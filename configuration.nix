@@ -6,6 +6,7 @@
       ./hardware-configuration.nix
       ./drivers/configuration.nix
       ./locale/configuration.nix
+      ./programs/configuration.nix
       ./sound/configuration.nix
       ./system/configuration.nix
       ./zsh/configuration.nix
@@ -24,58 +25,12 @@
 
 
   # Install firefox.
-  programs.firefox.enable = true;
 
   # Allow unfree packages
 
   # List packages installed in system profile. To search, run:
   # $ nix search wget
-  environment.systemPackages = with pkgs; [
-    micro
-    steam
-    steam-run
-    vscode.fhs
-    git
-    gnome-tweaks
-    protonup
-    spotify
-    dconf-editor
-    alsa-utils
-    easyeffects
-    gnomeExtensions.user-themes
-    papirus-icon-theme
-    orchis
-    gnomeExtensions.blur-my-shell
-    gnomeExtensions.appindicator
-    gnomeExtensions.dash-to-panel
-    gnomeExtensions.ddterm
-    gnomeExtensions.lock-keys
-    gnomeExtensions.quick-settings-tweaker
-    gnomeExtensions.vitals
-    gnomeExtensions.smile-complementary-extension
-    smile
-    wireplumber
-    appimage-run
-    vesktop
-    tldr
-    stremio
-  ];
 
-  environment.gnome.excludePackages = with pkgs; [
-    gnome-connections
-    evince
-    gnome-characters
-    gnome-logs
-    gnome-font-viewer
-    gnome-tour
-    yelp
-    epiphany
-    gnome-music
-  ];
-
-  services.xserver.excludePackages = with pkgs; [
-    xterm
-  ];
 
   environment.sessionVariables = {
     STEAM_EXTRA_COMPAT_TOOLS_PATHS = "/home/roman/.steam/root/compatibilitytools.d";
