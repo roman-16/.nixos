@@ -4,13 +4,10 @@
   imports =
     [
       ./hardware-configuration.nix
+      ./boot/configuration.nix
       ./sound/configuration.nix
       ./zsh/configuration.nix
     ];
-
-  # Bootloader.
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
 
   networking.hostName = "roman-nixos"; # Define your hostname.
 
