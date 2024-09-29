@@ -129,7 +129,6 @@
     isNormalUser = true;
     description = "Roman";
     extraGroups = [ "networkmanager" "wheel" ];
-    shell = pkgs.zsh;
   };
 
   home-manager = {

@@ -5,6 +5,10 @@
 { config, pkgs, inputs, ... }:
 
 {
+  users.users.roman = {
+    shell = pkgs.zsh;
+  };
+
   programs.zsh = {
     enable = true;
     enableCompletion = true;
