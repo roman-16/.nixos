@@ -8,6 +8,7 @@
   imports =
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
+      # ./zsh/configuration.nix
     ];
 
   # Bootloader.
@@ -198,6 +199,7 @@
     appimage-run
     vesktop
     tldr
+    stremio
   ];
 
   environment.gnome.excludePackages = with pkgs; [
