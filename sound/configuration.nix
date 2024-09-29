@@ -4,6 +4,7 @@
   environment.systemPackages = with pkgs; [
     alsa-utils
     easyeffects
+    wireplumber
   ];
 
   hardware.pulseaudio.enable = false;

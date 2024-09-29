@@ -5,6 +5,7 @@
     [
       ./hardware-configuration.nix
       ./drivers/configuration.nix
+      ./gnome/configuration.nix
       ./locale/configuration.nix
       ./programs/configuration.nix
       ./sound/configuration.nix
