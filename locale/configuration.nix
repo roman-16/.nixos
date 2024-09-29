@@ -16,8 +16,8 @@
     LC_TIME = "de_AT.UTF-8";
   };
 
-  services.xserver = {
+  services.xserver.xkb = {
     layout = "at";
-    xkbVariant = "nodeadkeys";
+    variant = "nodeadkeys";
   };
 }
