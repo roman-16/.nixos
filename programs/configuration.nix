@@ -3,8 +3,6 @@
 {
   environment.systemPackages = with pkgs; [
     micro
-    steam
-    steam-run
     vscode.fhs
     git
     gnome-tweaks
