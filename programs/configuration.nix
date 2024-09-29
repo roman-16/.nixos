@@ -11,6 +11,7 @@
     vesktop
     tldr
     stremio
+    alejandra
   ];
 
   services.xserver.excludePackages = with pkgs; [
