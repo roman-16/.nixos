@@ -4,14 +4,10 @@
   imports =
     [
       ./hardware-configuration.nix
-      ./boot/configuration.nix
       ./sound/configuration.nix
+      ./system/configuration.nix
       ./zsh/configuration.nix
     ];
-
-  networking.hostName = "roman-nixos"; # Define your hostname.
-
-  security.sudo.wheelNeedsPassword = false;
 
   hardware.opengl = {
     enable = true;
@@ -34,7 +30,6 @@
   # environment.sessionVariables.MOZ_ENABLE_WAYLAND = 0;
 
   # Enable networking
-  networking.networkmanager.enable = true;
 
   # Set your time zone.
   time.timeZone = "Europe/Vienna";
@@ -55,11 +50,8 @@
   };
 
   # Enable the X11 windowing system.
-  services.xserver.enable = true;
 
   # Enable the GNOME Desktop Environment.
-  services.xserver.displayManager.gdm.enable = true;
-  services.xserver.desktopManager.gnome.enable = true;
 
   # Configure keymap in X11
   services.xserver = {
@@ -68,16 +60,8 @@
   };
 
   # Enable CUPS to print documents.
-  services.printing.enable = true;
-
-  security.rtkit.enable = true;
 
   # Define a user account. Don't forget to set a password with ‘passwd’.
-  users.users.roman = {
-    isNormalUser = true;
-    description = "Roman";
-    extraGroups = [ "networkmanager" "wheel" ];
-  };
 
   home-manager = {
     extraSpecialArgs = {
@@ -92,11 +76,6 @@
   programs.firefox.enable = true;
 
   # Allow unfree packages
-  nixpkgs.config.allowUnfree = true;
-
-  powerManagement.cpuFreqGovernor = "performance";
-
-  documentation.nixos.enable = false;
 
   # List packages installed in system profile. To search, run:
   # $ nix search wget
@@ -179,7 +158,6 @@
   # Or disable the firewall altogether.
   # networking.firewall.enable = false;
 
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
   # This value determines the NixOS release from which the default
   # settings for stateful data, like file locations and database versions
