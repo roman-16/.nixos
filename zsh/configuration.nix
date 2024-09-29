@@ -19,7 +19,7 @@
       nup = "sudo nixos-rebuild switch --flake ~/.nixos#default";
       ngs = "git -C ~/.nixos add .";
       ngb = "git -C ~/.nixos commit -m \"$(date '+%Y-%m-%d %H:%M:%S')\" && git -C ~/.nixos push";
-      nft = "alejandra ~/.nixos";
+      nft = "alejandra -q ~/.nixos";
     };
     ohMyZsh = {
       enable = true;
