@@ -1,10 +1,13 @@
 { config, pkgs, ... }:
 
 {
+  imports =
+    [
+      ./sound/home.nix
+    ];
+
   home.username = "roman";
   home.homeDirectory = "/home/roman";
-
-  # Let Home Manager install and manage itself.
   programs.home-manager.enable = true;
 
   dconf.settings = {
