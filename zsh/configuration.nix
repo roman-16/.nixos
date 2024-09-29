@@ -1,6 +1,8 @@
-{ config, pkgs, inputs, ... }:
-
-{
+{ config,
+  pkgs,
+  inputs,
+  ...
+}: {
   users.users.roman = {
     shell = pkgs.zsh;
   };
@@ -16,6 +18,7 @@
       nup = "sudo nixos-rebuild switch --flake ~/.nixos#default";
       ngs = "git -C ~/.nixos add .";
       ngb = "git -C ~/.nixos commit -m \"$(date '+%Y-%m-%d %H:%M:%S')\" && git -C ~/.nixos push";
+      nft = "alejandra ~/.nixos";
     };
     ohMyZsh = {
       enable = true;

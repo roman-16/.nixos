@@ -1,18 +1,20 @@
-{ config, pkgs, inputs, ... }:
-
 {
-  imports =
-    [
-      ./hardware-configuration.nix
-      ./drivers/configuration.nix
-      ./gnome/configuration.nix
-      ./locale/configuration.nix
-      ./programs/configuration.nix
-      ./sound/configuration.nix
-      ./steam/configuration.nix
-      ./system/configuration.nix
-      ./zsh/configuration.nix
-    ];
+  config,
+  pkgs,
+  inputs,
+  ...
+}: {
+  imports = [
+    ./hardware-configuration.nix
+    ./drivers/configuration.nix
+    ./gnome/configuration.nix
+    ./locale/configuration.nix
+    ./programs/configuration.nix
+    ./sound/configuration.nix
+    ./steam/configuration.nix
+    ./system/configuration.nix
+    ./zsh/configuration.nix
+  ];
 
   # This value determines the NixOS release from which the default
   # settings for stateful data, like file locations and database versions

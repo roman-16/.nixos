@@ -1,12 +1,13 @@
-{ config, pkgs, ... }:
-
 {
-  imports =
-    [
-      ./gnome/home.nix
-      ./locale/home.nix
-      ./sound/home.nix
-    ];
+  config,
+  pkgs,
+  ...
+}: {
+  imports = [
+    ./gnome/home.nix
+    ./locale/home.nix
+    ./sound/home.nix
+  ];
 
   home.username = "roman";
   home.homeDirectory = "/home/roman";
