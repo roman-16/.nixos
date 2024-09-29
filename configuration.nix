@@ -149,7 +149,7 @@
     autosuggestions.enable = true;
     syntaxHighlighting.enable = true;
     shellAliases = {
-      yay = "nug";
+      nmn = "nug";
       nug = "yes | protonup; sudo nix flake update ~/.nixos; nup";
       nup = "sudo nixos-rebuild switch --flake ~/.nixos#default";
     };
