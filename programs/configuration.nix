@@ -9,8 +9,6 @@
     protonup
     spotify
     dconf-editor
-    alsa-utils
-    easyeffects
     gnomeExtensions.user-themes
     papirus-icon-theme
     orchis

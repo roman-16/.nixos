@@ -1,6 +1,11 @@
 { config, pkgs, inputs, ... }:
 
 {
+  environment.systemPackages = with pkgs; [
+    alsa-utils
+    easyeffects
+  ];
+
   hardware.pulseaudio.enable = false;
 
   services.pipewire = {
