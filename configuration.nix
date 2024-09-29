@@ -7,6 +7,7 @@
   imports = [
     ./hardware-configuration.nix
     ./drivers/configuration.nix
+    ./git/configuration.nix
     ./gnome/configuration.nix
     ./locale/configuration.nix
     ./programs/configuration.nix
