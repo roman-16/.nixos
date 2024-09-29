@@ -31,7 +31,7 @@
   };
 
   # https://www.reddit.com/r/NixOS/comments/1dl61a8/comment/l9nh0mr
-  environment.sessionVariables.MOZ_ENABLE_WAYLAND = 0;
+  # environment.sessionVariables.MOZ_ENABLE_WAYLAND = 0;
 
   # Enable networking
   networking.networkmanager.enable = true;
