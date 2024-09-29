@@ -30,5 +30,14 @@
 
   documentation.nixos.enable = false;
 
+  home-manager = {
+    extraSpecialArgs = {
+      inherit inputs;
+    };
+    users = {
+      "roman" = import ../home.nix;
+    };
+  };
+
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 }

@@ -4,32 +4,14 @@
   imports =
     [
       ./hardware-configuration.nix
+      ./drivers/configuration.nix
       ./sound/configuration.nix
       ./system/configuration.nix
       ./zsh/configuration.nix
     ];
 
-  hardware.opengl = {
-    enable = true;
-    driSupport32Bit = true;
-  };
-
-  services.xserver.videoDrivers = ["nvidia"];
-
-  hardware.nvidia = {
-    modesetting.enable = true;
-    powerManagement.enable = false;
-    powerManagement.finegrained = false;
-    nvidiaPersistenced = true;
-    open = false;
-    nvidiaSettings = true;
-    package = config.boot.kernelPackages.nvidiaPackages.stable;
-  };
-
   # https://www.reddit.com/r/NixOS/comments/1dl61a8/comment/l9nh0mr
   # environment.sessionVariables.MOZ_ENABLE_WAYLAND = 0;
-
-  # Enable networking
 
   # Set your time zone.
   time.timeZone = "Europe/Vienna";
@@ -49,10 +31,6 @@
     LC_TIME = "de_AT.UTF-8";
   };
 
-  # Enable the X11 windowing system.
-
-  # Enable the GNOME Desktop Environment.
-
   # Configure keymap in X11
   services.xserver = {
     layout = "at";
@@ -63,14 +41,6 @@
 
   # Define a user account. Don't forget to set a password with ‘passwd’.
 
-  home-manager = {
-    extraSpecialArgs = {
-      inherit inputs;
-    };
-    users = {
-      "roman" = import ./home.nix;
-    };
-  };
 
   # Install firefox.
   programs.firefox.enable = true;
