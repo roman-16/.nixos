@@ -14,6 +14,7 @@
     tldr
     stremio
     alejandra
+    prismlauncher
   ];
 
   services.xserver.excludePackages = with pkgs; [

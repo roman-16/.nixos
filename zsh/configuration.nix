@@ -14,7 +14,7 @@
     autosuggestions.enable = true;
     syntaxHighlighting.enable = true;
     shellAliases = {
-      nmn = "nft && ngs && nug && ngb";
+      nmn = "nft && ngs && nug && ngs && ngb";
       nug = "yes | protonup; sudo nix flake update ~/.nixos; nup";
       nup = "sudo nixos-rebuild switch --flake ~/.nixos#default";
       ngs = "git -C ~/.nixos add .";
