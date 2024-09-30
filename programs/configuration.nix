@@ -15,6 +15,7 @@
     stremio
     alejandra
     prismlauncher
+    gimp
   ];
 
   services.xserver.excludePackages = with pkgs; [

@@ -104,6 +104,7 @@
         "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/"
         "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/"
         "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2/"
+        "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom3/"
       ];
     };
 
@@ -123,6 +124,12 @@
       binding = "<Super>period";
       command = "smile";
       name = "Smile";
+    };
+
+    "org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom3" = {
+      binding = "<Super>c";
+      command = "code";
+      name = "Visual Studio Code";
     };
 
     "org/gnome/settings-daemon/plugins/power" = {
