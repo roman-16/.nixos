@@ -35,5 +35,6 @@
     yelp
     epiphany
     gnome-music
+    geary
   ];
 }
