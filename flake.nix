@@ -9,20 +9,15 @@
     };
   };
 
-  outputs = {
-    self,
-    nixpkgs,
-    home-manager,
-    ...
-  } @ inputs: {
-    nixosConfigurations.default = nixpkgs.lib.nixosSystem {
+  outputs = inputs: {
+    nixosConfigurations.default = inputs.nixpkgs.lib.nixosSystem {
       specialArgs = {
         inherit inputs;
       };
 
       modules = [
         ./configuration.nix
-        home-manager.nixosModules.default
+        inputs.home-manager.nixosModules.default
       ];
     };
   };
