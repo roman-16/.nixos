@@ -11,7 +11,6 @@
     ./gnome/configuration.nix
     ./locale/configuration.nix
     ./programs/configuration.nix
-    ./rust/configuration.nix
     ./sound/configuration.nix
     ./steam/configuration.nix
     ./system/configuration.nix
