@@ -16,6 +16,7 @@
     alejandra
     prismlauncher
     gimp
+    obsidian
   ];
 
   services.xserver.excludePackages = with pkgs; [
