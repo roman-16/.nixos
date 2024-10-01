@@ -6,6 +6,7 @@
 }: {
   imports = [
     ./hardware-configuration.nix
+
     ./drivers/configuration.nix
     ./git/configuration.nix
     ./gnome/configuration.nix
