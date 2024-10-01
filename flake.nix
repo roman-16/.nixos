@@ -12,6 +12,7 @@
   outputs = {
     self,
     nixpkgs,
+    home-manager,
     ...
   } @ inputs: {
     nixosConfigurations.default = nixpkgs.lib.nixosSystem {
@@ -20,7 +21,7 @@
       };
       modules = [
         ./configuration.nix
-        inputs.home-manager.nixosModules.default
+        home-manager.nixosModules.default
       ];
     };
   };
