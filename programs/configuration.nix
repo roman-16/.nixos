@@ -19,6 +19,7 @@
     obsidian
     just
     eza
+    nerdfonts
   ];
 
   services.xserver.excludePackages = with pkgs; [
