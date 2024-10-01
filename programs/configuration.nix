@@ -16,7 +16,6 @@
     alejandra
     prismlauncher
     gimp
-    solaar
   ];
 
   services.xserver.excludePackages = with pkgs; [
