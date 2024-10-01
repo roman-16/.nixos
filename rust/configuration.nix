@@ -4,9 +4,9 @@
   inputs,
   ...
 }: {
-  environment.systemPackages = with pkgs; [
-    cargo
-    rustc
-    trunk
-  ];
+  # environment.systemPackages = with pkgs; [
+  #   cargo
+  #   rustc
+  #   trunk
+  # ];
 }
