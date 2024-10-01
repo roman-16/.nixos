@@ -20,6 +20,9 @@
       ngs = "git -C ~/.nixos add .";
       ngb = "git -C ~/.nixos commit -m \"$(date '+%Y-%m-%d %H:%M:%S')\" && git -C ~/.nixos push";
       nft = "alejandra -q ~/.nixos";
+
+      ls = "ls -a --color";
+      grr = "git branch | grep -v \* | xargs git branch -D; git remote prune origin";
     };
     ohMyZsh = {
       enable = true;
