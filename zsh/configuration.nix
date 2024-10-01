@@ -21,7 +21,8 @@
       ngb = "git -C ~/.nixos commit -m \"$(date '+%Y-%m-%d %H:%M:%S')\" && git -C ~/.nixos push";
       nft = "alejandra -q ~/.nixos";
 
-      ls = "eza -a --icons --color=always --group-directories-first";
+      ls = "eza --icons=always --color=always --group-directories-first --hyperlink";
+      la = "ls -a";
       grr = "git branch | grep -v \* | xargs git branch -D; git remote prune origin";
     };
     ohMyZsh = {
