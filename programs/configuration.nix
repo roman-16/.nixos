@@ -17,6 +17,7 @@
     prismlauncher
     gimp
     obsidian
+    just
   ];
 
   services.xserver.excludePackages = with pkgs; [
