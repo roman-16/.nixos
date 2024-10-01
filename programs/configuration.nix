@@ -18,6 +18,7 @@
     gimp
     obsidian
     just
+    eza
   ];
 
   services.xserver.excludePackages = with pkgs; [
