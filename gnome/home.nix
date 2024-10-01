@@ -149,6 +149,7 @@
         pkgs.gnomeExtensions.smile-complementary-extension.extensionUuid
         pkgs.gnomeExtensions.user-themes.extensionUuid
         pkgs.gnomeExtensions.vitals.extensionUuid
+        pkgs.gnomeExtensions.pip-on-top.extensionUuid
       ];
       favorite-apps = [
         "firefox.desktop"
