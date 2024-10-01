@@ -30,15 +30,6 @@
 
   documentation.nixos.enable = false;
 
-  home-manager = {
-    extraSpecialArgs = {
-      inherit inputs;
-    };
-    users = {
-      "roman" = import ../home.nix;
-    };
-  };
-
   nix.optimise.automatic = true;
 
   nix.gc = {
