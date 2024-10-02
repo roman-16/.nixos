@@ -14,7 +14,6 @@
     tldr
     stremio
     alejandra
-    prismlauncher
     gimp
     obsidian
     just
