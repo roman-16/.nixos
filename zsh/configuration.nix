@@ -23,8 +23,8 @@
 
       ls = "eza --icons=always --color=always --group-directories-first --hyperlink";
       la = "ls -a";
-      grr = "git branch | grep -v \* | xargs git branch -D; git remote prune origin";
       cat = "bat -p";
+      grr = "git branch | grep -v \\* | xargs git branch -D; git remote prune origin";
     };
     ohMyZsh = {
       enable = true;
