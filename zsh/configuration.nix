@@ -24,7 +24,7 @@
       ls = "eza --icons=always --color=always --group-directories-first --hyperlink";
       la = "ls -a";
       cat = "bat -p";
-      grr = "git branch | grep -v \* | xargs git branch -D; git remote prune origin";
+      grra = "git branch | grep -v \* | xargs git branch -D; git remote prune origin";
     };
     ohMyZsh = {
       enable = true;
