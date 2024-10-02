@@ -20,7 +20,7 @@
       ngs = "git -C ~/.nixos add .";
       ngb = "git -C ~/.nixos commit -m \"$(date '+%Y-%m-%d %H:%M:%S')\" && git -C ~/.nixos push";
       nft = "alejandra -q ~/.nixos";
-      nde = "alejandra -q *; nix develop -c $SHELL";
+      nde = "alejandra -q *; nix develop -c \"$($SHELL) -c code\"";
 
       ls = "eza --icons=always --color=always --group-directories-first --hyperlink";
       la = "ls -a";
