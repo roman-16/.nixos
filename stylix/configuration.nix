@@ -4,7 +4,7 @@
   inputs,
   ...
 }: {
-  stylix.enable = true;
+  # stylix.enable = true;
   stylix.polarity = "dark";
   stylix.image = ./wallpaper.jpg;
   stylix.base16Scheme = "${pkgs.base16-schemes}/share/themes/gruvbox-dark-medium.yaml";
