@@ -19,6 +19,7 @@
     just
     eza
     nerdfonts
+    bat
   ];
 
   services.xserver.excludePackages = with pkgs; [
