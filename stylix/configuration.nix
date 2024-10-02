@@ -4,25 +4,25 @@
   inputs,
   ...
 }: {
-  # stylix.enable = true;
+  stylix.enable = true;
   stylix.polarity = "dark";
   stylix.image = ./wallpaper.jpg;
   stylix.base16Scheme = "${pkgs.base16-schemes}/share/themes/gruvbox-dark-medium.yaml";
 
   stylix.fonts = {
     serif = {
-      package = pkgs.dejavu_fonts;
-      name = "DejaVu Serif";
+      package = pkgs.cantarell-fonts;
+      name = "Cantarell";
     };
 
     sansSerif = {
-      package = pkgs.dejavu_fonts;
-      name = "DejaVu Sans";
+      package = pkgs.cantarell-fonts;
+      name = "Cantarell";
     };
 
     monospace = {
-      package = pkgs.dejavu_fonts;
-      name = "DejaVu Sans Mono";
+      package = pkgs.source-code-pro;
+      name = "Source Code Pro";
     };
 
     emoji = {
