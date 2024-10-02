@@ -20,6 +20,7 @@
     eza
     nerdfonts
     bat
+    neofetch
   ];
 
   services.xserver.excludePackages = with pkgs; [
