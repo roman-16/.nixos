@@ -15,6 +15,7 @@
     ./programs/configuration.nix
     ./sound/configuration.nix
     ./steam/configuration.nix
+    ./stylix/configuration.nix
     ./system/configuration.nix
     ./zsh/configuration.nix
   ];
