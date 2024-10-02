@@ -29,5 +29,12 @@
       package = pkgs.noto-fonts-emoji;
       name = "Noto Color Emoji";
     };
+
+    sizes = {
+      applications = 10;
+      desktop = 8;
+      popups = 8;
+      terminal = 10;
+    };
   };
 }
