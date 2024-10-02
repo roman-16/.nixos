@@ -25,8 +25,8 @@
     };
 
     "org/gnome/desktop/background" = {
-      picture-uri = "file:///run/current-system/sw/share/backgrounds/gnome/blobs-l.svg";
-      picture-uri-dark = "file:///run/current-system/sw/share/backgrounds/gnome/blobs-l.svg";
+      # picture-uri = "file:///run/current-system/sw/share/backgrounds/gnome/blobs-l.svg";
+      # picture-uri-dark = "file:///run/current-system/sw/share/backgrounds/gnome/blobs-l.svg";
       primary-color = "#241f31";
     };
 
@@ -38,11 +38,11 @@
       clock-show-date = true;
       clock-show-seconds = true;
       clock-show-weekday = true;
-      color-scheme = "prefer-dark";
+      # color-scheme = "prefer-dark";
       enable-hot-corners = false;
       gtk-enable-primary-paste = false;
       icon-theme = "Papirus-Dark";
-      gtk-theme = "Orchis-Dark";
+      # gtk-theme = "Orchis-Dark";
     };
 
     "org/gnome/desktop/peripherals/mouse" = {
@@ -192,7 +192,7 @@
     };
 
     "org/gnome/shell/extensions/user-theme" = {
-      name = "Orchis-Dark";
+      # name = "Orchis-Dark";
     };
 
     "org/gnome/shell/extensions/vitals" = {
