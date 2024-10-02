@@ -8,6 +8,7 @@
     ./hardware-configuration.nix
 
     ./drivers/configuration.nix
+    ./gdlauncher/configuration.nix
     ./git/configuration.nix
     ./gnome/configuration.nix
     ./locale/configuration.nix
