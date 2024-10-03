@@ -12,7 +12,7 @@
   stylix.cursor = {
     package = pkgs.phinger-cursors;
     name = "Phinger-cursor-light";
-    size = 24;
+    size = 32;
   };
 
   stylix.fonts = {
