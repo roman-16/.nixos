@@ -11,7 +11,7 @@
 
   stylix.cursor = {
     package = pkgs.phinger-cursors;
-    name = "Phinger-cursor-light";
+    name = "Phinger-cursors-light";
     size = 32;
   };
 
