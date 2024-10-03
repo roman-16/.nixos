@@ -21,7 +21,6 @@
     nerdfonts
     bat
     neofetch
-    mission-center
   ];
 
   services.xserver.excludePackages = with pkgs; [
