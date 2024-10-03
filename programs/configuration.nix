@@ -20,8 +20,10 @@
     eza
     nerdfonts
     bat
-    neofetch
     fastfetch
+    nerdfetch
+    screenfetch
+    macchina
   ];
 
   services.xserver.excludePackages = with pkgs; [
