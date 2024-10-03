@@ -9,7 +9,7 @@
   stylix.image = ./wallpaper.jpg;
   stylix.base16Scheme = "${pkgs.base16-schemes}/share/themes/selenized-black.yaml";
 
-  stylix.cursor.package = pkgs.bibata-cursors;
+  stylix.cursor.package = pkgs.phinger-cursors;
 
   stylix.fonts = {
     serif = {
