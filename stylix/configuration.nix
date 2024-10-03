@@ -31,10 +31,10 @@
     };
 
     sizes = {
-      applications = 10;
-      desktop = 8;
-      popups = 8;
-      terminal = 10;
+      applications = 11;
+      desktop = 9;
+      popups = 9;
+      terminal = 11;
     };
   };
 }
