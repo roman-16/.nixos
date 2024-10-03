@@ -81,7 +81,7 @@
 
     "org/gnome/desktop/wm/keybindings" = {
       close = ["<Super>q"];
-      move-to-center = ["<Super><Shift>c"];
+      move-to-center = ["<Super>c"];
     };
 
     "org/gnome/desktop/wm/preferences" = {
@@ -127,7 +127,7 @@
     };
 
     "org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom3" = {
-      binding = "<Super>c";
+      binding = "<Super>v";
       command = "code";
       name = "Visual Studio Code";
     };
