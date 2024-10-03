@@ -106,6 +106,7 @@
         "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/"
         "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2/"
         "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom3/"
+        "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom4/"
       ];
     };
 
@@ -131,6 +132,12 @@
       binding = "<Super>v";
       command = "code";
       name = "Visual Studio Code";
+    };
+
+    "org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom4" = {
+      binding = "<Super>n";
+      command = "code ~/.nixos";
+      name = "Visual Studio Code Nixos";
     };
 
     "org/gnome/settings-daemon/plugins/power" = {
