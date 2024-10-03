@@ -20,7 +20,6 @@
     gnomeExtensions.vitals
     gnomeExtensions.smile-complementary-extension
     gnomeExtensions.pip-on-top
-    papirus-icon-theme
     orchis
     smile
   ];
