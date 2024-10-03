@@ -10,6 +10,7 @@
   stylix.base16Scheme = "${pkgs.base16-schemes}/share/themes/selenized-black.yaml";
 
   stylix.cursor.package = pkgs.phinger-cursors;
+  stylix.cursor.name = "Phinger-cursor-dark";
 
   stylix.fonts = {
     serif = {
