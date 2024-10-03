@@ -32,7 +32,7 @@
 
       fastfetch = "fastfetch -l small -c ~/.nixos/zsh/fastfetch.jsonc";
     };
-    shellInit = "fastfetch";
+    shellInit = "fastfetch -l small -c ~/.nixos/zsh/fastfetch.jsonc";
     ohMyZsh = {
       enable = true;
       plugins = ["git"];
