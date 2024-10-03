@@ -28,6 +28,8 @@
       cat = "bat -p";
 
       grr = "git branch | grep -v \\* | xargs git branch -D; git remote prune origin";
+
+      fastfetch = "fastfetch -l small -c ./fastfetch.jsonc";
     };
     ohMyZsh = {
       enable = true;
