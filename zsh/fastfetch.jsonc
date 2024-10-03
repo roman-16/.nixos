@@ -18,11 +18,7 @@
       "temp": true
     },
     "memory",
-    {
-        "type": "disk",
-        "folders": "/nix",
-        "key": "Disk"
-    },
+    "disk",
     "datetime"
   ]
 }
