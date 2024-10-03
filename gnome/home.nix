@@ -82,6 +82,7 @@
     "org/gnome/desktop/wm/keybindings" = {
       close = ["<Super>q"];
       move-to-center = ["<Super>c"];
+      toggle-message-tray = [];
     };
 
     "org/gnome/desktop/wm/preferences" = {
