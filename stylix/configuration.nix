@@ -9,9 +9,11 @@
   stylix.image = ./wallpaper.jpg;
   stylix.base16Scheme = "${pkgs.base16-schemes}/share/themes/selenized-black.yaml";
 
-  stylix.cursor.package = pkgs.phinger-cursors;
-  stylix.cursor.name = "Phinger-cursor-dark";
-  stylix.cursor.size = 16;
+  stylix.cursor = {
+    package = pkgs.phinger-cursors;
+    name = "Phinger-cursor-light";
+    size = 16;
+  };
 
   stylix.fonts = {
     serif = {
