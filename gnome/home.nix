@@ -83,6 +83,7 @@
       close = ["<Super>q"];
       move-to-center = ["<Super>c"];
       toggle-message-tray = [];
+      focus-active-notification = [];
     };
 
     "org/gnome/desktop/wm/preferences" = {
