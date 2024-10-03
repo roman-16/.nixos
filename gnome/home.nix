@@ -191,10 +191,6 @@
       volume-mixer-enabled = false;
     };
 
-    "org/gnome/shell/extensions/user-theme" = {
-      # name = "Orchis-Dark";
-    };
-
     "org/gnome/shell/extensions/vitals" = {
       hot-sensors = ["_processor_usage_" "_gpu#1_utilization_" "_memory_usage_" "__temperature_avg__"];
       position-in-panel = 4;

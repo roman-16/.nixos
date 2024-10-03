@@ -21,6 +21,7 @@
     nerdfonts
     bat
     neofetch
+    fastfetch
   ];
 
   services.xserver.excludePackages = with pkgs; [
