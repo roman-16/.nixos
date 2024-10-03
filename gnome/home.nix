@@ -24,12 +24,6 @@
       load-hidden-on-startup = true;
     };
 
-    "org/gnome/desktop/background" = {
-      # picture-uri = "file:///run/current-system/sw/share/backgrounds/gnome/blobs-l.svg";
-      # picture-uri-dark = "file:///run/current-system/sw/share/backgrounds/gnome/blobs-l.svg";
-      primary-color = "#241f31";
-    };
-
     "org/gnome/desktop/calendar" = {
       show-weekdate = true;
     };
@@ -38,11 +32,9 @@
       clock-show-date = true;
       clock-show-seconds = true;
       clock-show-weekday = true;
-      # color-scheme = "prefer-dark";
       enable-hot-corners = false;
       gtk-enable-primary-paste = false;
       icon-theme = "Papirus-Dark";
-      # gtk-theme = "Orchis-Dark";
     };
 
     "org/gnome/desktop/peripherals/mouse" = {
@@ -83,7 +75,6 @@
       close = ["<Super>q"];
       move-to-center = ["<Super>c"];
       toggle-message-tray = [];
-      focus-active-notification = [];
     };
 
     "org/gnome/desktop/wm/preferences" = {
@@ -107,7 +98,6 @@
         "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/"
         "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2/"
         "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom3/"
-        "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom4/"
       ];
     };
 
@@ -133,12 +123,6 @@
       binding = "<Super>v";
       command = "code";
       name = "Visual Studio Code";
-    };
-
-    "org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom4" = {
-      binding = "<Super>n";
-      command = "code ~/.nixos";
-      name = "Visual Studio Code Nixos";
     };
 
     "org/gnome/settings-daemon/plugins/power" = {
