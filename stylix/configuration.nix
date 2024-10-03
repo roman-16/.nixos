@@ -7,7 +7,7 @@
   stylix.enable = true;
   stylix.polarity = "dark";
   stylix.image = ./wallpaper.jpg;
-  stylix.base16Scheme = "${pkgs.base16-schemes}/share/themes/tomorrow-night.yaml";
+  stylix.base16Scheme = "${pkgs.base16-schemes}/share/themes/gruvbox-dark-hard.yaml";
 
   stylix.fonts = {
     serif = {
