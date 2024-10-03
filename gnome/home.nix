@@ -81,7 +81,7 @@
 
     "org/gnome/desktop/wm/keybindings" = {
       close = ["<Super>q"];
-      move-to-center = ["<Super>c"];
+      move-to-center = ["<Super><Shift>c"];
     };
 
     "org/gnome/desktop/wm/preferences" = {
@@ -153,7 +153,7 @@
       ];
       favorite-apps = [
         "firefox.desktop"
-        "discord.desktop"
+        "vesktop.desktop"
       ];
     };
 
