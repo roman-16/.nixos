@@ -13,6 +13,7 @@
     ./gnome/configuration.nix
     ./locale/configuration.nix
     ./programs/configuration.nix
+    ./spicetify/configuration.nix
     ./sound/configuration.nix
     ./steam/configuration.nix
     ./stylix/configuration.nix
