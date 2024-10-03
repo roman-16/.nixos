@@ -21,9 +21,6 @@
     nerdfonts
     bat
     fastfetch
-    nerdfetch
-    screenfetch
-    macchina
   ];
 
   services.xserver.excludePackages = with pkgs; [
