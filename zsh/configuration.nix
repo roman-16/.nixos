@@ -2,6 +2,7 @@
   config,
   pkgs,
   inputs,
+  self,
   ...
 }: {
   users.users.roman = {
@@ -29,7 +30,7 @@
 
       grr = "git branch | grep -v \\* | xargs git branch -D; git remote prune origin";
 
-      fastfetch = "fastfetch -l small -c ./fastfetch.jsonc";
+      fastfetch = "fastfetch -l small -c ~/.nixos/zsh/fastfetch.jsonc";
     };
     ohMyZsh = {
       enable = true;
