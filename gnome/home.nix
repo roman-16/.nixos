@@ -34,7 +34,7 @@
       clock-show-weekday = true;
       enable-hot-corners = false;
       gtk-enable-primary-paste = false;
-      icon-theme = "Papirus-Dark";
+      # icon-theme = "Papirus-Dark";
     };
 
     "org/gnome/desktop/peripherals/mouse" = {

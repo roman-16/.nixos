@@ -8,6 +8,7 @@
     ./gnome/home.nix
     ./locale/home.nix
     ./sound/home.nix
+    ./stylix/home.nix
   ];
 
   home.username = "roman";
