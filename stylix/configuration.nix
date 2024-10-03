@@ -11,6 +11,7 @@
 
   stylix.cursor.package = pkgs.phinger-cursors;
   stylix.cursor.name = "Phinger-cursor-dark";
+  stylix.cursor.size = 16;
 
   stylix.fonts = {
     serif = {
