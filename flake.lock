@@ -69,22 +69,6 @@
     "flake-compat": {
       "flake": false,
       "locked": {
-        "lastModified": 1696426674,
-        "narHash": "sha256-kvjfFW7WAETZlt09AgDn1MrtKzP7t90Vf7vypd3OL1U=",
-        "owner": "edolstra",
-        "repo": "flake-compat",
-        "rev": "0f9255e01c2351cc7d116c072cb317785dd33b33",
-        "type": "github"
-      },
-      "original": {
-        "owner": "edolstra",
-        "repo": "flake-compat",
-        "type": "github"
-      }
-    },
-    "flake-compat_2": {
-      "flake": false,
-      "locked": {
         "lastModified": 1673956053,
         "narHash": "sha256-4gtG9iQuiKITOjNQQeQIpoIB6b16fm+504Ch3sNKLd8=",
         "owner": "edolstra",
@@ -229,29 +213,7 @@
       "inputs": {
         "home-manager": "home-manager",
         "nixpkgs": "nixpkgs",
-        "spicetify-nix": "spicetify-nix",
         "stylix": "stylix"
-      }
-    },
-    "spicetify-nix": {
-      "inputs": {
-        "flake-compat": "flake-compat",
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1728188225,
-        "narHash": "sha256-3Mf0XHpECwSxVDb7VYmiD7mqcMA3FcVVfqs3LLZHdaA=",
-        "owner": "Gerg-L",
-        "repo": "spicetify-nix",
-        "rev": "f532f68a72549f8ee585aa2f6f7dbe9e2ce5a45c",
-        "type": "github"
-      },
-      "original": {
-        "owner": "Gerg-L",
-        "repo": "spicetify-nix",
-        "type": "github"
       }
     },
     "stylix": {
@@ -260,7 +222,7 @@
         "base16-fish": "base16-fish",
         "base16-helix": "base16-helix",
         "base16-vim": "base16-vim",
-        "flake-compat": "flake-compat_2",
+        "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
         "gnome-shell": "gnome-shell",
         "home-manager": "home-manager_2",
