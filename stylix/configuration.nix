@@ -10,7 +10,7 @@
   stylix.base16Scheme = "${pkgs.base16-schemes}/share/themes/selenized-black.yaml";
 
   stylix.cursor = {
-    package = pkgs.bibata-cursors;
+    package = pkgs.volantes-cursors;
     name = "bibata-modern-ice";
     size = 32;
   };
