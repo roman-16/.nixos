@@ -11,7 +11,7 @@
 
   stylix.cursor = {
     package = pkgs.vimix-cursors;
-    name = "bibata-modern-ice";
+    name = "Vimix-white-cursors";
     size = 32;
   };
 
