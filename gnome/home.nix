@@ -87,6 +87,7 @@
     };
 
     "org/gnome/nautilus/preferences" = {
+      default-folder-viewer = "list-view";
       show-create-link = true;
     };
 
