@@ -16,6 +16,10 @@
         privateDefault = "DuckDuckGo";
       };
 
+      settings = {
+        "toolkit.legacyUserProfileCustomizations.stylesheets" = true;
+      };
+
       userChrome = ''
         #alltabs-button {
           display: none !important;
