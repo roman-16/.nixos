@@ -26,6 +26,4 @@
   services.xserver.excludePackages = with pkgs; [
     xterm
   ];
-
-  programs.firefox.enable = true;
 }
