@@ -86,6 +86,10 @@
       edge-tiling = true;
     };
 
+    "org/gnome/nautilus/preferences" = {
+      show-create-link = true;
+    };
+
     "org/gnome/settings-daemon/plugins/color" = {
       night-light-enabled = true;
       night-light-schedule-automatic = true;
