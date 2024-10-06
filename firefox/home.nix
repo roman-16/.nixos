@@ -17,6 +17,7 @@
       };
 
       settings = {
+        # Allow the removal of the all tabs button
         "toolkit.legacyUserProfileCustomizations.stylesheets" = true;
       };
 
