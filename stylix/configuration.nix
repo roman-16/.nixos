@@ -10,7 +10,7 @@
   stylix.base16Scheme = "${pkgs.base16-schemes}/share/themes/selenized-black.yaml";
 
   stylix.cursor = {
-    package = pkgs.phinger-cursors;
+    package = pkgs.bibata-cursors;
     name = "phinger-cursors-light";
     size = 32;
   };
