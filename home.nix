@@ -4,6 +4,7 @@
   ...
 }: {
   imports = [
+    ./firefox/home.nix
     ./git/home.nix
     ./gnome/home.nix
     ./locale/home.nix
