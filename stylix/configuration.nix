@@ -11,7 +11,7 @@
 
   stylix.cursor = {
     package = pkgs.bibata-cursors;
-    name = "phinger-cursors-light";
+    name = "bibata-modern-ice";
     size = 32;
   };
 
