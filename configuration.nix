@@ -12,6 +12,7 @@
     ./git/configuration.nix
     ./gnome/configuration.nix
     ./locale/configuration.nix
+    ./logitech/configuration.nix
     ./programs/configuration.nix
     ./spicetify/configuration.nix
     ./sound/configuration.nix
