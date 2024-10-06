@@ -21,6 +21,7 @@
     nerdfonts
     bat
     fastfetch
+    obsidian
   ];
 
   services.xserver.excludePackages = with pkgs; [
