@@ -174,7 +174,7 @@
     };
 
     "org/gnome/shell/extensions/lockkeys" = {
-      style = "show-hide";
+      style = "show-hide-capslock";
     };
 
     "org/gnome/shell/extensions/quick-settings-tweaks" = {
