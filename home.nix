@@ -10,6 +10,7 @@
     ./locale/home.nix
     ./sound/home.nix
     ./stylix/home.nix
+    ./zsh/home.nix
   ];
 
   home.username = "roman";
