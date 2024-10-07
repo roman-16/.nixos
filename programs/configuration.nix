@@ -18,6 +18,7 @@
     obsidian
     just
     nerdfonts
+    clapper
   ];
 
   services.xserver.excludePackages = with pkgs; [
