@@ -18,7 +18,7 @@
     obsidian
     just
     nerdfonts
-    celluloid
+    clapper
   ];
 
   services.xserver.excludePackages = with pkgs; [
