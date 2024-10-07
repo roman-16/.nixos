@@ -27,11 +27,6 @@
       fastfetch = "fastfetch -l small -c ~/.nixos/zsh/fastfetch.jsonc";
     };
     initExtra = ''
-      if [ -n "$\{commands [fzf-share]}" ]; then
-        source "$(fzf-share)/key-bindings.zsh"
-        source "$(fzf-share)/completion.zsh"
-      fi
-
       fastfetch -l small -c ~/.nixos/zsh/fastfetch.jsonc;
     '';
     oh-my-zsh = {
@@ -40,4 +35,6 @@
       theme = "robbyrussell";
     };
   };
+
+  programs.fzf.enable = true;
 }
