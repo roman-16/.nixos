@@ -19,6 +19,7 @@
     just
     nerdfonts
     clapper
+    gst_all_1.gst-plugins-base
   ];
 
   services.xserver.excludePackages = with pkgs; [
