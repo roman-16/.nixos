@@ -15,6 +15,6 @@
     fastfetch
     bat
     eza
-    fzf
+    zsh-fzf-tab
   ];
 }
