@@ -28,7 +28,7 @@
     };
     # shellInit = "fastfetch -l small -c ~/.nixos/zsh/fastfetch.jsonc";
     initExtra = ''
-      fastfetch;
+      fastfetch -l small -c ~/.nixos/zsh/fastfetch.jsonc;
     '';
     oh-my-zsh = {
       enable = true;
