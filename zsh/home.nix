@@ -27,6 +27,8 @@
       fastfetch = "fastfetch -l small -c ~/.nixos/zsh/fastfetch.jsonc";
     };
     initExtra = ''
+      source ${pkgs.zsh-fzf-tab}/share/fzf-tab/fzf-tab.plugin.zsh;
+
       fastfetch -l small -c ~/.nixos/zsh/fastfetch.jsonc;
     '';
     oh-my-zsh = {
