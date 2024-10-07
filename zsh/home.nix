@@ -26,7 +26,6 @@
 
       fastfetch = "fastfetch -l small -c ~/.nixos/zsh/fastfetch.jsonc";
     };
-    # shellInit = "fastfetch -l small -c ~/.nixos/zsh/fastfetch.jsonc";
     initExtra = ''
       fastfetch -l small -c ~/.nixos/zsh/fastfetch.jsonc;
     '';
