@@ -17,10 +17,7 @@
     gimp
     obsidian
     just
-    eza
     nerdfonts
-    bat
-    fastfetch
   ];
 
   services.xserver.excludePackages = with pkgs; [

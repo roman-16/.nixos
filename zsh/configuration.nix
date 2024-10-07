@@ -9,6 +9,13 @@
     shell = pkgs.zsh;
   };
 
+  environment.systemPackages = with pkgs; [
+    fastfetch
+    bat
+    eza
+    fzf
+  ];
+
   programs.zsh = {
     enable = true;
     enableCompletion = true;
@@ -35,7 +42,7 @@
     shellInit = "fastfetch -l small -c ~/.nixos/zsh/fastfetch.jsonc";
     ohMyZsh = {
       enable = true;
-      plugins = ["git"];
+      plugins = ["git" "fzf"];
       theme = "robbyrussell";
     };
   };
