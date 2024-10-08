@@ -138,17 +138,18 @@
 
     "org/gnome/shell" = {
       disable-user-extensions = false;
-      enabled-extensions = [
-        pkgs.gnomeExtensions.appindicator.extensionUuid
-        pkgs.gnomeExtensions.blur-my-shell.extensionUuid
-        pkgs.gnomeExtensions.dash-to-panel.extensionUuid
-        pkgs.gnomeExtensions.ddterm.extensionUuid
-        pkgs.gnomeExtensions.lock-keys.extensionUuid
-        pkgs.gnomeExtensions.quick-settings-tweaker.extensionUuid
-        pkgs.gnomeExtensions.smile-complementary-extension.extensionUuid
-        pkgs.gnomeExtensions.user-themes.extensionUuid
-        pkgs.gnomeExtensions.vitals.extensionUuid
-        pkgs.gnomeExtensions.pip-on-top.extensionUuid
+      enabled-extensions = with pkgs; [
+        gnomeExtensions.appindicator.extensionUuid
+        gnomeExtensions.blur-my-shell.extensionUuid
+        gnomeExtensions.burn-my-windows.extensionUuid
+        gnomeExtensions.dash-to-panel.extensionUuid
+        gnomeExtensions.ddterm.extensionUuid
+        gnomeExtensions.lock-keys.extensionUuid
+        gnomeExtensions.quick-settings-tweaker.extensionUuid
+        gnomeExtensions.smile-complementary-extension.extensionUuid
+        gnomeExtensions.user-themes.extensionUuid
+        gnomeExtensions.vitals.extensionUuid
+        gnomeExtensions.pip-on-top.extensionUuid
       ];
       favorite-apps = [
         "firefox.desktop"

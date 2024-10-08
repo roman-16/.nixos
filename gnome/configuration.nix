@@ -12,6 +12,7 @@
     dconf-editor
     gnomeExtensions.user-themes
     gnomeExtensions.blur-my-shell
+    gnomeExtensions.burn-my-windows
     gnomeExtensions.appindicator
     gnomeExtensions.dash-to-panel
     gnomeExtensions.ddterm
