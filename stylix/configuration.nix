@@ -7,7 +7,8 @@
   stylix.enable = true;
   stylix.polarity = "dark";
   stylix.image = ./wallpaper.jpg;
-  stylix.base16Scheme = "${pkgs.base16-schemes}/share/themes/catppuccin-mocha.yaml";
+  # stylix.base16Scheme = "${pkgs.base16-schemes}/share/themes/selenized-black.yaml";
+  stylix.base16Scheme = "${pkgs.base16-schemes}/share/themes/selenized-black.yaml";
 
   stylix.cursor = {
     package = pkgs.vimix-cursors;
