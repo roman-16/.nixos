@@ -161,6 +161,10 @@
       icon-size = 16;
     };
 
+    "org/gnome/shell/extensions/burn-my-windows" = {
+      active-profile = "~/.nixos/gnome/burn-my-windows-profile.conf";
+    };
+
     "org/gnome/shell/extensions/dash-to-panel" = {
       appicon-margin = 2;
       dot-color-override = true;
