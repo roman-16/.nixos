@@ -10,7 +10,8 @@
   stylix.base16Scheme = "${pkgs.base16-schemes}/share/themes/selenized-black.yaml";
 
   stylix.cursor = {
-    package = pkgs.vimix-cursors;
+    # package = pkgs.vimix-cursors;
+    package = pkgs.nordzy-cursor-theme;
     name = "Vimix-white-cursors";
     size = 32;
   };
