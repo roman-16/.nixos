@@ -11,7 +11,7 @@
 
   stylix.cursor = {
     # package = pkgs.vimix-cursors;
-    package = pkgs.nordzy-cursor-theme;
+    package = pkgs.rose-pine-cursor;
     name = "Vimix-white-cursors";
     size = 32;
   };
