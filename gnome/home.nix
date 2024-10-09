@@ -202,4 +202,13 @@
       show-voltage = false;
     };
   };
+
+  home.file."burn-my-windows/profiles/default.conf" = {
+    text = ''
+      [burn-my-windows-profile]
+      fire-enable-effect=false
+      glide-enable-effect=true
+      glide-animation-time=100
+    '';
+  };
 }
