@@ -162,7 +162,7 @@
     };
 
     "org/gnome/shell/extensions/burn-my-windows" = {
-      active-profile = "~/.nixos/gnome/burn-my-windows-profile.conf";
+      active-profile = ".config/burn-my-windows/profiles/default.conf";
     };
 
     "org/gnome/shell/extensions/dash-to-panel" = {
