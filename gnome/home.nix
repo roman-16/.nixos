@@ -203,7 +203,7 @@
     };
   };
 
-  home.file."burn-my-windows/profiles/default.conf" = {
+  home.file.".config/burn-my-windows/profiles/default.conf" = {
     text = ''
       [burn-my-windows-profile]
       fire-enable-effect=false
