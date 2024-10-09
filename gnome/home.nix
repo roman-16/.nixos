@@ -162,7 +162,7 @@
     };
 
     "org/gnome/shell/extensions/burn-my-windows" = {
-      active-profile = "$XDG_CONFIG_HOME/burn-my-windows/profiles/default.conf";
+      active-profile = "${config.xdg.configHome}/burn-my-windows/profiles/default.conf";
     };
 
     "org/gnome/shell/extensions/dash-to-panel" = {
