@@ -162,7 +162,7 @@
     };
 
     "org/gnome/shell/extensions/burn-my-windows" = {
-      active-profile = "${config.xdg.configHome}/burn-my-windows/profiles/default.conf";
+      active-profile = "${config.xdg.configHome}/burn-my-windows/profiles/1728415013431728.conf";
     };
 
     "org/gnome/shell/extensions/dash-to-panel" = {
@@ -203,7 +203,7 @@
     };
   };
 
-  home.file.".config/burn-my-windows/profiles/default.conf" = {
+  home.file.".config/burn-my-windows/profiles/1728415013431728.conf" = {
     text = ''
       [burn-my-windows-profile]
       fire-enable-effect=false
