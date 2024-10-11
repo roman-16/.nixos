@@ -19,6 +19,7 @@
     just
     nerdfonts
     clapper
+    lutris
   ];
 
   services.xserver.excludePackages = with pkgs; [
