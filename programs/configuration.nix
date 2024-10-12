@@ -19,6 +19,7 @@
     just
     nerdfonts
     clapper
+    r2modman
   ];
 
   services.xserver.excludePackages = with pkgs; [
