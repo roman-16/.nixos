@@ -6,7 +6,7 @@
 }: {
   environment.systemPackages = with pkgs; [
     micro
-    vscode
+    vscode.fhs
     protonup
     spotify
     appimage-run
