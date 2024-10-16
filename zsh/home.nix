@@ -19,7 +19,7 @@
       syntaxHighlighting.enable = true;
       shellAliases = {
         nmn = "nft && ngs && nug && ngs && ngb";
-        nug = "yes | protonup; nix flake update --flake ~/.nixos; nup";
+        nug = "nix flake update --flake ~/.nixos; nup";
         nup = "sudo nixos-rebuild switch --flake ~/.nixos#default";
         ngs = "git -C ~/.nixos add .";
         ngb = "git -C ~/.nixos commit -m \"$(date '+%Y-%m-%d %H:%M:%S')\" && git -C ~/.nixos push";
