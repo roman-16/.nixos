@@ -30,6 +30,8 @@
 
         cat = "bat -p";
 
+        grep = "rg";
+
         grr = "git branch | grep -v \\* | xargs git branch -D; git remote prune origin";
 
         fastfetch = "fastfetch -l small -c ~/.nixos/zsh/fastfetch.jsonc";

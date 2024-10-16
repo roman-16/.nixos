@@ -16,5 +16,6 @@
     bat
     eza
     zsh-fzf-tab
+    ripgrep
   ];
 }
