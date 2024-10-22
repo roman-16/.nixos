@@ -21,7 +21,6 @@
     gnomeExtensions.vitals
     gnomeExtensions.smile-complementary-extension
     gnomeExtensions.pip-on-top
-    orchis
     smile
   ];
 
