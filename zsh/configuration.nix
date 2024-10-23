@@ -1,10 +1,4 @@
-{
-  config,
-  pkgs,
-  inputs,
-  self,
-  ...
-}: {
+{pkgs, ...}: {
   users.users.roman = {
     shell = pkgs.zsh;
   };

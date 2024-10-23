@@ -1,9 +1,4 @@
-{
-  config,
-  pkgs,
-  inputs,
-  ...
-}: {
+{pkgs, ...}: {
   stylix.enable = true;
   stylix.polarity = "dark";
   stylix.image = ./wallpaper.jpg;
