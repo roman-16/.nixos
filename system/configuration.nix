@@ -32,6 +32,8 @@
 
   nix.optimise.automatic = true;
 
+  nix.nixPath = ["nixpkgs=${inputs.nixpkgs}"];
+
   nix.gc = {
     automatic = true;
     dates = "weekly";
