@@ -1,9 +1,4 @@
-{
-  config,
-  pkgs,
-  inputs,
-  ...
-}: {
+{inputs, ...}: {
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
@@ -33,12 +28,6 @@
   nix.optimise.automatic = true;
 
   nix.nixPath = ["nixpkgs=${inputs.nixpkgs}"];
-
-  nix.gc = {
-    automatic = true;
-    dates = "weekly";
-    options = "--delete-older-than 30d";
-  };
 
   nix.settings.experimental-features = ["nix-command" "flakes"];
 }
