@@ -1,9 +1,4 @@
-{
-  config,
-  pkgs,
-  inputs,
-  ...
-}: {
+{inputs, ...}: {
   imports = [
     ./hardware-configuration.nix
 
@@ -14,6 +9,7 @@
     ./gnome/configuration.nix
     ./locale/configuration.nix
     ./logitech/configuration.nix
+    ./nh/configuration.nix
     ./programs/configuration.nix
     ./sound/configuration.nix
     ./steam/configuration.nix
