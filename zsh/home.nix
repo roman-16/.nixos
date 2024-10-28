@@ -16,7 +16,7 @@
       shellAliases = {
         nmn = "nft && ngs && nug && ngs && ngb";
         nug = "sudo nix flake update --flake ~/.nixos; nup";
-        nup = "sudo nixos-rebuild switch --flake ~/.nixos#default";
+        nup = "nh os switch -H default";
         ngs = "git -C ~/.nixos add .";
         ngb = "git -C ~/.nixos commit -m \"$(date '+%Y-%m-%d %H:%M:%S')\" && git -C ~/.nixos push";
         nft = "alejandra -q ~/.nixos";
