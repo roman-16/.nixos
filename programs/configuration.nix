@@ -5,7 +5,7 @@
     spotify
     appimage-run
     vesktop
-    # tldr
+    tldr
     stremio
     alejandra
     gimp
