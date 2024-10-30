@@ -5,7 +5,7 @@
   ];
 
   environment.sessionVariables = {
-    STEAM_EXTRA_COMPAT_TOOLS_PATHS = pkgs.proton-ge-bin.outPath;
+    STEAM_EXTRA_COMPAT_TOOLS_PATHS = "/home/roman/.steam/root/compatibilitytools.d";
   };
 
   programs.gamemode.enable = true;
