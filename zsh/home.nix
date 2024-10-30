@@ -20,9 +20,6 @@
         ngb = "git -C ~/.nixos commit -m \"$(date '+%Y-%m-%d %H:%M:%S')\" && git -C ~/.nixos push";
         nft = "alejandra -q ~/.nixos";
 
-        tft = "${pkgs.proton-ge-bin.outPath}";
-        tft2 = "${pkgs.proton-ge-bin.outputName}";
-
         ls = "eza --icons=always --color=always --group-directories-first --hyperlink";
         la = "ls -a";
 
