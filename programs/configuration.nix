@@ -15,8 +15,8 @@
     clapper
     r2modman
     nixd
+    brave
     google-chrome
-    webcord
   ];
 
   services.xserver.excludePackages = with pkgs; [

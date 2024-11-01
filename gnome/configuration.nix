@@ -17,7 +17,6 @@
     gnomeExtensions.smile-complementary-extension
     gnomeExtensions.pip-on-top
     smile
-    brave
   ];
 
   environment.gnome.excludePackages = with pkgs; [
