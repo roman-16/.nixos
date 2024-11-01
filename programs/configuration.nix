@@ -15,6 +15,7 @@
     clapper
     r2modman
     nixd
+    google-chrome
   ];
 
   services.xserver.excludePackages = with pkgs; [
