@@ -1,8 +1,4 @@
-{
-  config,
-  pkgs,
-  ...
-}: {
+{...}: {
   imports = [
     ./firefox/home.nix
     ./git/home.nix
@@ -13,9 +9,12 @@
     ./zsh/home.nix
   ];
 
-  home.username = "roman";
-  home.homeDirectory = "/home/roman";
   programs.home-manager.enable = true;
+
+  home = {
+    username = "roman";
+    homeDirectory = "/home/roman";
+  };
 
   # This value determines the Home Manager release that your configuration is
   # compatible with. This helps avoid breakage when a new Home Manager release
