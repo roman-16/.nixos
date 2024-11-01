@@ -16,6 +16,7 @@
     r2modman
     nixd
     google-chrome
+    webcord
   ];
 
   services.xserver.excludePackages = with pkgs; [
