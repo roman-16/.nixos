@@ -21,7 +21,7 @@
         nft = "alejandra -q ~/.nixos";
 
         ls = "eza --icons=always --color=always --group-directories-first --hyperlink";
-        la = "ls -a";
+        la = "ls -lha";
 
         cat = "bat -p";
 
