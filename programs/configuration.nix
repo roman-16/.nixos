@@ -15,7 +15,6 @@
     clapper
     r2modman
     nixd
-    obs-studio
   ];
 
   services.xserver.excludePackages = with pkgs; [
