@@ -17,6 +17,7 @@
     nixd
     brave
     google-chrome
+    yt-dlp
   ];
 
   services.xserver.excludePackages = with pkgs; [
