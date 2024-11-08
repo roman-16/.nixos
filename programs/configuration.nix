@@ -18,7 +18,6 @@
     brave
     google-chrome
     yt-dlp
-    lutris
   ];
 
   services.xserver.excludePackages = with pkgs; [
