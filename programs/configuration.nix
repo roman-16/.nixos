@@ -18,6 +18,7 @@
     brave
     google-chrome
     yt-dlp
+    musescore
   ];
 
   services.xserver.excludePackages = with pkgs; [
