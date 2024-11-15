@@ -41,6 +41,12 @@
       speed = 0.4;
     };
 
+    "org/gnome/desktop/privacy" = {
+      old-files-age = lib.hm.gvariant.mkUint32 30;
+      remove-old-temp-files = true;
+      remove-old-trash-files = true;
+    };
+
     "org/gnome/desktop/screensaver" = {
       lock-enabled = false;
     };
