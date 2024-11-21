@@ -19,7 +19,6 @@
     google-chrome
     yt-dlp
     musescore
-    audacity
   ];
 
   services.xserver.excludePackages = with pkgs; [
