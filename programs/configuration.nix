@@ -19,6 +19,7 @@
     google-chrome
     yt-dlp
     musescore
+    cheese
   ];
 
   services.xserver.excludePackages = with pkgs; [
