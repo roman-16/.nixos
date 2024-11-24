@@ -2,10 +2,13 @@
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  networking.hostName = "roman-nixos";
-  security.sudo.wheelNeedsPassword = false;
+  networking = {
+    hostName = "roman-nixos";
+    networkmanager.enable = true;
+    wireless.enable = false;
+  };
 
-  networking.networkmanager.enable = true;
+  security.sudo.wheelNeedsPassword = false;
 
   services.xserver.enable = true;
 
