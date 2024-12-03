@@ -4,7 +4,6 @@
 
     ./drivers/configuration.nix
     ./firefox/configuration.nix
-    ./gdlauncher/configuration.nix
     ./git/configuration.nix
     ./gnome/configuration.nix
     ./locale/configuration.nix
