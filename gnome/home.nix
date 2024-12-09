@@ -203,6 +203,7 @@
 
     "org/gnome/shell/extensions/vitals" = {
       hot-sensors = ["_processor_usage_" "_gpu#1_utilization_" "_memory_usage_" "__temperature_avg__"];
+      icon-style = 1;
       position-in-panel = 4;
       show-gpu = true;
       show-voltage = false;
