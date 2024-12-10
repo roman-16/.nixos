@@ -20,6 +20,7 @@
     yt-dlp
     musescore
     cheese
+    darktable
   ];
 
   services.xserver.excludePackages = with pkgs; [
