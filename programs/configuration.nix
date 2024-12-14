@@ -22,6 +22,7 @@
     cheese
     darktable
     protonvpn-gui
+    deno
   ];
 
   services.xserver.excludePackages = with pkgs; [
