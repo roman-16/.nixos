@@ -21,6 +21,7 @@
     musescore
     cheese
     darktable
+    protonvpn-gui
   ];
 
   services.xserver.excludePackages = with pkgs; [
