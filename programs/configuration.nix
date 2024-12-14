@@ -22,6 +22,7 @@
     cheese
     darktable
     protonvpn-gui
+    protonvpn-cli
     deno
   ];
 
