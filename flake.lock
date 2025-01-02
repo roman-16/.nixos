@@ -204,7 +204,7 @@
       },
       "original": {
         "owner": "NixOS",
-        "ref": "nixpkgs-unstable",
+        "ref": "nixos-unstable",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -233,11 +233,11 @@
         "tinted-tmux": "tinted-tmux"
       },
       "locked": {
-        "lastModified": 1735764504,
-        "narHash": "sha256-shMdOkQzR9jIK3TW6XaesOea1rHwxWIFFOhIRhuCF4Y=",
+        "lastModified": 1735840530,
+        "narHash": "sha256-4O+KR6WSb40pcIPO9QboI59eH3/oxNEvCwXkFi6QvvM=",
         "owner": "danth",
         "repo": "stylix",
-        "rev": "911c07f40f816fd2d12a7dd750ca8bc421db9dd2",
+        "rev": "90f95c5d8408360fc38cb3a862565bcb08ae6aa8",
         "type": "github"
       },
       "original": {
