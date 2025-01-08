@@ -22,6 +22,7 @@
     cheese
     darktable
     protonvpn-gui
+    prismlauncher
   ];
 
   services.xserver.excludePackages = with pkgs; [
