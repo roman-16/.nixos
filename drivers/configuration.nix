@@ -10,8 +10,8 @@
     powerManagement.enable = false;
     powerManagement.finegrained = false;
     nvidiaPersistenced = true;
-    open = false;
+    open = true;
     nvidiaSettings = true;
-    package = config.boot.kernelPackages.nvidiaPackages.production;
+    package = config.boot.kernelPackages.nvidiaPackages.stable;
   };
 }
