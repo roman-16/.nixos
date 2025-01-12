@@ -23,6 +23,7 @@
     darktable
     protonvpn-gui
     prismlauncher
+    gdlauncher-carbon
   ];
 
   services.xserver.excludePackages = with pkgs; [
