@@ -11,7 +11,7 @@
     gimp
     obsidian
     just
-    nerd-fonts.symbols-only
+    nerd-fonts.sauce-code-pro
     clapper
     r2modman
     nixd
