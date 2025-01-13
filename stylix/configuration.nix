@@ -23,8 +23,8 @@
       };
 
       monospace = {
-        package = pkgs.fira-code;
-        name = "Fira Code";
+        package = pkgs.fira-mono;
+        name = "Fira Mono";
       };
 
       emoji = {
