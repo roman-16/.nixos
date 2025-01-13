@@ -10,9 +10,6 @@
     alejandra
     gimp
     obsidian
-    just
-    nerd-fonts.sauce-code-pro
-    fira-code
     clapper
     r2modman
     nixd
