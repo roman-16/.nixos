@@ -22,8 +22,8 @@
     };
 
     monospace = {
-      package = pkgs.source-code-pro;
-      name = "Source Code Pro";
+      package = pkgs.fira-code;
+      name = "Fira Code";
     };
 
     emoji = {
