@@ -1,18 +1,36 @@
 {pkgs, ...}: {
-  fonts = {
-    # enableDefaultPackages = true;
-    packages = with pkgs; [
-      nerd-fonts.fira-mono
-      # nerd-fonts.symbols-only
-      # fira-code-symbols
-    ];
+  fonts.packages = with pkgs; [
+    nerd-fonts.fira-mono
+  ];
 
-    # fontconfig = {
-    #   defaultFonts = {
-    #     serif = ["Cantarell"];
-    #     sansSerif = ["Cantarell"];
-    #     monospace = ["Fira Code"];
-    #   };
-    # };
+  stylix = {
+    fonts = {
+      serif = {
+        package = pkgs.cantarell-fonts;
+        name = "Cantarell";
+      };
+
+      sansSerif = {
+        package = pkgs.cantarell-fonts;
+        name = "Cantarell";
+      };
+
+      monospace = {
+        package = pkgs.fira-mono;
+        name = "Fira Mono";
+      };
+
+      emoji = {
+        package = pkgs.noto-fonts-emoji;
+        name = "Noto Color Emoji";
+      };
+
+      sizes = {
+        applications = 11;
+        desktop = 9;
+        popups = 9;
+        terminal = 11;
+      };
+    };
   };
 }
