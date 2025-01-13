@@ -1,10 +1,12 @@
 {pkgs, ...}: {
   fonts.packages = with pkgs; [
-    pkgs.fira-code
-    pkgs.fira-mono
+    fira-code
+    fira-mono
     nerd-fonts.fira-code
     nerd-fonts.fira-mono
   ];
+
+  # 󰉍 Down
 
   stylix = {
     fonts = {
