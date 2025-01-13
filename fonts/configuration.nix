@@ -6,8 +6,6 @@
     nerd-fonts.fira-mono
   ];
 
-  # 󰉍 Down
-
   stylix = {
     fonts = {
       serif = {
@@ -22,7 +20,7 @@
 
       monospace = {
         package = pkgs.fira-mono;
-        name = "Fira Mono";
+        name = "FiraMono Nerd Font";
       };
 
       emoji = {
