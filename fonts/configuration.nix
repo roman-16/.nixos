@@ -1,6 +1,8 @@
 {pkgs, ...}: {
   fonts.packages = with pkgs; [
     pkgs.fira-code
+    pkgs.fira-mono
+    nerd-fonts.fira-code
     nerd-fonts.fira-mono
   ];
 
