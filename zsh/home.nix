@@ -16,6 +16,7 @@
       shellAliases = {
         nmn = "nft && ngs && nup && ngs && ngb";
         nup = "nh os switch -uH default";
+        ngp = "git -C ~/.nixos pull";
         ngs = "git -C ~/.nixos add .";
         ngb = "git -C ~/.nixos commit -m \"$(date '+%Y-%m-%d %H:%M:%S')\"; git -C ~/.nixos push";
         nft = "alejandra -q ~/.nixos";
