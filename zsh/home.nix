@@ -14,7 +14,7 @@
       autosuggestion.enable = true;
       syntaxHighlighting.enable = true;
       shellAliases = {
-        nmn = "nft && ngs && nup && ngs && ngb";
+        nmn = "nft && ngp && ngs && nup && ngs && ngb";
         nup = "nh os switch -uH default";
         ngp = "git -C ~/.nixos pull";
         ngs = "git -C ~/.nixos add .";
