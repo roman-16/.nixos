@@ -22,6 +22,7 @@
     protonvpn-gui
     prismlauncher
     gdlauncher-carbon
+    anydesk
   ];
 
   services.xserver.excludePackages = with pkgs; [
