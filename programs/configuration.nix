@@ -23,6 +23,7 @@
     prismlauncher
     gdlauncher-carbon
     anydesk
+    warp-terminal
   ];
 
   services.xserver.excludePackages = with pkgs; [
