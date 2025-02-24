@@ -159,7 +159,7 @@
       ];
       favorite-apps = [
         "firefox.desktop"
-        "vesktop.desktop"
+        "discord.desktop"
       ];
     };
 
