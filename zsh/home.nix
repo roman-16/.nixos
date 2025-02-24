@@ -15,7 +15,7 @@
 
     oh-my-posh = {
       enable = true;
-      useTheme = "1_shell";
+      useTheme = "atomic";
       enableZshIntegration = true;
     };
 
