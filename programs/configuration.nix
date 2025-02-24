@@ -4,7 +4,6 @@
     vscode.fhs
     spotify
     appimage-run
-    vesktop
     tldr
     stremio
     alejandra
