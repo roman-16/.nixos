@@ -23,7 +23,6 @@
     gdlauncher-carbon
     anydesk
     discord
-    nodejs_22
   ];
 
   services.xserver.excludePackages = with pkgs; [
