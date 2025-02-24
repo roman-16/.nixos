@@ -44,8 +44,8 @@
       '';
       oh-my-zsh = {
         enable = true;
-        plugins = ["direnv" "git"];
-        theme = "robbyrussell";
+        plugins = ["direnv" "git" "starship"];
+        # theme = "robbyrussell";
       };
     };
   };
