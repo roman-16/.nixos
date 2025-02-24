@@ -1,9 +1,9 @@
 {pkgs, ...}: {
   programs = {
-    # carapace = {
-    #   enable = true;
-    #   enableZshIntegration = true;
-    # };
+    carapace = {
+      enable = true;
+      enableZshIntegration = true;
+    };
 
     direnv = {
       enable = true;
