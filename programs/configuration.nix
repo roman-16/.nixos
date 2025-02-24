@@ -23,6 +23,7 @@
     prismlauncher
     gdlauncher-carbon
     anydesk
+    discord
   ];
 
   services.xserver.excludePackages = with pkgs; [
