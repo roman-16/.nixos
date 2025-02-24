@@ -39,7 +39,6 @@
       };
       initExtra = ''
         source ${pkgs.zsh-fzf-tab}/share/fzf-tab/fzf-tab.plugin.zsh;
-        source ${pkgs.zsh-powerlevel10k}/share/zsh-powerlevel10k/powerlevel10k.zsh-theme;
 
         fastfetch -l small -c ~/.nixos/zsh/fastfetch.jsonc;
       '';
