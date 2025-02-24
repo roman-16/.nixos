@@ -13,6 +13,12 @@
 
     fzf.enable = true;
 
+    oh-my-posh = {
+      enable = true;
+      useTheme = "1_shell";
+      enableZshIntegration = true;
+    };
+
     zsh = {
       enable = true;
       enableCompletion = true;
