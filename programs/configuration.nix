@@ -23,7 +23,6 @@
     gdlauncher-carbon
     anydesk
     discord
-    bottles
   ];
 
   services.xserver.excludePackages = with pkgs; [
