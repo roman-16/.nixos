@@ -3,7 +3,7 @@
     enable = true;
     polarity = "dark";
     image = ./wallpaper.jpg;
-    base16Scheme = "${pkgs.base16-schemes}/share/themes/pandora.yaml";
+    base16Scheme = "${pkgs.base16-schemes}/share/themes/eris.yaml";
 
     cursor = {
       package = pkgs.vimix-cursors;
