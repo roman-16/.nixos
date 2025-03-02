@@ -15,7 +15,7 @@
 
     oh-my-posh = {
       enable = true;
-      useTheme = "powerlevel10k_rainbow";
+      useTheme = "1_shell";
       enableZshIntegration = true;
     };
 
