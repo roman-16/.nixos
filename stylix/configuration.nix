@@ -3,7 +3,7 @@
     enable = true;
     polarity = "dark";
     image = ./wallpaper.jpg;
-    base16Scheme = "${pkgs.base16-schemes}/share/themes/selenized-black.yaml";
+    base16Scheme = "${pkgs.base16-schemes}/share/themes/pandora.yaml";
 
     cursor = {
       package = pkgs.vimix-cursors;
