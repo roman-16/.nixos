@@ -33,6 +33,7 @@
         nft = "alejandra -q ~/.nixos";
 
         ls = "eza --icons=always --color=always --group-directories-first --hyperlink";
+        ll = "ls -lh";
         la = "ls -lha";
 
         cat = "bat -p";
