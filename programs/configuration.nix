@@ -23,6 +23,7 @@
     gdlauncher-carbon
     anydesk
     discord
+    owmods-gui
     owmods-cli
   ];
 
