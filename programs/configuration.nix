@@ -23,7 +23,7 @@
     gdlauncher-carbon
     anydesk
     discord
-    owmods-gui
+    owmods-cli
   ];
 
   services.xserver.excludePackages = with pkgs; [
