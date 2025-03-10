@@ -10,7 +10,6 @@
     gimp
     obsidian
     clapper
-    r2modman
     nixd
     brave
     google-chrome
