@@ -22,6 +22,7 @@
     gdlauncher-carbon
     anydesk
     discord
+    kooha
   ];
 
   services.xserver.excludePackages = with pkgs; [
