@@ -18,7 +18,6 @@
     cheese
     darktable
     protonvpn-gui
-    prismlauncher
     gdlauncher-carbon
     anydesk
     discord

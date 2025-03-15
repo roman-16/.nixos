@@ -15,7 +15,7 @@
 
     oh-my-posh = {
       enable = true;
-      useTheme = "powerlevel10k_rainbow";
+      useTheme = "jandedobbeleer";
       enableZshIntegration = true;
     };
 
