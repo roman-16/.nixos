@@ -15,7 +15,7 @@
 
     oh-my-posh = {
       enable = true;
-      # useTheme = "jandedobbeleer";
+      useTheme = "atomic";
       enableZshIntegration = true;
     };
 
