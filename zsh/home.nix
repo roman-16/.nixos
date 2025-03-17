@@ -50,7 +50,7 @@
         fastfetch -l small -c ~/.nixos/zsh/fastfetch.jsonc;
       '';
       oh-my-zsh = {
-        enable = true;
+        # enable = true;
         plugins = ["direnv" "git" "git-auto-fetch"];
         # theme = "robbyrussell";
       };
