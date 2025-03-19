@@ -4,5 +4,8 @@
     name = "Papirus-Dark";
   };
 
-  stylix.targets.firefox.profileNames = ["default"];
+  stylix.targets = {
+    firefox.profileNames = ["default"];
+    qt.platform = "qtct";
+  };
 }
