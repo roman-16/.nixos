@@ -5,7 +5,10 @@
   };
 
   stylix.targets = {
-    firefox.profileNames = ["default"];
+    firefox = {
+      enable = true;
+      profileNames = ["default"];
+    };
     qt.platform = "qtct";
   };
 }
