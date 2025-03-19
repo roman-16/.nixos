@@ -3,4 +3,6 @@
     package = pkgs.papirus-icon-theme;
     name = "Papirus-Dark";
   };
+
+  stylix.targets.firefox.profileNames = ["default"];
 }
