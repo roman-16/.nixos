@@ -22,6 +22,7 @@
     anydesk
     discord
     kooha
+    ghostty
   ];
 
   services.xserver.excludePackages = with pkgs; [
