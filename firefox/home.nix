@@ -6,9 +6,9 @@
 
       search = {
         force = true;
-        order = ["DuckDuckGo"];
-        default = "DuckDuckGo";
-        privateDefault = "DuckDuckGo";
+        order = ["ddg"];
+        default = "ddg";
+        privateDefault = "ddg";
       };
 
       settings = {
