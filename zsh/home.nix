@@ -15,8 +15,9 @@
 
     oh-my-posh = {
       enable = true;
-      useTheme = "atomic";
       enableZshIntegration = true;
+      settings = builtins.fromJSON (builtins.readFile ./oh-my-posh.json);
+      useTheme = "atomic";
     };
 
     zsh = {
