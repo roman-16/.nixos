@@ -16,7 +16,7 @@
     oh-my-posh = {
       enable = true;
       enableZshIntegration = true;
-      useTheme = "atomic";
+      useTheme = "blue-owl";
     };
 
     zsh = {
