@@ -3,7 +3,7 @@
   "blocks": [
     {
       "type": "prompt",
-      "alignment": "right",
+      "alignment": "left",
       "segments": [
         {
           "leading_diamond": "\u256d\u2500\ue0b6",
