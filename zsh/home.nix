@@ -52,7 +52,6 @@
       oh-my-zsh = {
         enable = true;
         plugins = ["direnv" "git" "git-auto-fetch"];
-        # theme = "robbyrussell";
       };
     };
   };
