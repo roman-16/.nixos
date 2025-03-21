@@ -14,7 +14,6 @@
     brave
     google-chrome
     yt-dlp
-    musescore
     cheese
     darktable
     protonvpn-gui
