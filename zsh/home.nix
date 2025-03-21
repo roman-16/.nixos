@@ -16,7 +16,7 @@
     oh-my-posh = {
       enable = true;
       enableZshIntegration = true;
-      useTheme = "wholespace";
+      useTheme = "slim";
     };
 
     zsh = {
