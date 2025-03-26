@@ -216,11 +216,11 @@ with lib.hm.gvariant; {
         (mkVariant (mkTuple [
           (mkUint32 2)
           (mkVariant (mkTuple [
-            "Melbourne"
-            "YMML"
+            "Graz"
+            "LOWG"
             true
-            [(mkTuple [(-0.65740735740229495) 2.5278185274873568])]
-            [(mkTuple [(-0.6600253512802865) 2.5301456447922108])]
+            [(mkTuple [0.82030474843733492 0.269362475406694])]
+            [(mkTuple [0.82146830708976193 0.2696533694331239])]
           ]))
         ]))
       ];
@@ -231,11 +231,11 @@ with lib.hm.gvariant; {
         (mkVariant (mkTuple [
           (mkUint32 2)
           (mkVariant (mkTuple [
-            "Melbourne"
-            "YMML"
+            "Graz"
+            "LOWG"
             true
-            [(mkTuple [(-0.65740735740229495) 2.5278185274873568])]
-            [(mkTuple [(-0.6600253512802865) 2.5301456447922108])]
+            [(mkTuple [0.82030474843733492 0.269362475406694])]
+            [(mkTuple [0.82146830708976193 0.2696533694331239])]
           ]))
         ]))
       ];
