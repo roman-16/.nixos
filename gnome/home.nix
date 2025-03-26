@@ -3,7 +3,8 @@
   pkgs,
   lib,
   ...
-}: {
+}:
+with lib.hm.gvariant; {
   dconf.settings = {
     "ca/desrt/dconf-editor" = {
       show-warning = false;
@@ -42,7 +43,7 @@
     };
 
     "org/gnome/desktop/privacy" = {
-      old-files-age = lib.hm.gvariant.mkUint32 30;
+      old-files-age = mkUint32 30;
       remove-old-temp-files = true;
       remove-old-trash-files = true;
     };
@@ -69,7 +70,7 @@
     };
 
     "org/gnome/desktop/session" = {
-      idle-delay = lib.hm.gvariant.mkUint32 0;
+      idle-delay = mkUint32 0;
     };
 
     "org/gnome/desktop/sound" = {
@@ -100,7 +101,7 @@
     "org/gnome/settings-daemon/plugins/color" = {
       night-light-enabled = true;
       night-light-schedule-automatic = true;
-      night-light-temperature = lib.hm.gvariant.mkUint32 3000;
+      night-light-temperature = mkUint32 3000;
     };
 
     "org/gnome/settings-daemon/plugins/media-keys" = {
@@ -211,11 +212,33 @@
     };
 
     "org/gnome/shell/weather" = {
-      locations = ["Graz, Austria"];
+      locations = [
+        (mkVariant (mkTuple [
+          (mkUint32 2)
+          (mkVariant (mkTuple [
+            "Melbourne"
+            "YMML"
+            true
+            [(mkTuple [(-0.65740735740229495) 2.5278185274873568])]
+            [(mkTuple [(-0.6600253512802865) 2.5301456447922108])]
+          ]))
+        ]))
+      ];
     };
 
     "org/gnome/Weather" = {
-      locations = ["Graz, Austria"];
+      locations = [
+        (mkVariant (mkTuple [
+          (mkUint32 2)
+          (mkVariant (mkTuple [
+            "Melbourne"
+            "YMML"
+            true
+            [(mkTuple [(-0.65740735740229495) 2.5278185274873568])]
+            [(mkTuple [(-0.6600253512802865) 2.5301456447922108])]
+          ]))
+        ]))
+      ];
     };
   };
 
