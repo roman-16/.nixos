@@ -209,6 +209,14 @@
       show-gpu = true;
       show-voltage = false;
     };
+
+    "org/gnome/shell/weather" = {
+      locations = ["Graz, Austria"];
+    };
+
+    "org/gnome/Weather" = {
+      locations = ["Graz, Austria"];
+    };
   };
 
   home.file.".config/burn-my-windows/profiles/1728415013431728.conf" = {
