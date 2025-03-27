@@ -19,6 +19,11 @@
       useTheme = "slim";
     };
 
+    zoxide = {
+      enable = true;
+      enableZshIntegration = true;
+    };
+
     zsh = {
       enable = true;
       enableCompletion = true;
