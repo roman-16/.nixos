@@ -20,7 +20,6 @@
     anydesk
     discord
     kooha
-    tealdeer
   ];
 
   services.xserver.excludePackages = with pkgs; [
