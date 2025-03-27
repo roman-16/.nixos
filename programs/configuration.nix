@@ -4,7 +4,6 @@
     vscode.fhs
     spotify
     appimage-run
-    tldr
     stremio
     alejandra
     gimp
@@ -21,6 +20,7 @@
     anydesk
     discord
     kooha
+    tealdeer
   ];
 
   services.xserver.excludePackages = with pkgs; [
