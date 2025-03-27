@@ -11,5 +11,6 @@
     eza
     zsh-fzf-tab
     ripgrep
+    fd
   ];
 }

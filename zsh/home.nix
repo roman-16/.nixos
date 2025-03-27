@@ -36,6 +36,8 @@
 
         fastfetch = "fastfetch -l small -c ~/.nixos/zsh/fastfetch.jsonc";
 
+        find = "fd";
+
         grep = "rg";
 
         grr = "git branch | grep -v \\* | xargs git branch -D; git remote prune origin";
