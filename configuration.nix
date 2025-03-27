@@ -15,7 +15,6 @@
     ./steam/configuration.nix
     ./stylix/configuration.nix
     ./system/configuration.nix
-    ./tealdeer/configuration.nix
     ./zsh/configuration.nix
   ];
 
