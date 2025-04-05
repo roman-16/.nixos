@@ -20,7 +20,6 @@
     anydesk
     discord
     kooha
-    gearlever
   ];
 
   services.xserver.excludePackages = with pkgs; [
