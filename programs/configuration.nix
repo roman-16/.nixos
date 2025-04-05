@@ -20,7 +20,7 @@
     anydesk
     discord
     kooha
-    lunar-client
+    gearlever
   ];
 
   services.xserver.excludePackages = with pkgs; [
