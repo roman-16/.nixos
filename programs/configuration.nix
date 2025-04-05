@@ -20,6 +20,7 @@
     anydesk
     discord
     kooha
+    lunar-client
   ];
 
   services.xserver.excludePackages = with pkgs; [
