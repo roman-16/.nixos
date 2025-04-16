@@ -16,11 +16,11 @@
         "toolkit.legacyUserProfileCustomizations.stylesheets" = true;
       };
 
-      userChrome = ''
-        #alltabs-button {
-          display: none !important;
-        }
-      '';
+      # userChrome = ''
+      #   #alltabs-button {
+      #     display: none !important;
+      #   }
+      # '';
     };
   };
 }
