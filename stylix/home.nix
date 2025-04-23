@@ -8,10 +8,4 @@
     firefox.profileNames = ["default"];
     qt.platform = "qtct";
   };
-
-  stylix.cursor = {
-    package = pkgs.vimix-cursors;
-    name = "Vimix-white-cursors";
-    size = 32;
-  };
 }
