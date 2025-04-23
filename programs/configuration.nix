@@ -15,7 +15,6 @@
     yt-dlp
     cheese
     darktable
-    protonvpn-gui
     gdlauncher-carbon
     anydesk
     discord
