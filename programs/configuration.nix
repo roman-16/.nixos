@@ -15,10 +15,11 @@
     yt-dlp
     cheese
     darktable
-    gdlauncher-carbon
+    # gdlauncher-carbon
     anydesk
     discord
     kooha
+    prismlauncher
   ];
 
   services.xserver.excludePackages = with pkgs; [
