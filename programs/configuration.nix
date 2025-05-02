@@ -15,7 +15,6 @@
     yt-dlp
     cheese
     darktable
-    # gdlauncher-carbon
     anydesk
     discord
     kooha
