@@ -6,7 +6,7 @@
     base16Scheme = "${pkgs.base16-schemes}/share/themes/selenized-black.yaml";
 
     cursor = {
-      package = pkgs.bibata-cursors;
+      package = pkgs.sweet;
       name = "Vimix-white-cursors";
       size = 32;
     };
