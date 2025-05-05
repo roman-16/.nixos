@@ -6,7 +6,7 @@
     base16Scheme = "${pkgs.base16-schemes}/share/themes/selenized-black.yaml";
 
     cursor = {
-      package = pkgs.sweet;
+      package = pkgs.nordzy-cursor-theme;
       name = "Vimix-white-cursors";
       size = 32;
     };
