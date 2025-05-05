@@ -7,7 +7,7 @@
 
     cursor = {
       package = pkgs.nordzy-cursor-theme;
-      name = "Vimix-white-cursors";
+      name = "Nordzy-cursors-white";
       size = 32;
     };
   };
