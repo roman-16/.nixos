@@ -19,7 +19,6 @@
     discord
     kooha
     prismlauncher
-    vesktop
   ];
 
   services.xserver.excludePackages = with pkgs; [
