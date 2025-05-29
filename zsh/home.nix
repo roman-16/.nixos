@@ -43,6 +43,8 @@
 
         find = "fd";
 
+        du = "dua interactive /";
+
         grep = "rga-fzf";
 
         grr = "git branch | grep -v \\* | xargs git branch -D; git remote prune origin";
