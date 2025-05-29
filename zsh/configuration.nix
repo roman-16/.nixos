@@ -15,5 +15,6 @@
     dua
     (uutils-coreutils.override {prefix = "";})
     uutils-findutils
+    uutils-diffutils
   ];
 }
