@@ -13,6 +13,6 @@
     ripgrep-all
     fd
     dua
-    uutils-coreutils
+    (uutils-coreutils.override {prefix = "";})
   ];
 }
