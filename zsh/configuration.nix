@@ -14,5 +14,6 @@
     fd
     dua
     (uutils-coreutils.override {prefix = "";})
+    uutils-findutils
   ];
 }
