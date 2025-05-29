@@ -19,6 +19,7 @@
     discord
     kooha
     prismlauncher
+    ghostty
   ];
 
   services.xserver.excludePackages = with pkgs; [

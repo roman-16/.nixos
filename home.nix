@@ -1,7 +1,6 @@
 {...}: {
   imports = [
     ./firefox/home.nix
-    ./ghostty/home.nix
     ./git/home.nix
     ./gnome/home.nix
     ./locale/home.nix
