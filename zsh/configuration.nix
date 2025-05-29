@@ -10,7 +10,7 @@
     bat
     eza
     zsh-fzf-tab
-    ripgrep
+    ripgrep-all
     fd
   ];
 }

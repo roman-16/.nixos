@@ -43,7 +43,7 @@
 
         find = "fd";
 
-        grep = "rg";
+        grep = "rga";
 
         grr = "git branch | grep -v \\* | xargs git branch -D; git remote prune origin";
 
