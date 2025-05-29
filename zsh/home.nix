@@ -43,7 +43,7 @@
 
         find = "fd";
 
-        grep = "rga";
+        grep = "rga-fzf";
 
         grr = "git branch | grep -v \\* | xargs git branch -D; git remote prune origin";
 
@@ -60,8 +60,6 @@
       };
       initContent = ''
         source ${pkgs.zsh-fzf-tab}/share/fzf-tab/fzf-tab.plugin.zsh;
-
-        fastfetch -l small -c ~/.nixos/zsh/fastfetch.jsonc;
       '';
       oh-my-zsh = {
         enable = true;
