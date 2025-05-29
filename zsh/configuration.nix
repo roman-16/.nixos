@@ -13,6 +13,6 @@
     ripgrep-all
     fd
     dua
-    (lib.hiPrio uutils-coreutils.override {prefix = "";})
+    (uutils-coreutils.override {prefix = "";})
   ];
 }
