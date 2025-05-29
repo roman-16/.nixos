@@ -12,5 +12,6 @@
     zsh-fzf-tab
     ripgrep-all
     fd
+    dua
   ];
 }
