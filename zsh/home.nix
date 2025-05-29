@@ -62,6 +62,15 @@
       };
       initContent = ''
         source ${pkgs.zsh-fzf-tab}/share/fzf-tab/fzf-tab.plugin.zsh;
+
+        gsc() {
+          if [[ $(git status -s) ]]; then
+            git stash -u && git checkout $@ && git stash pop;
+          else
+            git checkout $@;
+          fi
+        }
+        compdef _git gsc='git-checkout';
       '';
       oh-my-zsh = {
         enable = true;
