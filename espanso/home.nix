@@ -1,5 +1,0 @@
-{...}: {
-  services.espanso = {
-    enable = true;
-  };
-}
