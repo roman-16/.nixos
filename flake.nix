@@ -7,7 +7,6 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nix-flatpak.url = "github:gmodena/nix-flatpak?ref=latest";
     stylix.url = "github:danth/stylix";
   };
 
@@ -20,7 +19,6 @@
       modules = [
         ./configuration.nix
         inputs.home-manager.nixosModules.default
-        inputs.nix-flatpak.nixosModules.nix-flatpak
         inputs.stylix.nixosModules.stylix
       ];
     };
