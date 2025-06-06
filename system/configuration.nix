@@ -4,7 +4,7 @@
     systemd-boot = {
       enable = true;
       windows."default" = {
-        efiDeviceHandle = "sdb1";
+        efiDeviceHandle = "sda1";
         title = "Windows";
       };
     };
