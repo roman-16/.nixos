@@ -30,5 +30,6 @@
     epiphany
     gnome-music
     geary
+    gnome-software
   ];
 }
