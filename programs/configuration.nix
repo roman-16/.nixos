@@ -19,7 +19,6 @@
     discord
     kooha
     prismlauncher
-    lsb-release
   ];
 
   services.xserver.excludePackages = with pkgs; [
