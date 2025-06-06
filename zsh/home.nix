@@ -13,8 +13,6 @@
 
     fzf.enable = true;
 
-    nix-index.enable = true;
-
     oh-my-posh = {
       enable = true;
       enableZshIntegration = true;
