@@ -14,7 +14,6 @@
   boot = {
     extraModulePackages = [];
     kernelModules = ["kvm-intel"];
-    kernelParams = ["fbcon=map:1"];
     initrd = {
       availableKernelModules = ["xhci_pci" "ahci" "nvme" "usbhid" "usb_storage" "sd_mod"];
       kernelModules = [];
