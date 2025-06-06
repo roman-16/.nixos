@@ -4,7 +4,6 @@
     ./git/home.nix
     ./gnome/home.nix
     ./locale/home.nix
-    ./sound/home.nix
     ./stylix/home.nix
     ./tealdeer/home.nix
     ./zsh/home.nix
