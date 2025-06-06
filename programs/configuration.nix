@@ -19,7 +19,6 @@
     discord
     kooha
     prismlauncher
-    nix-index
   ];
 
   services.xserver.excludePackages = with pkgs; [
