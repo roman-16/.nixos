@@ -3,7 +3,7 @@
     efi.canTouchEfiVariables = true;
     systemd-boot = {
       enable = true;
-      windows."10".efiDeviceHandle = "sdb1";
+      windows."Windows".efiDeviceHandle = "sdb1";
     };
   };
 
