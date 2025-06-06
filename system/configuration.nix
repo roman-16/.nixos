@@ -1,13 +1,7 @@
 {inputs, ...}: {
   boot.loader = {
     efi.canTouchEfiVariables = true;
-    systemd-boot = {
-      enable = true;
-      windows."default" = {
-        efiDeviceHandle = "sda1";
-        title = "Windows";
-      };
-    };
+    systemd-boot.enable = true;
   };
 
   networking = {
