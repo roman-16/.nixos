@@ -17,6 +17,5 @@
     uutils-findutils
     uutils-diffutils
     sudo-rs
-    macchina
   ];
 }
