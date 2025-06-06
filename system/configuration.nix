@@ -1,6 +1,11 @@
 {inputs, ...}: {
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
+  boot.loader = {
+    efi.canTouchEfiVariables = true;
+    systemd-boot = {
+      enable = true;
+      windows."10".efiDeviceHandle = "sdb1";
+    };
+  };
 
   networking = {
     hostName = "roman-nixos";
