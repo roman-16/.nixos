@@ -31,5 +31,6 @@
     gnome-music
     geary
     gnome-software
+    decibels
   ];
 }
