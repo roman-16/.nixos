@@ -71,8 +71,6 @@
           fi
         }
         compdef _git gsc='git-checkout';
-
-        clear;
       '';
       oh-my-zsh = {
         enable = true;
