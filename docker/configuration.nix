@@ -1,7 +1,13 @@
 {pkgs, ...}: {
-  environment.systemPackages = with pkgs; [
-    podman-compose
-  ];
+  environment = {
+    systemPackages = with pkgs; [
+      podman-compose
+    ];
+
+    variables = {
+      PODMAN_COMPOSE_SUPPRESS_MSG = "1";
+    };
+  };
 
   virtualisation = {
     containers.enable = true;
