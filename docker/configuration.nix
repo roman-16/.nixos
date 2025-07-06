@@ -8,8 +8,7 @@
 
   virtualisation.docker = {
     autoPrune.enable = true;
-    enable = false;
-    enableOnBoot = false;
+    enable = true;
     rootless = {
       enable = true;
       setSocketVariable = true;
