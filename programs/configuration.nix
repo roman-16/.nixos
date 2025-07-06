@@ -19,6 +19,7 @@
     discord
     kooha
     prismlauncher
+    signal-desktop-bin
   ];
 
   services.xserver.excludePackages = with pkgs; [
