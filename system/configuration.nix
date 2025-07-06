@@ -10,18 +10,20 @@
     wireless.enable = false;
   };
 
-  security.sudo.wheelNeedsPassword = false;
+  security = {
+    rtkit.enable = true;
+    sudo.wheelNeedsPassword = false;
+  };
 
-  services.xserver.enable = true;
-
-  services.printing.enable = true;
-
-  security.rtkit.enable = true;
+  services = {
+    printing.enable = true;
+    xserver.enable = true;
+  };
 
   users.users.roman = {
     isNormalUser = true;
     description = "Roman";
-    extraGroups = ["networkmanager" "wheel"];
+    extraGroups = ["docker" "networkmanager" "wheel"];
   };
 
   nixpkgs.config.allowUnfree = true;
@@ -30,9 +32,11 @@
 
   documentation.nixos.enable = false;
 
-  nix.optimise.automatic = true;
+  nix = {
+    optimise.automatic = true;
+    nixPath = ["nixpkgs=${inputs.nixpkgs}"];
+    settings.experimental-features = ["nix-command" "flakes"];
+  };
 
-  nix.nixPath = ["nixpkgs=${inputs.nixpkgs}"];
-
-  nix.settings.experimental-features = ["nix-command" "flakes"];
+  virtualisation.docker.enable = true;
 }
