@@ -5,7 +5,7 @@
     ];
 
     variables = {
-      PODMAN_COMPOSE_SUPPRESS_MSG = "1";
+      PODMAN_COMPOSE_WARNING_LOGS = "false";
     };
   };
 
