@@ -2,6 +2,7 @@
   imports = [
     ./hardware-configuration.nix
 
+    ./docker/configuration.nix
     ./drivers/configuration.nix
     ./firefox/configuration.nix
     ./fonts/configuration.nix
