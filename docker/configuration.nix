@@ -10,6 +10,7 @@
   };
 
   users.users.roman = {
+    extraGroups = ["podman"];
     subUidRanges = [
       {
         startUid = 100000;
