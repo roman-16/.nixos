@@ -9,28 +9,20 @@
     };
   };
 
-  environment.etc."subuid".text = ''
-    roman:10000:65536
-  '';
-
-  environment.etc."subgid".text = ''
-    roman:10000:65536
-  '';
-
-  # users.users.roman = {
-  #   subUidRanges = [
-  #     {
-  #       startUid = 10000;
-  #       count = 65536;
-  #     }
-  #   ];
-  #   subGidRanges = [
-  #     {
-  #       startGid = 10000;
-  #       count = 65536;
-  #     }
-  #   ];
-  # };
+  users.users.roman = {
+    subUidRanges = [
+      {
+        startUid = 10000;
+        count = 65536;
+      }
+    ];
+    subGidRanges = [
+      {
+        startGid = 10000;
+        count = 65536;
+      }
+    ];
+  };
 
   virtualisation = {
     containers.enable = true;
