@@ -26,13 +26,13 @@
     extraGroups = ["networkmanager" "wheel" "podman"];
     subUidRanges = [
       {
-        startUid = 100000;
+        startUid = 10000;
         count = 65536;
       }
     ];
     subGidRanges = [
       {
-        startGid = 100000;
+        startGid = 10000;
         count = 65536;
       }
     ];
