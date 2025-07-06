@@ -7,7 +7,12 @@
   };
 
   virtualisation.docker = {
-    enable = true;
+    autoPrune.enable = true;
+    enable = false;
     enableOnBoot = false;
+    rootless = {
+      enable = true;
+      setSocketVariable = true;
+    };
   };
 }
