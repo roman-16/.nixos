@@ -3,7 +3,6 @@
     enable = true;
     polarity = "dark";
     image = ./wallpaper.jpg;
-    # base16Scheme = "${pkgs.base16-schemes}/share/themes/tomorrow-night.yaml";
     base16Scheme = {
       base00 = "1F1F1F";
       base01 = "181818";
