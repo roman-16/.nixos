@@ -20,6 +20,7 @@
     kooha
     prismlauncher
     signal-desktop-bin
+    eyedropper
   ];
 
   services.xserver.excludePackages = with pkgs; [
