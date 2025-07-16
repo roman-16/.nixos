@@ -6,7 +6,6 @@
     appimage-run
     stremio
     alejandra
-    gimp
     obsidian
     clapper
     nixd
@@ -14,11 +13,9 @@
     google-chrome
     yt-dlp
     cheese
-    darktable
     anydesk
     discord
     kooha
-    prismlauncher
     signal-desktop-bin
     eyedropper
   ];

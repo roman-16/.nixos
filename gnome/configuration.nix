@@ -12,7 +12,6 @@
     gnomeExtensions.dash-to-panel
     gnomeExtensions.ddterm
     gnomeExtensions.lock-keys
-    gnomeExtensions.quick-settings-tweaker
     gnomeExtensions.vitals
     gnomeExtensions.smile-complementary-extension
     gnomeExtensions.pip-on-top

@@ -152,7 +152,6 @@ with lib.hm.gvariant; {
         gnomeExtensions.dash-to-panel.extensionUuid
         gnomeExtensions.ddterm.extensionUuid
         gnomeExtensions.lock-keys.extensionUuid
-        gnomeExtensions.quick-settings-tweaker.extensionUuid
         gnomeExtensions.smile-complementary-extension.extensionUuid
         gnomeExtensions.user-themes.extensionUuid
         gnomeExtensions.vitals.extensionUuid
@@ -193,13 +192,6 @@ with lib.hm.gvariant; {
 
     "org/gnome/shell/extensions/lockkeys" = {
       style = "show-hide-capslock";
-    };
-
-    "org/gnome/shell/extensions/quick-settings-tweaks" = {
-      datemenu-remove-notifications = false;
-      notifications-enabled = false;
-      user-removed-buttons = ["NMWiredToggle" "NMWirelessToggle" "BluetoothToggle" "NightLightToggle" "DarkModeToggle" "PowerProfilesToggle"];
-      volume-mixer-enabled = false;
     };
 
     "org/gnome/shell/extensions/vitals" = {

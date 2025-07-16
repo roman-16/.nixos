@@ -1,7 +1,11 @@
 {inputs, ...}: {
-  boot.loader = {
-    efi.canTouchEfiVariables = true;
-    systemd-boot.enable = true;
+  boot = {
+    kernelParams = ["nvidia-drm.modeset=1"];
+
+    loader = {
+      efi.canTouchEfiVariables = true;
+      systemd-boot.enable = true;
+    };
   };
 
   networking = {
