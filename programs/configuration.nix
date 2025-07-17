@@ -18,6 +18,7 @@
     kooha
     signal-desktop-bin
     eyedropper
+    ffmpeg
   ];
 
   services.xserver.excludePackages = with pkgs; [
