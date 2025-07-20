@@ -19,7 +19,6 @@
     signal-desktop-bin
     eyedropper
     ffmpeg
-    tree
   ];
 
   services.xserver.excludePackages = with pkgs; [
