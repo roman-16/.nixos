@@ -17,5 +17,6 @@
     uutils-findutils
     uutils-diffutils
     sudo-rs
+    tre-command
   ];
 }
