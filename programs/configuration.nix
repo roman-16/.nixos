@@ -19,6 +19,7 @@
     signal-desktop-bin
     eyedropper
     ffmpeg
+    ledger-live-desktop
   ];
 
   services.xserver.excludePackages = with pkgs; [
