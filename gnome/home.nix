@@ -158,7 +158,7 @@ with lib.hm.gvariant; {
         gnomeExtensions.pip-on-top.extensionUuid
       ];
       favorite-apps = [
-        "firefox.desktop"
+        "brave.desktop"
         "discord.desktop"
       ];
     };
