@@ -18,7 +18,7 @@ with lib.hm.gvariant; {
       shortcut-page-close = ["<Shift><Control>w"];
       shortcut-win-new-tab = ["<Shift><Control>t"];
       tab-policy = "automatic";
-      window-size = 0.4;
+      window-size = 0.41;
     };
 
     "it/mijorus/smile" = {
