@@ -11,7 +11,6 @@ with lib.hm.gvariant; {
     };
 
     "com/github/amezin/ddterm" = {
-      background-opacity = 1;
       ddterm-toggle-hotkey = ["F10"];
       hide-when-focus-lost = true;
       panel-icon-type = "none";
