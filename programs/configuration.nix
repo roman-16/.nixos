@@ -9,7 +9,6 @@
     obsidian
     clapper
     nixd
-    brave
     google-chrome
     yt-dlp
     cheese

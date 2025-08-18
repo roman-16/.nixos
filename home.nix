@@ -1,5 +1,6 @@
 {...}: {
   imports = [
+    ./brave/home.nix
     ./firefox/home.nix
     ./git/home.nix
     ./gnome/home.nix
