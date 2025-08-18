@@ -19,6 +19,7 @@
     eyedropper
     ffmpeg
     ledger-live-desktop
+    brave
   ];
 
   services.xserver.excludePackages = with pkgs; [
