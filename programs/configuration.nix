@@ -4,7 +4,6 @@
     vscode.fhs
     spotify
     appimage-run
-    stremio
     alejandra
     obsidian
     clapper

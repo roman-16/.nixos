@@ -47,14 +47,14 @@
 
         grep = "rga-fzf";
 
-        grr = "git branch | grep -v \\* | xargs git branch -D; git remote prune origin";
+        grr = "git branch | rga -v \\* | xargs git branch -D; git remote prune origin";
 
         ls = "eza --icons=always --color=always --group-directories-first --hyperlink";
         ll = "ls -lh";
         la = "ls -lha";
 
         nmn = "nft && ngp && ngs && nup && ngs && ngb";
-        nup = "nh os switch -uH default";
+        nup = "nh os switch --update --hostname=default";
         ngp = "git -C ~/.nixos pull";
         ngs = "git -C ~/.nixos add .";
         ngb = "git -C ~/.nixos commit -m \"$(date '+%Y-%m-%d %H:%M:%S')\"; git -C ~/.nixos push";
