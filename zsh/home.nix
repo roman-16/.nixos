@@ -47,7 +47,7 @@
 
         grep = "rga-fzf";
 
-        grr = "git branch | rga -v \\* | xargs git branch -D; git remote prune origin";
+        grr = "git branch | rga -v \"\*\" | xargs git branch -D; git remote prune origin";
 
         ls = "eza --icons=always --color=always --group-directories-first --hyperlink";
         ll = "ls -lh";
