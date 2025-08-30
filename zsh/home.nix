@@ -16,7 +16,7 @@
     oh-my-posh = {
       enable = true;
       enableZshIntegration = true;
-      useTheme = "slim";
+      useTheme = "pararussel";
     };
 
     pay-respects = {
