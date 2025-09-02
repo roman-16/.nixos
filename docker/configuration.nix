@@ -1,10 +1,8 @@
 {pkgs, ...}: {
-  environment = {
-    systemPackages = with pkgs; [
-      docker
-      docker-compose
-    ];
-  };
+  environment.systemPackages = with pkgs; [
+    docker
+    docker-compose
+  ];
 
   virtualisation.docker = {
     autoPrune.enable = true;
