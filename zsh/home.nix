@@ -53,6 +53,8 @@
         ll = "ls -lh";
         la = "ls -lha";
 
+        mimetype = "xdg-mime query filetype $@";
+
         nmn = "nft && ngp && ngs && nup && ngs && ngb";
         nup = "nh os switch --update --hostname=default";
         ngp = "git -C ~/.nixos pull";
