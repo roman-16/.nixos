@@ -21,5 +21,6 @@
     uutils-diffutils
     sudo-rs
     tre-command
+    lsof
   ];
 }
