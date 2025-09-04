@@ -5,8 +5,13 @@
   ];
 
   virtualisation.docker = {
-    autoPrune.enable = true;
     enable = true;
+
+    autoPrune = {
+      enable = true;
+      flags = ["--all" "--volumes"];
+    };
+
     rootless = {
       enable = true;
       setSocketVariable = true;
