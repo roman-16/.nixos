@@ -19,7 +19,10 @@
     ffmpeg
     ledger-live-desktop
     brave
+    stremio
   ];
+
+  nixpkgs.config.permittedInsecurePackages = ["qtwebengine-5.15.19"];
 
   services.xserver.excludePackages = with pkgs; [
     xterm
