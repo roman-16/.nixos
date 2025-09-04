@@ -3,7 +3,10 @@
     shell = pkgs.zsh;
   };
 
-  programs.zsh.enable = true;
+  programs = {
+    command-not-found.enable = true;
+    zsh.enable = true;
+  };
 
   environment.systemPackages = with pkgs; [
     fastfetch

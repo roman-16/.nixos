@@ -22,6 +22,7 @@
     stremio
   ];
 
+  # Allowed because of stremio
   nixpkgs.config.permittedInsecurePackages = ["qtwebengine-5.15.19"];
 
   services.xserver.excludePackages = with pkgs; [
