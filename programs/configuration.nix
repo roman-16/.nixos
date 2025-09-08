@@ -20,6 +20,7 @@
     ledger-live-desktop
     brave
     stremio
+    foliate
   ];
 
   # Allowed because of stremio
