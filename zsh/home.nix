@@ -63,8 +63,6 @@
         nft = "alejandra -q ~/.nixos";
 
         tree = "tre --editor";
-
-        yay = "nmn";
       };
       initContent = ''
         source ${pkgs.zsh-fzf-tab}/share/fzf-tab/fzf-tab.plugin.zsh;
