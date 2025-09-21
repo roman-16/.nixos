@@ -21,6 +21,7 @@
     brave
     stremio
     foliate
+    prismlauncher
   ];
 
   # Allowed because of stremio
