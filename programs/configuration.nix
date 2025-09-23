@@ -22,6 +22,7 @@
     stremio
     foliate
     prismlauncher
+    gimp3-with-plugins
   ];
 
   # Allowed because of stremio
