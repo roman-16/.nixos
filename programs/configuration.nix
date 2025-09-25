@@ -19,14 +19,10 @@
     ffmpeg
     ledger-live-desktop
     brave
-    stremio
     foliate
     prismlauncher
     gimp3-with-plugins
   ];
-
-  # Allowed because of stremio
-  nixpkgs.config.permittedInsecurePackages = ["qtwebengine-5.15.19"];
 
   services.xserver.excludePackages = with pkgs; [
     xterm
