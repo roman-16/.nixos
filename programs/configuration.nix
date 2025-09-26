@@ -22,6 +22,7 @@
     foliate
     prismlauncher
     gimp3-with-plugins
+    cursor-cli
   ];
 
   services.xserver.excludePackages = with pkgs; [
