@@ -22,6 +22,7 @@
     foliate
     prismlauncher
     gimp3-with-plugins
+    claude-code
   ];
 
   services.xserver.excludePackages = with pkgs; [
