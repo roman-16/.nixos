@@ -22,5 +22,6 @@
     sudo-rs
     tre-command
     lsof
+    tree
   ];
 }
