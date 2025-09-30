@@ -41,8 +41,6 @@
 
         fastfetch = "fastfetch -l small -c ~/.nixos/zsh/fastfetch.jsonc";
 
-        find = "fd";
-
         du = "dua interactive /";
 
         grep = "rga-fzf";
@@ -61,8 +59,6 @@
         ngs = "git -C ~/.nixos add .";
         ngb = "git -C ~/.nixos commit -m \"$(date '+%Y-%m-%d %H:%M:%S')\"; git -C ~/.nixos push";
         nft = "alejandra -q ~/.nixos";
-
-        tree = "tre --editor";
       };
       initContent = ''
         source ${pkgs.zsh-fzf-tab}/share/fzf-tab/fzf-tab.plugin.zsh;
