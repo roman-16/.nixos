@@ -25,6 +25,7 @@ in {
         edit = "allow";
         bash = {
           "*" = "ask";
+          "cd*" = "allow";
           "echo*" = "allow";
           "ls*" = "allow";
           "npm*" = "allow";
