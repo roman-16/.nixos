@@ -21,7 +21,7 @@ in {
         };
         playwright = {
           enabled = true;
-          command = ["npx" "--yes" "@playwright/mcp@latest"];
+          command = ["npx" "--yes" "@playwright/mcp@latest" "--" "--executable-path" "\"$PLAYWRIGHT_BROWSERS_PATH/chromium-1169/chrome-linux/chrome\""];
           type = "local";
         };
       };
