@@ -21,8 +21,10 @@ in {
         };
         playwright = {
           enabled = true;
-          command = ["npx" "--yes" "@playwright/mcp@latest" "--" "--executable-path" "\"$PLAYWRIGHT_BROWSERS_PATH/chromium-1169/chrome-linux/chrome\""];
-          type = "local";
+          # command = ["npx" "--yes" "@playwright/mcp@latest" "--" "--executable-path" "\"$PLAYWRIGHT_BROWSERS_PATH/chromium-1169/chrome-linux/chrome\""];
+          # type = "local";
+          type = "remote";
+          url = "http://localhost:8931/mcp";
         };
       };
       model = "opencode/grok-code";
