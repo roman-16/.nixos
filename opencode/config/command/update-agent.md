@@ -7,7 +7,7 @@ Update the `AGENT.md` file to reflect the project. Look into the project for tha
 
 Compress content if needed but don't delete any. Add content if needed. Keep the file clean, small and simple.
 
-Include a overview of the project structure with descriptions for each folder/file, use `tree` to do that but ignore dependencies.
+Include a overview of the project structure with descriptions for each folder/file, use `tree` to do that but ignore dependencies. Don't include the complete result, just the most important parts.
 
 User input to add to the `AGENT.md` file:
 $ARGUMENTS
