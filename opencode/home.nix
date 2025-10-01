@@ -21,8 +21,10 @@ in {
         };
         playwright = {
           enabled = true;
-          command = ["npx" "@playwright/mcp@latest"];
-          type = "local";
+          # command = ["npx" "@playwright/mcp@latest"];
+          # type = "local";
+          type = "remote";
+          url = "http://localhost:8931/mcp";
         };
       };
       model = "opencode/grok-code";
