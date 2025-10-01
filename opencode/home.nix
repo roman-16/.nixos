@@ -22,7 +22,7 @@ in {
         playwright = {
           enabled = true;
           command = ["npx" "@playwright/mcp@latest"];
-          type = "remote";
+          type = "local";
         };
       };
       model = "opencode/grok-code";
