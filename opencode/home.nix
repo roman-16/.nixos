@@ -25,8 +25,9 @@ in {
         edit = "allow";
         bash = {
           "*" = "ask";
+          "ls*" = "allow";
           "npm*" = "allow";
-          "em*" = "allow";
+          "tree*" = "allow";
         };
         webfetch = "allow";
       };
