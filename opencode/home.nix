@@ -20,7 +20,7 @@ in {
           url = "https://mcp.context7.com/mcp";
         };
         playwright = {
-          command = ["npx" "--yes" "@playwright/mcp@latest"];
+          command = ["npx" "@playwright/mcp"];
           type = "local";
         };
       };
