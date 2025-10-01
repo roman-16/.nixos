@@ -1,6 +1,11 @@
 {...}: let
   secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
 in {
+  home.file.".config/opencode" = {
+    source = ./command;
+    recursive = true;
+  };
+
   programs.opencode = {
     enable = true;
     settings = {
