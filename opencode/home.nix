@@ -15,7 +15,7 @@ in {
           url = "https://mcp.context7.com/mcp";
         };
       };
-      model = "google/gemini-2.5-pro";
+      model = "opencode/grok-code";
       permission = {
         edit = "allow";
         bash = {
