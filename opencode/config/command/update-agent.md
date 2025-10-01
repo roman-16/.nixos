@@ -9,5 +9,5 @@ Compress content if needed but don't delete any. Add content if needed. Keep the
 
 Include a overview of the project structure with descriptions for each folder/file, use `tree` to do that but ignore dependencies.
 
-User input for the `AGENT.md` file:
+User input to add to the `AGENT.md` file:
 $ARGUMENTS
