@@ -20,7 +20,7 @@ in {
           url = "https://mcp.context7.com/mcp";
         };
         playwright = {
-          command = ["docker" "run" "-i" "--rm" "--init" "--pull=always" "mcr.microsoft.com/playwright/mcp"];
+          command = ["npx" "@playwright/mcp"];
           type = "local";
         };
       };
@@ -32,6 +32,7 @@ in {
           "cd*" = "allow";
           "echo*" = "allow";
           "ls*" = "allow";
+          "node*" = "allow";
           "npm*" = "allow";
           "tree*" = "allow";
         };
