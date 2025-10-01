@@ -21,7 +21,7 @@ in {
         };
         playwright = {
           enabled = true;
-          command = ["npx" "--yes" "puppeteer-mcp-server"];
+          command = ["npx" "--yes" "@playwright/mcp@latest"];
           type = "local";
         };
       };
