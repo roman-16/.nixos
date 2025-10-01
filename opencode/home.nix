@@ -20,8 +20,9 @@ in {
           url = "https://mcp.context7.com/mcp";
         };
         playwright = {
-          command = ["npx" "@playwright/mcp"];
-          type = "local";
+          enabled = true;
+          command = ["npx" "@playwright/mcp@latest"];
+          type = "remote";
         };
       };
       model = "opencode/grok-code";
