@@ -21,6 +21,7 @@ in {
         bash = {
           "*" = "ask";
           "npm*" = "allow";
+          "em*" = "allow";
         };
         webfetch = "allow";
       };
