@@ -21,10 +21,8 @@ in {
         };
         playwright = {
           enabled = true;
-          # command = ["npx" "@playwright/mcp@latest"];
-          # type = "local";
-          type = "remote";
-          url = "http://localhost:8931/mcp";
+          command = ["npx" "--yes" "puppeteer-mcp-server"];
+          type = "local";
         };
       };
       model = "opencode/grok-code";
