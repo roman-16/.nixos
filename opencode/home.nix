@@ -20,6 +20,7 @@ in {
         edit = "allow";
         bash = {
           "*" = "ask";
+          "npm*" = "allow";
         };
         webfetch = "allow";
       };
