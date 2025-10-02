@@ -21,7 +21,7 @@ in {
         };
         playwright = {
           enabled = true;
-          command = ["npx" "--yes" "@playwright/mcp@latest" "--executable-path" "\"/nix/store/qzwjabjfllflrr9zz1z3gz0mn3n0wsqz-playwright-browsers/chromium-1181/chrome-linux/chrome\""];
+          command = ["npx" "--yes" "@playwright/mcp@latest"];
           type = "local";
           # type = "remote";
           # url = "http://localhost:8931/mcp";
