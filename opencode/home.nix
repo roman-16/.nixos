@@ -21,10 +21,10 @@ in {
         };
         playwright = {
           enabled = true;
-          # command = ["npx" "--yes" "@playwright/mcp@latest" "--" "--executable-path" "\"$PLAYWRIGHT_BROWSERS_PATH/chromium-1169/chrome-linux/chrome\""];
-          # type = "local";
-          type = "remote";
-          url = "http://localhost:8931/mcp";
+          command = ["npx" "--yes" "@playwright/mcp@latest" "--executable-path" "\"/nix/store/qzwjabjfllflrr9zz1z3gz0mn3n0wsqz-playwright-browsers/chromium-1181/chrome-linux/chrome\""];
+          type = "local";
+          # type = "remote";
+          # url = "http://localhost:8931/mcp";
         };
       };
       model = "opencode/grok-code";
