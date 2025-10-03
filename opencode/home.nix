@@ -30,6 +30,7 @@ in {
         edit = "allow";
         bash = {
           "*" = "ask";
+          "cat*" = "allow";
           "cd*" = "allow";
           "echo*" = "allow";
           "grep*" = "allow";
