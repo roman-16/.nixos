@@ -37,6 +37,7 @@ in {
           "grep*" = "allow";
           "head*" = "allow";
           "ls*" = "allow";
+          "mkdir*" = "allow";
           "mv*" = "allow";
           "node*" = "allow";
           "npm*" = "allow";
