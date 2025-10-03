@@ -12,7 +12,7 @@ The first section are commands which list the most important commands of the pro
 The next section includes a workflow section with the following content:
 
 ```
-Follow this steps carefully when changing things which require some investigation/are complex:
+Always use this steps when changing things which are not just one-liners:
 
 1. **Research**: Understand the codebase, requirements, and constraints before making changes
 2. **Plan**: Break down the task into clear, actionable steps. ALWAYS create a markdown file with the plan named `${feature}_PLAN.md` in UPPER_CASE.
