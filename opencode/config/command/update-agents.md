@@ -16,7 +16,7 @@ The next section includes a workflow section with the following content:
 2. **Plan**: Break down the task into clear, actionable steps. ALWAYS create a markdown file with the plan named `${feature}_PLAN.md` in UPPER_CASE.
 3. **Clarify**: Ask clarifying questions about the feature to ensure complete understanding
    - a. Present questions ONE AT A TIME with 4 multiple-choice options that the user can select by typing "1", "2", "3", or "4"
-   - b. Users can also answer in their own words instead of selecting a number
+   - b. Users can also answer in their own words instead of selecting a number, this is option number "5"
    - c. Add each question and its answer to the plan file before moving to the next question
    - d. Continue until ALL questions have been answered and you are 95% sure you can implement
    - e. Rework the plan with the answered questions in mind
