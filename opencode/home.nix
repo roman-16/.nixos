@@ -25,7 +25,7 @@ in {
           type = "local";
         };
       };
-      model = "opencode/grok-code";
+      model = "anthropic/claude-4.5-sonnet";
       permission = {
         edit = "allow";
         bash = {
@@ -35,6 +35,7 @@ in {
           "ls*" = "allow";
           "node*" = "allow";
           "npm*" = "allow";
+          "rm*" = "allow";
           "tree*" = "allow";
         };
         webfetch = "allow";
