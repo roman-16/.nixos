@@ -37,6 +37,7 @@ in {
           "node*" = "allow";
           "npm*" = "allow";
           "rm*" = "allow";
+          "tail*" = "allow";
           "tree*" = "allow";
         };
         webfetch = "allow";
