@@ -44,8 +44,10 @@ in {
           "npm*" = "allow";
           "npx*" = "allow";
           "rm*" = "allow";
+          "sort*" = "allow";
           "tail*" = "allow";
           "tree*" = "allow";
+          "wc*" = "allow";
         };
         webfetch = "allow";
       };
