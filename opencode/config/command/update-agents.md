@@ -13,6 +13,7 @@ The next section includes a workflow section with the following content:
 
 ```
 Follow this steps carefully:
+
 1. **Research**: Understand the codebase, requirements, and constraints before making changes
 2. **Plan**: Break down the task into clear, actionable steps. ALWAYS create a markdown file with the plan named `${feature}_PLAN.md` in UPPER_CASE.
 3. **Clarify**: Ask clarifying questions about the feature to ensure complete understanding
@@ -22,7 +23,9 @@ Follow this steps carefully:
    - d. Continue until ALL questions have been answered and you are 95% sure you can implement
    - e. Rework the plan with the answered questions in mind
    - f. Ask "Should I continue with this plan? (y)" if the user confirms with "y" continue with the next steps
-4. **Implement**: If "y" was selected, execute the plan incrementally while keeping the plan in mind, following code style and architecture guidelines
+4. **Implement**:
+   - a. Only continue here if the user confirmed with "y", if the user didn't confirm, wait until he does
+   - b. Execute the plan incrementally while keeping the plan in mind, following code style and architecture guidelines
 5. **Validate**: Run quality gates (type check, lint, tests, build) to ensure correctness
 ```
 
