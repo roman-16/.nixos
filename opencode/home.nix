@@ -32,6 +32,7 @@ in {
           "*" = "ask";
           "cd*" = "allow";
           "echo*" = "allow";
+          "head*" = "allow";
           "ls*" = "allow";
           "node*" = "allow";
           "npm*" = "allow";
