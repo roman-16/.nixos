@@ -21,7 +21,7 @@ Follow this steps carefully when changing things which require some investigatio
    - b. Users can also answer in their own words instead of selecting a number, display this option too
    - c. Add each question and its answer to the plan file before moving to the next question
    - d. Continue until ALL questions have been answered and you are 95% sure you can implement
-   - e. Rework the plan with the answered questions in mind
+   - e. Rework the whole plan with the answered questions in mind
    - f. Ask "Should I continue with this plan? (y)" if the user confirms with "y" continue with the next steps
 4. **Implement**:
    - a. Only continue here if the user confirmed with "y", if the user didn't confirm, wait until he does
