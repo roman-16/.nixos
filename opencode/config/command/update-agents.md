@@ -3,12 +3,13 @@ description: Update AGENTS.md to reflect the latest changes
 agent: build
 ---
 
-Update the `AGENTS.md` file to reflect the current project state.
+Update the `AGENTS.md` file to reflect the project. Look into the project for that.
 
-Explore the project structure and document the most important folders and files with brief descriptions. Use the `tree` command to generate an overview, ignoring dependencies, and include only the key parts.
+Compress content if needed but don't delete any. Add content if needed. Keep the file clean, small and simple.
 
-List MCP servers grouped by service, including all their functions with brief descriptions of what each does.
+Include a overview of the project structure with descriptions for each folder/file next to it. Use `tree` to do that but ignore dependencies. Don't include the complete result, just the most important parts.
 
-Add user-provided content from $ARGUMENTS, rewriting if necessary to fit the document.
+List your MCP servers and group them by service, add these services with all their functions to the `AGENTS.md` file with a small what comment what each thing does.
 
-Keep the file clean, concise, and organized. Compress content if needed but don't delete any.
+User input to add to the `AGENTS.md` file as content, rewrite it if needed:
+$ARGUMENTS
