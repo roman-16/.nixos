@@ -33,6 +33,7 @@ in {
           "cat*" = "allow";
           "cd*" = "allow";
           "echo*" = "allow";
+          "find*" = "allow";
           "grep*" = "allow";
           "head*" = "allow";
           "ls*" = "allow";
