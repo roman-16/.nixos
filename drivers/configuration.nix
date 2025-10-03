@@ -14,7 +14,10 @@
       package = config.boot.kernelPackages.nvidiaPackages.stable;
     };
 
-    opengl.enable = true;
+    opengl = {
+      driSupport32Bit = true;
+      enable = true;
+    };
   };
 
   services.xserver.videoDrivers = ["nvidia"];
