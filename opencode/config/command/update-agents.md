@@ -5,9 +5,9 @@ agent: build
 
 Update the `AGENTS.md` file to reflect the project. Look into the project for that.
 
-Compress content if needed but don't delete any. Add content if needed. Keep the file clean, small and simple.
+Compress content if needed but don't delete any. Add content if needed. Keep the file clean, small and simple. You can update anything if needed.
 
-The first section are commands which list the most important commands of the project. Update it if needed.
+The first section are commands which list the most important commands of the project.
 
 The next section includes a workflow section with the following content:
 
@@ -25,13 +25,13 @@ The next section includes a workflow section with the following content:
 5. **Validate**: Run quality gates (type check, lint, tests, build) to ensure correctness
 ```
 
-The next section are code styles if any are defined. Update it if needed.
+The next section are code styles if any are defined.
 
-The next section is architecture with a description of the project architecture. Update it if needed.
+The next section is architecture with a description of the project architecture.
 
-The next section are quality gates which define things the agent needs to execute after code changes are made. Update it if needed.
+The next section are quality gates which define things the agent needs to execute after code changes are made.
 
-The next section is the project structure with descriptions for each folder/file next to it. Use `tree` to do that but ignore dependencies. Don't include the complete result, just the most important parts. Update it if needed.
+The next section is the project structure with descriptions for each folder/file next to it. Use `tree` to do that but ignore dependencies. Don't include the complete result, just the most important parts.
 
 The next section is MCP servers and lists your MCP servers and groups them by service. Add these services with all their functions and add a small comment what each thing does.
 
