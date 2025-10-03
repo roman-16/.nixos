@@ -38,6 +38,7 @@ in {
           "ls*" = "allow";
           "node*" = "allow";
           "npm*" = "allow";
+          "npx*" = "allow";
           "rm*" = "allow";
           "tail*" = "allow";
           "tree*" = "allow";
