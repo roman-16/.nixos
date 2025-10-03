@@ -34,6 +34,7 @@ in {
           "cd*" = "allow";
           "echo*" = "allow";
           "find*" = "allow";
+          "git*" = "allow";
           "grep*" = "allow";
           "head*" = "allow";
           "ls*" = "allow";
