@@ -46,6 +46,7 @@ in {
           "npm*" = "allow";
           "npx*" = "allow";
           "rm*" = "allow";
+          "sleep*" = "allow";
           "sort*" = "allow";
           "tail*" = "allow";
           "timeout*" = "allow";
