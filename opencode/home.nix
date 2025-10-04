@@ -45,6 +45,7 @@ in {
           "node*" = "allow";
           "npm*" = "allow";
           "npx*" = "allow";
+          "pkill*" = "allow";
           "rm*" = "allow";
           "sleep*" = "allow";
           "sort*" = "allow";
