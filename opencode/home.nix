@@ -32,6 +32,8 @@ in {
           "*" = "ask";
           "cat*" = "allow";
           "cd*" = "allow";
+          "docker*" = "allow";
+          "docker-compose*" = "allow";
           "echo*" = "allow";
           "find*" = "allow";
           "git*" = "allow";
