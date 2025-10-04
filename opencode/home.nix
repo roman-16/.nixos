@@ -48,6 +48,7 @@ in {
           "rm*" = "allow";
           "sort*" = "allow";
           "tail*" = "allow";
+          "timeout*" = "allow";
           "tree*" = "allow";
           "true*" = "allow";
           "wc*" = "allow";
