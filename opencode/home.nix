@@ -39,6 +39,7 @@ in {
           "git*" = "allow";
           "grep*" = "allow";
           "head*" = "allow";
+          "kill*" = "allow";
           "ls*" = "allow";
           "mkdir*" = "allow";
           "mv*" = "allow";
