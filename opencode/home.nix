@@ -49,6 +49,7 @@ in {
           "rm*" = "allow";
           "sleep*" = "allow";
           "sort*" = "allow";
+          "sed*" = "allow";
           "tail*" = "allow";
           "timeout*" = "allow";
           "tree*" = "allow";
