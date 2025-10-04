@@ -22,8 +22,7 @@ Always follow this steps carefully:
    - c. Add each question and its answer to the plan file before moving to the next question
    - d. Continue until ALL questions have been answered and you are 95% sure you can implement
    - e. Rework the whole plan with the answered questions in mind
-   - f. Ask "Should I continue with this plan? (y)" if the user confirms with "y" continue with the next steps
-   - g. If the user writes something other than "y", do what he says. At the end of you response ask again "Should I continue with this plan? (y)"
+   - f. Ask "Should I implement this plan? (y)" if the user confirms with "y" continue with the next steps. If the user writes something other than "y", do what he says. At the end of you response ask again "Should I implement this plan? (y)"
 4. **Implement**:
    - a. Only continue here if the user confirmed with "y", if the user didn't confirm, wait until he does
    - b. Execute the plan incrementally while keeping the plan in mind, following code style and architecture guidelines
