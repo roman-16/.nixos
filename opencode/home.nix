@@ -49,6 +49,7 @@ in {
           "sort*" = "allow";
           "tail*" = "allow";
           "tree*" = "allow";
+          "true*" = "allow";
           "wc*" = "allow";
         };
         webfetch = "allow";
