@@ -22,7 +22,6 @@
     foliate
     prismlauncher
     gimp3-with-plugins
-    lutris
   ];
 
   services.xserver.excludePackages = with pkgs; [
