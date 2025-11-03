@@ -47,14 +47,14 @@ Compress content if needed but don't delete any. Add content if needed. Keep the
    - Format: "**Question:** [clear question]? (1) [option] (2) [option] (3) [option]..."
    - Always mention that text answers are welcome - users can pick a number, pick a number with additional context, or provide a completely free-form text response
    - Do not include "text answer" or "custom approach" as a numbered option - the numbered options are the specific choices
-   - Add each Q&A to the plan file (if created) or conversation
+   - Add each Q&A to the plan file (if created) or conversation as they're answered
    - Continue until ALL architectural and structural ambiguities are resolved - do not stop just because pre-written questions are answered
    - Proactively identify new ambiguities that arise from answers and ask follow-up questions
    - Do not ask for permission to continue questioning - keep asking until everything is clear
    - Know when to stop: ask about architecture, file structure, user-facing changes, breaking changes, and major patterns - NOT minor implementation details that can be easily changed later
-   - Update plan with clarified requirements
+   - After all questions answered, comprehensively update the plan file to incorporate all decisions into the detailed sections
    - NEVER skip this step if uncertain - defaulting to an assumption is unacceptable
-4. **Confirm**: Present the final plan and ask "Type `y` to implement this plan"
+4. **Confirm**: Present the final plan summary and ask "Type `y` to implement this plan"
    - If "y": proceed to implementation
    - If other feedback: adjust the plan and ask for confirmation again
 5. **Implement**: Execute the plan incrementally, following code style and architecture guidelines
