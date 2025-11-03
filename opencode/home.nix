@@ -25,7 +25,7 @@ in {
           type = "local";
         };
       };
-      model = "anthropic/claude-sonnet-4-5-20250929";
+      model = "anthropic/claude-sonnet-4-5";
       permission = {
         edit = "allow";
         bash = {
