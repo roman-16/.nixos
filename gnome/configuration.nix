@@ -14,8 +14,8 @@
     gnomeExtensions.lock-keys
     gnomeExtensions.vitals
     gnomeExtensions.smile-complementary-extension
-    gnomeExtensions.pip-on-top
     smile
+    gnomeExtensions.alphabetical-app-grid
   ];
 
   environment.gnome.excludePackages = with pkgs; [
