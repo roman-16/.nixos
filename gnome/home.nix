@@ -145,7 +145,7 @@ with lib.hm.gvariant; {
     "org/gnome/shell" = {
       disable-user-extensions = false;
       enabled-extensions = with pkgs; [
-        # gnomeExtensions.alphabetical-app-grid.extensionUuid
+        gnomeExtensions.alphabetical-app-grid.extensionUuid
         gnomeExtensions.appindicator.extensionUuid
         gnomeExtensions.blur-my-shell.extensionUuid
         gnomeExtensions.burn-my-windows.extensionUuid
