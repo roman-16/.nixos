@@ -7,5 +7,8 @@
       init.defaultBranch = "main";
       pull.rebase = false;
     };
+    settings = {
+      user.email = "roman@lerchster.dev";
+    };
   };
 }
