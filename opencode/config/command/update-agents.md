@@ -160,10 +160,11 @@ Run in this order to fail fast:
 - **Commit Workflow**: NEVER commit automatically. Only ask when logical
   - Before asking: check staged files (`git status`, `git diff --staged`)
   - Display: files to unstage (if any), additional files to stage (if any), proposed commit message (conventional format describing ALL changes), horizontal rule (`---`)
-  - Options (initial): `s` to stage | `c` to stage and commit | `p` to stage, commit and push
-  - Options (after `s`): `c` to commit | `p` to commit and push
+  - Display options based on staging needs:
+    - If staging changes needed (files to unstage or additional files to stage): `s` to stage | `c` to stage and commit | `p` to stage, commit and push
+    - If no staging changes needed: `c` to commit | `p` to commit and push
   - On `s`: unstage specified files, stage additional files, show staged changes, prompt with `c`/`p` options
-  - On `c`/`p`: unstage/stage files as needed, then commit (and push if `p`)
+  - On `c`/`p`: perform staging changes if needed, then commit (and push if `p`)
   - On other response: treat as instruction (modify message, change files, make more changes, etc.)
   - If file changes made relevant to current commit: restart entire workflow from beginning
 - **When to Ask About Committing**: Ask when task complete AND no clear indication more changes coming
