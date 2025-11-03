@@ -1,4 +1,11 @@
-{...}: let
+{pkgs, ...}: let
+  opencodePackages = import (builtins.fetchTarball {
+    # Replace with the commit hash for your desired nixpkgs version
+    url = "https://github.com/NixOS/nixpkgs/archive/876df71365b3c0ab2d363cd6af36a80199879430.tar.gz";
+    # The sha256 hash can be obtained by initially leaving it empty
+    # and Nix will report the correct hash in the error message.
+    sha256 = "0am3j6dbd60n9dyprg32n0fpc92ik1s7parcfcya7blask2f8qn6";
+  }) {system = pkgs.system;};
   secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
 in {
   home.file.".config/opencode" = {
@@ -8,6 +15,7 @@ in {
 
   programs.opencode = {
     enable = true;
+    package = opencodePackages.opencode;
     settings = {
       autoupdate = false;
       mcp = {
