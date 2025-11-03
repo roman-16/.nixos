@@ -165,20 +165,30 @@ Run in this order to fail fast:
 ## Version Control
 - **Commit Workflow**: NEVER commit automatically. Only ask when logical
   - Before asking: check staged files (`git status`, `git diff --staged`)
-  - Display: additional files to stage (if any), proposed commit message (conventional format describing ALL changes), horizontal rule (`---`)
-  - Display options:
+  - Display:
+    - Files to unstage (if any should be removed from staging)
+    - Additional files to stage (if any should be added to staging)
+    - Proposed commit message (conventional format describing ALL changes)
+    - Horizontal rule (`---`)
+  - Display options (initial prompt):
+    - Type `s` to stage
+    - Type `c` to stage and commit
+    - Type `p` to stage, commit and push
+  - Display options (after `s` executed):
     - Type `c` to commit
     - Type `p` to commit and push
-  - On "c": stage additional files and commit
-  - On "p": stage additional files, commit and push
+  - On "s": unstage specified files, stage additional files, then show staged changes and prompt again with only `c` and `p` options
+  - On "c": unstage specified files (if needed), stage additional files (if needed), then commit
+  - On "p": unstage specified files (if needed), stage additional files (if needed), commit and push
   - On other response: treat as instruction (modify message, change files, make more changes, etc.)
+  - If any file changes are made that are relevant to the current commit (by you or the user), restart the entire commit workflow from the beginning (check staged files, display options, etc.)
 - **When to Ask About Committing**: Ask when task complete AND no clear indication more changes coming
   - Logical unit complete (feature/bugfix/refactor/task finished)
   - Quality gates pass (or minimally, changes validated)
   - Before significantly different task
   - **Key principle**: When in doubt, ask. Only skip if certain larger commit coming
 - **Commit Message Format**: `emoji type(scope): description`
-  - Examples: `✨ feat(consumer): add retry logic` | `🐛 fix(zendesk): handle rate limiting` | `✅ test(consumer): add timeout scenarios`
+  - Examples: `✨ feat(llm): add retrieval tool` | `🐛 fix(auth): handle token expiry` | `✅ test(server): add chat history tests`
   - **Body**: Keep simple and concise. Skip body for obvious changes. Use bullet list only for meaningful details (key architectural decisions, breaking changes, important context). Avoid exhaustive change lists
 - **Types with Emojis**:
   - `✨ feat` - New feature
