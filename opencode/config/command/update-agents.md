@@ -41,9 +41,12 @@ Compress content if needed but don't delete any. Add content if needed. Keep the
    - For complex features (significant architectural changes, 3+ files affected, new external integrations), create a markdown plan file named `FEATURE_NAME_PLAN.md` (e.g., `AUTHENTICATION_PLAN.md`)
    - For simpler tasks, a clear written plan in the conversation is sufficient
 3. **Clarify**: Ask questions to ensure complete understanding. REQUIRED before implementation if ANY ambiguity exists
-   - Ask as many questions as needed - no limit on number of questions or choices per question
-   - Present each question with numbered multiple-choice options (user can select by number or provide custom answer)
-   - Format: "**Question:** [clear question]? (1) [option] (2) [option] (3) [option]... - or describe your preference"
+   - Ask questions one at a time, waiting for each answer before asking the next
+   - Use previous answers to inform and refine subsequent questions
+   - Present each question with numbered multiple-choice options for convenience (as many options as appropriate)
+   - Format: "**Question:** [clear question]? (1) [option] (2) [option] (3) [option]..."
+   - Always mention that text answers are welcome - users can pick a number, pick a number with additional context, or provide a completely free-form text response
+   - Do not include "text answer" or "custom approach" as a numbered option - the numbered options are the specific choices
    - Add each Q&A to the plan file (if created) or conversation
    - Continue until ALL ambiguities resolved
    - Update plan with clarified requirements
