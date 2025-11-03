@@ -11,6 +11,7 @@
     ./locale/configuration.nix
     ./logitech/configuration.nix
     ./nh/configuration.nix
+    ./opencode/configuration.nix
     ./programs/configuration.nix
     ./sound/configuration.nix
     ./steam/configuration.nix
