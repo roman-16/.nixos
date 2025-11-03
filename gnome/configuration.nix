@@ -16,6 +16,8 @@
     gnomeExtensions.smile-complementary-extension
     smile
     gnomeExtensions.alphabetical-app-grid
+    gnomeExtensions.just-perfection
+    gnomeExtensions.gnome-40-ui-improvements
   ];
 
   environment.gnome.excludePackages = with pkgs; [
