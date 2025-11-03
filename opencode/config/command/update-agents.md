@@ -41,19 +41,13 @@ Compress content if needed but don't delete any. Add content if needed. Keep the
    - For complex features (significant architectural changes, 3+ files affected, new external integrations), create a markdown plan file named `FEATURE_NAME_PLAN.md` (e.g., `AUTHENTICATION_PLAN.md`)
    - For simpler tasks, a clear written plan in the conversation is sufficient
 3. **Clarify**: Ask questions to ensure complete understanding. REQUIRED before implementation if ANY ambiguity exists
-   - Ask questions one at a time, waiting for each answer before asking the next
-   - Use previous answers to inform and refine subsequent questions
-   - Present each question with numbered multiple-choice options for convenience (as many options as appropriate)
-   - Format: "**Question:** [clear question]? (1) [option] (2) [option] (3) [option]..."
-   - Always mention that text answers are welcome - users can pick a number, pick a number with additional context, or provide a completely free-form text response
-   - Do not include "text answer" or "custom approach" as a numbered option - the numbered options are the specific choices
-   - Add each Q&A to the plan file (if created) or conversation as they're answered
-   - Continue until ALL architectural and structural ambiguities are resolved - do not stop just because pre-written questions are answered
-   - Proactively identify new ambiguities that arise from answers and ask follow-up questions
-   - Do not ask for permission to continue questioning - keep asking until everything is clear
-   - Know when to stop: ask about architecture, file structure, user-facing changes, breaking changes, and major patterns - NOT minor implementation details that can be easily changed later
-   - After all questions answered, comprehensively update the plan file to incorporate all decisions into the detailed sections
-   - NEVER skip this step if uncertain - defaulting to an assumption is unacceptable
+   - Ask questions one at a time, using previous answers to inform subsequent questions
+   - Format: "**Question:** [question]? (1) [option] (2) [option]..." - mention text answers welcome (pick number, add context, or free-form text). Don't include "text answer" as a numbered option
+   - Add each Q&A to plan file (if created) or conversation as answered
+   - Continue until ALL ambiguities resolved - don't stop after pre-written questions. Proactively identify new ambiguities and ask follow-ups. Don't ask permission to continue
+   - Know when to stop: architecture, file structure, user-facing changes, breaking changes, major patterns - NOT minor implementation details
+   - After all questions: comprehensively update plan with all decisions
+   - NEVER skip if uncertain - defaulting to assumption is unacceptable
 4. **Confirm**: Present the final plan summary and ask "Type `y` to implement this plan"
    - If "y": proceed to implementation
    - If other feedback: adjust the plan and ask for confirmation again
@@ -165,23 +159,13 @@ Run in this order to fail fast:
 ## Version Control
 - **Commit Workflow**: NEVER commit automatically. Only ask when logical
   - Before asking: check staged files (`git status`, `git diff --staged`)
-  - Display:
-    - Files to unstage (if any should be removed from staging)
-    - Additional files to stage (if any should be added to staging)
-    - Proposed commit message (conventional format describing ALL changes)
-    - Horizontal rule (`---`)
-  - Display options (initial prompt):
-    - Type `s` to stage
-    - Type `c` to stage and commit
-    - Type `p` to stage, commit and push
-  - Display options (after `s` executed):
-    - Type `c` to commit
-    - Type `p` to commit and push
-  - On "s": unstage specified files, stage additional files, then show staged changes and prompt again with only `c` and `p` options
-  - On "c": unstage specified files (if needed), stage additional files (if needed), then commit
-  - On "p": unstage specified files (if needed), stage additional files (if needed), commit and push
+  - Display: files to unstage (if any), additional files to stage (if any), proposed commit message (conventional format describing ALL changes), horizontal rule (`---`)
+  - Options (initial): `s` to stage | `c` to stage and commit | `p` to stage, commit and push
+  - Options (after `s`): `c` to commit | `p` to commit and push
+  - On `s`: unstage specified files, stage additional files, show staged changes, prompt with `c`/`p` options
+  - On `c`/`p`: unstage/stage files as needed, then commit (and push if `p`)
   - On other response: treat as instruction (modify message, change files, make more changes, etc.)
-  - If any file changes are made that are relevant to the current commit (by you or the user), restart the entire commit workflow from the beginning (check staged files, display options, etc.)
+  - If file changes made relevant to current commit: restart entire workflow from beginning
 - **When to Ask About Committing**: Ask when task complete AND no clear indication more changes coming
   - Logical unit complete (feature/bugfix/refactor/task finished)
   - Quality gates pass (or minimally, changes validated)
