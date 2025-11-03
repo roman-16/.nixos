@@ -145,14 +145,14 @@ with lib.hm.gvariant; {
     "org/gnome/shell" = {
       disable-user-extensions = false;
       enabled-extensions = with pkgs; [
-        gnomeExtensions.alphabetical-app-grid.extensionUuid
+        # gnomeExtensions.alphabetical-app-grid.extensionUuid
         gnomeExtensions.appindicator.extensionUuid
         gnomeExtensions.blur-my-shell.extensionUuid
         gnomeExtensions.burn-my-windows.extensionUuid
         gnomeExtensions.dash-to-panel.extensionUuid
         gnomeExtensions.ddterm.extensionUuid
-        gnomeExtensions.gnome-40-ui-improvements.extensionUuid
-        gnomeExtensions.just-perfection.extensionUuid
+        # gnomeExtensions.gnome-40-ui-improvements.extensionUuid
+        # gnomeExtensions.just-perfection.extensionUuid
         gnomeExtensions.lock-keys.extensionUuid
         gnomeExtensions.smile-complementary-extension.extensionUuid
         gnomeExtensions.user-themes.extensionUuid
