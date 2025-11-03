@@ -154,7 +154,6 @@ with lib.hm.gvariant; {
         gnomeExtensions.smile-complementary-extension.extensionUuid
         gnomeExtensions.user-themes.extensionUuid
         gnomeExtensions.vitals.extensionUuid
-        gnomeExtensions.pip-on-top.extensionUuid
       ];
       favorite-apps = [
         "brave-browser.desktop"
