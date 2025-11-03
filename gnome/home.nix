@@ -151,8 +151,7 @@ with lib.hm.gvariant; {
         gnomeExtensions.burn-my-windows.extensionUuid
         gnomeExtensions.dash-to-panel.extensionUuid
         gnomeExtensions.ddterm.extensionUuid
-        # gnomeExtensions.gnome-40-ui-improvements.extensionUuid
-        # gnomeExtensions.just-perfection.extensionUuid
+        gnomeExtensions.just-perfection.extensionUuid
         gnomeExtensions.lock-keys.extensionUuid
         gnomeExtensions.smile-complementary-extension.extensionUuid
         gnomeExtensions.user-themes.extensionUuid
@@ -189,6 +188,14 @@ with lib.hm.gvariant; {
       trans-use-custom-bg = true;
       trans-use-custom-opacity = true;
       tray-size = 14;
+    };
+
+    "org/gnome/shell/extensions/just-perfection" = {
+      events-button = false;
+      quick-settings-night-light = false;
+      search = false;
+      window-demands-attention-focus = true;
+      world-clock = false;
     };
 
     "org/gnome/shell/extensions/lockkeys" = {
