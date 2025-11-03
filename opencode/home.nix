@@ -7,6 +7,8 @@
     }) {
       system = pkgs.system;
     };
+
+  secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
 in {
   home.file.".config/opencode" = {
     recursive = true;
@@ -21,10 +23,22 @@ in {
       autoupdate = false;
       model = "anthropic/claude-sonnet-4-5";
 
-      mcp.playwright = {
-        command = ["docker" "run" "-i" "--rm" "--init" "--pull=always" "mcr.microsoft.com/playwright/mcp"];
-        enabled = true;
-        type = "local";
+      mcp = {
+        context7 = {
+          enabled = true;
+          type = "remote";
+          url = "https://mcp.context7.com/mcp";
+
+          headers = {
+            CONTEXT7_API_KEY = secrets.CONTEXT7_API_KEY;
+          };
+        };
+
+        playwright = {
+          command = ["docker" "run" "-i" "--rm" "--init" "--pull=always" "mcr.microsoft.com/playwright/mcp"];
+          enabled = true;
+          type = "local";
+        };
       };
 
       permission = {
