@@ -1,5 +1,6 @@
 {pkgs, ...}: {
   stylix = {
+    autoEnable = true;
     enable = true;
     polarity = "dark";
     image = ./wallpaper.jpg;

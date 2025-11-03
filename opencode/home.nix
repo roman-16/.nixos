@@ -60,7 +60,6 @@ in {
         };
         webfetch = "allow";
       };
-      theme = "system";
     };
   };
 }
