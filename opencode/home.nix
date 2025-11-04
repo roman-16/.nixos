@@ -27,7 +27,7 @@ in {
         chrome-devtools = {
           type = "local";
           enabled = true;
-          command = ["npx" "-y" "@playwright/mcp@latest"];
+          command = ["npx" "-y" "@playwright/mcp@latest" "--executablePath=/run/current-system/sw/bin/google-chrome-stable"];
         };
 
         context7 = {
