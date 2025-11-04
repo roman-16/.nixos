@@ -22,7 +22,10 @@
     zsh.enable = true;
   };
 
-  security.sudo-rs.enable = true;
+  security.sudo-rs = {
+    enable = true;
+    wheelNeedsPassword = false;
+  };
 
   users.users.roman = {
     shell = pkgs.zsh;
