@@ -73,6 +73,7 @@ in {
           "tail*" = "allow";
           "test*" = "allow";
           "timeout*" = "allow";
+          "tofu fmt*" = "allow";
           "tree*" = "allow";
           "true*" = "allow";
           "wc*" = "allow";
