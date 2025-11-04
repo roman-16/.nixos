@@ -27,7 +27,7 @@ in {
         chrome-devtools = {
           type = "local";
           enabled = true;
-          command = ["npx" "-y" "@playwright/mcp@latest" "--wsEndpoint=ws://127.0.0.1:9222/devtools/browser/216eed71-0aa7-4200-a213-b3e360df3d24"];
+          command = ["npx" "-y" "@playwright/mcp@latest" "--wsEndpoint=ws://127.0.0.1:9222/devtools/browser/216eed71-0aa7-4200-a213-b3e360df3d24" "--logFile=/tmp/mcp-debug.log"];
           # command = ["npx" "-y" "@playwright/mcp@latest" "--browser-url=http://127.0.0.1:9222"];
         };
 
