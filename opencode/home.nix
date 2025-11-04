@@ -27,7 +27,7 @@ in {
         chrome-devtools = {
           type = "local";
           enabled = true;
-          command = ["npx" "-y" "@playwright/mcp@latest" "--executablePath=/run/current-system/sw/bin/google-chrome-stable"];
+          command = ["npx" "-y" "@playwright/mcp@latest" "--browser-url=http://127.0.0.1:9222"];
         };
 
         context7 = {
