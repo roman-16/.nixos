@@ -39,7 +39,7 @@ Compress content if needed but don't delete any. Add content if needed. Keep the
    - Identify dependencies and potential side effects
 2. **Plan**: Create an initial plan breaking down the task into clear, actionable steps
    - For complex features (significant architectural changes, 3+ files affected, new external integrations), create a markdown plan file named `FEATURE_NAME_PLAN.md` (e.g., `AUTHENTICATION_PLAN.md`)
-   - Plan files are working documents that can be kept in the repository for documentation
+   - Plan files are temporary working documents - do NOT commit them to version control
    - For simpler tasks, a clear written plan in the conversation is sufficient
 3. **Clarify**: Ask questions to ensure complete understanding. REQUIRED before implementation if ANY ambiguity exists
    - Ask ONE question at a time, wait for answer, then ask the next question
