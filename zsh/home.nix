@@ -13,17 +13,6 @@
 
     fzf.enable = true;
 
-    ghostty = {
-      enable = true;
-      enableZshIntegration = true;
-
-      settings = {
-        keybind = [
-          "global:ctrl+ö=toggle_quick_terminal"
-        ];
-      };
-    };
-
     oh-my-posh = {
       enable = true;
       enableZshIntegration = true;

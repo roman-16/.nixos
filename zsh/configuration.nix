@@ -14,7 +14,6 @@
     tre-command
     lsof
     tree
-    ghostty
   ];
 
   programs = {
