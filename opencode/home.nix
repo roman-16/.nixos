@@ -65,6 +65,7 @@ in {
           "npm*" = "allow";
           "npx*" = "allow";
           "pkill*" = "allow";
+          "pwd*" = "allow";
           "rm*" = "allow";
           "sleep*" = "allow";
           "sort*" = "allow";
