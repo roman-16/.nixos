@@ -22,9 +22,13 @@
     zsh.enable = true;
   };
 
-  security.sudo-rs = {
-    enable = true;
-    wheelNeedsPassword = false;
+  security = {
+    sudo.wheelNeedsPassword = false;
+
+    sudo-rs = {
+      enable = true;
+      wheelNeedsPassword = false;
+    };
   };
 
   users.users.roman = {
