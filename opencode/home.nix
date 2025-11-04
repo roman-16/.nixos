@@ -42,7 +42,7 @@ in {
             "browserless/chrome"
             "sh"
             "-c"
-            "google-chrome-stable --headless --remote-debugging-port=9222 --no-sandbox & sleep 3 && npx chrome-devtools-mcp@latest --browser-url http://127.0.0.1:9222"
+            "\"google-chrome-stable --headless --remote-debugging-port=9222 --no-sandbox & sleep 3 && npx chrome-devtools-mcp@latest --browser-url http://127.0.0.1:9222\""
           ];
         };
 
