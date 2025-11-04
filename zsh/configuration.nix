@@ -23,5 +23,6 @@
     tre-command
     lsof
     tree
+    ghostty
   ];
 }
