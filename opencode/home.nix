@@ -31,7 +31,7 @@ in {
           # command = ["NIXPKGS_ALLOW_UNFREE=1 nix-shell -p nodejs_22 google-chrome --run \"google-chrome-stable --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-stable & sleep 5 && npx chrome-devtools-mcp@latest --browser-url http://127.0.0.1:9222\""];
           # command = ["npx" "-y" "@playwright/mcp@latest" "--wsEndpoint=ws://127.0.0.1:9222/devtools/browser/216eed71-0aa7-4200-a213-b3e360df3d24" "--logFile=/tmp/mcp-debug.log"];
           # command = ["npx" "-y" "@playwright/mcp@latest" "--browser-url=http://127.0.0.1:9222"];
-          command = ["npx" "-y" "@playwright/mcp@latest" "--executablePath" "/run/current-system/sw/bin/google-chrome-stable" "--no-sandbox" "--disable-setuid-sandbox"];
+          command = ["npx" "-y" "@playwright/mcp@latest" "--executablePath" "/run/current-system/sw/bin/google-chrome-stable" "--headless" "--no-sandbox" "--disable-setuid-sandbox"];
         };
 
         context7 = {
