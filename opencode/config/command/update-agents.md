@@ -212,5 +212,5 @@ Analyze and document:
 - Add inline comments describing the purpose of each directory/file
 ```
 
-User input to add:
+User input:
 $ARGUMENTS
