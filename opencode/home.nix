@@ -24,6 +24,12 @@ in {
       model = "anthropic/claude-sonnet-4-5";
 
       mcp = {
+        chrome-devtools = {
+          type = "local";
+          enabled = true;
+          command = ["npx" "-y" "@playwright/mcp@latest"];
+        };
+
         context7 = {
           enabled = true;
           type = "remote";
