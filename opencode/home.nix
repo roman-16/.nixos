@@ -71,6 +71,7 @@ in {
           "sort*" = "allow";
           "sed*" = "allow";
           "tail*" = "allow";
+          "test*" = "allow";
           "timeout*" = "allow";
           "tree*" = "allow";
           "true*" = "allow";
