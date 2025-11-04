@@ -17,7 +17,7 @@ in {
 
   programs.opencode = {
     enable = true;
-    package = pkgs.opencode;
+    package = opencodePackages.opencode;
 
     settings = {
       autoupdate = false;
