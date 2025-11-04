@@ -1,13 +1,4 @@
 {pkgs, ...}: {
-  users.users.roman = {
-    shell = pkgs.zsh;
-  };
-
-  programs = {
-    command-not-found.enable = true;
-    zsh.enable = true;
-  };
-
   environment.systemPackages = with pkgs; [
     fastfetch
     bat
@@ -25,4 +16,15 @@
     tree
     ghostty
   ];
+
+  programs = {
+    command-not-found.enable = true;
+    zsh.enable = true;
+  };
+
+  security.sudo-rs.enable = true;
+
+  users.users.roman = {
+    shell = pkgs.zsh;
+  };
 }

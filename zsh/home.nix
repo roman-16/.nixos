@@ -15,6 +15,7 @@
 
     ghostty = {
       enable = true;
+      enableZshIntegration = true;
     };
 
     oh-my-posh = {
