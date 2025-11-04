@@ -13,6 +13,10 @@
 
     fzf.enable = true;
 
+    ghostty = {
+      enable = true;
+    };
+
     oh-my-posh = {
       enable = true;
       enableZshIntegration = true;
