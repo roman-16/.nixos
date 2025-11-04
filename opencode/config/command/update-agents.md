@@ -206,7 +206,7 @@ Analyze and document:
 - Architectural patterns
 
 ### Project Structure
-- Run `tree` to analyze the project structure
+- Always run `tree` to analyze the project structure
 - Document only the important directories and key files
 - Exclude dependencies, build artifacts, cache and version control folders
 - Add inline comments describing the purpose of each directory/file
