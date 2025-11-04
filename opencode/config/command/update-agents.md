@@ -167,6 +167,7 @@ Run in this order to fail fast:
 4. Project must build and run successfully (`npm run dev`)
 
 ## Version Control
+- **NEVER do ANY git operation without explicit user permission** - This includes: commit, push, stage, unstage, branch operations, merges, rebases, etc.
 - **Commit Workflow**: NEVER commit automatically. Only ask when logical
   - Before asking: check staged files (`git status`, `git diff --staged`)
   - Display: files to unstage (if any), additional files to stage (if any), proposed commit message (conventional format describing ALL changes), horizontal rule (`---`)
