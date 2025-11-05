@@ -39,9 +39,9 @@ in {
               --chromeArg='--no-sandbox'
           '';
         in {
-          type = "local";
-          command = ["${start-mcp-script}/bin/start-mcp-chrome"];
           enabled = true;
+          command = ["${start-mcp-script}/bin/start-mcp-chrome"];
+          type = "local";
         };
 
         context7 = {
