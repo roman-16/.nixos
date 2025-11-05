@@ -27,23 +27,34 @@ in {
         chrome-devtools = {
           type = "local";
           enabled = true;
+          environment = {
+            NIXPKGS_ALLOW_UNFREE = "1";
+          };
 
+          command = [
+            "nix-shell"
+            "-p"
+            "nodejs_22"
+            "google-chrome-stable"
+            "--run"
+            "\"google-chrome-stable --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-stable & sleep 3 && npx chrome-devtools-mcp@latest --browser-url http://127.0.0.1:9222\""
+          ];
           # command = ["NIXPKGS_ALLOW_UNFREE=1 nix-shell -p nodejs_22 google-chrome --run \"google-chrome-stable --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-stable & sleep 5 && npx chrome-devtools-mcp@latest --browser-url http://127.0.0.1:9222\""];
           # command = ["npx" "-y" "@playwright/mcp@latest" "--wsEndpoint=ws://127.0.0.1:9222/devtools/browser/216eed71-0aa7-4200-a213-b3e360df3d24" "--logFile=/tmp/mcp-debug.log"];
           # command = ["npx" "-y" "@playwright/mcp@latest" "--browser-url=http://127.0.0.1:9222"];
           # command = ["npx" "-y" "@playwright/mcp@latest" "--executablePath" "/run/current-system/sw/bin/google-chrome-stable" "--headless" "--no-sandbox" "--disable-setuid-sandbox"];
-          command = [
-            "docker"
-            "run"
-            "-i"
-            "--rm"
-            "--init"
-            "--pull=always"
-            "browserless/chrome"
-            "sh"
-            "-c"
-            "\"google-chrome-stable --headless --remote-debugging-port=9222 --no-sandbox & sleep 3 && npx chrome-devtools-mcp@latest --browser-url http://127.0.0.1:9222\""
-          ];
+          # command = [
+          #   "docker"
+          #   "run"
+          #   "-i"
+          #   "--rm"
+          #   "--init"
+          #   "--pull=always"
+          #   "browserless/chrome"
+          #   "sh"
+          #   "-c"
+          #   "\"google-chrome-stable --headless --remote-debugging-port=9222 --no-sandbox & sleep 3 && npx chrome-devtools-mcp@latest --browser-url http://127.0.0.1:9222\""
+          # ];
         };
 
         context7 = {
