@@ -43,7 +43,8 @@ Compress content if needed but don't delete any. Add content if needed. Keep the
    - Plan files are temporary working documents - do NOT commit them to version control
    - NEVER delete plan files - leave them for the user to manage
    - For simpler tasks, a clear written plan in the conversation is sufficient
-3. **Clarify**: Ask questions to ensure complete understanding. REQUIRED before implementation if ANY ambiguity exists
+3. **Present Summary**: Present a brief plan summary to the user, allowing early feedback on approach, scope, or direction
+4. **Clarify**: Ask questions to ensure complete understanding. REQUIRED before implementation if ANY ambiguity exists
    - Ask ONE question at a time, wait for answer, then ask the next question
    - Use previous answers to inform subsequent questions
    - Format each question as:
@@ -53,20 +54,20 @@ Compress content if needed but don't delete any. Add content if needed. Keep the
      (2) [option]
      ```
      Mention that text answers are welcome (pick number, add context, or free-form text). Don't include "text answer" as a numbered option
-   - Add each Q&A to plan file (if created) or conversation as answered
+   - Update plan with each Q&A after answering (in plan file if created, or in conversation)
    - Continue until ALL ambiguities resolved - don't stop after pre-written questions. Proactively identify new ambiguities and ask follow-ups. Don't ask permission to continue
    - Know when to stop: architecture, file structure, user-facing changes, breaking changes, major patterns - NOT minor implementation details
    - After all questions: comprehensively update plan with all decisions
    - NEVER skip if uncertain - defaulting to assumption is unacceptable
-4. **Confirm**: Present the final plan summary and ask "Type `y` to implement this plan"
+5. **Confirm**: Present the final plan summary and ask "Type `y` to implement this plan"
    - If "y": proceed to implementation
    - If other feedback: adjust the plan and ask for confirmation again
-5. **Implement**: Execute the plan incrementally, following code style and architecture guidelines
+6. **Implement**: Execute the plan incrementally, following code style and architecture guidelines
    - Write tests alongside implementation
    - Make incremental commits for major milestones if working on large features
-6. **Validate**: Run all quality gates in order to ensure correctness (see Quality Gates section)
+7. **Validate**: Run all quality gates in order to ensure correctness (see Quality Gates section)
    - If any gate fails: fix issues and re-run all gates from the beginning
-7. **Complete**: After all quality gates pass, summarize changes made and ask about committing (see Version Control section)
+8. **Complete**: After all quality gates pass, summarize changes made and ask about committing (see Version Control section)
 
 ## Code Style
 
@@ -81,8 +82,8 @@ Compress content if needed but don't delete any. Add content if needed. Keep the
 - **Property Ordering**: Alphabetical by default unless another ordering makes better sense. For mixed objects: primitives first, then nested (both alphabetically)
 
 ### Imports & Exports [JS/TS]
-- **Imports**: [DETECT: e.g., "`@/` for src/, `./` for same directory only"]
-- **Exports**: At end of files. Only export what's used elsewhere. Export shared types
+- **Imports**: `@/` for src/, `./` for same directory only
+- **Exports**: At end of files. Only export what's used elsewhere. Export shared types. Do not export unused code
 
 ### Naming Conventions [JS/TS]
 - **Types/Interfaces/Classes**: PascalCase (e.g., `OrderEvent`, `UserConfig`)
@@ -95,6 +96,7 @@ Compress content if needed but don't delete any. Add content if needed. Keep the
   - Prefer `type` over `interface`
   - Let TypeScript infer types when obvious
   - Don't duplicate type definitions
+  - No dedicated `types.ts` files - define types inline where used
 - **Variables**: Prefer `const` over `let`
   - Only use `let` for: singletons with lazy init, error handling/cleanup reassignments, loop counters, complex state management
 
@@ -148,6 +150,7 @@ Compress content if needed but don't delete any. Add content if needed. Keep the
 ### Testing [JS/TS]
 - **Approach**: Write tests alongside implementation - test-driven or test-first
 - **Location**: `.test.ts` files in `tests/` directory, mirroring `src/` structure
+- **Framework**: vitest with exact matchers only (no relative matchers like `toBeCloseTo`, `toBeGreaterThan`)
 - **Coverage**: Minimum 95% coverage across all metrics
 - **Test Quality**:
   - Write meaningful tests validating behavior/edge cases
