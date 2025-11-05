@@ -10,6 +10,9 @@
 
   secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
 in {
+  # Maybe remove
+  nixpkgs.config.allowUnfree = true;
+
   home.file.".config/opencode" = {
     recursive = true;
     source = ./config;
@@ -24,38 +27,78 @@ in {
       model = "anthropic/claude-sonnet-4-5";
 
       mcp = {
-        chrome-devtools = {
+        chrome-devtools = let
+          # 1. Declaratively build a script that does exactly what we need.
+          #    Nix will build this script and place it in the /nix/store.
+          #    All the package paths will be hardcoded and correct.
+          start-mcp-script = pkgs.writeShellScriptBin "start-mcp-chrome" ''
+            #!${pkgs.stdenv.shell}
+
+            # Set the PATH to include the binaries for chrome and nodejs.
+            # This is the declarative equivalent of what `nix-shell -p` does.
+            export PATH=${pkgs.lib.makeBinPath [pkgs.google-chrome pkgs.nodejs_22]}:$PATH
+
+            echo "MCP Script: Starting Google Chrome..."
+            # Run chrome in the background
+            google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-stable &
+
+            # Get the Process ID of Chrome
+            CHROME_PID=$!
+
+            # IMPORTANT: When this script is terminated, it will also kill the background Chrome process.
+            trap "kill $CHROME_PID" EXIT
+
+            echo "MCP Script: Waiting for Chrome to initialize..."
+            sleep 3
+
+            echo "MCP Script: Starting chrome-devtools-mcp server..."
+            # Run the MCP server in the foreground. This script will stay running as long as the server does.
+            npx -y chrome-devtools-mcp@latest --browser-url http://127.0.0.1:9222
+          '';
+        in {
           type = "local";
           enabled = true;
           environment = {
+            # This is still good practice.
             NIXPKGS_ALLOW_UNFREE = "1";
           };
 
-          command = [
-            "nix-shell"
-            "-p"
-            "nodejs_22"
-            "google-chrome-stable"
-            "--run"
-            "\"google-chrome-stable --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-stable & sleep 3 && npx chrome-devtools-mcp@latest --browser-url http://127.0.0.1:9222\""
-          ];
-          # command = ["NIXPKGS_ALLOW_UNFREE=1 nix-shell -p nodejs_22 google-chrome --run \"google-chrome-stable --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-stable & sleep 5 && npx chrome-devtools-mcp@latest --browser-url http://127.0.0.1:9222\""];
-          # command = ["npx" "-y" "@playwright/mcp@latest" "--wsEndpoint=ws://127.0.0.1:9222/devtools/browser/216eed71-0aa7-4200-a213-b3e360df3d24" "--logFile=/tmp/mcp-debug.log"];
-          # command = ["npx" "-y" "@playwright/mcp@latest" "--browser-url=http://127.0.0.1:9222"];
-          # command = ["npx" "-y" "@playwright/mcp@latest" "--executablePath" "/run/current-system/sw/bin/google-chrome-stable" "--headless" "--no-sandbox" "--disable-setuid-sandbox"];
-          # command = [
-          #   "docker"
-          #   "run"
-          #   "-i"
-          #   "--rm"
-          #   "--init"
-          #   "--pull=always"
-          #   "browserless/chrome"
-          #   "sh"
-          #   "-c"
-          #   "\"google-chrome-stable --headless --remote-debugging-port=9222 --no-sandbox & sleep 3 && npx chrome-devtools-mcp@latest --browser-url http://127.0.0.1:9222\""
-          # ];
+          # 2. The command is now extremely simple: just run the script Nix built for us.
+          command = ["${start-mcp-script}/bin/start-mcp-chrome"];
         };
+
+        # chrome-devtools = {
+        #   type = "local";
+        #   enabled = true;
+        #   environment = {
+        #     NIXPKGS_ALLOW_UNFREE = "1";
+        #   };
+
+        #   command = [
+        #     "nix-shell"
+        #     "-p"
+        #     "nodejs_22"
+        #     "google-chrome-stable"
+        #     "--run"
+        #     "google-chrome-stable --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-stable & sleep 3 && npx chrome-devtools-mcp@latest --browser-url http://127.0.0.1:9222"
+        #   ];
+        #   # command = ["NIXPKGS_ALLOW_UNFREE=1 nix-shell -p nodejs_22 google-chrome --run \"google-chrome-stable --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-stable & sleep 5 && npx chrome-devtools-mcp@latest --browser-url http://127.0.0.1:9222\""];
+        #   # command = ["npx" "-y" "@playwright/mcp@latest" "--wsEndpoint=ws://127.0.0.1:9222/devtools/browser/216eed71-0aa7-4200-a213-b3e360df3d24" "--logFile=/tmp/mcp-debug.log"];
+        #   # command = ["npx" "-y" "@playwright/mcp@latest" "--browser-url=http://127.0.0.1:9222"];
+        #   # command = ["npx" "-y" "@playwright/mcp@latest" "--executablePath" "/run/current-system/sw/bin/google-chrome-stable" "--headless" "--no-sandbox" "--disable-setuid-sandbox"];
+        #   # command = [
+        #   #   "docker"
+        #   #   "run"
+        #   #   "-i"
+        #   #   "--rm"
+        #   #   "--init"
+        #   #   "--pull=always"
+        #   #   "browserless/chrome"
+        #   #   "sh"
+        #   #   "-c"
+        #   #   "\"google-chrome-stable --headless --remote-debugging-port=9222 --no-sandbox & sleep 3 && npx chrome-devtools-mcp@latest --browser-url http://127.0.0.1:9222\""
+        #   # ];
+        # };
 
         context7 = {
           enabled = true;
