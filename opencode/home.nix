@@ -10,7 +10,7 @@
 
   secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
 in {
-  # Maybe remove
+  # Maybe remove/move below
   nixpkgs.config.allowUnfree = true;
 
   home.file.".config/opencode" = {
@@ -38,22 +38,16 @@ in {
             # This is the declarative equivalent of what `nix-shell -p` does.
             export PATH=${pkgs.lib.makeBinPath [pkgs.google-chrome pkgs.nodejs_22]}:$PATH
 
-            echo "MCP Script: Starting Google Chrome..."
-            # Run chrome in the background
-            google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-stable &
-
-            # Get the Process ID of Chrome
-            CHROME_PID=$!
-
-            # IMPORTANT: When this script is terminated, it will also kill the background Chrome process.
-            trap "kill $CHROME_PID" EXIT
-
-            echo "MCP Script: Waiting for Chrome to initialize..."
-            sleep 3
-
-            echo "MCP Script: Starting chrome-devtools-mcp server..."
-            # Run the MCP server in the foreground. This script will stay running as long as the server does.
-            npx -y chrome-devtools-mcp@latest --browser-url http://127.0.0.1:9222
+            # 2. Execute the MCP server. This is the key change.
+            #    We tell the server *where* to find Chrome. The server will launch it as a child process.
+            #    - --isolated: Automatically creates a temporary, clean user profile.
+            #    - --chromeArg='--no-sandbox': This is often required for automated Chrome instances
+            #      running inside sandboxed environments like Nix or Docker.
+            #    - `exec`: Replaces the shell with the npx process for cleaner process management.
+            exec npx chrome-devtools-mcp@latest \
+              --executablePath="${pkgs.google-chrome}/bin/google-chrome-stable" \
+              --isolated \
+              --chromeArg='--no-sandbox'
           '';
         in {
           type = "local";
