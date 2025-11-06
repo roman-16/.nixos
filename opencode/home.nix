@@ -64,6 +64,7 @@ in {
           "cat*" = "allow";
           "cd*" = "allow";
           "cp*" = "allow";
+          "cut*" = "allow";
           "docker*" = "allow";
           "docker-compose*" = "allow";
           "echo*" = "allow";
