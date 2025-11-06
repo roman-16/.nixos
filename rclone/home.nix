@@ -11,9 +11,9 @@ in {
         password = secrets.protonPassword;
       };
 
-      mounts."/home/roman/ProtonDrive1" = {
+      mounts."/home/roman/ProtonDrive" = {
         enable = true;
-        mountPoint = "/home/roman/ProtonDrive1";
+        mountPoint = "/home/roman/ProtonDrive";
       };
     };
   };
