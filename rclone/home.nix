@@ -13,7 +13,7 @@ in {
 
       mounts."." = {
         enable = true;
-        mountPoint = "/home/roman/Proton Drive";
+        mountPoint = "/home/roman/ProtonDrive";
       };
     };
   };
