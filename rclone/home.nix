@@ -11,6 +11,14 @@ in {
           username = "roman@lerchster.dev";
           password = secrets.protonPassword;
         };
+
+        mounts = {
+          "/home/roman/ProtonDrive" = {
+            enable = true;
+            mountPoint = "/home/roman/ProtonDrive";
+            # options = [];
+          };
+        };
       };
     };
   };
