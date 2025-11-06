@@ -5,6 +5,7 @@
     ./gnome/home.nix
     ./locale/home.nix
     ./opencode/home.nix
+    ./rclone/home.nix
     ./stylix/home.nix
     ./tealdeer/home.nix
     ./zsh/home.nix

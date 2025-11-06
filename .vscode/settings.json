@@ -9,8 +9,11 @@
       "options": {
         "nixos": {
           "expr": "(builtins.getFlake \"${workspaceFolder}\").nixosConfigurations.default.options"
+        },
+        "home-manager": {
+          "expr": "(builtins.getFlake \"${workspaceFolder}\").nixosConfigurations.default.config.home-manager.users.roman.options"
         }
       }
     }
-  },
+  }
 }
