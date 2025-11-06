@@ -16,7 +16,10 @@ in {
           "/home/roman/ProtonDrive" = {
             enable = true;
             mountPoint = "/home/roman/ProtonDrive";
-            # options = [];
+            options = {
+              vfs-cache-mode = "full";
+              allow-other = true;
+            };
           };
         };
       };
