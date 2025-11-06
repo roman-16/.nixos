@@ -4,24 +4,16 @@ in {
   programs.rclone = {
     enable = true;
 
-    remotes = {
-      proton = {
-        config = {
-          type = "protondrive";
-          username = "roman@lerchster.dev";
-          password = secrets.protonPassword;
-        };
+    remotes.proton = {
+      config = {
+        type = "protondrive";
+        username = "roman@lerchster.dev";
+        password = secrets.protonPassword;
+      };
 
-        mounts = {
-          "/home/roman/ProtonDrive" = {
-            enable = true;
-            mountPoint = "/home/roman/ProtonDrive";
-            options = {
-              vfs-cache-mode = "full";
-              allow-other = true;
-            };
-          };
-        };
+      mounts."/home/roman/ProtonDrive1" = {
+        enable = true;
+        mountPoint = "/home/roman/ProtonDrive1";
       };
     };
   };
