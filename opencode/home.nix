@@ -93,6 +93,7 @@ in {
           "tree*" = "allow";
           "true*" = "allow";
           "wc*" = "allow";
+          "xargs*" = "allow";
         };
       };
 
