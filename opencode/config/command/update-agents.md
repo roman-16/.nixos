@@ -7,7 +7,10 @@ Update the `AGENTS.md` file to reflect the project. Look into the project for th
 
 Compress content if needed but don't delete any. Add content if needed. Keep the file clean, small and simple. You can update anything if needed.
 
-**Section Flags**: Some subsections are marked with language/project type flags (e.g., `[JS/TS]`). Only include these sections if they apply to the project type. Omit them for non-matching projects.
+**Section Flags**: Some subsections in the template below are marked with language/project type flags (e.g., `[JS/TS]`). These flags indicate which sections apply to specific project types:
+- If the section applies to the current project: include the section content and REMOVE the flag from the output
+- If the section does NOT apply: completely omit the entire section
+- Never keep the flag markers `[JS/TS]` in the final AGENTS.md file
 
 **Section Order**: Maintain the exact section order as shown below:
 1. General Principles
