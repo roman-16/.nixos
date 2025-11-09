@@ -82,6 +82,7 @@ in {
           "npx*" = "allow";
           "pkill*" = "allow";
           "pwd*" = "allow";
+          "rg*" = "allow";
           "rm*" = "allow";
           "sleep*" = "allow";
           "sort*" = "allow";
