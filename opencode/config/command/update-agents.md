@@ -5,7 +5,12 @@ agent: build
 
 Update the `AGENTS.md` file to reflect the project. Look into the project for that.
 
-Clear up the file to keep context small for the model, but don't lose any important information. Compress and reorganize content as needed while preserving all essential context. Add content if needed. Keep the file clean, small and simple. You can update anything if needed.
+Clear up the file to keep context small for the model, but don't lose any important information. Balance optimization with completeness:
+- **What to compress**: Remove redundancy, verbose explanations of obvious concepts, excessive examples when one suffices
+- **What to preserve**: All rules/requirements (even if rephrased shorter), specific examples that clarify non-obvious points, complete workflow steps, all commit types/emojis, all quality gates
+- **Goal**: More concise without losing substance. If unclear whether to keep detail, err on the side of keeping it
+
+Add content if needed. Keep the file clean and well-organized. You can update anything if needed.
 
 **Section Flags**: Some subsections in the template below are marked with language/project type flags (e.g., `[JS/TS]`). These flags indicate which sections apply to specific project types:
 - If the section applies to the current project: include the section content and REMOVE the flag from the output
@@ -76,10 +81,10 @@ Clear up the file to keep context small for the model, but don't lose any import
 ## Code Style
 
 ### General Principles
-- **Simplicity**: Prefer straightforward solutions. Eliminate unnecessary intermediate variables - directly invoke/access when only used once
-- **Paradigm**: Functional programming only - pure functions, immutability, no classes/mutations
-- **Duplicate Code**: Extract repeated patterns into reusable helpers
-- **Dependencies**: Check if existing dependencies solve the problem before adding new ones. Prefer well-maintained libraries. Document rationale for major dependencies
+- **Simplicity**: Straightforward solutions. No unnecessary intermediate variables—directly invoke/access if used once
+- **Paradigm**: Functional only—pure functions, immutability, no classes/mutations
+- **Duplicate Code**: Extract to reusable helpers
+- **Dependencies**: Check existing before adding new. Prefer well-maintained. Document rationale for major ones
 
 ### Style & Formatting
 - **Formatting**: [DETECT formatter and settings from project config files (biome.json, .prettierrc, .eslintrc, pyproject.toml, etc.) - e.g., "Biome (2 spaces, auto-organize imports)" or "Black (line length 100)" or "None - follow language standards"], empty line at end of files, whitespace between logical blocks
@@ -90,80 +95,57 @@ Clear up the file to keep context small for the model, but don't lose any import
 - **Exports**: At end of files. Only export what's used elsewhere. Export shared types. Do not export unused code
 
 ### Naming Conventions [JS/TS]
-- **Types/Interfaces/Classes**: PascalCase (e.g., `OrderEvent`, `UserConfig`)
-- **Functions/Variables/Constants**: camelCase (e.g., `processOrder`, `maxRetries`, `kafkaConfig`)
-- **Files**: Named as the default export
-- **Test Files**: Mirror source structure with `.test.ts` suffix
+- **PascalCase**: Types/Interfaces/Classes (`OrderEvent`, `UserConfig`)
+- **camelCase**: Functions/Variables/Constants (`processOrder`, `maxRetries`)
+- **Files**: Named as default export
+- **Test Files**: Mirror source with `.test.ts` in `tests/`
 
 ### TypeScript Practices [JS/TS]
-- **Types**: Strict TypeScript, never `any` - use `unknown` or proper types
-  - Prefer `type` over `interface`
-  - Let TypeScript infer types when obvious
-  - Don't duplicate type definitions
-  - No dedicated `types.ts` files - define types inline where used
-- **Variables**: Prefer `const` over `let`
-  - Only use `let` for: singletons with lazy init, error handling/cleanup reassignments, loop counters, complex state management
+- **Types**: Strict, never `any` (use `unknown`). Prefer `type` over `interface`. Infer when obvious. No duplicates. No `types.ts` files—define inline
+- **Variables**: Prefer `const`. Use `let` only for: lazy init singletons, error cleanup, loop counters, complex state
 
 ### Functions & Control Flow [JS/TS]
-- **Functions**: Arrow functions preferred. Use implicit returns when possible
-- **Callback Wrappers**: Pass function references directly when signatures match
+- **Functions**: Arrow preferred, implicit returns when possible
+- **Callbacks**: Pass references directly if signatures match (`process.on("SIGINT", shutdown)` not `() => shutdown()`)
+- **Async**: Prefer async/await. Only use when adding error handling or sequencing
+- **Conditionals**: Combine related, reduce nesting. Single-line for simple cases:
   ```ts
-  // Good
-  process.on("SIGINT", shutdown)
-  // Bad
-  process.on("SIGINT", () => shutdown())
-  ```
-- **Async**: Prefer async/await over callbacks/promises
-- **Redundant Async**: Only use async/await when adding error handling or sequencing logic
-- **Conditional Logic**: Combine related conditions - reduce nesting. Prefer single-line statements for simple conditions
-  ```ts
-  // Good for simple cases
   if (!value) throw new Error('Value required');
-  // Also fine for complex error messages or when adding context
+  // Multi-line fine for complex messages
   if (!value) {
     throw new Error('Value required: provide a non-empty string');
   }
   ```
 
 ### Object & Data Handling [JS/TS]
-- **Object Construction**: Generally spread dynamic properties FIRST, explicit properties LAST (unless intentionally allowing overrides)
+- **Object Construction**: Spread dynamic FIRST, explicit LAST (explicit overrides spreads):
   ```ts
-  // Preferred: explicit properties override spreads
-  const obj = { ...dynamicProps, id: 123, name: "fixed" }
-  // Avoid: spreads can override explicit properties (unless intentional)
-  const obj = { id: 123, name: "fixed", ...dynamicProps }
+  const obj = { ...dynamicProps, id: 123, name: "fixed" } // Good
+  const obj = { id: 123, ...dynamicProps } // Avoid (unless intentional)
   ```
-- **Redundant Variables**: Don't create multiple variables holding same value
-- **String Building**: Use array join for conditional concatenation instead of `+=`
-- **Method Chaining**: Chain directly instead of storing intermediate results (unless needed for clarity/reuse)
+- **Redundant Variables**: Don't create multiple holding same value
+- **String Building**: Array join for conditional concat (not `+=`)
+- **Method Chaining**: Chain directly (unless needed for clarity/reuse)
 
 ### Comments & Documentation
-- **When to Comment**: Explain "why" not "what" - document business logic, workarounds, non-obvious decisions
-- **Avoid**: Redundant comments that restate code (e.g., `// increment counter` above `counter++`)
-- **TODOs**: Use `// TODO:` (or language-appropriate format) with context and optionally a ticket reference
+- **When**: Explain "why" not "what"—business logic, workarounds, non-obvious decisions
+- **Avoid**: NEVER restate code. If self-explanatory, no comment needed
+- **TODOs**: `// TODO:` with context (optional ticket ref)
 
 ### Config & Environment
-- **Config**: Environment variables only, no secrets in code
-- **Environment Variables [JS/TS]**: When adding/updating, ALWAYS update: `.env`, `.env.example`, and `src/env.ts`. NEVER access `process.env` directly - import from `src/env.ts`
+- **Config**: Env vars only, no secrets in code
+- **Env Vars [JS/TS]**: ALWAYS update: `.env`, `.env.example`, `src/env.ts`. NEVER access `process.env` directly—import from `src/env.ts`
 
 ### Error Handling & Logging
-- **Error Handling**: Graceful failures with structured logging
-- **Error Messages**: Include context in error messages (what failed, why, what was expected). Consider adding error codes for production debugging
-- **Logging**: Structured JSON logging via custom logger. Log key operations, state changes, external calls, and errors for observability
+- **Errors**: Graceful failures with structured logging. Include context (what failed, why, expected). Consider error codes for production
+- **Logging**: Structured JSON via custom logger. Log: key ops, state changes, external calls, errors
 
 ### Testing [JS/TS]
-- **Approach**: Write tests alongside implementation - test-driven or test-first
-- **Location**: `.test.ts` files in `tests/` directory, mirroring `src/` structure
-- **Framework**: vitest with exact matchers only (no relative matchers like `toBeCloseTo`, `toBeGreaterThan`)
-- **Coverage**: Minimum 95% coverage across all metrics
-- **Test Quality**:
-  - Write meaningful tests validating behavior/edge cases
-  - Avoid trivial tests (testing that functions exist, mocked implementations without behavior verification)
-  - Test behavior, not implementation details
-  - Use descriptive test names: `"should throw error when orderId is missing"`
-  - Mock external services (Kafka, Zendesk, Schema Registry); use real implementations for internal logic
-  - Group related tests with `describe` blocks
-- **Validation**: Run `npm run test:coverage` after test changes
+- **Approach**: Write alongside implementation (TDD/test-first)
+- **Location**: `tests/` mirroring `src/`, `.test.ts` files
+- **Framework**: vitest, exact matchers only (no `toBeCloseTo`, `toBeGreaterThan`)
+- **Coverage**: Min 95% all metrics
+- **Quality**: Meaningful tests (behavior/edges), no trivial tests (function existence, mocked without verification), test behavior not implementation, descriptive names (`"should throw error when orderId is missing"`), mock external services, real implementations for internal, group with `describe`
 
 ## Quality Gates [JS/TS]
 Run in this order to fail fast:
