@@ -22,6 +22,7 @@
     foliate
     prismlauncher
     gimp3-with-plugins
+    protonvpn-gui
   ];
 
   services.xserver.excludePackages = with pkgs; [
