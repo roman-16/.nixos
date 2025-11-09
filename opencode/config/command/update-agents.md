@@ -52,7 +52,11 @@ Add content if needed. Keep the file clean and well-organized. You can update an
    - Plan files are temporary working documents - do NOT commit them to version control
    - NEVER delete plan files - leave them for the user to manage
    - For simpler tasks, a clear written plan in the conversation is sufficient
-3. **Present Summary**: Present a brief plan summary to the user, allowing early feedback on approach, scope, or direction
+3. **Present Summary**: Present a brief plan summary to the user
+   - Display: "Type `y` to go to clarifying"
+   - If user adds context/feedback: immediately update the plan file (or conversation plan for simple tasks)
+   - Continue showing the prompt until user types `y`
+   - Only proceed to step 4 (Clarify) after user confirmation
 4. **Clarify**: Ask questions to ensure complete understanding. REQUIRED before implementation if ANY ambiguity exists
    - Ask ONE question at a time, wait for answer, then ask the next question
    - Use previous answers to inform subsequent questions
@@ -93,39 +97,37 @@ Add content if needed. Keep the file clean and well-organized. You can update an
 ### Imports & Exports [JS/TS]
 - **Imports**: `@/` for src/, `./` for same directory only
 - **Exports**: At end of files. Only export what's used elsewhere. Export shared types. Do not export unused code
+- **Default exports preferred**: Nearly every file has default export named as file
+  - Named exports only for: types, constants alongside default, or utilities grouping together (rare)
+  - Barrel files (index.ts): Only re-export actual consumer imports—remove unused
+- **File Organization**: Remove folder if only index file—move up and rename to folder name. No `types.ts` files. Files named as default export
 
 ### Naming Conventions [JS/TS]
 - **PascalCase**: Types/Interfaces/Classes (`OrderEvent`, `UserConfig`)
 - **camelCase**: Functions/Variables/Constants (`processOrder`, `maxRetries`)
+- **Descriptive Names**: Full names, not abbreviations—especially parameters. Exceptions: `i` (index), `error` (catch), single-letter generics (`T`, `K`, `V`)
 - **Files**: Named as default export
 - **Test Files**: Mirror source with `.test.ts` in `tests/`
 
 ### TypeScript Practices [JS/TS]
-- **Types**: Strict, never `any` (use `unknown`). Prefer `type` over `interface`. Infer when obvious. No duplicates. No `types.ts` files—define inline
+- **Types**: Strict, never `any` (use `unknown`). Prefer `type` over `interface`. Infer when obvious. No `types.ts` files—define inline, co-located with primary implementation
+- **Type Assertions**: Prefer `satisfies` over `as`. Use type predicates for filters: `items.filter((item): item is NonNullable<typeof item> => item !== null)`
 - **Variables**: Prefer `const`. Use `let` only for: lazy init singletons, error cleanup, loop counters, complex state
+- **Inline Constants**: Inline strings/numbers used 2-3 times in one module. Extract only when cross-module, complex, or likely to change
 
 ### Functions & Control Flow [JS/TS]
-- **Functions**: Arrow preferred, implicit returns when possible
-- **Callbacks**: Pass references directly if signatures match (`process.on("SIGINT", shutdown)` not `() => shutdown()`)
-- **Async**: Prefer async/await. Only use when adding error handling or sequencing
-- **Conditionals**: Combine related, reduce nesting. Single-line for simple cases:
-  ```ts
-  if (!value) throw new Error('Value required');
-  // Multi-line fine for complex messages
-  if (!value) {
-    throw new Error('Value required: provide a non-empty string');
-  }
-  ```
+- **Functions**: Arrow functions, implicit returns when possible
+- **Callbacks**: Pass references directly if signatures match: `process.on("SIGINT", shutdown)`
+- **Wrapper Functions**: Don't create functions called once at startup—execute at module scope. Don't wrap array functions—use single-item arrays
+- **Async**: Prefer async/await
+- **Loops**: Prefer functional (map, filter, reduce) over imperative (for, while)
+- **Conditionals**: Combine related, reduce nesting. Single-line for simple cases
 
 ### Object & Data Handling [JS/TS]
-- **Object Construction**: Spread dynamic FIRST, explicit LAST (explicit overrides spreads):
-  ```ts
-  const obj = { ...dynamicProps, id: 123, name: "fixed" } // Good
-  const obj = { id: 123, ...dynamicProps } // Avoid (unless intentional)
-  ```
+- **Object Construction**: Spread dynamic FIRST, explicit LAST (explicit overrides): `{ ...dynamicProps, id: 123 }`
 - **Redundant Variables**: Don't create multiple holding same value
 - **String Building**: Array join for conditional concat (not `+=`)
-- **Method Chaining**: Chain directly (unless needed for clarity/reuse)
+- **Method Chaining**: Chain directly unless needed for clarity
 
 ### Comments & Documentation
 - **When**: Explain "why" not "what"—business logic, workarounds, non-obvious decisions
