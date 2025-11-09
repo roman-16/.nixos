@@ -220,10 +220,17 @@ Analyze and document:
 - Architectural patterns
 
 ### Project Structure
-- Always run `tree` to analyze the project structure
-- Document only the important directories and key files
-- Exclude dependencies, build artifacts, cache and version control folders
-- Add inline comments describing the purpose of each directory/file
+- Only list key directories with descriptions
+- Use a simple bullet list format (not a tree structure)
+- Focus on adding context that explains purpose and architecture
+- Example format:
+  ```markdown
+  ## Project Structure
+  Key directories:
+  - `src/services/` - Business logic and external service integrations
+  - `src/db/` - Database models and migrations
+  - `tests/` - Unit and integration tests
+  ```
 ```
 
 User input:
