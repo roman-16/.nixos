@@ -5,7 +5,7 @@ agent: build
 
 Update the `AGENTS.md` file to reflect the project. Look into the project for that.
 
-Compress content if needed but don't delete any. Add content if needed. Keep the file clean, small and simple. You can update anything if needed.
+Clear up the file to keep context small for the model, but don't lose any important information. Compress and reorganize content as needed while preserving all essential context. Add content if needed. Keep the file clean, small and simple. You can update anything if needed.
 
 **Section Flags**: Some subsections in the template below are marked with language/project type flags (e.g., `[JS/TS]`). These flags indicate which sections apply to specific project types:
 - If the section applies to the current project: include the section content and REMOVE the flag from the output
