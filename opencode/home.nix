@@ -94,6 +94,7 @@ in {
           "touch*" = "allow";
           "tree*" = "allow";
           "true*" = "allow";
+          "uniq*" = "allow";
           "wc*" = "allow";
           "xargs*" = "allow";
         };
