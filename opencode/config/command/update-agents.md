@@ -146,7 +146,7 @@ Add content if needed. Keep the file clean and well-organized. You can update an
 - **Approach**: Write tests alongside implementation (TDD/test-first)
 - **Location**: `.test.ts` files in `tests/` directory, mirroring `src/` structure
 - **Framework**: vitest with exact matchers only (no relative matchers like `toBeCloseTo`, `toBeGreaterThan`)
-- **Coverage**: Minimum 95% coverage across all metrics
+- **Coverage**: Minimum 95% for statements, lines, and functions; 90% for branches
 - **Mocking**:
   - **ONLY mock external dependencies** (npm packages) - NEVER mock our own code in `src/`
   - **Not all dependencies need mocking** - only mock dependencies that require it (external services, APIs, complex integrations)
