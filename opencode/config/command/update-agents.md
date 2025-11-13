@@ -95,7 +95,7 @@ Add content if needed. Keep the file clean and well-organized. You can update an
 - **Property Ordering**: Alphabetical by default unless another ordering makes better sense. For mixed objects: primitives first, then nested (both alphabetically)
 
 ### Imports & Exports [JS/TS]
-- **Imports**: `@/` for src/, `@@/` for project root, `./` for same directory only
+- **Imports**: `@/` for src/, `@@/` for package root, `./` for same directory only
 - **Exports**: At end of files. Only export what's used elsewhere. Export shared types. Do not export unused code
 - **Default exports preferred**: Nearly every file has default export named as file
   - Named exports only for: types, constants alongside default, or utilities grouping together (rare)
