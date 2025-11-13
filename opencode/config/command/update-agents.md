@@ -95,7 +95,7 @@ Add content if needed. Keep the file clean and well-organized. You can update an
 - **Property Ordering**: Alphabetical by default unless another ordering makes better sense. For mixed objects: primitives first, then nested (both alphabetically)
 
 ### Imports & Exports [JS/TS]
-- **Imports**: `@/` for src/, `./` for same directory only
+- **Imports**: `@/` for src/, `@@/` for project root, `./` for same directory only
 - **Exports**: At end of files. Only export what's used elsewhere. Export shared types. Do not export unused code
 - **Default exports preferred**: Nearly every file has default export named as file
   - Named exports only for: types, constants alongside default, or utilities grouping together (rare)
@@ -143,11 +143,24 @@ Add content if needed. Keep the file clean and well-organized. You can update an
 - **Logging**: Structured JSON via custom logger. Log: key ops, state changes, external calls, errors
 
 ### Testing [JS/TS]
-- **Approach**: Write alongside implementation (TDD/test-first)
-- **Location**: `tests/` mirroring `src/`, `.test.ts` files
-- **Framework**: vitest, exact matchers only (no `toBeCloseTo`, `toBeGreaterThan`)
-- **Coverage**: Min 95% all metrics
-- **Quality**: Meaningful tests (behavior/edges), no trivial tests (function existence, mocked without verification), test behavior not implementation, descriptive names (`"should throw error when orderId is missing"`), mock external services, real implementations for internal, group with `describe`
+- **Approach**: Write tests alongside implementation (TDD/test-first)
+- **Location**: `.test.ts` files in `tests/` directory, mirroring `src/` structure
+- **Framework**: vitest with exact matchers only (no relative matchers like `toBeCloseTo`, `toBeGreaterThan`)
+- **Coverage**: Minimum 95% coverage across all metrics
+- **Mocking**:
+  - **ONLY mock external dependencies** (npm packages) - NEVER mock our own code in `src/`
+  - **Not all dependencies need mocking** - only mock dependencies that require it (external services, APIs, complex integrations)
+  - **ALL mocks MUST be global** - place in `.vitest/mocks/` directory, named as `mock` + camelCased dependency name (e.g., `@google-cloud/secret-manager` → `mockGoogleCloudSecretManager.ts`)
+  - **No local mocks** - NEVER use `vi.mock()` in test files. All mocking must be in `.vitest/mocks/`
+  - **Mock setup**: Import mocks in `.vitest/setup.ts`, referenced by `vitest.config.ts`
+  - **Mock exports**: Export mocks from `.vitest/mocks/index.ts` barrel file only when tests need to reconfigure them
+- **Test Quality**:
+  - Write meaningful tests validating behavior/edge cases
+  - Avoid trivial tests (testing that functions exist, mocked implementations without behavior verification)
+  - Test behavior, not implementation details
+  - Use descriptive test names: `"should throw error when orderId is missing"`
+  - Group related tests with `describe` blocks
+- **Validation**: Run `npm run test:coverage` after test changes
 
 ## Quality Gates [JS/TS]
 Run in this order to fail fast:
@@ -159,24 +172,27 @@ Run in this order to fail fast:
 
 ## Version Control
 - **NEVER do ANY git operation without explicit user permission** - This includes: commit, push, stage, unstage, branch operations, merges, rebases, etc.
-- **Commit Workflow**: NEVER commit automatically. Only ask when logical
-  - Before asking: check staged (`git status`, `git diff --staged`). Auto-exclude plan files (`*_PLAN.md`)—unstage if staged
-  - Display: files to unstage (if any), additional to stage (if any), proposed message (conventional format, ALL changes), horizontal rule (`---`)
-  - Options based on staging needs:
-    - If changes needed: `s` to stage | `c` to stage and commit | `p` to stage, commit and push
-    - If no changes needed: `c` to commit | `p` to commit and push
-  - On `s`: unstage specified, stage additional, show staged, prompt `c`/`p`
-  - On `c`/`p`: perform staging if needed, then commit (and push if `p`)
-  - On other: treat as instruction (modify message, change files, more changes, etc.)
-  - If file changes relevant to commit: restart workflow from beginning
-- **When to Ask**: When task complete AND no clear indication more changes coming
-  - Logical unit complete (feature/bugfix/refactor/task)
-  - Quality gates pass (or minimally validated)
+- **When to Ask About Committing**: Ask when you feel like it makes sense
+  - Logical unit complete (feature/bugfix/refactor/task finished)
+  - Quality gates pass (or minimally, changes validated)
   - Before significantly different task
-  - Key principle: When in doubt, ask. Only skip if certain larger commit coming
-- **Format**: `emoji type(scope): description`
-  - Examples: `✨ feat(llm): add retrieval tool` | `🐛 fix(auth): handle token expiry` | `✅ test(server): add chat history tests`
-  - **Body**: Simple, concise. Skip for obvious. Bullet list only for meaningful details (architecture, breaking, context). No exhaustive lists
+  - **Key principle**: When in doubt, ask. Only skip if certain larger commit coming
+- **Commit Workflow**: NEVER commit automatically. Only ask when logical
+  - Ask: "Type `y` to start committing"
+  - If "y": proceed with commit workflow
+    - Check staged files (`git status`, `git diff --staged`)
+    - Display: files to unstage (if any), additional files to stage (if any), proposed commit message (conventional format describing ALL changes), horizontal rule (`---`)
+    - Display options based on staging needs:
+      - If staging changes needed (files to unstage or additional files to stage): Type `s` to stage | `c` to stage and commit | `p` to stage, commit and push
+      - If no staging changes needed: Type `c` to commit | `p` to commit and push
+    - On `s`: unstage specified files, stage additional files, show staged changes, prompt with `c`/`p` options
+    - On `c`/`p`: perform staging changes if needed, then commit (and push if `p`)
+    - On other response: treat as instruction (modify message, change files, make more changes, etc.)
+    - If file changes made relevant to current commit: restart entire workflow from beginning
+  - On other response: treat as instruction (don't start commit workflow)
+- **Commit Message Format**: `emoji type(scope): description`
+  - Examples: `✨ feat(consumer): add retry logic` | `🐛 fix(zendesk): handle rate limiting` | `✅ test(consumer): add timeout scenarios`
+  - **Body**: Keep simple and concise. Skip body for obvious changes. Use bullet list only for meaningful details (key architectural decisions, breaking changes, important context). Avoid exhaustive change lists
 - **Types with Emojis**:
   - `✨ feat` - New feature
   - `🐛 fix` - Bug fix
