@@ -80,8 +80,10 @@ in {
           "node*" = "allow";
           "npm*" = "allow";
           "npx*" = "allow";
+          "perl*" = "allow";
           "pkill*" = "allow";
           "pwd*" = "allow";
+          "python3*" = "allow";
           "rg*" = "allow";
           "rm*" = "allow";
           "sleep*" = "allow";
@@ -92,6 +94,7 @@ in {
           "timeout*" = "allow";
           "tofu fmt*" = "allow";
           "touch*" = "allow";
+          "tr*" = "allow";
           "tree*" = "allow";
           "true*" = "allow";
           "uniq*" = "allow";

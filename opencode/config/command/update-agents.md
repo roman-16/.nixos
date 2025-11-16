@@ -96,7 +96,7 @@ Add content if needed. Keep the file clean and well-organized. You can update an
 
 ### Imports & Exports [JS/TS]
 - **Imports**: `@/` for src/, `@@/` for package root, `./` for same directory only
-- **Exports**: At end of files. Only export what's used elsewhere. Export shared types. Do not export unused code
+- **Exports**: ALWAYS at end of file (EOF). Only export what's used elsewhere. Export shared types. Do not export unused code
 - **Default exports preferred**: Nearly every file has default export named as file
   - Named exports only for: types, constants alongside default, or utilities grouping together (rare)
   - Barrel files (index.ts): Only re-export actual consumer imports—remove unused

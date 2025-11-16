@@ -16,7 +16,6 @@
     gnomeExtensions.smile-complementary-extension
     smile
     gnomeExtensions.alphabetical-app-grid
-    gnomeExtensions.foresight
   ];
 
   environment.gnome.excludePackages = with pkgs; [

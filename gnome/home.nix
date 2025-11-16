@@ -151,7 +151,6 @@ with lib.hm.gvariant; {
         gnomeExtensions.burn-my-windows.extensionUuid
         gnomeExtensions.dash-to-panel.extensionUuid
         gnomeExtensions.ddterm.extensionUuid
-        gnomeExtensions.foresight.extensionUuid
         gnomeExtensions.lock-keys.extensionUuid
         gnomeExtensions.smile-complementary-extension.extensionUuid
         gnomeExtensions.user-themes.extensionUuid
