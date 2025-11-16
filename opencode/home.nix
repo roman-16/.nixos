@@ -93,6 +93,7 @@ in {
           "test*" = "allow";
           "timeout*" = "allow";
           "tofu fmt*" = "allow";
+          "tofu validate*" = "allow";
           "touch*" = "allow";
           "tr*" = "allow";
           "tree*" = "allow";
