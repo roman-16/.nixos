@@ -1,13 +1,4 @@
 {pkgs, ...}: let
-  opencodePackages =
-    import (builtins.fetchTarball {
-      # Pinpoint opencode version because the newest version doesn't work
-      url = "https://github.com/NixOS/nixpkgs/archive/876df71365b3c0ab2d363cd6af36a80199879430.tar.gz";
-      sha256 = "0am3j6dbd60n9dyprg32n0fpc92ik1s7parcfcya7blask2f8qn6";
-    }) {
-      system = pkgs.system;
-    };
-
   secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
 in {
   # Needed for the chrome devtools workaround
@@ -20,7 +11,6 @@ in {
 
   programs.opencode = {
     enable = true;
-    # package = opencodePackages.opencode;
 
     settings = {
       autoupdate = false;
