@@ -20,7 +20,7 @@ in {
 
   programs.opencode = {
     enable = true;
-    package = opencodePackages.opencode;
+    # package = opencodePackages.opencode;
 
     settings = {
       autoupdate = false;
