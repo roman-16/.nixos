@@ -1,5 +1,5 @@
 ---
-description: Execute the version control flow
+description: execute the version control flow
 agent: build
 ---
 

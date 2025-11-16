@@ -1,5 +1,5 @@
 ---
-description: Create or update AGENTS.md to reflect the latest project structure and guidelines
+description: create or update AGENTS.md to reflect the latest project structure and guidelines
 agent: build
 ---
 

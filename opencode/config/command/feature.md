@@ -1,5 +1,5 @@
 ---
-description: Create a new feature
+description: create a new feature
 agent: build
 ---
 
