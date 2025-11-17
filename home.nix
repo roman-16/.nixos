@@ -1,4 +1,4 @@
-{inputs, ...}: {
+{...}: {
   imports = [
     ./firefox/home.nix
     ./git/home.nix
@@ -9,8 +9,6 @@
     ./stylix/home.nix
     ./tealdeer/home.nix
     ./zsh/home.nix
-    inputs.nix-flatpak.homeManagerModules.nix-flatpak
-    ./flatpak/configuration.nix
   ];
 
   programs.home-manager.enable = true;
