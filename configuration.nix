@@ -5,7 +5,6 @@
     ./docker/configuration.nix
     ./drivers/configuration.nix
     ./firefox/configuration.nix
-    ./flatpak/configuration.nix
     ./fonts/configuration.nix
     ./git/configuration.nix
     ./gnome/configuration.nix
