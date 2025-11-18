@@ -23,7 +23,7 @@
     prismlauncher
     gimp3-with-plugins
     gparted
-    varia
+    motrix
   ];
 
   services.xserver.excludePackages = with pkgs; [
