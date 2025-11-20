@@ -97,10 +97,13 @@ Add content if needed. Keep the file clean and well-organized. You can update an
 ### Imports & Exports [JS/TS]
 - **Imports**: `@/` for src/, `@@/` for package root, `./` for same directory only
 - **Exports**: ALWAYS at end of file (EOF). Only export what's used elsewhere. Export shared types. Do not export unused code
+  - Use inline `type` keyword in export statements: `export { functionName, type TypeName }`
+  - Alphabetical ordering for exports (case-insensitive)
 - **Default exports preferred**: Nearly every file has default export named as file
   - Named exports only for: types, constants alongside default, or utilities grouping together (rare)
   - Barrel files (index.ts): Only re-export actual consumer imports—remove unused
 - **File Organization**: Remove folder if only index file—move up and rename to folder name. No `types.ts` files. Files named as default export
+- **Type Location**: Define types in the module where they're **primarily used**, export for other modules to import
 
 ### Naming Conventions [JS/TS]
 - **PascalCase**: Types/Interfaces/Classes (`OrderEvent`, `UserConfig`)
