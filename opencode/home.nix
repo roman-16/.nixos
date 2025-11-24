@@ -25,7 +25,6 @@ in {
 
             exec npx chrome-devtools-mcp@latest \
               --executablePath="${pkgs.google-chrome}/bin/google-chrome-stable" \
-              --isolated \
               --chromeArg='--no-sandbox'
           '';
         in {
