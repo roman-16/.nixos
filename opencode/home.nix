@@ -14,7 +14,7 @@ in {
 
     settings = {
       autoupdate = false;
-      model = "anthropic/claude-sonnet-4-5";
+      model = "anthropic/claude-opus-4-5";
 
       mcp = {
         chrome-devtools = let
