@@ -163,14 +163,14 @@ Add content if needed. Keep the file clean and well-organized. You can update an
   - Test behavior, not implementation details
   - Use descriptive test names: `"should throw error when orderId is missing"`
   - Group related tests with `describe` blocks
-- **Validation**: Run `npm run test:coverage` after test changes
+- **Validation**: Run `npm run test` after test changes
 
 ## Quality Gates [JS/TS]
 Run in this order to fail fast:
 
 1. TypeScript compilation must succeed with no errors (`npm run typecheck`)
 2. Biome linting must pass (`npm run lint`)
-3. All tests must pass and test coverage must meet minimum 95% threshold across all metrics (`npm run test:coverage`)
+3. All tests must pass and test coverage must meet minimum 95% threshold across all metrics (`npm run test`)
 4. Project must build and run successfully (`npm run dev`)
 
 ## Version Control
@@ -212,7 +212,7 @@ Run in this order to fail fast:
 - **Build**: `npm run build` (production) | `npm run dev` (development with watch)
 - **Type check**: `npm run typecheck`
 - **Lint**: `npm run lint`
-- **Test**: `npm test` | `npm run test:watch` | `npm run test:coverage`
+- **Test**: `npm run test`
 - **[Project-specific]**: [DETECT and document project-specific commands]
 ```
 
