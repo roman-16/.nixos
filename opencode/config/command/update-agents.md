@@ -175,6 +175,7 @@ Run in this order to fail fast:
 
 ## Version Control
 - **NEVER do ANY git operation without explicit user permission** - This includes: commit, push, stage, unstage, branch operations, merges, rebases, etc.
+- **Quality Gates Required**: Run ALL quality gates before ANY git operation. If any gate fails, inform the user and stop
 - **When to Ask About Committing**: Ask when you feel like it makes sense
   - Logical unit complete (feature/bugfix/refactor/task finished)
   - Quality gates pass (or minimally, changes validated)
@@ -182,7 +183,7 @@ Run in this order to fail fast:
   - **Key principle**: When in doubt, ask. Only skip if certain larger commit coming
 - **Commit Workflow**: NEVER commit automatically. Only ask when logical
   - Ask: "Type `y` to start committing"
-  - If "y": proceed with commit workflow
+  - If "y": Run quality gates first. If any gate fails, inform the user and stop. Then proceed with commit workflow:
     - Check staged files (`git status`, `git diff --staged`)
     - Display: files to unstage (if any), additional files to stage (if any), proposed commit message (conventional format describing ALL changes), horizontal rule (`---`)
     - Display options based on staging needs:
