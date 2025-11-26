@@ -34,6 +34,7 @@ Add content if needed. Keep the file clean and well-organized. You can update an
 - **Strictness**: ALWAYS/NEVER = strict rules. Prefer/Avoid = strong defaults with exceptions allowed
 - **Git Operations**: NEVER EVER do ANY git operation (`git add`, `git stage`, `git restore --staged`, `git commit`, `git push`, `git checkout`, `git branch`, `git merge`, `git rebase`, etc.) without EXPLICIT user permission. This is an absolute rule with ZERO exceptions. Only the user initiates git operations
 - **Verify Before Implementing**: ALWAYS verify APIs, library features, and configurations using Context7 or official documentation before implementation. NEVER assume attributes, methods, or behavior exist without verification
+- **Documentation**: Use `docs/` folder for documentation
 - **Ask Questions**: ALWAYS ask if unclear. NEVER assume. STOP and ask before proceeding if ANY of:
   - Multiple valid approaches exist
   - User intent could be interpreted multiple ways
@@ -42,19 +43,16 @@ Add content if needed. Keep the file clean and well-organized. You can update an
   - Trade-offs exist between options
   - Scope is ambiguous (what's in/out, how deep to go)
 
-## Workflow
+## Feature Workflow
 1. **Research**: Understand the codebase, requirements, and constraints before making changes
    - Check existing patterns and implementations for similar functionality
    - Review related tests to understand expected behavior
    - Identify dependencies and potential side effects
 2. **Plan**: Create an initial plan breaking down the task into clear, actionable steps
-   - For complex features (significant architectural changes, 3+ files affected, new external integrations), create a markdown plan file named `FEATURE_NAME_PLAN.md` (e.g., `AUTHENTICATION_PLAN.md`)
-   - Plan files are temporary working documents - do NOT commit them to version control
-   - NEVER delete plan files - leave them for the user to manage
-   - For simpler tasks, a clear written plan in the conversation is sufficient
+   - Create a markdown feature file in `docs/features/` named `YYYY-MM-DD-HHMM_FEATURE_NAME.md` (e.g., `docs/features/2025-11-26-1530_AUTHENTICATION.md`)
 3. **Present Summary**: Present a brief plan summary to the user
    - Display: "Type `y` to go to clarifying"
-   - If user adds context/feedback: immediately update the plan file (or conversation plan for simple tasks)
+   - If user adds context/feedback: immediately update the feature file
    - Continue showing the prompt until user types `y`
    - Only proceed to step 4 (Clarify) after user confirmation
 4. **Clarify**: Ask questions to ensure complete understanding. REQUIRED before implementation if ANY ambiguity exists
@@ -67,7 +65,7 @@ Add content if needed. Keep the file clean and well-organized. You can update an
      (2) [option]
      ```
      Mention that text answers are welcome (pick number, add context, or free-form text). Don't include "text answer" as a numbered option
-   - Update plan with each Q&A after answering (in plan file if created, or in conversation)
+   - Update the feature file with each Q&A after answering
    - Continue until ALL ambiguities resolved - don't stop after pre-written questions. Proactively identify new ambiguities and ask follow-ups. Don't ask permission to continue
    - Know when to stop: architecture, file structure, user-facing changes, breaking changes, major patterns - NOT minor implementation details
    - After all questions: comprehensively update plan with all decisions
