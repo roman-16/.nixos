@@ -173,7 +173,14 @@ Run in this order to fail fast:
 4. Project must build and run successfully (`npm run dev`)
 
 ## Version Control
+
+### CRITICAL: Explicit Permission Required
 - **NEVER do ANY git operation without explicit user permission** - This includes: commit, push, stage, unstage, branch operations, merges, rebases, etc.
+- **ALWAYS wait for user to type `y`, `c`, or `p`** before executing ANY git command
+- **Even if quality gates pass, even if the user said "commit" earlier in the conversation, even if it seems obvious** - STOP and ask for confirmation with the exact options below
+- **No exceptions. No shortcuts. No assuming intent.**
+
+### Quality Gates & Timing
 - **Quality Gates Required**: Run ALL quality gates before ANY git operation. If any gate fails, inform the user and stop
 - **When to Ask About Committing**: Ask when you feel like it makes sense
   - Logical unit complete (feature/bugfix/refactor/task finished)
