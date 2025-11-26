@@ -49,7 +49,8 @@ Add content if needed. Keep the file clean and well-organized. You can update an
    - Review related tests to understand expected behavior
    - Identify dependencies and potential side effects
 2. **Plan**: Create an initial plan breaking down the task into clear, actionable steps
-   - Create a markdown feature file in `docs/features/` named `YYYY-MM-DD-HHMM_FEATURE_NAME.md` (e.g., `docs/features/2025-11-26-1530_AUTHENTICATION.md`)
+   - Create a markdown feature file in `docs/features/` named `YYYY-MM-DD-HHMM_FEATURE_NAME.md`
+   - Use `date +%Y-%m-%d-%H%M` to get the timestamp (e.g., `docs/features/2025-11-26-1530_AUTHENTICATION.md`)
 3. **Present Summary**: Present a brief plan summary to the user
    - Display: "Type `y` to go to clarifying"
    - If user adds context/feedback: immediately update the feature file
