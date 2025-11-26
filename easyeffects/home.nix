@@ -1,9 +1,10 @@
 {...}: {
   services.easyeffects = {
     enable = true;
+    preset = "default";
 
     extraPresets = {
-      my-preset = {
+      default = {
         input = {
           blocklist = [];
           "compressor#0" = {
