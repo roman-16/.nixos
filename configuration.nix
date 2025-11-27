@@ -4,6 +4,7 @@
 
     ./docker/configuration.nix
     ./drivers/configuration.nix
+    ./easyeffects/configuration.nix
     ./firefox/configuration.nix
     ./fonts/configuration.nix
     ./git/configuration.nix
