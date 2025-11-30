@@ -14,6 +14,7 @@
     tre-command
     lsof
     tree
+    devbox
   ];
 
   programs = {
