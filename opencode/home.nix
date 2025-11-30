@@ -56,6 +56,7 @@ in {
           "curl*" = "allow";
           "cut*" = "allow";
           "date*" = "allow";
+          "devbox*" = "allow";
           "docker*" = "allow";
           "docker-compose*" = "allow";
           "echo*" = "allow";
