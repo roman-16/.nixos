@@ -1,7 +1,7 @@
 {pkgs, ...}: {
   environment.systemPackages = with pkgs; [
     micro
-    vscode.fhs
+    vscode
     spotify
     appimage-run
     alejandra

@@ -1,13 +1,7 @@
 {pkgs, ...}: {
-  environment = {
-    # Workaround: NixOS containers module creates config in /etc/static/containers
-    # but Podman looks at /etc/containers. Point Podman to the correct location.
-    sessionVariables.REGISTRIES_CONFIG_PATH = "/etc/static/containers/registries.conf";
-
-    systemPackages = with pkgs; [
-      podman-compose
-    ];
-  };
+  environment.systemPackages = with pkgs; [
+    podman-compose
+  ];
 
   hardware.nvidia-container-toolkit.enable = true;
 
