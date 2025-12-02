@@ -73,6 +73,8 @@ in {
           "npx*" = "allow";
           "perl*" = "allow";
           "pkill*" = "allow";
+          "podman*" = "allow";
+          "podman-compose*" = "allow";
           "pwd*" = "allow";
           "python3*" = "allow";
           "rg*" = "allow";
