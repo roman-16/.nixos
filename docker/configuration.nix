@@ -3,6 +3,10 @@
     podman-compose
   ];
 
+  # Workaround: NixOS containers module creates config in /etc/static/containers
+  # but Podman looks at /etc/containers. Point Podman to the correct location.
+  environment.sessionVariables.REGISTRIES_CONFIG_PATH = "/etc/static/containers/registries.conf";
+
   hardware.nvidia-container-toolkit.enable = true;
 
   virtualisation = {
