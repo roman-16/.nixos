@@ -11,7 +11,6 @@
     google-chrome
     yt-dlp
     cheese
-    anydesk
     discord
     kooha
     signal-desktop-bin
@@ -23,7 +22,6 @@
     prismlauncher
     gimp3-with-plugins
     gparted
-    motrix
   ];
 
   services.xserver.excludePackages = with pkgs; [
