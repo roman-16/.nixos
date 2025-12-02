@@ -14,6 +14,8 @@
     wireless.enable = false;
   };
 
+  programs.nix-ld.enable = true;
+
   security = {
     rtkit.enable = true;
   };
