@@ -15,6 +15,7 @@
     lsof
     tree
     devbox
+    rar
   ];
 
   programs = {
