@@ -6,20 +6,20 @@
   hardware.nvidia-container-toolkit.enable = true;
 
   # Required for rootless Podman to map UIDs/GIDs inside containers
-  users.users.roman = {
-    subGidRanges = [
-      {
-        startGid = 100000;
-        count = 65536;
-      }
-    ];
-    subUidRanges = [
-      {
-        startUid = 100000;
-        count = 65536;
-      }
-    ];
-  };
+  # users.users.roman = {
+  #   subGidRanges = [
+  #     {
+  #       startGid = 100000;
+  #       count = 65536;
+  #     }
+  #   ];
+  #   subUidRanges = [
+  #     {
+  #       startUid = 100000;
+  #       count = 65536;
+  #     }
+  #   ];
+  # };
 
   virtualisation = {
     containers = {
