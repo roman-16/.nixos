@@ -1,7 +1,11 @@
 {pkgs, ...}: {
-  environment.systemPackages = with pkgs; [
-    podman-compose
-  ];
+  environment = {
+    sessionVariables.PODMAN_COMPOSE_WARNING_LOGS = "false";
+
+    systemPackages = with pkgs; [
+      podman-compose
+    ];
+  };
 
   hardware.nvidia-container-toolkit.enable = true;
 
