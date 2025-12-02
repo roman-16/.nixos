@@ -22,6 +22,7 @@
     prismlauncher
     gimp3-with-plugins
     gparted
+    file-roller
   ];
 
   services.xserver.excludePackages = with pkgs; [
