@@ -37,7 +37,7 @@
   users.users.roman = {
     isNormalUser = true;
     description = "Roman";
-    extraGroups = ["docker" "networkmanager" "wheel"];
+    extraGroups = ["networkmanager" "podman" "wheel"];
   };
 
   nixpkgs.config.allowUnfree = true;

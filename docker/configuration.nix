@@ -1,20 +1,19 @@
-{pkgs, ...}: {
-  environment.systemPackages = with pkgs; [
-    docker
-    docker-compose
-  ];
+{...}: {
+  hardware.nvidia-container-toolkit.enable = true;
 
-  virtualisation.docker = {
-    enable = true;
+  virtualisation = {
+    containers.enable = true;
 
-    autoPrune = {
+    podman = {
+      dockerCompat = true;
+      defaultNetwork.settings.dns_enabled = true; # Required for containers under podman-compose to be able to talk to each other.
       enable = true;
-      flags = ["--all" "--volumes"];
-    };
 
-    rootless = {
-      enable = true;
-      setSocketVariable = true;
+      autoPrune = {
+        dates = "weekly";
+        enable = true;
+        flags = ["--all" "--volumes"];
+      };
     };
   };
 }
