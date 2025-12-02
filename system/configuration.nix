@@ -38,6 +38,18 @@
     isNormalUser = true;
     description = "Roman";
     extraGroups = ["networkmanager" "podman" "wheel"];
+    subGidRanges = [
+      {
+        startGid = 100000;
+        count = 65536;
+      }
+    ];
+    subUidRanges = [
+      {
+        startUid = 100000;
+        count = 65536;
+      }
+    ];
   };
 
   nixpkgs.config.allowUnfree = true;
