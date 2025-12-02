@@ -93,6 +93,7 @@ in {
           "true*" = "allow";
           "uniq*" = "allow";
           "wc*" = "allow";
+          "which*" = "allow";
           "xargs*" = "allow";
         };
       };
