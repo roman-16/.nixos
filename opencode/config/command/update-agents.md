@@ -162,6 +162,7 @@ Add content if needed. Keep the file clean and well-organized. You can update an
   - Test behavior, not implementation details
   - Use descriptive test names: `"should throw error when orderId is missing"`
   - Group related tests with `describe` blocks
+- **DOM Selectors**: Define a `selectors` constant at the top of test files with all query selectors.
 - **Validation**: Run `npm run test` after test changes
 
 ## Quality Gates [JS/TS]
