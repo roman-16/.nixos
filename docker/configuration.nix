@@ -6,7 +6,10 @@
   hardware.nvidia-container-toolkit.enable = true;
 
   virtualisation = {
-    containers.enable = true;
+    containers = {
+      enable = true;
+      registries.search = ["docker.io"];
+    };
 
     podman = {
       dockerCompat = true;
