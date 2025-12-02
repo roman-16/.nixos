@@ -12,7 +12,7 @@
   virtualisation = {
     containers = {
       enable = true;
-      # registries.search = ["docker.io"];
+      registries.search = ["docker.io"];
     };
 
     podman = {
