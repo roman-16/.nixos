@@ -83,7 +83,7 @@ in {
           "*" = "ask";
           "cat*" = "allow";
           "cd*" = "allow";
-          "cp *" = "allow";
+          "cp*" = "allow";
           "curl*" = "allow";
           "cut*" = "allow";
           "date*" = "allow";
