@@ -81,6 +81,7 @@ in {
 
         bash = {
           "*" = "ask";
+          "cargo*" = "allow";
           "cat*" = "allow";
           "cd*" = "allow";
           "cp*" = "allow";
