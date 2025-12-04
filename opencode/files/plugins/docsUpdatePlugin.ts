@@ -16,7 +16,7 @@ const docsUpdatePlugin: Plugin = async ({ client }) => {
 
     if (files.length === 0) return;
 
-    const sessionTitle = `${new Date().toISOString()} Docs Update`;
+    const sessionTitle = `${new Date().toISOString().split("T")[0]} Docs Update`;
 
     await client.tui.showToast({
       body: {
