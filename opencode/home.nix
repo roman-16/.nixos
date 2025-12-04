@@ -4,6 +4,37 @@ in {
   # Needed for the chrome devtools workaround
   nixpkgs.config.allowUnfree = true;
 
+  # Fix: opencode missing @parcel/watcher native modules
+  nixpkgs.overlays = [
+    (final: prev: {
+      opencode = prev.opencode.overrideAttrs (old: {
+        nativeBuildInputs = old.nativeBuildInputs ++ [prev.autoPatchelfHook];
+        buildInputs = (old.buildInputs or []) ++ [prev.stdenv.cc.cc.lib];
+
+        postInstall =
+          old.postInstall
+          + ''
+            # Fix: Copy only the glibc variant for this platform
+            mkdir -p $out/lib/opencode/node_modules/@parcel
+            for pkg in ../../node_modules/.bun/@parcel+watcher-linux-x64-glibc@*; do
+              if [ -d "$pkg" ]; then
+                cp -r "$pkg" $out/lib/opencode/node_modules/.bun/$(basename "$pkg")
+              fi
+            done
+
+            # Add symlink for @parcel/watcher-linux-x64-glibc
+            for pkg in $out/lib/opencode/node_modules/.bun/@parcel+watcher-linux-x64-glibc@*; do
+              if [ -d "$pkg" ]; then
+                pkgName=$(basename "$pkg" | sed 's/@parcel+\(watcher-[^@]*\)@.*/\1/')
+                ln -sf ../.bun/$(basename "$pkg")/node_modules/@parcel/$pkgName \
+                       $out/lib/opencode/node_modules/@parcel/$pkgName
+              fi
+            done
+          '';
+      });
+    })
+  ];
+
   home.file.".config/opencode" = {
     recursive = true;
     source = ./config;
