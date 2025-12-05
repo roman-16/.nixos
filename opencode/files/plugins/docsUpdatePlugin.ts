@@ -7,7 +7,7 @@ const docsUpdatePlugin: Plugin = async ({ client }) => {
   const docsDir = `${cwd}/docs/`;
   const docsReadme = `${cwd}/docs/README.md`;
   const pendingFiles: Set<string> = new Set();
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
   const executeUpdate = async () => {
     const files = Array.from(pendingFiles);
@@ -87,17 +87,15 @@ Do not include docs/README.md itself in the summary.`,
       // Process if it's in docs folder OR if it's a markdown file outside docs
       if (!isInDocsFolder && !isMarkdownFile) return;
 
-      // Add file to pending set and reset debounce timer
+      // Add file to pending set and start timer if not already running
       pendingFiles.add(file);
 
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
+      if (!debounceTimer) {
+        debounceTimer = setTimeout(() => {
+          debounceTimer = undefined;
+          executeUpdate();
+        }, DEBOUNCE_MS);
       }
-
-      debounceTimer = setTimeout(() => {
-        debounceTimer = null;
-        executeUpdate();
-      }, DEBOUNCE_MS);
     },
   };
 };

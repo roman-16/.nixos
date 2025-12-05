@@ -85,6 +85,7 @@
 - **Types**: Strict, never `any` (use `unknown`). Prefer `type` over `interface`. Infer when obvious. No `types.ts` files—define inline, co-located with primary implementation
 - **Type Assertions**: Prefer `satisfies` over `as`. Use type predicates for filters: `items.filter((item): item is NonNullable<typeof item> => item !== null)`
 - **Variables**: Prefer `const`. Use `let` only for: lazy init singletons, error cleanup, loop counters, complex state
+- **Nullish Values**: Prefer `undefined` over `null` for absent values
 - **Inline Constants**: Inline strings/numbers used 2-3 times in one module. Extract only when cross-module, complex, or likely to change
 
 ### Functions & Control Flow [JS/TS]
