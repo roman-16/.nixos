@@ -1,22 +1,18 @@
-{inputs, ...}: {
-  imports = [
-    ./hardware-configuration.nix
+{inputs, ...}: let
+  modulesDir = ./modules;
+  entries = builtins.readDir modulesDir;
 
-    ./drivers/configuration.nix
-    ./firefox/configuration.nix
-    ./fonts/configuration.nix
-    ./git/configuration.nix
-    ./gnome/configuration.nix
-    ./locale/configuration.nix
-    ./logitech/configuration.nix
-    ./nh/configuration.nix
-    ./programs/configuration.nix
-    ./sound/configuration.nix
-    ./steam/configuration.nix
-    ./stylix/configuration.nix
-    ./system/configuration.nix
-    ./zsh/configuration.nix
-  ];
+  importModule = name: import (modulesDir + "/${name}");
+
+  modules = map importModule (builtins.attrNames entries);
+  nixosModules = map (m: m.nixos) modules;
+  homeModules = map (m: m.home) modules;
+in {
+  imports =
+    [
+      ./hardware-configuration.nix
+    ]
+    ++ nixosModules;
 
   home-manager = {
     backupFileExtension = "backup";
@@ -25,8 +21,24 @@
       inherit inputs;
     };
 
-    users = {
-      "roman" = import ./home.nix;
+    users."roman" = {
+      imports = homeModules;
+
+      programs.home-manager.enable = true;
+
+      home = {
+        username = "roman";
+        homeDirectory = "/home/roman";
+
+        # This value determines the Home Manager release that your configuration is
+        # compatible with. This helps avoid breakage when a new Home Manager release
+        # introduces backwards incompatible changes.
+        #
+        # You should not change this value, even if you update Home Manager. If you do
+        # want to update the value, then make sure to first check the Home Manager
+        # release notes.
+        stateVersion = "24.05"; # Please read the comment before changing.
+      };
     };
   };
 
