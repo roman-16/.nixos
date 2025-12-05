@@ -96,6 +96,7 @@ in {
           "git*" = "allow";
           "grep*" = "allow";
           "head*" = "allow";
+          "just*" = "allow";
           "kill*" = "allow";
           "ls*" = "allow";
           "mkdir*" = "allow";
