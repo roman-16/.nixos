@@ -135,6 +135,19 @@
 - **DOM Selectors**: Define a `selectors` constant at the top of test files with all query selectors.
 - **Validation**: Run `npm run test` after test changes
 
+### Testing [Rust]
+- **Approach**: Write tests alongside implementation
+- **Location**: Co-located in same file using `#[cfg(test)]` module
+- **Coverage**: Minimum 95% via cargo-tarpaulin
+- **Test Types**:
+  - Edge case tests (large inputs, boundary conditions)
+  - Panic tests with `#[should_panic(expected = "...")]`
+  - Main function execution tests
+- **Test Quality**:
+  - Test behavior, not implementation details
+  - Use descriptive test names: `test_part1_example`, `test_part2_large_rotation`
+  - Extract shared test data to constants: `const EXAMPLE: &str = "..."`
+
 ## Quality Gates [JS/TS]
 Run in this order to fail fast:
 
@@ -142,6 +155,14 @@ Run in this order to fail fast:
 2. Biome linting must pass (`npm run lint`)
 3. All tests must pass and test coverage must meet minimum 95% threshold across all metrics (`npm run test`)
 4. Project must build and run successfully (`npm run dev`)
+
+## Quality Gates [Rust]
+Run in this order to fail fast:
+
+1. Code must compile with no errors (`just build`)
+2. Lints must pass, clippy and check formatting (`just lint`)
+3. All tests must pass and test coverage must meet minimum 95% threshold across all metrics (`just test`)
+4. Project must build and run successfully (`just dev`)
 
 ## Version Control
 
@@ -191,4 +212,10 @@ Run in this order to fail fast:
 - **Type check**: `npm run typecheck`
 - **Lint**: `npm run lint`
 - **Test**: `npm run test`
+- **[Project-specific]**: [DETECT and document project-specific commands]
+
+## Commands [Rust]
+- **Build**: `just build` (release) | `just dev` (development)
+- **Lint**: `just lint`
+- **Test**: `just test`
 - **[Project-specific]**: [DETECT and document project-specific commands]
