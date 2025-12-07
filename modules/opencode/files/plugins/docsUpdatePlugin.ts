@@ -1,6 +1,21 @@
 import type { Plugin } from "@opencode-ai/plugin";
+import ignore, { type Ignore } from "ignore";
+import { readFileSync, existsSync } from "fs";
+import { relative } from "path";
 
 const DEBOUNCE_MS = 1000 * 60 * 10; // 10 minutes
+
+const loadGitignore = (cwd: string): Ignore => {
+  const ig = ignore();
+  const gitignorePath = `${cwd}/.gitignore`;
+
+  if (existsSync(gitignorePath)) {
+    const content = readFileSync(gitignorePath, "utf-8");
+    ig.add(content);
+  }
+
+  return ig;
+};
 
 const docsUpdatePlugin: Plugin = async ({ client }) => {
   const cwd = process.cwd();
@@ -8,6 +23,7 @@ const docsUpdatePlugin: Plugin = async ({ client }) => {
   const docsReadme = `${cwd}/docs/README.md`;
   const pendingFiles: Set<string> = new Set();
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  const gitignore = loadGitignore(cwd);
 
   const executeUpdate = async () => {
     const files = Array.from(pendingFiles);
@@ -74,6 +90,11 @@ Do not include docs/README.md itself in the summary.`,
       if (event.type !== "file.watcher.updated") return;
 
       const file = event.properties.file;
+      const relativePath = relative(cwd, file);
+
+      // Skip files matching .gitignore patterns
+      if (gitignore.ignores(relativePath)) return;
+
       const isReadme = file === docsReadme;
       const isAgentFile =
         file === `${cwd}/AGENTS.md` || file === `${cwd}/CLAUDE.md`;
