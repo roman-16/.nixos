@@ -1,7 +1,7 @@
+import { existsSync, readFileSync } from "node:fs";
+import { relative } from "node:path";
 import type { Plugin } from "@opencode-ai/plugin";
 import ignore, { type Ignore } from "ignore";
-import { readFileSync, existsSync } from "fs";
-import { relative } from "path";
 
 const DEBOUNCE_MS = 1000 * 60 * 10; // 10 minutes
 
