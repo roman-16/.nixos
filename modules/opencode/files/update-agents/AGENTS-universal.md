@@ -118,6 +118,7 @@
 
 ### Testing [JS/TS]
 - **Approach**: Write tests alongside implementation (TDD/test-first)
+- **Test Strategy**: Write tests outside-in (e.g., e2e → integration → unit)
 - **Location**: `.test.ts` files in `tests/` directory, mirroring `src/` structure
 - **Framework**: vitest with exact matchers only (no relative matchers like `toBeCloseTo`, `toBeGreaterThan`)
 - **Coverage**: Minimum 95% for statements, lines, and functions; 90% for branches
@@ -139,6 +140,7 @@
 
 ### Testing [Rust]
 - **Approach**: Write tests alongside implementation
+- **Test Strategy**: Write tests outside-in (e.g., e2e → integration → unit)
 - **Location**: Co-located in same file using `#[cfg(test)]` module
 - **Coverage**: Minimum 95% via cargo-tarpaulin
 - **Test Types**:
