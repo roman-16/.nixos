@@ -27,7 +27,7 @@ Capture coding preferences and conventions in AGENTS.md by making corrections to
    Make changes. Type `y` when done.
    ```
 
-4. **After Snapshot**: After user types `y`, read all modified files again into context. Compare the before/after versions in context to identify what the user changed.
+4. **After Snapshot**: After user types `y`, run `git status` again to get all modified/new files and read each file into context. Compare the before/after versions in context to identify what the user changed.
 
 5. **Derive Updates**: Analyze the differences between before/after to determine updates for AGENTS.md:
    - What patterns did the user change?
