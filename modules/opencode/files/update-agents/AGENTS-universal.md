@@ -130,6 +130,7 @@
   - **No local mocks** - NEVER use `vi.mock()` in test files. All mocking must be in `.vitest/mocks/`
   - **Mock setup**: Import mocks in `.vitest/setup.ts`, referenced by `vitest.config.ts`
   - **Mock exports**: Export mocks from `.vitest/mocks/index.ts` barrel file only when tests need to reconfigure them
+- **Test Environment**: Set `process.env` in `.vitest/env.ts`, imported first in `.vitest/setup.ts`
 - **Test Quality**:
   - Write meaningful tests validating behavior/edge cases
   - Avoid trivial tests (testing that functions exist, mocked implementations without behavior verification)
