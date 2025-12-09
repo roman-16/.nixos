@@ -135,9 +135,16 @@
           };
         };
 
-        provider.anthropic.models.claude-opus-4-5.options.thinking = {
-          budgetTokens = 32000;
-          type = "enabled";
+        provider.anthropic.models = {
+          claude-opus-4-5.options.thinking = {
+            budgetTokens = 32000;
+            type = "enabled";
+          };
+
+          claude-sonnet-4-5.options.thinking = {
+            budgetTokens = 32000;
+            type = "enabled";
+          };
         };
       };
     };
