@@ -49,7 +49,8 @@
    - Make incremental commits for major milestones if working on large features
 7. **Validate**: Run all quality gates in order to ensure correctness (see Quality Gates section)
    - If any gate fails: fix issues and re-run all gates from the beginning
-8. **Complete**: After all quality gates pass, summarize changes made and ask about committing (see Version Control section)
+8. **Update Feature File**: Sync the feature file with any discussions, decisions, or changes not yet documented
+9. **Complete**: After all quality gates pass, summarize changes made and ask about committing (see Version Control section)
 
 ## Code Style
 
