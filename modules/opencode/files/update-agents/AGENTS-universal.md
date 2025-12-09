@@ -83,6 +83,7 @@
 
 ### TypeScript Practices [JS/TS]
 - **Types**: Strict, never `any` (use `unknown`). Prefer `type` over `interface`. Infer when obvious. No `types.ts` files—define inline, co-located with primary implementation
+- **Type Derivation**: Prefer `Awaited<ReturnType<typeof fn>>` to derive types from function returns instead of defining explicit duplicate types
 - **Type Assertions**: Prefer `satisfies` over `as`. Use type predicates for filters: `items.filter((item): item is NonNullable<typeof item> => item !== null)`
 - **Variables**: Prefer `const`. Use `let` only for: lazy init singletons, error cleanup, loop counters, complex state
 - **Nullish Values**: Prefer `undefined` over `null` for absent values
