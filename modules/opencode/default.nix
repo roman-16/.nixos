@@ -92,6 +92,7 @@
             "cut*" = "allow";
             "date*" = "allow";
             "devbox*" = "allow";
+            "diff*" = "allow";
             "docker*" = "allow";
             "docker-compose*" = "allow";
             "echo*" = "allow";
