@@ -1,3 +1,7 @@
+---
+description: update the AGENTS.md file
+---
+
 # Update AGENTS.md
 
 Update the `AGENTS.md` file to reflect the project. Look into the project for that.
