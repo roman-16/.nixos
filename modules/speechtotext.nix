@@ -20,11 +20,12 @@
 
     home.file.".local/bin/wsi" = {
       executable = true;
-
-      source = pkgs.fetchurl {
-        url = "https://raw.githubusercontent.com/QuantiusBenignus/blurt/main/wsi";
-        hash = "sha256-Z18a2XCn4xYZS1S0GTwUpI730FZTfJeFLTec7SeR+8M=";
-      };
+      source = pkgs.runCommand "wsi" {} ''
+        ${pkgs.gnused}/bin/sed '1s|#!/usr/bin/zsh|#!/usr/bin/env zsh|' ${pkgs.fetchurl {
+          url = "https://raw.githubusercontent.com/QuantiusBenignus/blurt/main/wsi";
+          hash = "sha256-Z18a2XCn4xYZS1S0GTwUpI730FZTfJeFLTec7SeR+8M=";
+        }} > $out
+      '';
     };
   };
 }
