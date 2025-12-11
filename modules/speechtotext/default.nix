@@ -26,6 +26,16 @@
       chmod +x $out
     '';
 
+    # Compile GSettings schema
+    compiledSchemas =
+      pkgs.runCommand "speechtotext-schemas" {
+        nativeBuildInputs = [pkgs.glib];
+      } ''
+        mkdir -p $out
+        cp ${./schemas/org.gnome.shell.extensions.speechtotext.gschema.xml} $out/
+        glib-compile-schemas $out
+      '';
+
     extDir = ".local/share/gnome-shell/extensions/speechtotext@local";
   in {
     home.file = {
@@ -37,6 +47,10 @@
       "${extDir}/extension.js".source = ./extension.js;
       "${extDir}/metadata.json".source = ./metadata.json;
       "${extDir}/stylesheet.css".source = ./stylesheet.css;
+      "${extDir}/schemas" = {
+        source = compiledSchemas;
+        recursive = true;
+      };
     };
 
     dconf.settings."org/gnome/shell" = {

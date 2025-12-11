@@ -2,6 +2,8 @@ import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import St from 'gi://St';
+import Meta from 'gi://Meta';
+import Shell from 'gi://Shell';
 
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -9,11 +11,14 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 export default class SpeechToTextExtension extends Extension {
     _button = null;
     _icon = null;
-    _isStreaming = false;
     _isRecording = false;
+    _recordingMode = null;  // 'typing' or 'clipboard'
     _proc = null;
+    _settings = null;
 
     enable() {
+        this._settings = this.getSettings();
+
         this._icon = new St.Icon({
             icon_name: 'audio-input-microphone-symbolic',
             style_class: 'system-status-icon',
@@ -27,32 +32,55 @@ export default class SpeechToTextExtension extends Extension {
             track_hover: true,
         });
 
-        // Left click uses 'clicked' signal
+        // Click on icon toggles typing mode
         this._button.connect('clicked', () => {
-            this._toggleStreaming();
-        });
-
-        // Right click uses button-press-event
-        this._button.connect('button-press-event', (actor, event) => {
-            if (event.get_button() === 3) {  // Right click
-                this._toggleRecording();
-                return Clutter.EVENT_STOP;
-            }
-            return Clutter.EVENT_PROPAGATE;
+            this._toggleRecording('typing');
         });
 
         Main.panel._rightBox.insert_child_at_index(this._button, 0);
+
+        // Register global keybindings
+        this._bindShortcuts();
     }
 
     disable() {
-        this._stopStreaming();
+        this._unbindShortcuts();
         this._stopRecording();
+        
         if (this._button) {
             Main.panel._rightBox.remove_child(this._button);
             this._button.destroy();
             this._button = null;
         }
         this._icon = null;
+        this._settings = null;
+    }
+
+    _bindShortcuts() {
+        const ModeType = Shell.hasOwnProperty('ActionMode')
+            ? Shell.ActionMode
+            : Shell.KeyBindingMode;
+
+        Main.wm.addKeybinding(
+            'toggle-typing',
+            this._settings,
+            Meta.KeyBindingFlags.NONE,
+            ModeType.ALL,
+            () => this._toggleRecording('typing')
+        );
+
+        Main.wm.addKeybinding(
+            'toggle-clipboard',
+            this._settings,
+            Meta.KeyBindingFlags.NONE,
+            ModeType.ALL,
+            () => this._toggleRecording('clipboard')
+        );
+    }
+
+    _unbindShortcuts() {
+        Main.wm.removeKeybinding('toggle-typing');
+        Main.wm.removeKeybinding('toggle-clipboard');
     }
 
     _getScriptPath() {
@@ -61,78 +89,17 @@ export default class SpeechToTextExtension extends Extension {
         ]);
     }
 
-    // Streaming mode (left click) - real-time typing
-    _toggleStreaming() {
-        if (this._isStreaming) {
-            this._stopStreaming();
-        } else {
-            this._startStreaming();
-        }
-    }
-
-    _startStreaming() {
-        if (this._isRecording) return;
-        
-        this._isStreaming = true;
-        this._icon.add_style_class_name('recording');
-
-        try {
-            this._proc = Gio.Subprocess.new(
-                [this._getScriptPath(), 'stream'],
-                Gio.SubprocessFlags.NONE
-            );
-        } catch (e) {
-            logError(e, 'SpeechToText: Failed to start streaming');
-            this._isStreaming = false;
-            this._icon.remove_style_class_name('recording');
-        }
-    }
-
-    _stopStreaming() {
-        if (!this._isStreaming) return;
-
-        this._isStreaming = false;
-        this._icon.remove_style_class_name('recording');
-
-        try {
-            // Kill the recording process
-            Gio.Subprocess.new(
-                ['pkill', '-f', 'arecord.*stt-recording'],
-                Gio.SubprocessFlags.NONE
-            );
-
-            // Wait a bit for the file to be written, then transcribe and type
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-                try {
-                    Gio.Subprocess.new(
-                        [this._getScriptPath(), 'stream-finish'],
-                        Gio.SubprocessFlags.NONE
-                    );
-                } catch (e) {
-                    logError(e, 'SpeechToText: Failed to run stream-finish');
-                }
-                return GLib.SOURCE_REMOVE;
-            });
-        } catch (e) {
-            logError(e, 'SpeechToText: Failed to stop streaming');
-        }
-
-        this._proc = null;
-    }
-
-    // Recording mode (right click) - record then paste
-    _toggleRecording() {
+    _toggleRecording(mode) {
         if (this._isRecording) {
             this._stopRecording();
         } else {
-            this._startRecording();
+            this._startRecording(mode);
         }
     }
 
-    _startRecording() {
-        if (this._isStreaming) return;
-        
+    _startRecording(mode) {
         this._isRecording = true;
+        this._recordingMode = mode;
         this._icon.add_style_class_name('recording');
 
         try {
@@ -143,6 +110,7 @@ export default class SpeechToTextExtension extends Extension {
         } catch (e) {
             logError(e, 'SpeechToText: Failed to start recording');
             this._isRecording = false;
+            this._recordingMode = null;
             this._icon.remove_style_class_name('recording');
         }
     }
@@ -150,7 +118,9 @@ export default class SpeechToTextExtension extends Extension {
     _stopRecording() {
         if (!this._isRecording) return;
 
+        const mode = this._recordingMode;
         this._isRecording = false;
+        this._recordingMode = null;
         this._icon.remove_style_class_name('recording');
 
         try {
@@ -162,8 +132,9 @@ export default class SpeechToTextExtension extends Extension {
             // Wait a bit for the file to be written, then transcribe
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
                 try {
+                    const command = mode === 'typing' ? 'transcribe-type' : 'transcribe-clipboard';
                     Gio.Subprocess.new(
-                        [this._getScriptPath(), 'transcribe'],
+                        [this._getScriptPath(), command],
                         Gio.SubprocessFlags.NONE
                     );
                 } catch (e) {

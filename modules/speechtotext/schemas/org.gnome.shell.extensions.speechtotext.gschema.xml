@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.speechtotext" path="/org/gnome/shell/extensions/speechtotext/">
+    <key name="toggle-typing" type="as">
+      <default><![CDATA[['<Control><Super>r']]]></default>
+      <summary>Toggle recording with typing</summary>
+      <description>Shortcut to toggle speech recording that types the result</description>
+    </key>
+    <key name="toggle-clipboard" type="as">
+      <default><![CDATA[['<Control><Super><Shift>r']]]></default>
+      <summary>Toggle recording with clipboard</summary>
+      <description>Shortcut to toggle speech recording that copies result to clipboard</description>
+    </key>
+  </schema>
+</schemalist>
