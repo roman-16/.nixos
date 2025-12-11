@@ -11,6 +11,7 @@
       blurt
       sox
       whisper-cpp
+      wl-clipboard
     ];
   };
 
