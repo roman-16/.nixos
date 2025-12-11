@@ -34,14 +34,18 @@
       gnomeExtensions.blurt.extensionUuid
     ];
 
-    home.file = {
-      ".local/bin/transcribe" = {
-        source = "${pkgs.whisper-cpp}/bin/whisper-cli";
-      };
+    home = {
+      sessionPath = ["$HOME/.local/bin"];
 
-      ".local/bin/wsi" = {
-        executable = true;
-        source = wsiScript;
+      file = {
+        ".local/bin/transcribe" = {
+          source = "${pkgs.whisper-cpp}/bin/whisper-cli";
+        };
+
+        ".local/bin/wsi" = {
+          executable = true;
+          source = wsiScript;
+        };
       };
     };
   };
