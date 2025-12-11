@@ -5,43 +5,49 @@ import St from 'gi://St';
 
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 
 export default class SpeechToTextExtension extends Extension {
-    _indicator = null;
+    _button = null;
     _icon = null;
     _isStreaming = false;
     _isRecording = false;
     _proc = null;
 
     enable() {
-        // true = don't create menu, so left click won't open menu
-        this._indicator = new PanelMenu.Button(0.0, this.metadata.name, true);
-
         this._icon = new St.Icon({
             icon_name: 'audio-input-microphone-symbolic',
             style_class: 'system-status-icon',
         });
-        this._indicator.add_child(this._icon);
 
-        this._indicator.connect('button-press-event', (actor, event) => {
+        this._button = new St.Button({
+            style_class: 'panel-button',
+            child: this._icon,
+            reactive: true,
+            can_focus: true,
+            track_hover: true,
+        });
+
+        this._button.connect('button-press-event', (actor, event) => {
             const button = event.get_button();
-            if (button === Clutter.BUTTON_PRIMARY) {
+            if (button === 1) {  // Left click
                 this._toggleStreaming();
-            } else if (button === Clutter.BUTTON_SECONDARY) {
+            } else if (button === 3) {  // Right click
                 this._toggleRecording();
             }
             return Clutter.EVENT_STOP;
         });
 
-        Main.panel.addToStatusArea(this.uuid, this._indicator);
+        Main.panel._rightBox.insert_child_at_index(this._button, 0);
     }
 
     disable() {
         this._stopStreaming();
         this._stopRecording();
-        this._indicator?.destroy();
-        this._indicator = null;
+        if (this._button) {
+            Main.panel._rightBox.remove_child(this._button);
+            this._button.destroy();
+            this._button = null;
+        }
         this._icon = null;
     }
 
