@@ -15,7 +15,8 @@ export default class SpeechToTextExtension extends Extension {
     _proc = null;
 
     enable() {
-        this._indicator = new PanelMenu.Button(0.0, this.metadata.name, false);
+        // true = don't create menu, so left click won't open menu
+        this._indicator = new PanelMenu.Button(0.0, this.metadata.name, true);
 
         this._icon = new St.Icon({
             icon_name: 'audio-input-microphone-symbolic',
@@ -30,7 +31,7 @@ export default class SpeechToTextExtension extends Extension {
             } else if (button === Clutter.BUTTON_SECONDARY) {
                 this._toggleRecording();
             }
-            return Clutter.EVENT_PROPAGATE;
+            return Clutter.EVENT_STOP;
         });
 
         Main.panel.addToStatusArea(this.uuid, this._indicator);
