@@ -16,18 +16,33 @@ case "${1:-}" in
         ;;
     stream-finish)
         # Transcribe and type result
+        LOG="/tmp/stt-debug.log"
+        echo "$(date): stream-finish started" >> "$LOG"
+        echo "Recording file: $RECORDING_FILE" >> "$LOG"
+        ls -la "$RECORDING_FILE" >> "$LOG" 2>&1
+        
         if [[ -f "$RECORDING_FILE" ]]; then
-            result=$("$WHISPER_CLI" -t 4 -m "$MODEL" -f "$RECORDING_FILE" 2>/dev/null | sed 's/\[.*\] *//g')
+            echo "File exists, transcribing..." >> "$LOG"
+            result=$("$WHISPER_CLI" -t 4 -m "$MODEL" -f "$RECORDING_FILE" 2>&1 | tee -a "$LOG" | sed 's/\[.*\] *//g')
+            echo "After sed: '$result'" >> "$LOG"
             result="${result//\[*\]/}"
             result="${result//\(*\)/}"
             result="${result#"${result%%[![:space:]]*}"}"
             result="${result%"${result##*[![:space:]]}"}"
+            echo "Final result: '$result'" >> "$LOG"
             
             if [[ -n "$result" ]]; then
-                "$YDOTOOL" type -- "$result"
+                echo "Typing with ydotool..." >> "$LOG"
+                "$YDOTOOL" type -- "$result" >> "$LOG" 2>&1
+                echo "ydotool exit code: $?" >> "$LOG"
+            else
+                echo "Result is empty, not typing" >> "$LOG"
             fi
             rm -f "$RECORDING_FILE"
+        else
+            echo "Recording file does not exist!" >> "$LOG"
         fi
+        echo "$(date): stream-finish done" >> "$LOG"
         ;;
     start)
         # Run in foreground - extension will kill this process
