@@ -7,17 +7,23 @@
       '';
     });
   in {
-    environment.systemPackages = [
+    environment.systemPackages = with pkgs; [
       blurt
+      whisper-cpp
     ];
   };
 
   home = {pkgs, ...}: {
-    dconf.settings = {
-      "org/gnome/shell" = {
-        enabled-extensions = with pkgs; [
-          gnomeExtensions.blurt.extensionUuid
-        ];
+    dconf.settings."org/gnome/shell".enabled-extensions = with pkgs; [
+      gnomeExtensions.blurt.extensionUuid
+    ];
+
+    home.file.".local/bin/wsi" = {
+      executable = true;
+
+      source = pkgs.fetchurl {
+        url = "https://raw.githubusercontent.com/QuantiusBenignus/blurt/main/wsi";
+        hash = "sha256-Z18a2XCn4xYZS1S0GTwUpI730FZTfJeFLTec7SeR+8M=";
       };
     };
   };
