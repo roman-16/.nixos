@@ -8,15 +8,16 @@ MODEL="@model@"
 WHISPER_CLI="@whisper@/bin/whisper-cli"
 WHISPER_STREAM="@whisper@/bin/whisper-stream"
 YDOTOOL="@ydotool@/bin/ydotool"
+LOG="/tmp/stt-debug.log"
+
+echo "$(date): stt-record.sh called with args: $*" >> "$LOG"
 
 case "${1:-}" in
     stream)
-        # Record then type result (simpler than real-time streaming)
+        echo "$(date): stream - starting recording to $RECORDING_FILE" >> "$LOG"
         exec arecord -q -f S16_LE -r 16000 -c 1 -t wav "$RECORDING_FILE"
         ;;
     stream-finish)
-        # Transcribe and type result
-        LOG="/tmp/stt-debug.log"
         echo "$(date): stream-finish started" >> "$LOG"
         echo "Recording file: $RECORDING_FILE" >> "$LOG"
         ls -la "$RECORDING_FILE" >> "$LOG" 2>&1
@@ -45,11 +46,13 @@ case "${1:-}" in
         echo "$(date): stream-finish done" >> "$LOG"
         ;;
     start)
-        # Run in foreground - extension will kill this process
+        echo "$(date): start - starting recording to $RECORDING_FILE" >> "$LOG"
         exec arecord -q -f S16_LE -r 16000 -c 1 -t wav "$RECORDING_FILE"
         ;;
     transcribe)
+        echo "$(date): transcribe started" >> "$LOG"
         if [[ -f "$RECORDING_FILE" ]]; then
+            echo "$(date): transcribe - file exists" >> "$LOG"
             # Transcribe and strip timestamps with sed
             result=$("$WHISPER_CLI" -t 4 -m "$MODEL" -f "$RECORDING_FILE" 2>/dev/null | sed 's/\[.*\] *//g')
             # Remove whisper artifacts like [BLANK_AUDIO] and (background noise)
@@ -60,10 +63,16 @@ case "${1:-}" in
             result="${result%"${result##*[![:space:]]}"}"
             
             if [[ -n "$result" ]]; then
+                echo "$(date): transcribe - copying to clipboard: '$result'" >> "$LOG"
                 echo -n "$result" | wl-copy
+            else
+                echo "$(date): transcribe - result empty" >> "$LOG"
             fi
             rm -f "$RECORDING_FILE"
+        else
+            echo "$(date): transcribe - file does not exist!" >> "$LOG"
         fi
+        echo "$(date): transcribe done" >> "$LOG"
         ;;
     *)
         echo "Usage: $0 {stream|start|transcribe}"
