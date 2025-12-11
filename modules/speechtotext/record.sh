@@ -18,7 +18,7 @@ case "${1:-}" in
         exec arecord -q -f S16_LE -r 16000 -c 1 -t wav "$RECORDING_FILE"
         ;;
     stream-finish)
-        # Right click: transcribe and COPY to clipboard
+        # Left click: transcribe and TYPE (paste)
         echo "$(date): stream-finish started" >> "$LOG"
         if [[ -f "$RECORDING_FILE" ]]; then
             echo "$(date): stream-finish - file exists" >> "$LOG"
@@ -29,8 +29,14 @@ case "${1:-}" in
             result="${result%"${result##*[![:space:]]}"}"
             
             if [[ -n "$result" ]]; then
-                echo "$(date): stream-finish - copying to clipboard: '$result'" >> "$LOG"
+                echo "$(date): stream-finish - typing via clipboard+paste: '$result'" >> "$LOG"
+                # Copy transcription to clipboard
                 echo -n "$result" | wl-copy
+                # Small delay to ensure clipboard is ready
+                sleep 0.15
+                # Paste with Shift+Insert (keycodes: 42=LeftShift, 110=Insert)
+                "$YDOTOOL" key 42:1 110:1 110:0 42:0 >> "$LOG" 2>&1
+                echo "ydotool exit code: $?" >> "$LOG"
             else
                 echo "$(date): stream-finish - result empty" >> "$LOG"
             fi
@@ -45,7 +51,7 @@ case "${1:-}" in
         exec arecord -q -f S16_LE -r 16000 -c 1 -t wav "$RECORDING_FILE"
         ;;
     transcribe)
-        # Left click: transcribe and TYPE
+        # Right click: transcribe and COPY to clipboard only
         echo "$(date): transcribe started" >> "$LOG"
         if [[ -f "$RECORDING_FILE" ]]; then
             echo "$(date): transcribe - file exists" >> "$LOG"
@@ -56,21 +62,8 @@ case "${1:-}" in
             result="${result%"${result##*[![:space:]]}"}"
             
             if [[ -n "$result" ]]; then
-                echo "$(date): transcribe - typing via clipboard+paste: '$result'" >> "$LOG"
-                # Save current clipboard content
-                old_clipboard=$(wl-paste 2>/dev/null || true)
-                # Copy transcription to clipboard
+                echo "$(date): transcribe - copying to clipboard: '$result'" >> "$LOG"
                 echo -n "$result" | wl-copy
-                # Small delay to ensure clipboard is ready
-                sleep 0.1
-                # Paste with Ctrl+V (key codes: 29=Ctrl, 47=V)
-                "$YDOTOOL" key 29:1 47:1 47:0 29:0 >> "$LOG" 2>&1
-                echo "ydotool exit code: $?" >> "$LOG"
-                # Restore old clipboard after a short delay
-                sleep 0.3
-                if [[ -n "$old_clipboard" ]]; then
-                    echo -n "$old_clipboard" | wl-copy
-                fi
             else
                 echo "$(date): transcribe - result empty" >> "$LOG"
             fi
