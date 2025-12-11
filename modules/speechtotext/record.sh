@@ -18,30 +18,25 @@ case "${1:-}" in
         exec arecord -q -f S16_LE -r 16000 -c 1 -t wav "$RECORDING_FILE"
         ;;
     stream-finish)
+        # Right click: transcribe and COPY to clipboard
         echo "$(date): stream-finish started" >> "$LOG"
-        echo "Recording file: $RECORDING_FILE" >> "$LOG"
-        ls -la "$RECORDING_FILE" >> "$LOG" 2>&1
-        
         if [[ -f "$RECORDING_FILE" ]]; then
-            echo "File exists, transcribing..." >> "$LOG"
-            result=$("$WHISPER_CLI" -t 4 -m "$MODEL" -f "$RECORDING_FILE" 2>&1 | tee -a "$LOG" | sed 's/\[.*\] *//g')
-            echo "After sed: '$result'" >> "$LOG"
+            echo "$(date): stream-finish - file exists" >> "$LOG"
+            result=$("$WHISPER_CLI" -t 4 -m "$MODEL" -f "$RECORDING_FILE" 2>/dev/null | sed 's/\[.*\] *//g')
             result="${result//\[*\]/}"
             result="${result//\(*\)/}"
             result="${result#"${result%%[![:space:]]*}"}"
             result="${result%"${result##*[![:space:]]}"}"
-            echo "Final result: '$result'" >> "$LOG"
             
             if [[ -n "$result" ]]; then
-                echo "Typing with ydotool..." >> "$LOG"
-                "$YDOTOOL" type -- "$result" >> "$LOG" 2>&1
-                echo "ydotool exit code: $?" >> "$LOG"
+                echo "$(date): stream-finish - copying to clipboard: '$result'" >> "$LOG"
+                echo -n "$result" | wl-copy
             else
-                echo "Result is empty, not typing" >> "$LOG"
+                echo "$(date): stream-finish - result empty" >> "$LOG"
             fi
             rm -f "$RECORDING_FILE"
         else
-            echo "Recording file does not exist!" >> "$LOG"
+            echo "$(date): stream-finish - file does not exist!" >> "$LOG"
         fi
         echo "$(date): stream-finish done" >> "$LOG"
         ;;
@@ -50,21 +45,20 @@ case "${1:-}" in
         exec arecord -q -f S16_LE -r 16000 -c 1 -t wav "$RECORDING_FILE"
         ;;
     transcribe)
+        # Left click: transcribe and TYPE
         echo "$(date): transcribe started" >> "$LOG"
         if [[ -f "$RECORDING_FILE" ]]; then
             echo "$(date): transcribe - file exists" >> "$LOG"
-            # Transcribe and strip timestamps with sed
             result=$("$WHISPER_CLI" -t 4 -m "$MODEL" -f "$RECORDING_FILE" 2>/dev/null | sed 's/\[.*\] *//g')
-            # Remove whisper artifacts like [BLANK_AUDIO] and (background noise)
             result="${result//\[*\]/}"
             result="${result//\(*\)/}"
-            # Trim whitespace
             result="${result#"${result%%[![:space:]]*}"}"
             result="${result%"${result##*[![:space:]]}"}"
             
             if [[ -n "$result" ]]; then
-                echo "$(date): transcribe - copying to clipboard: '$result'" >> "$LOG"
-                echo -n "$result" | wl-copy
+                echo "$(date): transcribe - typing: '$result'" >> "$LOG"
+                "$YDOTOOL" type -- "$result" >> "$LOG" 2>&1
+                echo "ydotool exit code: $?" >> "$LOG"
             else
                 echo "$(date): transcribe - result empty" >> "$LOG"
             fi
