@@ -11,18 +11,23 @@ WTYPE="@wtype@/bin/wtype"
 
 case "${1:-}" in
     stream)
-        # Real-time streaming transcription with keyboard output
-        exec "$WHISPER_STREAM" -m "$MODEL" -t 4 --step 500 --length 5000 2>/dev/null | \
-            grep --line-buffered -oP '(?<=\] ).*' | \
-            while IFS= read -r line; do
-                # Skip empty lines and artifacts
-                line="${line//\[*\]/}"
-                line="${line//\(*\)/}"
-                line="${line#"${line%%[![:space:]]*}"}"
-                if [[ -n "$line" ]]; then
-                    "$WTYPE" "$line"
-                fi
-            done
+        # Record then type result (simpler than real-time streaming)
+        exec arecord -q -f S16_LE -r 16000 -c 1 -t wav "$RECORDING_FILE"
+        ;;
+    stream-finish)
+        # Transcribe and type result
+        if [[ -f "$RECORDING_FILE" ]]; then
+            result=$("$WHISPER_CLI" -t 4 -m "$MODEL" -f "$RECORDING_FILE" 2>/dev/null | sed 's/\[.*\] *//g')
+            result="${result//\[*\]/}"
+            result="${result//\(*\)/}"
+            result="${result#"${result%%[![:space:]]*}"}"
+            result="${result%"${result##*[![:space:]]}"}"
+            
+            if [[ -n "$result" ]]; then
+                "$WTYPE" -- "$result"
+            fi
+            rm -f "$RECORDING_FILE"
+        fi
         ;;
     start)
         # Run in foreground - extension will kill this process

@@ -84,8 +84,15 @@ export default class SpeechToTextExtension extends Extension {
         this._icon.remove_style_class_name('recording');
 
         try {
+            // Kill the recording process
             Gio.Subprocess.new(
-                ['pkill', '-f', 'whisper-stream'],
+                ['pkill', '-f', 'arecord.*stt-recording'],
+                Gio.SubprocessFlags.NONE
+            );
+
+            // Transcribe and type result
+            Gio.Subprocess.new(
+                [this._getScriptPath(), 'stream-finish'],
                 Gio.SubprocessFlags.NONE
             );
         } catch (e) {
