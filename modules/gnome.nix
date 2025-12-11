@@ -17,7 +17,6 @@
       gnomeExtensions.smile-complementary-extension
       smile
       gnomeExtensions.alphabetical-app-grid
-      gnomeExtensions.blurt
     ];
 
     environment.gnome.excludePackages = with pkgs; [
@@ -186,7 +185,6 @@
             gnomeExtensions.alphabetical-app-grid.extensionUuid
             gnomeExtensions.appindicator.extensionUuid
             gnomeExtensions.blur-my-shell.extensionUuid
-            gnomeExtensions.blurt.extensionUuid
             gnomeExtensions.burn-my-windows.extensionUuid
             gnomeExtensions.dash-to-panel.extensionUuid
             gnomeExtensions.ddterm.extensionUuid
