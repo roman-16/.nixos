@@ -1,8 +1,8 @@
 {
   nixos = {pkgs, ...}: {
     environment.systemPackages = with pkgs; [
+      alsa-utils # provides arecord
       whisper-cpp
-      sox
       wl-clipboard
     ];
   };

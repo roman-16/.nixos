@@ -74,7 +74,7 @@ export default class SpeechToTextExtension extends Extension {
         try {
             // Kill the recording process
             Gio.Subprocess.new(
-                ['pkill', '-f', 'rec.*stt-recording'],
+                ['pkill', '-f', 'arecord.*stt-recording'],
                 Gio.SubprocessFlags.NONE
             );
 
