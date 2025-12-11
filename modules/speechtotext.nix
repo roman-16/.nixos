@@ -24,6 +24,8 @@
       ${pkgs.gnused}/bin/sed \
         -e '1s|#!/usr/bin/zsh|#!/usr/bin/env zsh|' \
         -e 's|model="$HOME/CHANGE_PATH_TO/WHISPER_CPP/MODELS/HERE/ggml-base.en.bin"|model="${whisperModel}"|' \
+        -e 's|command -v transcribe|command -v ${pkgs.whisper-cpp}/bin/whisper-cli|g' \
+        -e 's|transcribe -m|${pkgs.whisper-cpp}/bin/whisper-cli -m|g' \
         ${pkgs.fetchurl {
         url = "https://raw.githubusercontent.com/QuantiusBenignus/blurt/main/wsi";
         hash = "sha256-Z18a2XCn4xYZS1S0GTwUpI730FZTfJeFLTec7SeR+8M=";
