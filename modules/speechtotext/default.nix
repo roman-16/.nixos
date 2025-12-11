@@ -4,8 +4,11 @@
       alsa-utils # provides arecord
       whisper-cpp
       wl-clipboard
-      wtype # keyboard simulation for Wayland
+      ydotool # keyboard simulation for Wayland
     ];
+
+    # Enable ydotool daemon
+    programs.ydotool.enable = true;
   };
 
   home = {pkgs, ...}: let
@@ -18,7 +21,7 @@
       ${pkgs.gnused}/bin/sed \
         -e 's|@model@|${whisperModel}|g' \
         -e 's|@whisper@|${pkgs.whisper-cpp}|g' \
-        -e 's|@wtype@|${pkgs.wtype}|g' \
+        -e 's|@ydotool@|${pkgs.ydotool}|g' \
         ${./record.sh} > $out
       chmod +x $out
     '';

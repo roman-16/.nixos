@@ -7,7 +7,7 @@ RECORDING_FILE="/dev/shm/stt-recording.wav"
 MODEL="@model@"
 WHISPER_CLI="@whisper@/bin/whisper-cli"
 WHISPER_STREAM="@whisper@/bin/whisper-stream"
-WTYPE="@wtype@/bin/wtype"
+YDOTOOL="@ydotool@/bin/ydotool"
 
 case "${1:-}" in
     stream)
@@ -24,7 +24,7 @@ case "${1:-}" in
             result="${result%"${result##*[![:space:]]}"}"
             
             if [[ -n "$result" ]]; then
-                "$WTYPE" -- "$result"
+                "$YDOTOOL" type -- "$result"
             fi
             rm -f "$RECORDING_FILE"
         fi
