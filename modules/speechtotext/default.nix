@@ -13,8 +13,8 @@
   home = {pkgs, ...}: let
     extensionDirectory = ".local/share/gnome-shell/extensions/speechtotext@local";
     model = pkgs.fetchurl {
-      url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin";
-      hash = "sha256-YO1bw90U7qhWST0zQ0m0BXgt3K8AKNS130CINF+6Lv4=";
+      url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin";
+      hash = "sha256-G+OpsgY4Z7k35k4ux0gzZKeZF+FX+pjF2UtcH//qmHs=";
     };
     schemas =
       pkgs.runCommand "stt-schemas" {
