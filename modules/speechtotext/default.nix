@@ -21,24 +21,17 @@
       chmod +x $out
     '';
 
-    extension = pkgs.stdenvNoCC.mkDerivation {
-      pname = "gnome-shell-extension-speechtotext";
-      version = "1.0";
-      src = ./.;
-
-      installPhase = ''
-        mkdir -p $out/share/gnome-shell/extensions/speechtotext@local
-        cp extension.js $out/share/gnome-shell/extensions/speechtotext@local/
-        cp metadata.json $out/share/gnome-shell/extensions/speechtotext@local/
-        cp stylesheet.css $out/share/gnome-shell/extensions/speechtotext@local/
-      '';
-    };
+    extDir = ".local/share/gnome-shell/extensions/speechtotext@local";
   in {
-    home.packages = [extension];
+    home.file = {
+      ".local/bin/stt-record.sh" = {
+        source = recordScript;
+        executable = true;
+      };
 
-    home.file.".local/bin/stt-record.sh" = {
-      source = recordScript;
-      executable = true;
+      "${extDir}/extension.js".source = ./extension.js;
+      "${extDir}/metadata.json".source = ./metadata.json;
+      "${extDir}/stylesheet.css".source = ./stylesheet.css;
     };
 
     dconf.settings."org/gnome/shell" = {
