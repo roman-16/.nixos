@@ -24,6 +24,7 @@
     wsiScript = pkgs.runCommand "wsi" {} ''
       ${pkgs.gnused}/bin/sed \
         -e '1s|#!/usr/bin/zsh|#!/usr/bin/env zsh|' \
+        -e '2i\export WAYLAND_DISPLAY=''${WAYLAND_DISPLAY:-wayland-0}' \
         -e 's|model="$HOME/CHANGE_PATH_TO/WHISPER_CPP/MODELS/HERE/ggml-base.en.bin"|model="${whisperModel}"|' \
         -e 's|command -v transcribe|command -v ${pkgs.whisper-cpp}/bin/whisper-cli|g' \
         -e 's|\$(transcribe |\$(${pkgs.whisper-cpp}/bin/whisper-cli |g' \
