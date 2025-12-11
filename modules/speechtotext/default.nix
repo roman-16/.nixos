@@ -4,6 +4,7 @@
       alsa-utils # provides arecord
       whisper-cpp
       wl-clipboard
+      wtype # keyboard simulation for Wayland
     ];
   };
 
@@ -17,6 +18,7 @@
       ${pkgs.gnused}/bin/sed \
         -e 's|@model@|${whisperModel}|g' \
         -e 's|@whisper@|${pkgs.whisper-cpp}|g' \
+        -e 's|@wtype@|${pkgs.wtype}|g' \
         ${./record.sh} > $out
       chmod +x $out
     '';

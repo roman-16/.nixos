@@ -10,8 +10,9 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 export default class SpeechToTextExtension extends Extension {
     _indicator = null;
     _icon = null;
+    _isStreaming = false;
     _isRecording = false;
-    _recordingProc = null;
+    _proc = null;
 
     enable() {
         this._indicator = new PanelMenu.Button(0.0, this.metadata.name, false);
@@ -22,8 +23,13 @@ export default class SpeechToTextExtension extends Extension {
         });
         this._indicator.add_child(this._icon);
 
-        this._indicator.connect('button-press-event', () => {
-            this._toggleRecording();
+        this._indicator.connect('button-press-event', (actor, event) => {
+            const button = event.get_button();
+            if (button === Clutter.BUTTON_PRIMARY) {
+                this._toggleStreaming();
+            } else if (button === Clutter.BUTTON_SECONDARY) {
+                this._toggleRecording();
+            }
             return Clutter.EVENT_PROPAGATE;
         });
 
@@ -31,12 +37,65 @@ export default class SpeechToTextExtension extends Extension {
     }
 
     disable() {
+        this._stopStreaming();
         this._stopRecording();
         this._indicator?.destroy();
         this._indicator = null;
         this._icon = null;
     }
 
+    _getScriptPath() {
+        return GLib.build_filenamev([
+            GLib.get_home_dir(), '.local', 'bin', 'stt-record.sh'
+        ]);
+    }
+
+    // Streaming mode (left click) - real-time typing
+    _toggleStreaming() {
+        if (this._isStreaming) {
+            this._stopStreaming();
+        } else {
+            this._startStreaming();
+        }
+    }
+
+    _startStreaming() {
+        if (this._isRecording) return;
+        
+        this._isStreaming = true;
+        this._icon.add_style_class_name('recording');
+
+        try {
+            this._proc = Gio.Subprocess.new(
+                [this._getScriptPath(), 'stream'],
+                Gio.SubprocessFlags.NONE
+            );
+        } catch (e) {
+            logError(e, 'SpeechToText: Failed to start streaming');
+            this._isStreaming = false;
+            this._icon.remove_style_class_name('recording');
+        }
+    }
+
+    _stopStreaming() {
+        if (!this._isStreaming) return;
+
+        this._isStreaming = false;
+        this._icon.remove_style_class_name('recording');
+
+        try {
+            Gio.Subprocess.new(
+                ['pkill', '-f', 'whisper-stream'],
+                Gio.SubprocessFlags.NONE
+            );
+        } catch (e) {
+            logError(e, 'SpeechToText: Failed to stop streaming');
+        }
+
+        this._proc = null;
+    }
+
+    // Recording mode (right click) - record then paste
     _toggleRecording() {
         if (this._isRecording) {
             this._stopRecording();
@@ -46,16 +105,14 @@ export default class SpeechToTextExtension extends Extension {
     }
 
     _startRecording() {
+        if (this._isStreaming) return;
+        
         this._isRecording = true;
         this._icon.add_style_class_name('recording');
 
         try {
-            const scriptPath = GLib.build_filenamev([
-                GLib.get_home_dir(), '.local', 'bin', 'stt-record.sh'
-            ]);
-
-            this._recordingProc = Gio.Subprocess.new(
-                [scriptPath, 'start'],
+            this._proc = Gio.Subprocess.new(
+                [this._getScriptPath(), 'start'],
                 Gio.SubprocessFlags.NONE
             );
         } catch (e) {
@@ -72,25 +129,19 @@ export default class SpeechToTextExtension extends Extension {
         this._icon.remove_style_class_name('recording');
 
         try {
-            // Kill the recording process
             Gio.Subprocess.new(
                 ['pkill', '-f', 'arecord.*stt-recording'],
                 Gio.SubprocessFlags.NONE
             );
 
-            // Run transcription
-            const scriptPath = GLib.build_filenamev([
-                GLib.get_home_dir(), '.local', 'bin', 'stt-record.sh'
-            ]);
-
             Gio.Subprocess.new(
-                [scriptPath, 'transcribe'],
+                [this._getScriptPath(), 'transcribe'],
                 Gio.SubprocessFlags.NONE
             );
         } catch (e) {
             logError(e, 'SpeechToText: Failed to stop recording');
         }
 
-        this._recordingProc = null;
+        this._proc = null;
     }
 }

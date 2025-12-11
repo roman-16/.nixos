@@ -6,8 +6,24 @@ export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
 RECORDING_FILE="/dev/shm/stt-recording.wav"
 MODEL="@model@"
 WHISPER_CLI="@whisper@/bin/whisper-cli"
+WHISPER_STREAM="@whisper@/bin/whisper-stream"
+WTYPE="@wtype@/bin/wtype"
 
 case "${1:-}" in
+    stream)
+        # Real-time streaming transcription with keyboard output
+        exec "$WHISPER_STREAM" -m "$MODEL" -t 4 --step 500 --length 5000 2>/dev/null | \
+            grep --line-buffered -oP '(?<=\] ).*' | \
+            while IFS= read -r line; do
+                # Skip empty lines and artifacts
+                line="${line//\[*\]/}"
+                line="${line//\(*\)/}"
+                line="${line#"${line%%[![:space:]]*}"}"
+                if [[ -n "$line" ]]; then
+                    "$WTYPE" "$line"
+                fi
+            done
+        ;;
     start)
         # Run in foreground - extension will kill this process
         exec arecord -q -f S16_LE -r 16000 -c 1 -t wav "$RECORDING_FILE"
@@ -30,7 +46,7 @@ case "${1:-}" in
         fi
         ;;
     *)
-        echo "Usage: $0 {start|transcribe}"
+        echo "Usage: $0 {stream|start|transcribe}"
         exit 1
         ;;
 esac
