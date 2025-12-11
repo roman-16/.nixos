@@ -27,14 +27,18 @@ export default class SpeechToTextExtension extends Extension {
             track_hover: true,
         });
 
+        // Left click uses 'clicked' signal
+        this._button.connect('clicked', () => {
+            this._toggleStreaming();
+        });
+
+        // Right click uses button-press-event
         this._button.connect('button-press-event', (actor, event) => {
-            const button = event.get_button();
-            if (button === 1) {  // Left click
-                this._toggleStreaming();
-            } else if (button === 3) {  // Right click
+            if (event.get_button() === 3) {  // Right click
                 this._toggleRecording();
+                return Clutter.EVENT_STOP;
             }
-            return Clutter.EVENT_STOP;
+            return Clutter.EVENT_PROPAGATE;
         });
 
         Main.panel._rightBox.insert_child_at_index(this._button, 0);
