@@ -32,9 +32,15 @@
       }} > $out
     '';
   in {
-    dconf.settings."org/gnome/shell".enabled-extensions = with pkgs; [
-      gnomeExtensions.blurt.extensionUuid
-    ];
+    dconf.settings = {
+      "org/gnome/shell".enabled-extensions = with pkgs; [
+        gnomeExtensions.blurt.extensionUuid
+      ];
+
+      "org/gnome/shell/extensions/blurt" = {
+        whisper-path = ".local/bin/";
+      };
+    };
 
     home = {
       sessionPath = ["$HOME/.local/bin"];
