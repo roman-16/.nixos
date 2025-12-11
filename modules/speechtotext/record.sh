@@ -9,7 +9,8 @@ WHISPER_CLI="@whisper@/bin/whisper-cli"
 
 case "${1:-}" in
     start)
-        rec -q -t wav "$RECORDING_FILE" rate 16k &
+        # Run in foreground - extension will kill this process
+        exec rec -q -t wav "$RECORDING_FILE" rate 16k
         ;;
     transcribe)
         if [[ -f "$RECORDING_FILE" ]]; then
