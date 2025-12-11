@@ -56,9 +56,21 @@ case "${1:-}" in
             result="${result%"${result##*[![:space:]]}"}"
             
             if [[ -n "$result" ]]; then
-                echo "$(date): transcribe - typing: '$result'" >> "$LOG"
-                "$YDOTOOL" type -- "$result" >> "$LOG" 2>&1
+                echo "$(date): transcribe - typing via clipboard+paste: '$result'" >> "$LOG"
+                # Save current clipboard content
+                old_clipboard=$(wl-paste 2>/dev/null || true)
+                # Copy transcription to clipboard
+                echo -n "$result" | wl-copy
+                # Small delay to ensure clipboard is ready
+                sleep 0.1
+                # Paste with Ctrl+V (key codes: 29=Ctrl, 47=V)
+                "$YDOTOOL" key 29:1 47:1 47:0 29:0 >> "$LOG" 2>&1
                 echo "ydotool exit code: $?" >> "$LOG"
+                # Restore old clipboard after a short delay
+                sleep 0.3
+                if [[ -n "$old_clipboard" ]]; then
+                    echo -n "$old_clipboard" | wl-copy
+                fi
             else
                 echo "$(date): transcribe - result empty" >> "$LOG"
             fi
