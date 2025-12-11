@@ -1,0 +1,8 @@
+can run, can whisper on the nvidia video chip is this possible or is it
+running on the CPU
+
+should we change the icon to something more fitting?
+remove logs
+simplify code
+
+

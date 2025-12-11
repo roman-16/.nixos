@@ -2,6 +2,7 @@
 set -euo pipefail
 
 export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
+export YDOTOOL_SOCKET="${YDOTOOL_SOCKET:-/run/user/$(id -u)/.ydotool_socket}"
 
 RECORDING_FILE="/dev/shm/stt-recording.wav"
 MODEL="@model@"
