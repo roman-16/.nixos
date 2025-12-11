@@ -1,17 +1,22 @@
 {
-  nixos = {pkgs, ...}: {
+  nixos = {pkgs, ...}: let
+    whisper-cuda = pkgs.whisper-cpp.override {
+      cudaSupport = true;
+    };
+  in {
     environment.systemPackages = with pkgs; [
       alsa-utils # provides arecord
-      whisper-cpp
+      whisper-cuda
       wl-clipboard
-      ydotool # keyboard simulation for Wayland
+      dotool # keyboard simulation with layout support
     ];
-
-    # Enable ydotool daemon
-    programs.ydotool.enable = true;
   };
 
   home = {pkgs, ...}: let
+    whisper-cuda = pkgs.whisper-cpp.override {
+      cudaSupport = true;
+    };
+
     whisperModel = pkgs.fetchurl {
       url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin";
       hash = "sha256-YO1bw90U7qhWST0zQ0m0BXgt3K8AKNS130CINF+6Lv4=";
@@ -20,8 +25,8 @@
     recordScript = pkgs.runCommand "stt-record.sh" {} ''
       ${pkgs.gnused}/bin/sed \
         -e 's|@model@|${whisperModel}|g' \
-        -e 's|@whisper@|${pkgs.whisper-cpp}|g' \
-        -e 's|@ydotool@|${pkgs.ydotool}|g' \
+        -e 's|@whisper@|${whisper-cuda}|g' \
+        -e 's|@dotool@|${pkgs.dotool}|g' \
         ${./record.sh} > $out
       chmod +x $out
     '';
