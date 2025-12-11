@@ -90,11 +90,18 @@ export default class SpeechToTextExtension extends Extension {
                 Gio.SubprocessFlags.NONE
             );
 
-            // Transcribe and type result
-            Gio.Subprocess.new(
-                [this._getScriptPath(), 'stream-finish'],
-                Gio.SubprocessFlags.NONE
-            );
+            // Wait a bit for the file to be written, then transcribe and type
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+                try {
+                    Gio.Subprocess.new(
+                        [this._getScriptPath(), 'stream-finish'],
+                        Gio.SubprocessFlags.NONE
+                    );
+                } catch (e) {
+                    logError(e, 'SpeechToText: Failed to run stream-finish');
+                }
+                return GLib.SOURCE_REMOVE;
+            });
         } catch (e) {
             logError(e, 'SpeechToText: Failed to stop streaming');
         }
@@ -141,10 +148,18 @@ export default class SpeechToTextExtension extends Extension {
                 Gio.SubprocessFlags.NONE
             );
 
-            Gio.Subprocess.new(
-                [this._getScriptPath(), 'transcribe'],
-                Gio.SubprocessFlags.NONE
-            );
+            // Wait a bit for the file to be written, then transcribe
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+                try {
+                    Gio.Subprocess.new(
+                        [this._getScriptPath(), 'transcribe'],
+                        Gio.SubprocessFlags.NONE
+                    );
+                } catch (e) {
+                    logError(e, 'SpeechToText: Failed to run transcribe');
+                }
+                return GLib.SOURCE_REMOVE;
+            });
         } catch (e) {
             logError(e, 'SpeechToText: Failed to stop recording');
         }
