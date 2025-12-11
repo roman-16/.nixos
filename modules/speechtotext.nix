@@ -1,7 +1,14 @@
 {
-  nixos = {pkgs, ...}: {
-    environment.systemPackages = with pkgs; [
-      gnomeExtensions.blurt
+  nixos = {pkgs, ...}: let
+    blurt = pkgs.gnomeExtensions.blurt.overrideAttrs (old: {
+      postPatch = ''
+        ${pkgs.jq}/bin/jq '.["shell-version"] += ["49"]' metadata.json > tmp.json
+        mv tmp.json metadata.json
+      '';
+    });
+  in {
+    environment.systemPackages = [
+      blurt
     ];
   };
 
