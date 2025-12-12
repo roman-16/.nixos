@@ -11,8 +11,8 @@ const SCRIPT = GLib.build_filenamev([GLib.get_home_dir(), '.local', 'bin', 'stt-
 export default class SpeechToTextExtension extends Extension {
     enable() {
         this._mode = null;
-        this._icon = new St.Icon({icon_name: 'audio-input-microphone-symbolic', style_class: 'system-status-icon'});
-        this._button = new St.Button({style_class: 'panel-button', child: this._icon});
+        this._icon = new St.Icon({icon_name: 'audio-input-microphone-symbolic', style_class: 'system-status-icon recording'});
+        this._button = new St.Button({style_class: 'panel-button', child: this._icon, visible: false});
         this._button.connect('clicked', () => this._toggle('type'));
         Main.panel._rightBox.insert_child_at_index(this._button, 0);
 
@@ -34,16 +34,16 @@ export default class SpeechToTextExtension extends Extension {
 
     _start(mode) {
         this._mode = mode;
-        this._icon.add_style_class_name('recording');
+        this._button.visible = true;
         try { Gio.Subprocess.new([SCRIPT, 'start'], Gio.SubprocessFlags.NONE); }
-        catch(e) { this._mode = null; this._icon.remove_style_class_name('recording'); }
+        catch(e) { this._mode = null; this._button.visible = false; }
     }
 
     _stop() {
         if (!this._mode) return;
         const mode = this._mode;
         this._mode = null;
-        this._icon.remove_style_class_name('recording');
+        this._button.visible = false;
         try {
             Gio.Subprocess.new(['pkill', '-f', 'arecord.*stt-recording'], Gio.SubprocessFlags.NONE);
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
