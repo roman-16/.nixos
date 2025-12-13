@@ -65,20 +65,23 @@ const docsUpdatePlugin: Plugin = async ({ client }) => {
             text: `Documentation files were changed:
 - ${fileList}
 
-Your task: Update docs/README.md to reflect the current state of all documentation.
+Your task: Update docs/README.md to represent the current project state.
 
 Instructions:
 1. Read all files in the docs/ folder (recursively)
-2. Read all .md files outside the docs/ folder (e.g., README.md), except AGENTS.md and CLAUDE.md
-3. Create a unified summary of all documentation (not per-file summaries)
-4. If files have timestamps and information conflicts between files, use the newer file's information
-5. If any information is unclear, look at the project codebase as the source of truth
-6. Update docs/README.md with this unified summary
-7. If docs/README.md doesn't exist, create it
-8. Keep the summary concise but informative
-9. Remove any content from docs/README.md that cannot be found in any documentation file
+2. Read all .md files outside the docs/ folder, except AGENTS.md and CLAUDE.md
+3. Merge information from all files, but when information conflicts, the file with the newer timestamp takes priority
+4. If any information is unclear, examine the actual codebase as the source of truth
 
-Do not include docs/README.md itself in the summary.`,
+Format requirements:
+- Write as authoritative project documentation, NOT as a summary of documentation files
+- Organize by topic/domain (Architecture, Features, Development, etc.), never by source file
+- Use Wikipedia-style citations [1] linking to source files, with a References section at the end listing all sources
+- State facts directly: "The server uses Hono" not "According to docs/architecture.md, the server uses Hono"
+- Remove any content that no longer exists in the documentation or codebase
+- Keep it concise - this is reference documentation, not a changelog
+
+Do not include docs/README.md itself as a source.`,
           },
         ],
       },
