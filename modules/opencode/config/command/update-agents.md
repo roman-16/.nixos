@@ -10,7 +10,7 @@ Update the `AGENTS.md` file to reflect the project. Look into the project for th
 
 1. **Install Plugins** - Use `cp` to copy all files from `~/.nixos/modules/opencode/files/plugins/` into the project's `.opencode/plugin/` directory. Create the directory if it doesn't exist.
 
-2. **Install Plugin Dependencies** - Add `"ignore": "^7.0.5"` to `.opencode/package.json` dependencies.
+2. **Install Plugin Dependencies** - Add `"chokidar": "^5.0.0"` and `"ignore": "^7.0.5"` to `.opencode/package.json` dependencies.
 
 3. **Copy Universal Sections** - Copy the entire content from `~/.nixos/modules/opencode/files/update-agents/AGENTS-universal.md` exactly as written. Use `cat` to read the file. DO NOT compress, shorten, rephrase, or modify in any way.
 

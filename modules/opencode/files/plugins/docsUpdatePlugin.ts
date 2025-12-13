@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { relative } from "node:path";
 import type { Plugin } from "@opencode-ai/plugin";
+import { watch } from "chokidar";
 import ignore, { type Ignore } from "ignore";
 
 const DEBOUNCE_MS = 1000 * 60 * 10; // 10 minutes
@@ -88,40 +89,47 @@ Do not include docs/README.md itself as a source.`,
     });
   };
 
-  return {
-    event: async ({ event }) => {
-      if (event.type !== "file.watcher.updated") return;
+  const handleFileChange = async (file: string) => {
+    const isReadme = file === docsReadme;
+    const isAgentFile =
+      file === `${cwd}/AGENTS.md` || file === `${cwd}/CLAUDE.md`;
 
-      const file = event.properties.file;
-      const relativePath = relative(cwd, file);
+    // Skip if it's the README itself or an agent instructions file
+    if (isReadme || isAgentFile) return;
 
-      // Skip files matching .gitignore patterns
-      if (gitignore.ignores(relativePath)) return;
+    const isInDocsFolder = file.startsWith(docsDir);
+    const isMarkdownFile = file.endsWith(".md");
 
-      const isReadme = file === docsReadme;
-      const isAgentFile =
-        file === `${cwd}/AGENTS.md` || file === `${cwd}/CLAUDE.md`;
+    // Process if it's in docs folder OR if it's a markdown file outside docs
+    if (!isInDocsFolder && !isMarkdownFile) return;
 
-      // Skip if it's the README itself or an agent instructions file
-      if (isReadme || isAgentFile) return;
+    // Add file to pending set and start timer if not already running
+    pendingFiles.add(file);
 
-      const isInDocsFolder = file.startsWith(docsDir);
-      const isMarkdownFile = file.endsWith(".md");
-
-      // Process if it's in docs folder OR if it's a markdown file outside docs
-      if (!isInDocsFolder && !isMarkdownFile) return;
-
-      // Add file to pending set and start timer if not already running
-      pendingFiles.add(file);
-
-      if (!debounceTimer) {
-        debounceTimer = setTimeout(() => {
-          debounceTimer = undefined;
-          executeUpdate();
-        }, DEBOUNCE_MS);
-      }
-    },
+    if (!debounceTimer) {
+      debounceTimer = setTimeout(() => {
+        debounceTimer = undefined;
+        executeUpdate();
+      }, DEBOUNCE_MS);
+    }
   };
+
+  const watcher = watch(cwd, {
+    ignored: (path) => {
+      const rel = relative(cwd, path);
+      if (!rel) return false; // Don't ignore root
+      return gitignore.ignores(rel);
+    },
+    persistent: true,
+    ignoreInitial: true,
+  });
+
+  watcher.on("add", handleFileChange);
+  watcher.on("change", handleFileChange);
+  watcher.on("unlink", handleFileChange);
+
+  // Return empty hooks - we handle everything via chokidar
+  return {};
 };
 
 export { docsUpdatePlugin };
