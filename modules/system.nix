@@ -1,5 +1,9 @@
 {
-  nixos = {inputs, ...}: {
+  nixos = {
+    inputs,
+    lib,
+    ...
+  }: {
     boot = {
       kernelParams = ["nvidia-drm.modeset=1"];
 
@@ -12,7 +16,7 @@
     networking = {
       hostName = "roman-nixos";
       networkmanager.enable = true;
-      wireless.enable = false;
+      wireless.enable = lib.mkForce false;
     };
 
     programs.nix-ld.enable = true;
