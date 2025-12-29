@@ -3,7 +3,7 @@
 ## General Principles
 - **Strictness**: ALWAYS/NEVER = strict rules. Prefer/Avoid = strong defaults with exceptions allowed
 - **Git Operations**: NEVER EVER do ANY git operation (`git add`, `git stage`, `git restore --staged`, `git commit`, `git push`, `git checkout`, `git branch`, `git merge`, `git rebase`, etc.) without EXPLICIT user permission. This is an absolute rule with ZERO exceptions. Only the user initiates git operations
-- **Verify Before Implementing**: ALWAYS verify APIs, library features, and configurations using context7 or exa for official documentation before implementation. NEVER assume attributes, methods, or behavior exist without verification
+- **Verify Before Implementing**: ALWAYS verify APIs, library features, and configurations before implementation. NEVER assume attributes, methods, or behavior exist without verification. Use context7 for library/framework docs. Use Exa for discovery (broad searches, ecosystem, community resources, tutorials). Use WebFetch for deep-diving into specific URLs
 - **Documentation**: Use `docs/README.md` as the main documentation file (rest of `docs/` folder available for additional docs)
 - **Ask Questions**: ALWAYS ask if unclear. NEVER assume. STOP and ask before proceeding if ANY of:
   - Multiple valid approaches exist
