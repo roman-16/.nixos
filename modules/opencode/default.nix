@@ -17,6 +17,7 @@
 
       settings = {
         autoupdate = false;
+        instructions = ["docs/README.md"];
         model = "anthropic/claude-opus-4-5";
 
         mcp = {
