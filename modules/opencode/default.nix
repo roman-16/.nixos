@@ -45,6 +45,12 @@
               CONTEXT7_API_KEY = secrets.CONTEXT7_API_KEY;
             };
           };
+
+          exa = {
+            enabled = true;
+            type = "remote";
+            url = "https://mcp.exa.ai/mcp";
+          };
         };
 
         permission = {
