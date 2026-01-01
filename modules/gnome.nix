@@ -17,6 +17,7 @@
       gnomeExtensions.smile-complementary-extension
       smile
       gnomeExtensions.alphabetical-app-grid
+      gnomeExtensions.pip-on-top
     ];
 
     environment.gnome.excludePackages = with pkgs; [
@@ -189,6 +190,7 @@
             gnomeExtensions.dash-to-panel.extensionUuid
             gnomeExtensions.ddterm.extensionUuid
             gnomeExtensions.lock-keys.extensionUuid
+            gnomeExtensions.pip-on-top.extensionUuid
             gnomeExtensions.smile-complementary-extension.extensionUuid
             gnomeExtensions.user-themes.extensionUuid
             gnomeExtensions.vitals.extensionUuid
