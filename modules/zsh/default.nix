@@ -10,7 +10,6 @@
       dua
       tre-command
       lsof
-      tree
       devbox
       rar
     ];
@@ -93,6 +92,8 @@
           ngs = "git -C ~/.nixos add .";
           ngb = "git -C ~/.nixos commit -m \"$(date '+%Y-%m-%d %H:%M:%S')\"; git -C ~/.nixos push";
           nft = "alejandra -q ~/.nixos";
+
+          tree = "tre";
         };
         initContent = ''
           source ${pkgs.zsh-fzf-tab}/share/fzf-tab/fzf-tab.plugin.zsh;

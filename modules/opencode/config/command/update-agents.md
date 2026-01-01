@@ -8,18 +8,20 @@ Update the `AGENTS.md` file to reflect the project. Look into the project for th
 
 ## Instructions
 
-1. **Install Plugins** - Use `cp` to copy all files from `~/.nixos/modules/opencode/files/plugins/` into the project's `.opencode/plugin/` directory. Create the directory if it doesn't exist.
+1. **Install Plugins** - Use `cp -r` to copy all files from `~/.nixos/modules/opencode/files/plugins/` into the project's `.opencode/plugin/` directory. Create the directory if it doesn't exist.
 
 2. **Install Plugin Dependencies** - Add `"chokidar": "^5.0.0"` and `"ignore": "^7.0.5"` to `.opencode/package.json` dependencies.
 
-3. **Copy Universal Sections** - Copy the entire content from `~/.nixos/modules/opencode/files/update-agents/AGENTS-universal.md` exactly as written. Use `cat` to read the file. DO NOT compress, shorten, rephrase, or modify in any way.
+3. **Install Skills** - Use `cp -r` to copy all skill directories from `~/.nixos/modules/opencode/files/skills/` into the project's `.opencode/skill/` directory. Create the directory if it doesn't exist.
 
-4. **Remove Inapplicable Sections** - Some subsections have language/project type flags (e.g., `[JS/TS]`):
+4. **Copy Universal Sections** - Copy the entire content from `~/.nixos/modules/opencode/files/update-agents/AGENTS-universal.md` exactly as written. Use `cat` to read the file. DO NOT compress, shorten, rephrase, or modify in any way.
+
+5. **Remove Inapplicable Sections** - Some subsections have language/project type flags (e.g., `[JS/TS]`):
    - If the section applies to the current project: include the section and REMOVE the flag
    - If the section does NOT apply: completely omit the entire section
    - Never keep flag markers in the final file
 
-5. **Generate Project-Specific Sections** - Use `~/.nixos/modules/opencode/files/update-agents/AGENTS-project.md` as a template to create customized content by analyzing the codebase. Use `cat` to read the file.
+6. **Generate Project-Specific Sections** - Use `~/.nixos/modules/opencode/files/update-agents/AGENTS-project.md` as a template to create customized content by analyzing the codebase. Use `cat` to read the file.
 
 User input:
 $ARGUMENTS
