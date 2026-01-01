@@ -12,7 +12,7 @@ Update the `AGENTS.md` file to reflect the project. Look into the project for th
 
 2. **Install Plugin Dependencies** - Add `"chokidar": "^5.0.0"` and `"ignore": "^7.0.5"` to `.opencode/package.json` dependencies.
 
-3. **Install Skills** - Use `cp -r` to copy all skill directories from `~/.nixos/modules/opencode/files/skills/` into the project's `.opencode/skill/` directory. Create the directory if it doesn't exist.
+3. **Install Skills** - Use `cp -r` to copy all skill directories from `~/.nixos/modules/opencode/files/skill/` into the project's `.opencode/skill/` directory. Create the directory if it doesn't exist.
 
 4. **Copy Universal Sections** - Copy the entire content from `~/.nixos/modules/opencode/files/update-agents/AGENTS-universal.md` exactly as written. Use `cat` to read the file. DO NOT compress, shorten, rephrase, or modify in any way.
 
