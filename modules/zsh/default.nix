@@ -8,10 +8,6 @@
       ripgrep-all
       fd
       dua
-      (uutils-coreutils.override {prefix = "";})
-      uutils-findutils
-      uutils-diffutils
-      sudo-rs
       tre-command
       lsof
       tree
