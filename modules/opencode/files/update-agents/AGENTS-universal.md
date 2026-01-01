@@ -2,7 +2,7 @@
 
 ## General Principles
 - **Strictness**: ALWAYS/NEVER = strict rules. Prefer/Avoid = strong defaults with exceptions allowed
-- **Dev Server Required**: The user will have [DETECT from project (`npm run dev`)] running during development. If it's not running and you need it, ask the user to start it. Display: "Type `y` to continue". Once they confirm, continue with your work. If the dev server runs in Docker (check for `docker-compose.yml`, `compose.yml`, or Dockerfile), use `docker logs <container>` to retrieve logs when needed
+- **Dev Server Required**: The user will have [DETECT from project (`npm run dev`)] running during development. If it's not running and you need it, ask the user to start it. Display: "Type `y` to continue". Once they confirm, continue with your work. [DETECT if Docker-based dev server - if so, use `docker logs <container>` for logs when needed]
 - **Git Operations**: NEVER EVER do ANY git operation (`git add`, `git stage`, `git restore --staged`, `git commit`, `git push`, `git checkout`, `git branch`, `git merge`, `git rebase`, etc.) without EXPLICIT user permission. This is an absolute rule with ZERO exceptions. Only the user initiates git operations
 - **Verify Before Implementing**: ALWAYS verify APIs, library features, and configurations before implementation. NEVER assume attributes, methods, or behavior exist without verification. Use context7 for library/framework docs. Use Exa for discovery (broad searches, ecosystem, community resources, tutorials). Use WebFetch for deep-diving into specific URLs
 - **Documentation**: Use `docs/README.md` as the main documentation file (rest of `docs/` folder available for additional docs)
