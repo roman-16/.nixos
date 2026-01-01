@@ -2,7 +2,6 @@
 
 ## General Principles
 - **Strictness**: ALWAYS/NEVER = strict rules. Prefer/Avoid = strong defaults with exceptions allowed
-- **Dev Server Required**: The user will have [DETECT from project (`npm run dev`)] running during development. If it's not running and you need it, ask the user to start it. Display: "Type `y` to continue". Once they confirm, continue with your work
 - **Git Operations**: NEVER EVER do ANY git operation (`git add`, `git stage`, `git restore --staged`, `git commit`, `git push`, `git checkout`, `git branch`, `git merge`, `git rebase`, etc.) without EXPLICIT user permission. This is an absolute rule with ZERO exceptions. Only the user initiates git operations
 - **Verify Before Implementing**: ALWAYS verify APIs, library features, and configurations before implementation. NEVER assume attributes, methods, or behavior exist without verification. Use context7 for library/framework docs. Use Exa for discovery (broad searches, ecosystem, community resources, tutorials). Use WebFetch for deep-diving into specific URLs
 - **Documentation**: Use `docs/README.md` as the main documentation file (rest of `docs/` folder available for additional docs)
@@ -53,60 +52,67 @@
 8. **Update Feature File**: Sync the feature file with any discussions, decisions, or changes not yet documented
 9. **Complete**: After all quality gates pass, summarize changes made and ask about committing (see Version Control section)
 
+## Architecture
+NixOS system configuration using Nix flakes with home-manager for user configuration:
+- **Flake Inputs**: nixpkgs-unstable, home-manager, stylix (theming)
+- **Module System**: Each module in `modules/` exports both `nixos` and `home` attributes for system and user configuration respectively
+- **Auto-import**: Modules are automatically imported from the `modules/` directory via `configuration.nix`
+- **Hardware**: NVIDIA drivers, systemd-boot, EFI system
+- **Desktop**: GNOME with extensive dconf configuration and custom extensions
+
+## Project Structure
+Key directories:
+- `modules/` - NixOS and home-manager modules, each exporting `{ nixos = {...}; home = {...}; }` structure
+- `modules/opencode/` - OpenCode AI assistant configuration and secrets
+- `modules/speechtotext/` - Custom GNOME extension for speech-to-text
+- `modules/stylix/` - Theming configuration with stylix
+- `modules/zsh/` - Shell configuration including fastfetch
+- `.opencode/` - OpenCode plugins and skills
+
+Key files:
+- `flake.nix` - Nix flake definition with inputs (nixpkgs, home-manager, stylix)
+- `configuration.nix` - Main configuration that imports all modules and sets up home-manager
+- `hardware-configuration.nix` - Hardware-specific configuration (auto-generated)
+
 ## Code Style
 
-### Testing [JS/TS]
-- **Approach**: Write tests alongside implementation (TDD/test-first)
-- **Test Strategy**: Write tests outside-in (e.g., e2e → integration → unit)
-- **Location**: `.test.ts` files in `tests/` directory, mirroring `src/` structure
-- **Framework**: vitest with exact matchers only (no relative matchers like `toBeCloseTo`, `toBeGreaterThan`)
-- **Coverage**: Minimum 95% for statements, lines, and functions; 90% for branches
-- **Mocking**:
-  - **ONLY mock external dependencies** (npm packages) - NEVER mock our own code in `src/`
-  - **Not all dependencies need mocking** - only mock dependencies that require it (external services, APIs, complex integrations)
-  - **ALL mocks MUST be global** - place in `.vitest/mocks/` directory, named as `mock` + camelCased dependency name (e.g., `@google-cloud/secret-manager` → `mockGoogleCloudSecretManager.ts`)
-  - **No local mocks** - NEVER use `vi.mock()` in test files. All mocking must be in `.vitest/mocks/`
-  - **Mock setup**: Import mocks in `.vitest/setup.ts`, referenced by `vitest.config.ts`
-  - **Mock exports**: Export mocks from `.vitest/mocks/index.ts` barrel file only when tests need to reconfigure them
-- **Test Environment**: Set `process.env` in `.vitest/env.ts`, imported first in `.vitest/setup.ts`
-- **Test Quality**:
-  - Write meaningful tests validating behavior/edge cases
-  - Avoid trivial tests (testing that functions exist, mocked implementations without behavior verification)
-  - Test behavior, not implementation details
-  - Use descriptive test names: `"should throw error when orderId is missing"`
-  - Group related tests with `describe` blocks
-- **DOM Selectors**: Define a `selectors` constant at the top of test files with all query selectors.
-- **Validation**: Run `npm run test` after test changes
+### General Principles
+- **Simplicity**: Straightforward solutions. No unnecessary intermediate variables—directly invoke/access if used once
+- **Paradigm**: Functional only—pure functions, immutability (Nix is inherently functional)
+- **Duplicate Code**: Extract to reusable modules or let bindings
+- **Dependencies**: Check existing flake inputs before adding new ones. Document rationale for major additions
 
-### Testing [Rust]
-- **Approach**: Write tests alongside implementation
-- **Test Strategy**: Write tests outside-in (e.g., e2e → integration → unit)
-- **Location**: Co-located in same file using `#[cfg(test)]` module
-- **Coverage**: Minimum 95% via cargo-tarpaulin
-- **Test Types**:
-  - Edge case tests (large inputs, boundary conditions)
-  - Panic tests with `#[should_panic(expected = "...")]`
-  - Main function execution tests
-- **Test Quality**:
-  - Test behavior, not implementation details
-  - Use descriptive test names: `test_part1_example`, `test_part2_large_rotation`
-  - Extract shared test data to constants: `const EXAMPLE: &str = "..."`
+### Style & Formatting
+- **Formatting**: Alejandra formatter (standard Nix formatter), empty line at end of files, whitespace between logical blocks
+- **Property Ordering**: Alphabetical by default unless another ordering makes better sense
 
-## Quality Gates [JS/TS]
+### Nix Practices
+- **Module Pattern**: Always export `{ nixos = {...}; home = {...}; }` from modules
+- **Attribute Sets**: Use `with pkgs;` sparingly, prefer explicit references for clarity
+- **Let Bindings**: Use for reusable values within a scope
+- **Imports**: Use relative paths from module location
+- **Conditionals**: Use `lib.mkIf` and `lib.mkForce` for conditional configuration
+- **Lists**: Use `++` for list concatenation, `map` for transformations
+- **Options**: Prefer home-manager options over direct file management when available
+
+### Naming Conventions
+- **Files**: Lowercase with hyphens (e.g., `hardware-configuration.nix`)
+- **Modules**: Named after their primary function (e.g., `gnome.nix`, `firefox.nix`)
+- **Folders**: Only use when module needs additional files (e.g., `stylix/default.nix` with `wallpaper.jpg`)
+
+### Comments & Documentation
+- **When**: Explain "why" not "what"—business logic, workarounds, non-obvious decisions
+- **Avoid**: NEVER restate code. If self-explanatory, no comment needed
+- **TODOs**: `# TODO:` with context
+
+### Config & Environment
+- **Secrets**: Use `secrets.json` files within module directories, never commit actual secrets
+- **Hardware**: Keep hardware-specific config in `hardware-configuration.nix`
+
+## Quality Gates
 Run in this order to fail fast:
 
-1. TypeScript compilation must succeed with no errors (`npm run typecheck`)
-2. Biome linting must pass (`npm run lint`)
-3. All tests must pass and test coverage must meet minimum 95% threshold across all metrics (`npm run test`)
-4. Project must build and run successfully (`npm run dev`)
-
-## Quality Gates [Rust]
-Run in this order to fail fast:
-
-1. Code must compile with no errors (`just build`)
-2. Lints must pass, clippy and check formatting (`just lint`)
-3. All tests must pass and test coverage must meet minimum 95% threshold across all metrics (`just test`)
-4. Project must build and run successfully (`just dev`)
+1. Nix flake check must pass (`nix flake check`)
 
 ## Version Control
 
@@ -137,7 +143,7 @@ Run in this order to fail fast:
     - If file changes made relevant to current commit: restart entire workflow from beginning
   - On other response: treat as instruction (don't start commit workflow)
 - **Commit Message Format**: `emoji type(scope): description`
-  - Examples: `✨ feat(consumer): add retry logic` | `🐛 fix(zendesk): handle rate limiting` | `✅ test(consumer): add timeout scenarios`
+  - Examples: `✨ feat(gnome): add blur-my-shell extension` | `🐛 fix(drivers): resolve nvidia sleep issue` | `♻️ refactor(modules): extract common patterns`
   - **Body**: Keep simple and concise. Skip body for obvious changes. Use bullet list only for meaningful details (key architectural decisions, breaking changes, important context). Avoid exhaustive change lists
 - **Types with Emojis**:
   - `✨ feat` - New feature
@@ -149,17 +155,12 @@ Run in this order to fail fast:
   - `⚡ perf` - Performance improvements
   - `🎨 style` - Code style/formatting changes
   - `🔒 security` - Security improvements
-- **Scope**: [DETECT from project structure]
+- **Scope**: Module name (e.g., `gnome`, `firefox`, `stylix`, `system`, `drivers`)
 
-## Commands [JS/TS]
-- **Build**: `npm run build` (production) | `npm run dev` (development with watch)
-- **Type check**: `npm run typecheck`
-- **Lint**: `npm run lint`
-- **Test**: `npm run test`
-- **[Project-specific]**: [DETECT and document project-specific commands]
-
-## Commands [Rust]
-- **Build**: `just build` (release) | `just dev` (development)
-- **Lint**: `just lint`
-- **Test**: `just test`
-- **[Project-specific]**: [DETECT and document project-specific commands]
+## Commands
+- **Format**: `alejandra .` (format all Nix files)
+- **Check**: `nix flake check` (validate flake)
+- **Build**: `sudo nixos-rebuild build --flake .` (build without switching)
+- **Switch**: `sudo nixos-rebuild switch --flake .` (build and switch to new configuration)
+- **Update**: `nix flake update` (update flake inputs)
+- **Garbage collect**: `sudo nix-collect-garbage -d` (remove old generations)
