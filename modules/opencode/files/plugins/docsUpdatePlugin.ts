@@ -15,6 +15,8 @@ const loadGitignore = (cwd: string): Ignore => {
     ig.add(content);
   }
 
+  ig.add(".opencode");
+
   return ig;
 };
 
