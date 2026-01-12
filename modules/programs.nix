@@ -24,6 +24,7 @@
       gimp3-with-plugins
       gparted
       file-roller
+      pear-desktop
 
       # GStreamer plugins for video/audio support
       gst_all_1.gstreamer
