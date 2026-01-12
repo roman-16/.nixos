@@ -2,7 +2,7 @@
 description: create a new feature
 ---
 
-Execute the Feature Workflow from `AGENTS.md` and create the plan file.
+Load the `feature-workflow` skill and execute the workflow.
 
 User input:
 $ARGUMENTS
