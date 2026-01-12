@@ -12,6 +12,7 @@
   - Design decisions needed (architecture, patterns, data models, APIs)
   - Trade-offs exist between options
   - Scope is ambiguous (what's in/out, how deep to go)
+- **Question Tool** (`mcp_question`, referred to as `question_tool`): PREFER over plain text when there are predefined options (including y/n)
 
 ## Feature Workflow
 1. **Research**: Understand the codebase, requirements, and constraints before making changes
@@ -22,27 +23,21 @@
    - Create a markdown feature file in `docs/features/` named `YYYY-MM-DD-HHMM_FEATURE_NAME.md`
    - Use `date +%Y-%m-%d-%H%M` to get the timestamp (e.g., `docs/features/2025-11-26-1530_AUTHENTICATION.md`)
 3. **Present Summary**: Present a brief plan summary to the user
-   - Display: "Type `y` to go to clarifying"
+   - Use `question_tool`: "Go to clarifying"
    - If user adds context/feedback: immediately update the feature file
-   - Continue showing the prompt until user types `y`
+   - Continue showing the prompt until user confirms
    - Only proceed to step 4 (Clarify) after user confirmation
 4. **Clarify**: Ask questions to ensure complete understanding. REQUIRED before implementation if ANY ambiguity exists
    - Ask ONE question at a time, wait for answer, then ask the next question
    - Use previous answers to inform subsequent questions
-   - Format each question as:
-     ```
-     **Question:** [question]?
-     (1) [option]
-     (2) [option]
-     ```
-     Mention that text answers are welcome (pick number, add context, or free-form text). Don't include "text answer" as a numbered option
+   - Use `question_tool` when options can be predefined; plain text otherwise
    - Update the feature file with each Q&A after answering
    - Continue until ALL ambiguities resolved - don't stop after pre-written questions. Proactively identify new ambiguities and ask follow-ups. Don't ask permission to continue
    - Know when to stop: architecture, file structure, user-facing changes, breaking changes, major patterns - NOT minor implementation details
    - After all questions: comprehensively update plan with all decisions
    - NEVER skip if uncertain - defaulting to assumption is unacceptable
-5. **Confirm**: Present the final plan summary and ask "Type `y` to implement this plan"
-   - If "y": proceed to implementation
+5. **Confirm**: Present the final plan summary. Use `question_tool`: "Implement this plan"
+   - If user confirms: proceed to implementation
    - If other feedback: adjust the plan and ask for confirmation again
 6. **Implement**: Execute the plan incrementally, following code style and architecture guidelines
    - Write tests alongside implementation
@@ -54,7 +49,7 @@
 
 ## Architecture
 NixOS system configuration using Nix flakes with home-manager for user configuration:
-- **Flake Inputs**: nixpkgs-unstable, home-manager, stylix (theming)
+- **Flake Inputs**: nixpkgs-unstable, home-manager, nix-flatpak, stylix (theming)
 - **Module System**: Each module in `modules/` exports both `nixos` and `home` attributes for system and user configuration respectively
 - **Auto-import**: Modules are automatically imported from the `modules/` directory via `configuration.nix`
 - **Hardware**: NVIDIA drivers, systemd-boot, EFI system
@@ -67,10 +62,11 @@ Key directories:
 - `modules/speechtotext/` - Custom GNOME extension for speech-to-text
 - `modules/stylix/` - Theming configuration with stylix
 - `modules/zsh/` - Shell configuration including fastfetch
-- `.opencode/` - OpenCode plugins and skills
+- `modules/rclone/` - Cloud storage sync configuration
+- `.opencode/` - OpenCode plugins, commands, and skills
 
 Key files:
-- `flake.nix` - Nix flake definition with inputs (nixpkgs, home-manager, stylix)
+- `flake.nix` - Nix flake definition with inputs (nixpkgs, home-manager, nix-flatpak, stylix)
 - `configuration.nix` - Main configuration that imports all modules and sets up home-manager
 - `hardware-configuration.nix` - Hardware-specific configuration (auto-generated)
 
@@ -118,7 +114,7 @@ Run in this order to fail fast:
 
 ### CRITICAL: Explicit Permission Required
 - **NEVER do ANY git operation without explicit user permission** - This includes: commit, push, stage, unstage, branch operations, merges, rebases, etc.
-- **ALWAYS wait for user to type `y`, `c`, or `p`** before executing ANY git command
+- **ALWAYS use `question_tool` and wait for user confirmation** before executing ANY git command
 - **Even if quality gates pass, even if the user said "commit" earlier in the conversation, even if it seems obvious** - STOP and ask for confirmation with the exact options below
 - **No exceptions. No shortcuts. No assuming intent.**
 
@@ -130,15 +126,15 @@ Run in this order to fail fast:
   - Before significantly different task
   - **Key principle**: When in doubt, ask. Only skip if certain larger commit coming
 - **Commit Workflow**: NEVER commit automatically. Only ask when logical
-  - Ask: "Type `y` to start committing"
-  - If "y": Run quality gates first. If any gate fails, inform the user and stop. Then proceed with commit workflow:
+  - Use `question_tool`: "Start committing"
+  - If user confirms: Run quality gates first. If any gate fails, inform the user and stop. Then proceed with commit workflow:
     - Check staged files (`git status`, `git diff --staged`)
     - Display: files to unstage (if any), additional files to stage (if any), proposed commit message (conventional format describing ALL changes), horizontal rule (`---`)
-    - Display options based on staging needs:
-      - If staging changes needed (files to unstage or additional files to stage): Type `s` to stage | `c` to stage and commit | `p` to stage, commit and push
-      - If no staging changes needed: Type `c` to commit | `p` to commit and push
-    - On `s`: unstage specified files, stage additional files, show staged changes, prompt with `c`/`p` options
-    - On `c`/`p`: perform staging changes if needed, then commit (and push if `p`)
+    - Use `question_tool` with options based on staging needs:
+      - If staging changes needed (files to unstage or additional files to stage): "Stage" | "Stage and commit" | "Stage, commit and push"
+      - If no staging changes needed: "Commit" | "Commit and push"
+    - On "Stage": unstage specified files, stage additional files, show staged changes, prompt with commit options
+    - On commit/push options: perform staging changes if needed, then commit (and push if selected)
     - On other response: treat as instruction (modify message, change files, make more changes, etc.)
     - If file changes made relevant to current commit: restart entire workflow from beginning
   - On other response: treat as instruction (don't start commit workflow)

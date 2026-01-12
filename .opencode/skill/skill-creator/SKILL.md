@@ -224,7 +224,7 @@ For example, when building an image-editor skill, relevant questions include:
 - "I can imagine users asking for things like 'Remove the red-eye from this image' or 'Rotate this image'. Are there other ways you imagine this skill being used?"
 - "What would a user say that should trigger this skill?"
 
-To avoid overwhelming users, avoid asking too many questions in a single message. Start with the most important questions and follow up as needed for better effectiveness.
+To avoid overwhelming users, ask one question at a time. Use `question_tool` when options can be predefined.
 
 Conclude this step when there is a clear sense of the functionality the skill should support.
 

@@ -24,10 +24,11 @@ Capture coding preferences and conventions in AGENTS.md by making corrections to
    I've captured these modified files (before your corrections):
    [list files or "No modified files yet"]
 
-   Make changes. Type `y` when done.
+   Make changes.
    ```
+   Use `question_tool`: "Done"
 
-4. **After Snapshot**: After user types `y`, run `git status` again to get all modified/new files and read each file into context. Compare the before/after versions in context to identify what the user changed.
+4. **After Snapshot**: After user confirms, run `git status` again to get all modified/new files and read each file into context. Compare the before/after versions in context to identify what the user changed.
 
 5. **Derive Updates**: Analyze the differences between before/after to determine updates for AGENTS.md:
    - What patterns did the user change?
@@ -37,18 +38,13 @@ Capture coding preferences and conventions in AGENTS.md by making corrections to
 
 6. **Conflict Resolution**: Read AGENTS.md and check derived updates against existing content:
    - If no conflict: apply automatically
-   - If conflicts with existing content: notify user and offer options:
+   - If conflicts with existing content: notify user:
      ```
      Conflict detected:
      - Existing: [existing content]
      - New: [derived content]
-
-     Options:
-     (1) Keep existing
-     (2) Replace with new
-     (3) Merge (explain how)
-     (4) Write custom resolution
      ```
+     Use `question_tool`: "Keep existing" | "Replace with new" | "Merge (explain how)" | "Write custom resolution"
 
 7. **Update AGENTS.md**: Apply all updates to AGENTS.md
 
