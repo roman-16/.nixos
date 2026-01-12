@@ -25,14 +25,13 @@ Follow this workflow for new features or significant changes.
    - Only proceed to Clarify after confirmation
 
 4. **Clarify**: Ask questions to ensure complete understanding (REQUIRED if ANY ambiguity exists)
-   - Ask ONE question at a time, wait for answer, then ask next
-   - Use previous answers to inform subsequent questions
+   - Ask ALL questions at once in a single `question_tool` call with multiple questions
    - Use `question_tool` when options can be predefined; plain text otherwise
-   - Update feature file with each Q&A after answering
-   - Continue until ALL ambiguities resolved - proactively identify new ambiguities and ask follow-ups
+   - After receiving answers: update feature file with all Q&A decisions
+   - If answers reveal new ambiguities: ask follow-up questions (again, all at once)
    - When to ask: architecture, file structure, user-facing changes, breaking changes, major patterns
    - When NOT to ask: minor implementation details
-   - After all questions: comprehensively update plan with all decisions
+   - After all questions resolved: comprehensively update plan with all decisions
    - NEVER skip if uncertain - defaulting to assumption is unacceptable
 
 5. **Confirm**: Present final plan summary
