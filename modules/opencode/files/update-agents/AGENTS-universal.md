@@ -15,39 +15,6 @@
   - Scope is ambiguous (what's in/out, how deep to go)
 - **Question Tool** (`mcp_question`, referred to as `question_tool`): PREFER over plain text when there are predefined options (including y/n)
 
-## Feature Workflow
-1. **Research**: Understand the codebase, requirements, and constraints before making changes
-   - Check existing patterns and implementations for similar functionality
-   - Review related tests to understand expected behavior
-   - Identify dependencies and potential side effects
-2. **Plan**: Create an initial plan breaking down the task into clear, actionable steps
-   - Create a markdown feature file in `docs/features/` named `YYYY-MM-DD-HHMM_FEATURE_NAME.md`
-   - Use `date +%Y-%m-%d-%H%M` to get the timestamp (e.g., `docs/features/2025-11-26-1530_AUTHENTICATION.md`)
-3. **Present Summary**: Present a brief plan summary to the user
-   - Use `question_tool`: "Go to clarifying"
-   - If user adds context/feedback: immediately update the feature file
-   - Continue showing the prompt until user confirms
-   - Only proceed to step 4 (Clarify) after user confirmation
-4. **Clarify**: Ask questions to ensure complete understanding. REQUIRED before implementation if ANY ambiguity exists
-   - Ask ONE question at a time, wait for answer, then ask the next question
-   - Use previous answers to inform subsequent questions
-   - Use `question_tool` when options can be predefined; plain text otherwise
-   - Update the feature file with each Q&A after answering
-   - Continue until ALL ambiguities resolved - don't stop after pre-written questions. Proactively identify new ambiguities and ask follow-ups. Don't ask permission to continue
-   - Know when to stop: architecture, file structure, user-facing changes, breaking changes, major patterns - NOT minor implementation details
-   - After all questions: comprehensively update plan with all decisions
-   - NEVER skip if uncertain - defaulting to assumption is unacceptable
-5. **Confirm**: Present the final plan summary. Use `question_tool`: "Implement this plan"
-   - If user confirms: proceed to implementation
-   - If other feedback: adjust the plan and ask for confirmation again
-6. **Implement**: Execute the plan incrementally, following code style and architecture guidelines
-   - Write tests alongside implementation
-   - Make incremental commits for major milestones if working on large features
-7. **Validate**: Run all quality gates in order to ensure correctness (see Quality Gates section)
-   - If any gate fails: fix issues and re-run all gates from the beginning
-8. **Update Feature File**: Sync the feature file with any discussions, decisions, or changes not yet documented
-9. **Complete**: After all quality gates pass, summarize changes made and ask about committing (see Version Control section)
-
 ## Code Style
 
 ### Testing [JS/TS]
