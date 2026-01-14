@@ -3,16 +3,10 @@
 ## General Principles
 - **Strictness**: ALWAYS/NEVER = strict rules. Prefer/Avoid = strong defaults with exceptions allowed
 - **Dev Server Required**: The user will have [DETECT from project (`npm run dev`)] running during development. If it's not running and you need it, ask the user to start it. Use `question_tool`: "Continue". Once they confirm, continue with your work. [DETECT if Docker-based dev server - if so, use `docker logs <container>` for logs when needed]
-- **Git Operations**: NEVER EVER do ANY git operation (`git add`, `git stage`, `git restore --staged`, `git commit`, `git push`, `git checkout`, `git branch`, `git merge`, `git rebase`, etc.) without EXPLICIT user permission. This is an absolute rule with ZERO exceptions. Only the user initiates git operations
+- **Git Operations**: NEVER do ANY git operation without EXPLICIT user permission. Permission expires immediately - only execute git operations directly after user grants permission. If the user sends a different message or moves on to another topic, permission is revoked and you must ask again
 - **Verify Before Implementing**: ALWAYS verify APIs, library features, and configurations before implementation. NEVER assume attributes, methods, or behavior exist without verification. Use context7 for library/framework docs. Use Exa for discovery (broad searches, ecosystem, community resources, tutorials). Use WebFetch for deep-diving into specific URLs
 - **Documentation**: Use `docs/README.md` as the main documentation file (rest of `docs/` folder available for additional docs)
-- **Ask Questions**: ALWAYS ask if unclear. NEVER assume. STOP and ask before proceeding if ANY of:
-  - Multiple valid approaches exist
-  - User intent could be interpreted multiple ways
-  - Requirements are vague or incomplete
-  - Design decisions needed (architecture, patterns, data models, APIs)
-  - Trade-offs exist between options
-  - Scope is ambiguous (what's in/out, how deep to go)
+- **Ask Questions**: ALWAYS ask if unclear. NEVER assume
 - **Question Tool** (`mcp_question`, referred to as `question_tool`): PREFER over plain text when there are predefined options (including y/n). The tool always provides an "Other" option for custom text input, so only include the recommended/primary options - don't add fallback options like "Adjust", "Not yet", or "Other"
 
 ## Code Style
@@ -72,11 +66,9 @@ Run in this order to fail fast:
 
 ## Version Control
 
-### CRITICAL: Explicit Permission Required
-- **NEVER do ANY git operation without explicit user permission** - This includes: commit, push, stage, unstage, branch operations, merges, rebases, etc.
-- **ALWAYS use `question_tool` and wait for user confirmation** before executing ANY git command
-- **Even if quality gates pass, even if the user said "commit" earlier in the conversation, even if it seems obvious** - STOP and ask for confirmation with the exact options below
-- **No exceptions. No shortcuts. No assuming intent.**
+### Commit Confirmation
+- Use `question_tool` and wait for user confirmation before executing git commands
+- Even if quality gates pass or user said "commit" earlier - ask for confirmation
 
 ### Quality Gates & Timing
 - **Quality Gates Required**: Run ALL quality gates before ANY git operation. If any gate fails, inform the user and stop
