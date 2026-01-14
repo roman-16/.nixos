@@ -13,7 +13,7 @@
   - Design decisions needed (architecture, patterns, data models, APIs)
   - Trade-offs exist between options
   - Scope is ambiguous (what's in/out, how deep to go)
-- **Question Tool** (`mcp_question`, referred to as `question_tool`): PREFER over plain text when there are predefined options (including y/n)
+- **Question Tool** (`mcp_question`, referred to as `question_tool`): PREFER over plain text when there are predefined options (including y/n). The tool always provides an "Other" option for custom text input, so only include the recommended/primary options - don't add fallback options like "Adjust", "Not yet", or "Other"
 
 ## Code Style
 

@@ -27,17 +27,17 @@ Follow this workflow for new features or significant changes.
 4. **Clarify**: Ask questions to ensure complete understanding (REQUIRED if ANY ambiguity exists)
    - Ask ALL questions at once in a single `question_tool` call with multiple questions
    - Use `question_tool` when options can be predefined; plain text otherwise
-   - After receiving answers: update feature file with all Q&A decisions
    - If answers reveal new ambiguities: ask follow-up questions (again, all at once)
    - When to ask: architecture, file structure, user-facing changes, breaking changes, major patterns
    - When NOT to ask: minor implementation details
-   - After all questions resolved: comprehensively update plan with all decisions
    - NEVER skip if uncertain - defaulting to assumption is unacceptable
+   - After ALL clarifying questions resolved: update feature file with decisions, then go to **Confirm**
 
 5. **Confirm**: Present final plan summary
    - Use `question_tool`: "Implement this plan"
-   - If user confirms: proceed to implementation
-   - If other feedback: adjust plan and ask for confirmation again
+   - If user confirms with no changes: proceed to implementation
+   - If user provides changes/details: update feature file and ask "Implement this plan" again
+   - Any plan modification requires re-confirmation before implementation
 
 6. **Implement**: Execute plan incrementally
    - Follow code style and architecture guidelines
