@@ -17,7 +17,6 @@
       signal-desktop-bin
       eyedropper
       ffmpeg
-      ledger-live-desktop
       brave
       foliate
       prismlauncher
