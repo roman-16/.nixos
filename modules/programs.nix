@@ -25,6 +25,7 @@
       gparted
       file-roller
       pear-desktop
+      zip
 
       # GStreamer plugins for video/audio support
       gst_all_1.gstreamer
