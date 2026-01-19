@@ -55,6 +55,8 @@ Inline strings/numbers used 2-3 times in one module. Extract only when cross-mod
 
 **Descriptive names**: Full names, not abbreviations. Exceptions: `i` (index), `error` (catch), single-letter generics (`T`, `K`, `V`).
 
+**Callback parameters**: Use descriptive names for callback functions—`resolveFunction`, `transformItem`, `validateInput`—not abbreviated names like `fn`, `cb`, or `fetchFn`.
+
 ## Imports & Exports
 
 ### Import Paths
