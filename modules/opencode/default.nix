@@ -84,6 +84,7 @@
           "pkill*" = "allow";
           "podman*" = "allow";
           "podman-compose*" = "allow";
+          "printf*" = "allow";
           "pwd*" = "allow";
           "python3*" = "allow";
           "rg*" = "allow";
