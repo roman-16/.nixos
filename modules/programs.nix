@@ -3,7 +3,6 @@
     environment.systemPackages = with pkgs; [
       micro
       vscode
-      spotify
       appimage-run
       alejandra
       obsidian
