@@ -107,7 +107,7 @@
         '';
         oh-my-zsh = {
           enable = true;
-          plugins = ["direnv" "git" "git-auto-fetch"];
+          plugins = ["git" "git-auto-fetch" "mise"];
         };
       };
     };
