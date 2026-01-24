@@ -10,7 +10,6 @@
       dua
       tre-command
       lsof
-      devbox
       rar
     ];
 
@@ -38,12 +37,6 @@
       carapace = {
         enable = true;
         enableZshIntegration = true;
-      };
-
-      direnv = {
-        enable = true;
-        enableZshIntegration = true;
-        nix-direnv.enable = true;
       };
 
       fzf.enable = true;

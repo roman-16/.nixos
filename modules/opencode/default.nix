@@ -63,7 +63,6 @@
           "curl*" = "allow";
           "cut*" = "allow";
           "date*" = "allow";
-          "devbox*" = "allow";
           "diff*" = "allow";
           "docker*" = "allow";
           "docker-compose*" = "allow";
