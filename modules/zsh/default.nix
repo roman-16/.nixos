@@ -41,6 +41,11 @@
 
       fzf.enable = true;
 
+      mise = {
+        enable = true;
+        enableZshIntegration = true;
+      };
+
       oh-my-posh = {
         enable = true;
         enableZshIntegration = true;
