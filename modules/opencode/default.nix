@@ -74,6 +74,7 @@
           "just*" = "allow";
           "kill*" = "allow";
           "ls*" = "allow";
+          "mise*" = "allow";
           "mkdir*" = "allow";
           "mv*" = "allow";
           "node*" = "allow";
