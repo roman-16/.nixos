@@ -10,6 +10,7 @@
       dua
       tre-command
       lsof
+      devbox
       rar
     ];
 
@@ -39,12 +40,13 @@
         enableZshIntegration = true;
       };
 
-      fzf.enable = true;
-
-      mise = {
+      direnv = {
         enable = true;
         enableZshIntegration = true;
+        nix-direnv.enable = true;
       };
+
+      fzf.enable = true;
 
       oh-my-posh = {
         enable = true;
@@ -107,7 +109,7 @@
         '';
         oh-my-zsh = {
           enable = true;
-          plugins = ["git" "git-auto-fetch" "mise"];
+          plugins = ["direnv" "git" "git-auto-fetch"];
         };
       };
     };

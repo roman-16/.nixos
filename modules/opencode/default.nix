@@ -63,6 +63,7 @@
           "curl*" = "allow";
           "cut*" = "allow";
           "date*" = "allow";
+          "devbox*" = "allow";
           "diff*" = "allow";
           "docker*" = "allow";
           "docker-compose*" = "allow";
@@ -74,7 +75,6 @@
           "just*" = "allow";
           "kill*" = "allow";
           "ls*" = "allow";
-          "mise*" = "allow";
           "mkdir*" = "allow";
           "mv*" = "allow";
           "node*" = "allow";
