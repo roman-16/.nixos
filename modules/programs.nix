@@ -6,7 +6,6 @@
       appimage-run
       alejandra
       obsidian
-      clapper
       nixd
       google-chrome
       yt-dlp
@@ -25,15 +24,6 @@
       pear-desktop
       zip
       lmstudio
-
-      # GStreamer plugins for video/audio support
-      gst_all_1.gstreamer
-      gst_all_1.gst-plugins-base
-      gst_all_1.gst-plugins-good
-      gst_all_1.gst-plugins-bad
-      gst_all_1.gst-plugins-ugly
-      gst_all_1.gst-libav
-      gst_all_1.gst-vaapi
     ];
 
     services.xserver.excludePackages = with pkgs; [
