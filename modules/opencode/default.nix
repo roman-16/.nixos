@@ -107,6 +107,8 @@
           "xargs*" = "allow";
         };
 
+        plugin = ["opencode-anthropic-auth@latest"];
+
         provider.anthropic.models.claude-opus-4-5.options.thinking = {
           budgetTokens = 32000;
           type = "enabled";
