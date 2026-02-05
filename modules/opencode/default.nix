@@ -111,7 +111,7 @@
           reasoningEffort = "max";
 
           thinking = {
-            type = "enabled";
+            type = "adaptive";
           };
         };
       };
