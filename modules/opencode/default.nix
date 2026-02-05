@@ -107,9 +107,13 @@
           "xargs*" = "allow";
         };
 
-        provider.anthropic.models.claude-opus-4-6.options.thinking = {
-          budgetTokens = 32000;
-          type = "enabled";
+        provider.anthropic.models.claude-opus-4-6.options = {
+          maxTokens = 64000;
+
+          thinking = {
+            budgetTokens = 32000;
+            type = "enabled";
+          };
         };
       };
     };
