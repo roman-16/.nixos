@@ -107,9 +107,9 @@
           "xargs*" = "allow";
         };
 
-        # provider.anthropic.models.claude-opus-4-6.options.thinking = {
-        #   type = "adaptive";
-        # };
+        provider.anthropic.models.claude-opus-4-6.options.thinking = {
+          type = "adaptive";
+        };
       };
     };
   };
