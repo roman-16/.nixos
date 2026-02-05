@@ -18,7 +18,7 @@
       settings = {
         autoupdate = false;
         instructions = ["docs/README.md"];
-        model = "anthropic/claude-opus-4-6:max";
+        model = "anthropic/claude-opus-4-6";
 
         mcp = {
           chrome-devtools = let
@@ -107,10 +107,10 @@
           "xargs*" = "allow";
         };
 
-        # provider.anthropic.models.claude-opus-4-6.options = {
-        #   effort = "max";
-        #   thinking.type = "adaptive";
-        # };
+        provider.anthropic.models.claude-opus-4-6.options = {
+          effort = "max";
+          thinking.type = "adaptive";
+        };
       };
     };
   };
