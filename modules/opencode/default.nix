@@ -108,7 +108,11 @@
         };
 
         provider.anthropic.models.claude-opus-4-6.options = {
-          reasoningEffort = "high";
+          reasoningEffort = "max";
+
+          thinking = {
+            type = "enabled";
+          };
         };
       };
     };
