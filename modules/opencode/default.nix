@@ -18,7 +18,7 @@
       settings = {
         autoupdate = false;
         instructions = ["docs/README.md"];
-        model = "anthropic/claude-opus-4-5";
+        model = "anthropic/claude-opus-4-6";
 
         mcp = {
           chrome-devtools = let
@@ -107,7 +107,7 @@
           "xargs*" = "allow";
         };
 
-        provider.anthropic.models.claude-opus-4-5.options.thinking = {
+        provider.anthropic.models.claude-opus-4-6.options.thinking = {
           budgetTokens = 32000;
           type = "enabled";
         };
