@@ -109,10 +109,7 @@
 
         provider.anthropic.models.claude-opus-4-6.options = {
           effort = "max";
-
-          thinking = {
-            type = "adaptive";
-          };
+          thinking.type = "adaptive";
         };
       };
     };
