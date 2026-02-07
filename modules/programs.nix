@@ -24,7 +24,6 @@
       pear-desktop
       zip
       lmstudio
-      flameshot
     ];
 
     services.xserver.excludePackages = with pkgs; [
