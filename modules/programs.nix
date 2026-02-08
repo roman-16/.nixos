@@ -24,6 +24,7 @@
       pear-desktop
       zip
       lmstudio
+      libreoffice
     ];
 
     services.xserver.excludePackages = with pkgs; [
