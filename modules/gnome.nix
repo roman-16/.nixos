@@ -18,6 +18,7 @@
       gnomeExtensions.alphabetical-app-grid
       gnomeExtensions.pip-on-top
       gnomeExtensions.quake-terminal
+      gnomeExtensions.rounded-window-corners-reborn
     ];
 
     environment.gnome.excludePackages = with pkgs; [
@@ -182,6 +183,7 @@
             gnomeExtensions.lock-keys.extensionUuid
             gnomeExtensions.pip-on-top.extensionUuid
             gnomeExtensions.quake-terminal.extensionUuid
+            gnomeExtensions.rounded-window-corners-reborn.extensionUuid
             gnomeExtensions.smile-complementary-extension.extensionUuid
             gnomeExtensions.user-themes.extensionUuid
             gnomeExtensions.vitals.extensionUuid
