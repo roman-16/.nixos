@@ -63,13 +63,9 @@
         enable = true;
         enableZshIntegration = true;
         extraConfig = ''
-          local wezterm = require 'wezterm'
-          local config = wezterm.config_builder()
-
-          -- This uses WezTerm's custom rendering for the title bar
-          config.window_decorations = "TITLE | RESIZE"
-
-          return config
+          return {
+            window_decorations = "TITLE | RESIZE",
+          }
         '';
       };
 
