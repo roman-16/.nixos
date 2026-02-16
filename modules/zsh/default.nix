@@ -34,6 +34,9 @@
   };
 
   home = {pkgs, ...}: {
+    # Used to integrate wezterm better with gnome
+    home.sessionVariables.WAYLAND_DISPLAY = "wayland-0";
+
     programs = {
       carapace = {
         enable = true;
