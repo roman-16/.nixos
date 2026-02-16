@@ -18,6 +18,7 @@
       smile
       gnomeExtensions.alphabetical-app-grid
       gnomeExtensions.pip-on-top
+      gnomeExtensions.quake-terminal
     ];
 
     environment.gnome.excludePackages = with pkgs; [
@@ -191,6 +192,7 @@
             gnomeExtensions.ddterm.extensionUuid
             gnomeExtensions.lock-keys.extensionUuid
             gnomeExtensions.pip-on-top.extensionUuid
+            gnomeExtensions.quake-terminal.extensionUuid
             gnomeExtensions.smile-complementary-extension.extensionUuid
             gnomeExtensions.user-themes.extensionUuid
             gnomeExtensions.vitals.extensionUuid
