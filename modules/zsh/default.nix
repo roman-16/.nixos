@@ -12,7 +12,6 @@
       lsof
       devbox
       rar
-      ghostty
     ];
 
     programs = {
@@ -68,6 +67,7 @@
         # show_startup_tips = false;
         # };
       };
+      ghostty.enable = true;
 
       zoxide = {
         enable = true;
