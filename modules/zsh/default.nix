@@ -64,8 +64,8 @@
         enableZshIntegration = true;
         extraConfig = ''
           return {
-            window_decorations = "TITLE | RESIZE",
-          }
+                  window_decorations = "TITLE | RESIZE",
+              }
         '';
       };
 
