@@ -12,6 +12,7 @@
       lsof
       devbox
       rar
+      alacritty
     ];
 
     programs = {
