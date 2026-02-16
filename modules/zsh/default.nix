@@ -64,7 +64,6 @@
         enableZshIntegration = true;
         exitShellOnExit = true;
         settings = {
-          theme = "nord";
         };
       };
 
