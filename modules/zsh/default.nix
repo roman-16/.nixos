@@ -62,6 +62,15 @@
         enableZshIntegration = true;
       };
 
+      wezterm = {
+        enable = true;
+        enableZshIntegration = true;
+        extraConfig = ''
+          return {
+          }
+        '';
+      };
+
       zellij = {
         enable = true;
         enableZshIntegration = true;
@@ -70,16 +79,6 @@
         # show_startup_tips = false;
         # };
       };
-      wezterm = {
-        enable = true;
-        enableZshIntegration = true;
-        extraConfig = ''
-          return {
-            window_decorations = "TITLE | RESIZE",
-          }
-        '';
-      };
-      rio.enable = true;
 
       zoxide = {
         enable = true;
