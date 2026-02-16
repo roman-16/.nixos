@@ -12,6 +12,7 @@
       lsof
       devbox
       rar
+      ghostty
     ];
 
     programs = {
@@ -63,6 +64,9 @@
         enable = true;
         enableZshIntegration = true;
         exitShellOnExit = true;
+        # settings = {
+        # show_startup_tips = false;
+        # };
       };
 
       zoxide = {
