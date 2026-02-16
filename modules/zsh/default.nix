@@ -69,6 +69,7 @@
         # };
       };
       wezterm.enable = true;
+      rio.enable = true;
 
       zoxide = {
         enable = true;
