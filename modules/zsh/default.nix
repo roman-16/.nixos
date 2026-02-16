@@ -34,9 +34,6 @@
   };
 
   home = {pkgs, ...}: {
-    # Used to integrate wezterm better with gnome
-    home.sessionVariables.WAYLAND_DISPLAY = "wayland-0";
-
     programs = {
       carapace = {
         enable = true;
@@ -66,8 +63,13 @@
         enable = true;
         enableZshIntegration = true;
         extraConfig = ''
-          return {
-          }
+          local wezterm = require 'wezterm'
+          local config = wezterm.config_builder()
+
+          -- This uses WezTerm's custom rendering for the title bar
+          config.window_decorations = "TITLE | RESIZE"
+
+          return config
         '';
       };
 
