@@ -29,6 +29,8 @@ in {
       home = {
         username = "roman";
         homeDirectory = "/home/roman";
+        # Used to integrate wezterm better with gnome
+        sessionVariables.WAYLAND_DISPLAY = "wayland-0";
 
         # This value determines the Home Manager release that your configuration is
         # compatible with. This helps avoid breakage when a new Home Manager release
