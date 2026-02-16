@@ -63,8 +63,6 @@
         enable = true;
         enableZshIntegration = true;
         exitShellOnExit = true;
-        settings = {
-        };
       };
 
       zoxide = {
