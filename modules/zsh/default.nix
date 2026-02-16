@@ -70,6 +70,11 @@
       wezterm = {
         enable = true;
         enableZshIntegration = true;
+        extraConfig = ''
+          return {
+            window_decorations = "TITLE | RESIZE"
+          }
+        '';
       };
       rio.enable = true;
 
