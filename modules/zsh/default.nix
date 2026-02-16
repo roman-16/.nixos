@@ -67,7 +67,10 @@
         # show_startup_tips = false;
         # };
       };
-      wezterm.enable = true;
+      wezterm = {
+        enable = true;
+        enableZshIntegration = true;
+      };
       rio.enable = true;
 
       zoxide = {

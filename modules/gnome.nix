@@ -11,7 +11,6 @@
       gnomeExtensions.burn-my-windows
       gnomeExtensions.appindicator
       gnomeExtensions.dash-to-panel
-      gnomeExtensions.ddterm
       gnomeExtensions.lock-keys
       gnomeExtensions.vitals
       gnomeExtensions.smile-complementary-extension
@@ -47,16 +46,6 @@
       dconf.settings = {
         "ca/desrt/dconf-editor" = {
           show-warning = false;
-        };
-
-        "com/github/amezin/ddterm" = {
-          ddterm-toggle-hotkey = ["F10"];
-          hide-when-focus-lost = true;
-          panel-icon-type = "none";
-          shortcut-page-close = ["<Shift><Control>w"];
-          shortcut-win-new-tab = ["<Shift><Control>t"];
-          tab-policy = "automatic";
-          window-size = 0.41;
         };
 
         "it/mijorus/smile" = {
@@ -182,6 +171,7 @@
         };
 
         "org/gnome/shell" = {
+          disable-extension-version-validation = true;
           disable-user-extensions = false;
           enabled-extensions = with pkgs; [
             gnomeExtensions.alphabetical-app-grid.extensionUuid
@@ -189,7 +179,6 @@
             gnomeExtensions.blur-my-shell.extensionUuid
             gnomeExtensions.burn-my-windows.extensionUuid
             gnomeExtensions.dash-to-panel.extensionUuid
-            gnomeExtensions.ddterm.extensionUuid
             gnomeExtensions.lock-keys.extensionUuid
             gnomeExtensions.pip-on-top.extensionUuid
             gnomeExtensions.quake-terminal.extensionUuid
