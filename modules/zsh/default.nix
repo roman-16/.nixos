@@ -64,6 +64,7 @@
         enableZshIntegration = true;
         extraConfig = ''
           return {
+                  enable_wayland = false,
                   window_decorations = "TITLE | RESIZE",
               }
         '';
