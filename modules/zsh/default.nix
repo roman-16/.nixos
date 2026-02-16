@@ -62,6 +62,7 @@
       zellij = {
         enable = true;
         enableZshIntegration = true;
+        exitShellOnExit = true;
       };
 
       zoxide = {
