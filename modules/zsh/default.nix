@@ -63,6 +63,9 @@
         enable = true;
         enableZshIntegration = true;
         exitShellOnExit = true;
+        settings = {
+          theme = "nord";
+        };
       };
 
       zoxide = {
