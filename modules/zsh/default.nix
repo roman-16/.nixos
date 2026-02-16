@@ -68,6 +68,7 @@
         # show_startup_tips = false;
         # };
       };
+      wezterm.enable = true;
 
       zoxide = {
         enable = true;
