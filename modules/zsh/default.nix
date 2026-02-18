@@ -85,6 +85,7 @@
 
         settings = {
           on_force_close = "quit";
+          show_release_notes = false;
           show_startup_tips = false;
         };
       };
