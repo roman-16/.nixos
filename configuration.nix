@@ -21,7 +21,7 @@ in {
       inherit inputs;
     };
 
-    users."roman" = {
+    users.roman = {
       imports = homeModules;
 
       programs.home-manager.enable = true;

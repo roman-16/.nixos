@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "@opencode-ai/plugin": "1.1.30",
+    "@opencode-ai/plugin": "1.1.65",
     "chokidar": "^5.0.0",
     "ignore": "^7.0.5"
   }
