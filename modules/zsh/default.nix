@@ -93,10 +93,6 @@
                   unbind "Ctrl g"
                   bind "Ctrl Alt g" { SwitchToMode "Normal"; }
               }
-              move {
-                  unbind "Ctrl h"
-                  bind "Ctrl Alt m" { SwitchToMode "Normal"; }
-              }
               pane {
                   unbind "Ctrl p" "x"
                   bind "Ctrl Alt p" { SwitchToMode "Normal"; }
@@ -134,10 +130,6 @@
               shared_except "locked" {
                   unbind "Ctrl g" "Ctrl q"
                   bind "Ctrl Alt g" { SwitchToMode "Locked"; }
-              }
-              shared_except "move" "locked" {
-                  unbind "Ctrl h"
-                  bind "Ctrl Alt m" { SwitchToMode "Move"; }
               }
               shared_except "pane" "locked" {
                   unbind "Ctrl p"
