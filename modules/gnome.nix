@@ -234,6 +234,11 @@
           style = "show-hide-capslock";
         };
 
+        "org/gnome/shell/extensions/quake-terminal" = {
+          terminal-id = "org.wezfurlong.wezterm.desktop";
+          terminal-shortcut = ["F10"];
+        };
+
         "org/gnome/shell/extensions/vitals" = {
           hot-sensors = ["_processor_usage_" "_gpu#1_utilization_" "_memory_usage_" "__temperature_avg__"];
           icon-style = 1;
