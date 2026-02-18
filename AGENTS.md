@@ -80,7 +80,7 @@ Key files:
 
 ### Style & Formatting
 - **Formatting**: Alejandra formatter (standard Nix formatter), empty line at end of files, whitespace between logical blocks
-- **Property Ordering**: Alphabetical by default unless another ordering makes better sense
+- **Property Ordering**: Alphabetical by default unless another ordering makes better sense. Single-value attributes come before object/set attributes
 
 ### Nix Practices
 - **Module Pattern**: Always export `{ nixos = {...}; home = {...}; }` from modules
@@ -90,6 +90,7 @@ Key files:
 - **Conditionals**: Use `lib.mkIf` and `lib.mkForce` for conditional configuration
 - **Lists**: Use `++` for list concatenation, `map` for transformations
 - **Options**: Prefer home-manager options over direct file management when available
+- **Attribute Grouping**: Always nest related attributes under a shared parent instead of repeating the prefix. For example, use `xdg.configFile = { "a" = ...; "b" = ...; };` instead of separate `xdg.configFile."a" = ...;` and `xdg.configFile."b" = ...;` declarations. Same applies to `home.file`, `dconf.settings`, `systemd.user.services`, etc.
 
 ### Naming Conventions
 - **Files**: Lowercase with hyphens (e.g., `hardware-configuration.nix`)

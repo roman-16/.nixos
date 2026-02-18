@@ -282,8 +282,24 @@
         };
       };
 
-      home.file.".config/burn-my-windows/profiles/1728415013431728.conf" = {
-        text = ''
+      xdg.configFile = {
+        "autostart/brave-browser.desktop".text = ''
+          [Desktop Entry]
+          Name=Brave Web Browser
+          Exec=brave
+          Type=Application
+          X-GNOME-Autostart-enabled=true
+        '';
+
+        "autostart/discord.desktop".text = ''
+          [Desktop Entry]
+          Name=Discord
+          Exec=discord
+          Type=Application
+          X-GNOME-Autostart-enabled=true
+        '';
+
+        "burn-my-windows/profiles/1728415013431728.conf".text = ''
           [burn-my-windows-profile]
           fire-enable-effect=false
           glide-enable-effect=true
