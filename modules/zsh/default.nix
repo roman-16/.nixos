@@ -132,7 +132,7 @@
                   bind "Ctrl Alt s" { SwitchToMode "Scroll"; }
               }
               shared_except "locked" {
-                  unbind "Ctrl g"
+                  unbind "Ctrl g" "Ctrl q"
                   bind "Ctrl Alt g" { SwitchToMode "Locked"; }
               }
               shared_except "move" "locked" {
