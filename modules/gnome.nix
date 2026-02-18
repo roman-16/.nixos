@@ -235,6 +235,7 @@
         };
 
         "org/gnome/shell/extensions/quake-terminal" = {
+          always-on-top = true;
           render-on-current-monitor = true;
           terminal-id = "org.wezfurlong.wezterm.desktop";
           terminal-shortcut = ["F10"];
