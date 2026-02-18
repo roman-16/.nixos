@@ -1,7 +1,6 @@
 {
   nixos = {pkgs, ...}: {
     environment.systemPackages = with pkgs; [
-      micro
       vscode
       appimage-run
       alejandra

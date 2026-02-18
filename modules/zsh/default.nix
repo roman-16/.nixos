@@ -48,6 +48,8 @@
 
       fzf.enable = true;
 
+      micro.enable = true;
+
       oh-my-posh = {
         enable = true;
         enableZshIntegration = true;
