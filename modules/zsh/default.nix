@@ -66,7 +66,6 @@
           return {
             enable_wayland = false,
             hide_tab_bar_if_only_one_tab = true,
-            skip_close_confirmation_for_processes_named = { 'zellij' },
           }
         '';
       };
@@ -75,9 +74,9 @@
         enable = true;
         enableZshIntegration = true;
         exitShellOnExit = true;
-        # settings = {
-        # show_startup_tips = false;
-        # };
+        settings = {
+          on_force_close = "quit";
+        };
       };
 
       zoxide = {
