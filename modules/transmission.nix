@@ -1,7 +1,7 @@
 {
   nixos = {pkgs, ...}: {
     environment.systemPackages = with pkgs; [
-      fragments
+      transmission_4-gtk
     ];
   };
 
