@@ -88,6 +88,83 @@
           show_release_notes = false;
           show_startup_tips = false;
         };
+
+        extraConfig = ''
+          keybinds {
+              locked {
+                  unbind "Ctrl g"
+                  bind "Ctrl Alt g" { SwitchToMode "Normal"; }
+              }
+              pane {
+                  unbind "Ctrl p"
+                  bind "Ctrl Alt p" { SwitchToMode "Normal"; }
+              }
+              resize {
+                  unbind "Ctrl n"
+                  bind "Ctrl Alt n" { SwitchToMode "Normal"; }
+              }
+              move {
+                  unbind "Ctrl h"
+                  bind "Ctrl Alt h" { SwitchToMode "Normal"; }
+              }
+              tab {
+                  unbind "Ctrl t"
+                  bind "Ctrl Alt t" { SwitchToMode "Normal"; }
+              }
+              scroll {
+                  unbind "Ctrl s" "Ctrl c"
+                  bind "Ctrl Alt s" { SwitchToMode "Normal"; }
+                  bind "Ctrl Alt c" { ScrollToBottom; SwitchToMode "Normal"; }
+              }
+              search {
+                  unbind "Ctrl s" "Ctrl c"
+                  bind "Ctrl Alt s" { SwitchToMode "Normal"; }
+                  bind "Ctrl Alt c" { ScrollToBottom; SwitchToMode "Normal"; }
+              }
+              entersearch {
+                  unbind "Ctrl c"
+                  bind "Ctrl Alt c" { SwitchToMode "Scroll"; }
+              }
+              session {
+                  unbind "Ctrl o" "Ctrl s"
+                  bind "Ctrl Alt o" { SwitchToMode "Normal"; }
+                  bind "Ctrl Alt s" { SwitchToMode "Scroll"; }
+              }
+
+              shared_except "locked" {
+                  unbind "Ctrl g"
+                  bind "Ctrl Alt g" { SwitchToMode "Locked"; }
+              }
+              shared_except "pane" "locked" {
+                  unbind "Ctrl p"
+                  bind "Ctrl Alt p" { SwitchToMode "Pane"; }
+              }
+              shared_except "resize" "locked" {
+                  unbind "Ctrl n"
+                  bind "Ctrl Alt n" { SwitchToMode "Resize"; }
+              }
+              shared_except "move" "locked" {
+                  unbind "Ctrl h"
+                  bind "Ctrl Alt h" { SwitchToMode "Move"; }
+              }
+              shared_except "scroll" "locked" {
+                  unbind "Ctrl s"
+                  bind "Ctrl Alt s" { SwitchToMode "Scroll"; }
+              }
+              shared_except "session" "locked" {
+                  unbind "Ctrl o"
+                  bind "Ctrl Alt o" { SwitchToMode "Session"; }
+              }
+              shared_except "tab" "locked" {
+                  unbind "Ctrl t"
+                  bind "Ctrl Alt t" { SwitchToMode "Tab"; }
+              }
+              shared_except "entersearch" "locked" {
+                  unbind "Ctrl s"
+                  bind "Ctrl Alt s" { SwitchToMode "Scroll"; }
+              }
+          }
+        '';
       };
 
       zoxide = {
