@@ -235,7 +235,7 @@
         };
 
         "org/gnome/shell/extensions/quake-terminal" = {
-          launch-args-map = "{'org.wezfurlong.wezterm.desktop': '--config \"window_decorations=\\\"NONE\\\"\"'}";
+          launch-args-map = ''{"org.wezfurlong.wezterm.desktop": "--config 'window_decorations=\"NONE\"'"}'';
           render-on-current-monitor = true;
           terminal-id = "org.wezfurlong.wezterm.desktop";
           terminal-shortcut = ["F10"];
