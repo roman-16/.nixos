@@ -128,7 +128,7 @@
                   bind "Ctrl Alt s" { SwitchToMode "Scroll"; }
               }
               shared_except "locked" {
-                  unbind "Ctrl g" "Ctrl q"
+                  unbind "Ctrl g" "Ctrl h" "Ctrl q"
                   bind "Ctrl Alt g" { SwitchToMode "Locked"; }
               }
               shared_except "pane" "locked" {
