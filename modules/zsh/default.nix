@@ -1,18 +1,22 @@
 {
   nixos = {pkgs, ...}: {
-    environment.systemPackages = with pkgs; [
-      fastfetch
-      bat
-      eza
-      zsh-fzf-tab
-      ripgrep-all
-      fd
-      dua
-      tre-command
-      lsof
-      devbox
-      rar
-    ];
+    environment = {
+      sessionVariables.EDITOR = "micro";
+
+      systemPackages = with pkgs; [
+        fastfetch
+        bat
+        eza
+        zsh-fzf-tab
+        ripgrep-all
+        fd
+        dua
+        tre-command
+        lsof
+        devbox
+        rar
+      ];
+    };
 
     programs = {
       command-not-found.enable = true;
@@ -34,8 +38,6 @@
   };
 
   home = {pkgs, ...}: {
-    home.sessionVariables.EDITOR = "micro";
-
     programs = {
       carapace = {
         enable = true;
