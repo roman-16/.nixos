@@ -24,6 +24,7 @@
       zip
       lmstudio
       libreoffice
+      fragments
     ];
 
     services.xserver.excludePackages = with pkgs; [
