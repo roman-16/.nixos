@@ -34,6 +34,10 @@
   };
 
   home = {pkgs, ...}: {
+    home.sessionVariables = {
+      EDITOR = "micro";
+    };
+
     programs = {
       carapace = {
         enable = true;
