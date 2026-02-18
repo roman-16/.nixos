@@ -67,6 +67,7 @@
             enable_wayland = false,
             hide_tab_bar_if_only_one_tab = true,
             skip_close_confirmation_for_processes_named = { 'zellij' },
+            window_close_confirmation = "NeverPrompt",
           }
         '';
       };
