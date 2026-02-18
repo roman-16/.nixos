@@ -54,8 +54,6 @@
           ddterm-toggle-hotkey = ["F10"];
           hide-when-focus-lost = true;
           panel-icon-type = "none";
-          shortcut-page-close = ["<Shift><Control>w"];
-          shortcut-win-new-tab = ["<Shift><Control>t"];
           tab-policy = "automatic";
           window-size = 0.41;
         };
