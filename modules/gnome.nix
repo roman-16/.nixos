@@ -291,7 +291,7 @@
 
       xdg.desktopEntries.wezterm-borderless = {
         name = "WezTerm (Borderless)";
-        exec = ''wezterm --config window_decorations="NONE" start'';
+        exec = "wezterm --config \"window_decorations='NONE'\" start";
         icon = "org.wezfurlong.wezterm";
         type = "Application";
       };
