@@ -235,14 +235,8 @@
         };
 
         "org/gnome/shell/extensions/quake-terminal" = {
-          launch-args-map = [
-            (mkDictionaryEntry [
-              "org.wezfurlong.wezterm.desktop"
-              "--config=window_decorations=\\\"NONE\\\""
-            ])
-          ];
           render-on-current-monitor = true;
-          terminal-id = "org.wezfurlong.wezterm.desktop";
+          terminal-id = "wezterm-borderless.desktop";
           terminal-shortcut = ["F10"];
         };
 
@@ -293,6 +287,13 @@
           glide-enable-effect=true
           glide-animation-time=100
         '';
+      };
+
+      xdg.desktopEntries.wezterm-borderless = {
+        name = "WezTerm (Borderless)";
+        exec = "wezterm --config window_decorations=\"\\\"NONE\\\"\" start";
+        icon = "org.wezfurlong.wezterm";
+        type = "Application";
       };
     };
 }
