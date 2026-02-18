@@ -83,57 +83,61 @@
         enableZshIntegration = true;
         exitShellOnExit = true;
 
-        settings = {
-          on_force_close = "quit";
-          show_release_notes = false;
-          show_startup_tips = false;
-        };
-
         extraConfig = ''
           keybinds {
+              entersearch {
+                  unbind "Ctrl c"
+                  bind "Ctrl Alt c" { SwitchToMode "Scroll"; }
+              }
               locked {
                   unbind "Ctrl g"
                   bind "Ctrl Alt g" { SwitchToMode "Normal"; }
-              }
-              pane {
-                  unbind "Ctrl p"
-                  bind "Ctrl Alt p" { SwitchToMode "Normal"; }
-              }
-              resize {
-                  unbind "Ctrl n"
-                  bind "Ctrl Alt n" { SwitchToMode "Normal"; }
               }
               move {
                   unbind "Ctrl h"
                   bind "Ctrl Alt h" { SwitchToMode "Normal"; }
               }
-              tab {
-                  unbind "Ctrl t"
-                  bind "Ctrl Alt t" { SwitchToMode "Normal"; }
+              pane {
+                  unbind "Ctrl p" "x"
+                  bind "Ctrl Alt p" { SwitchToMode "Normal"; }
+                  bind "w" { CloseFocus; SwitchToMode "Normal"; }
+              }
+              resize {
+                  unbind "Ctrl n"
+                  bind "Ctrl Alt n" { SwitchToMode "Normal"; }
               }
               scroll {
                   unbind "Ctrl s" "Ctrl c"
-                  bind "Ctrl Alt s" { SwitchToMode "Normal"; }
                   bind "Ctrl Alt c" { ScrollToBottom; SwitchToMode "Normal"; }
+                  bind "Ctrl Alt s" { SwitchToMode "Normal"; }
               }
               search {
                   unbind "Ctrl s" "Ctrl c"
-                  bind "Ctrl Alt s" { SwitchToMode "Normal"; }
                   bind "Ctrl Alt c" { ScrollToBottom; SwitchToMode "Normal"; }
-              }
-              entersearch {
-                  unbind "Ctrl c"
-                  bind "Ctrl Alt c" { SwitchToMode "Scroll"; }
+                  bind "Ctrl Alt s" { SwitchToMode "Normal"; }
               }
               session {
                   unbind "Ctrl o" "Ctrl s"
                   bind "Ctrl Alt o" { SwitchToMode "Normal"; }
                   bind "Ctrl Alt s" { SwitchToMode "Scroll"; }
               }
+              tab {
+                  unbind "Ctrl t" "x"
+                  bind "Ctrl Alt t" { SwitchToMode "Normal"; }
+                  bind "w" { CloseTab; SwitchToMode "Normal"; }
+              }
 
+              shared_except "entersearch" "locked" {
+                  unbind "Ctrl s"
+                  bind "Ctrl Alt s" { SwitchToMode "Scroll"; }
+              }
               shared_except "locked" {
                   unbind "Ctrl g"
                   bind "Ctrl Alt g" { SwitchToMode "Locked"; }
+              }
+              shared_except "move" "locked" {
+                  unbind "Ctrl h"
+                  bind "Ctrl Alt h" { SwitchToMode "Move"; }
               }
               shared_except "pane" "locked" {
                   unbind "Ctrl p"
@@ -142,10 +146,6 @@
               shared_except "resize" "locked" {
                   unbind "Ctrl n"
                   bind "Ctrl Alt n" { SwitchToMode "Resize"; }
-              }
-              shared_except "move" "locked" {
-                  unbind "Ctrl h"
-                  bind "Ctrl Alt h" { SwitchToMode "Move"; }
               }
               shared_except "scroll" "locked" {
                   unbind "Ctrl s"
@@ -159,12 +159,14 @@
                   unbind "Ctrl t"
                   bind "Ctrl Alt t" { SwitchToMode "Tab"; }
               }
-              shared_except "entersearch" "locked" {
-                  unbind "Ctrl s"
-                  bind "Ctrl Alt s" { SwitchToMode "Scroll"; }
-              }
           }
         '';
+
+        settings = {
+          on_force_close = "quit";
+          show_release_notes = false;
+          show_startup_tips = false;
+        };
       };
 
       zoxide = {
