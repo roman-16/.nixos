@@ -25,6 +25,7 @@
       lmstudio
       libreoffice
       qbittorrent
+      deluge
     ];
 
     services.xserver.excludePackages = with pkgs; [
