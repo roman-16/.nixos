@@ -4,21 +4,21 @@
     services.desktopManager.gnome.enable = true;
 
     environment.systemPackages = with pkgs; [
-      gnome-tweaks
       dconf-editor
-      gnomeExtensions.user-themes
+      gnome-tweaks
+      gnomeExtensions.alphabetical-app-grid
+      gnomeExtensions.appindicator
       gnomeExtensions.blur-my-shell
       gnomeExtensions.burn-my-windows
-      gnomeExtensions.appindicator
       gnomeExtensions.dash-to-panel
+      gnomeExtensions.ddterm
       gnomeExtensions.lock-keys
-      gnomeExtensions.vitals
-      gnomeExtensions.smile-complementary-extension
-      smile
-      gnomeExtensions.alphabetical-app-grid
       gnomeExtensions.pip-on-top
-      gnomeExtensions.quake-terminal
       gnomeExtensions.rounded-window-corners-reborn
+      gnomeExtensions.smile-complementary-extension
+      gnomeExtensions.user-themes
+      gnomeExtensions.vitals
+      smile
     ];
 
     environment.gnome.excludePackages = with pkgs; [
@@ -48,6 +48,16 @@
       dconf.settings = {
         "ca/desrt/dconf-editor" = {
           show-warning = false;
+        };
+
+        "com/github/amezin/ddterm" = {
+          ddterm-toggle-hotkey = ["F10"];
+          hide-when-focus-lost = true;
+          panel-icon-type = "none";
+          shortcut-page-close = ["<Shift><Control>w"];
+          shortcut-win-new-tab = ["<Shift><Control>t"];
+          tab-policy = "automatic";
+          window-size = 0.41;
         };
 
         "it/mijorus/smile" = {
@@ -181,9 +191,9 @@
             gnomeExtensions.blur-my-shell.extensionUuid
             gnomeExtensions.burn-my-windows.extensionUuid
             gnomeExtensions.dash-to-panel.extensionUuid
+            gnomeExtensions.ddterm.extensionUuid
             gnomeExtensions.lock-keys.extensionUuid
             gnomeExtensions.pip-on-top.extensionUuid
-            gnomeExtensions.quake-terminal.extensionUuid
             gnomeExtensions.rounded-window-corners-reborn.extensionUuid
             gnomeExtensions.smile-complementary-extension.extensionUuid
             gnomeExtensions.user-themes.extensionUuid
@@ -232,13 +242,6 @@
 
         "org/gnome/shell/extensions/lockkeys" = {
           style = "show-hide-capslock";
-        };
-
-        "org/gnome/shell/extensions/quake-terminal" = {
-          always-on-top = true;
-          render-on-current-monitor = true;
-          terminal-id = "org.wezfurlong.wezterm.desktop";
-          terminal-shortcut = ["F10"];
         };
 
         "org/gnome/shell/extensions/vitals" = {
