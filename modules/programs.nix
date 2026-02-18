@@ -24,6 +24,7 @@
       zip
       lmstudio
       libreoffice
+      transmission_4-gtk
     ];
 
     services.xserver.excludePackages = with pkgs; [
