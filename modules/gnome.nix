@@ -238,7 +238,7 @@
           launch-args-map = [
             (mkDictionaryEntry [
               "org.wezfurlong.wezterm.desktop"
-              "--config window_decorations=\\\"NONE\\\""
+              "--config=window_decorations=\\\"NONE\\\""
             ])
           ];
           render-on-current-monitor = true;
