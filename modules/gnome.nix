@@ -34,6 +34,7 @@
       geary
       gnome-software
       decibels
+      gnome-console
     ];
   };
 
