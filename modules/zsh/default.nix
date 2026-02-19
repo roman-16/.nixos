@@ -160,6 +160,7 @@
 
         settings = {
           on_force_close = "quit";
+          pane_frames = false;
           show_release_notes = false;
           show_startup_tips = false;
         };
