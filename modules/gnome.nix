@@ -54,7 +54,9 @@
           ddterm-toggle-hotkey = ["F10"];
           hide-when-focus-lost = true;
           panel-icon-type = "none";
+          show-scrollbar = false;
           tab-policy = "automatic";
+          window-resizable = false;
           window-size = 0.41;
         };
 
