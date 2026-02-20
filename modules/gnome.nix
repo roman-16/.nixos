@@ -1,41 +1,45 @@
 {
   nixos = {pkgs, ...}: {
-    services.displayManager.gdm.enable = true;
-    services.desktopManager.gnome.enable = true;
+    environment = {
+      gnome.excludePackages = with pkgs; [
+        gnome-connections
+        evince
+        gnome-characters
+        gnome-logs
+        gnome-font-viewer
+        gnome-tour
+        yelp
+        epiphany
+        gnome-music
+        geary
+        gnome-software
+        decibels
+        gnome-console
+      ];
 
-    environment.systemPackages = with pkgs; [
-      dconf-editor
-      gnome-tweaks
-      gnomeExtensions.alphabetical-app-grid
-      gnomeExtensions.appindicator
-      gnomeExtensions.blur-my-shell
-      gnomeExtensions.burn-my-windows
-      gnomeExtensions.dash-to-panel
-      gnomeExtensions.ddterm
-      gnomeExtensions.lock-keys
-      gnomeExtensions.pip-on-top
-      gnomeExtensions.rounded-window-corners-reborn
-      gnomeExtensions.smile-complementary-extension
-      gnomeExtensions.user-themes
-      gnomeExtensions.vitals
-      smile
-    ];
+      systemPackages = with pkgs; [
+        dconf-editor
+        gnome-tweaks
+        gnomeExtensions.alphabetical-app-grid
+        gnomeExtensions.appindicator
+        gnomeExtensions.blur-my-shell
+        gnomeExtensions.burn-my-windows
+        gnomeExtensions.dash-to-panel
+        gnomeExtensions.ddterm
+        gnomeExtensions.lock-keys
+        gnomeExtensions.pip-on-top
+        gnomeExtensions.rounded-window-corners-reborn
+        gnomeExtensions.smile-complementary-extension
+        gnomeExtensions.user-themes
+        gnomeExtensions.vitals
+        smile
+      ];
+    };
 
-    environment.gnome.excludePackages = with pkgs; [
-      gnome-connections
-      evince
-      gnome-characters
-      gnome-logs
-      gnome-font-viewer
-      gnome-tour
-      yelp
-      epiphany
-      gnome-music
-      geary
-      gnome-software
-      decibels
-      gnome-console
-    ];
+    services = {
+      desktopManager.gnome.enable = true;
+      displayManager.gdm.enable = true;
+    };
   };
 
   home = {
