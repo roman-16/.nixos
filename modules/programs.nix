@@ -16,7 +16,9 @@
       ffmpeg
       brave
       foliate
-      prismlauncher
+      (prismlauncher.override {
+        additionalLibs = [pkgs.libxtst];
+      })
       gimp3-with-plugins
       gparted
       file-roller
