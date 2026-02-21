@@ -17,7 +17,15 @@
       brave
       foliate
       (prismlauncher.override {
-        additionalLibs = [pkgs.libxtst];
+        # JNativeHook (used by mcsrfairplay) needs these X11 libs
+        additionalLibs = with pkgs; [
+          libxkbcommon
+          libX11
+          libxcb
+          libXt
+          libxtst
+          libXinerama
+        ];
       })
       gimp3-with-plugins
       gparted
