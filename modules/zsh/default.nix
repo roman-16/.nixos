@@ -70,7 +70,6 @@
         enableZshIntegration = true;
         extraConfig = ''
           return {
-            enable_kitty_keyboard = true,
             enable_wayland = false,
             hide_tab_bar_if_only_one_tab = true,
             keys = {
