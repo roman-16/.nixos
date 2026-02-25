@@ -244,6 +244,11 @@
           world-clock = false;
         };
 
+        "org/gnome/shell/extensions/lockkeys" = {
+          capslock-indicator = "when-active";
+          numlock-indicator = "when-active";
+        };
+
         "org/gnome/shell/extensions/vitals" = {
           hot-sensors = ["_processor_usage_" "_gpu#1_utilization_" "_memory_usage_" "__temperature_avg__"];
           icon-style = 1;
