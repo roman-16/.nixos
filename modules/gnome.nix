@@ -20,13 +20,13 @@
       systemPackages = with pkgs; [
         dconf-editor
         gnome-tweaks
+        gnome49Extensions."lockkeys@vaina.lt"
         gnomeExtensions.alphabetical-app-grid
         gnomeExtensions.appindicator
         gnomeExtensions.blur-my-shell
         gnomeExtensions.burn-my-windows
         gnomeExtensions.dash-to-panel
         gnomeExtensions.ddterm
-        gnomeExtensions.lock-keys
         gnomeExtensions.pip-on-top
         gnomeExtensions.rounded-window-corners-reborn
         gnomeExtensions.smile-complementary-extension
@@ -190,13 +190,13 @@
           disable-extension-version-validation = true;
           disable-user-extensions = false;
           enabled-extensions = with pkgs; [
+            "lockkeys@vaina.lt"
             gnomeExtensions.alphabetical-app-grid.extensionUuid
             gnomeExtensions.appindicator.extensionUuid
             gnomeExtensions.blur-my-shell.extensionUuid
             gnomeExtensions.burn-my-windows.extensionUuid
             gnomeExtensions.dash-to-panel.extensionUuid
             gnomeExtensions.ddterm.extensionUuid
-            gnomeExtensions.lock-keys.extensionUuid
             gnomeExtensions.pip-on-top.extensionUuid
             gnomeExtensions.rounded-window-corners-reborn.extensionUuid
             gnomeExtensions.smile-complementary-extension.extensionUuid
@@ -242,10 +242,6 @@
           search = false;
           window-demands-attention-focus = true;
           world-clock = false;
-        };
-
-        "org/gnome/shell/extensions/lockkeys" = {
-          style = "show-hide-capslock";
         };
 
         "org/gnome/shell/extensions/vitals" = {
