@@ -35,7 +35,6 @@
       lmstudio
       libreoffice
       qbittorrent
-      jdk25
     ];
 
     services.xserver.excludePackages = with pkgs; [
