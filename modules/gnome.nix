@@ -165,8 +165,13 @@
             "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/"
             "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2/"
             "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom3/"
+            "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom4/"
           ];
           volume-step = 2;
+        };
+
+        "org/gnome/shell/keybindings" = {
+          show-screenshot-ui = [];
         };
 
         "org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0" = {
@@ -191,6 +196,12 @@
           binding = "<Super>v";
           command = "code";
           name = "Visual Studio Code";
+        };
+
+        "org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom4" = {
+          binding = "Print";
+          command = "gradia --screenshot";
+          name = "Screenshot";
         };
 
         "org/gnome/settings-daemon/plugins/power" = {
