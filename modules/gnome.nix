@@ -1,5 +1,16 @@
 {
-  nixos = {pkgs, ...}: {
+  nixos = {pkgs, ...}: let
+    dynamic-music-pill = pkgs.gnomeExtensions.buildShellExtension {
+      uuid = "dynamic-music-pill@andbal";
+      name = "Dynamic Music Pill";
+      pname = "dynamic-music-pill";
+      version = "26";
+      description = "An elegant, pill-shaped music player for your desktop";
+      link = "https://extensions.gnome.org/extension/9334/dynamic-music-pill/";
+      sha256 = "sha256-YnFGl+LJRWioq/mPc59+zjrVkGdE516UJc+H9stGRnk=";
+      metadata = "eyJ1dWlkIjoiZHluYW1pYy1tdXNpYy1waWxsQGFuZGJhbCIsIm5hbWUiOiJEeW5hbWljIE11c2ljIFBpbGwiLCJkZXNjcmlwdGlvbiI6IkFuIGVsZWdhbnQsIHBpbGwtc2hhcGVkIG11c2ljIHBsYXllciBmb3IgeW91ciBkZXNrdG9wLiIsInNoZWxsLXZlcnNpb24iOlsiNDUiLCI0NiIsIjQ3IiwiNDgiLCI0OSJdLCJ1cmwiOiJodHRwczovL2dpdGh1Yi5jb20vQW5kYmFsMjMvZHluYW1pYy1tdXNpYy1waWxsIn0K";
+    };
+  in {
     environment = {
       gnome.excludePackages = with pkgs; [
         gnome-connections
@@ -20,6 +31,7 @@
       systemPackages = with pkgs; [
         dconf-editor
         gnome-tweaks
+        dynamic-music-pill
         gnome49Extensions."lockkeys@vaina.lt"
         gnomeExtensions.alphabetical-app-grid
         gnomeExtensions.appindicator
@@ -236,6 +248,14 @@
           tray-size = 14;
         };
 
+        "org/gnome/shell/extensions/dynamic-music-pill" = {
+          action-left-click = "toggle_menu";
+          action-middle-click = "none";
+          action-right-click = "play_pause";
+          invert-scroll-animation = true;
+          target-container = 2;
+        };
+
         "org/gnome/shell/extensions/just-perfection" = {
           events-button = false;
           quick-settings-night-light = false;
@@ -302,6 +322,14 @@
           [Desktop Entry]
           Name=Discord
           Exec=discord
+          Type=Application
+          X-GNOME-Autostart-enabled=true
+        '';
+
+        "autostart/pear-desktop.desktop".text = ''
+          [Desktop Entry]
+          Name=Pear Desktop
+          Exec=pear-desktop
           Type=Application
           X-GNOME-Autostart-enabled=true
         '';

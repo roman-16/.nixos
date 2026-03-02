@@ -35,6 +35,7 @@
       lmstudio
       libreoffice
       qbittorrent
+      gradia
     ];
 
     services.xserver.excludePackages = with pkgs; [
