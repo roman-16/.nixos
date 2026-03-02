@@ -48,27 +48,27 @@
 9. **Complete**: After all quality gates pass, summarize changes made and ask about committing (see Version Control section)
 
 ## Architecture
-NixOS system configuration using Nix flakes with home-manager for user configuration:
+Multi-host NixOS configuration using Nix flakes with home-manager for user configuration:
+- **Multi-host**: Each host lives under `hosts/<hostname>/` with its own `configuration.nix`, `hardware-configuration.nix`, and `modules/`
 - **Flake Inputs**: nixpkgs-unstable, home-manager, nix-flatpak, stylix (theming)
-- **Module System**: Each module in `modules/` exports both `nixos` and `home` attributes for system and user configuration respectively
-- **Auto-import**: Modules are automatically imported from the `modules/` directory via `configuration.nix`
-- **Hardware**: NVIDIA drivers, systemd-boot, EFI system
-- **Desktop**: GNOME with extensive dconf configuration and custom extensions
+- **Module System**: Each module exports both `nixos` and `home` attributes for system and user configuration respectively
+- **Auto-import**: Modules are automatically imported from the host's `modules/` directory via its `configuration.nix`
+- **Hardware**: NVIDIA drivers, systemd-boot, EFI system (roman-nixos host)
+- **Desktop**: GNOME with extensive dconf configuration and custom extensions (roman-nixos host)
 
 ## Project Structure
 Key directories:
-- `modules/` - NixOS and home-manager modules, each exporting `{ nixos = {...}; home = {...}; }` structure
-- `modules/opencode/` - OpenCode AI assistant configuration and secrets
-- `modules/speechtotext/` - Custom GNOME extension for speech-to-text
-- `modules/stylix/` - Theming configuration with stylix
-- `modules/zsh/` - Shell configuration including fastfetch
-- `modules/rclone/` - Cloud storage sync configuration
-- `.opencode/` - OpenCode plugins, commands, and skills
+- `hosts/roman-nixos/` - Desktop/workstation host configuration
+- `hosts/roman-nixos/modules/` - NixOS and home-manager modules, each exporting `{ nixos = {...}; home = {...}; }` structure
+- `hosts/roman-nixos/modules/opencode/` - OpenCode AI assistant configuration and secrets
+- `hosts/roman-nixos/modules/stylix/` - Theming configuration with stylix
+- `hosts/roman-nixos/modules/zsh/` - Shell configuration including fastfetch
+- `hosts/roman-nixos/modules/rclone/` - Cloud storage sync configuration
 
 Key files:
-- `flake.nix` - Nix flake definition with inputs (nixpkgs, home-manager, nix-flatpak, stylix)
-- `configuration.nix` - Main configuration that imports all modules and sets up home-manager
-- `hardware-configuration.nix` - Hardware-specific configuration (auto-generated)
+- `flake.nix` - Nix flake definition with inputs and all host configurations
+- `hosts/roman-nixos/configuration.nix` - Desktop host config that imports all modules and sets up home-manager
+- `hosts/roman-nixos/hardware-configuration.nix` - Hardware-specific configuration (auto-generated)
 
 ## Code Style
 
@@ -157,7 +157,7 @@ Run in this order to fail fast:
 ## Commands
 - **Format**: `alejandra .` (format all Nix files)
 - **Check**: `nix flake check` (validate flake)
-- **Build**: `sudo nixos-rebuild build --flake .` (build without switching)
-- **Switch**: `sudo nixos-rebuild switch --flake .` (build and switch to new configuration)
+- **Build**: `sudo nixos-rebuild build --flake .#roman-nixos` (build without switching)
+- **Switch**: `sudo nixos-rebuild switch --flake .#roman-nixos` (build and switch to new configuration)
 - **Update**: `nix flake update` (update flake inputs)
 - **Garbage collect**: `sudo nix-collect-garbage -d` (remove old generations)

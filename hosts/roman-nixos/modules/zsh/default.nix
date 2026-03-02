@@ -180,7 +180,7 @@
 
           cd = "z";
 
-          fastfetch = "fastfetch -l small -c ~/.nixos/modules/zsh/fastfetch.jsonc";
+          fastfetch = "fastfetch -l small -c ~/.nixos/hosts/roman-nixos/modules/zsh/fastfetch.jsonc";
 
           du = "dua interactive /";
 
@@ -193,7 +193,7 @@
           mimetype = "xdg-mime query filetype $@";
 
           nmn = "nft && ngp && ngs && nup && ngs && ngb";
-          nup = "nh os switch --update --hostname=default";
+          nup = "nh os switch --update --hostname=roman-nixos";
           ngp = "git -C ~/.nixos pull";
           ngs = "git -C ~/.nixos add .";
           ngb = "git -C ~/.nixos commit -m \"$(date '+%Y-%m-%d %H:%M:%S')\"; git -C ~/.nixos push";

@@ -12,13 +12,13 @@
   };
 
   outputs = inputs: {
-    nixosConfigurations.default = inputs.nixpkgs.lib.nixosSystem {
+    nixosConfigurations.roman-nixos = inputs.nixpkgs.lib.nixosSystem {
       specialArgs = {
         inherit inputs;
       };
 
       modules = [
-        ./configuration.nix
+        ./hosts/roman-nixos/configuration.nix
         inputs.home-manager.nixosModules.default
         inputs.nix-flatpak.nixosModules.nix-flatpak
         inputs.stylix.nixosModules.stylix
