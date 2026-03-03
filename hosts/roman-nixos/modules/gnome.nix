@@ -213,6 +213,7 @@
           disable-extension-version-validation = true;
           disable-user-extensions = false;
           enabled-extensions = with pkgs; [
+            "dynamic-music-pill@andbal"
             "lockkeys@vaina.lt"
             gnomeExtensions.alphabetical-app-grid.extensionUuid
             gnomeExtensions.appindicator.extensionUuid
