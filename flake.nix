@@ -12,17 +12,31 @@
   };
 
   outputs = inputs: {
-    nixosConfigurations.roman-nixos = inputs.nixpkgs.lib.nixosSystem {
-      specialArgs = {
-        inherit inputs;
+    nixosConfigurations = {
+      roman-nixos = inputs.nixpkgs.lib.nixosSystem {
+        specialArgs = {
+          inherit inputs;
+        };
+
+        modules = [
+          ./hosts/roman-nixos/configuration.nix
+          inputs.home-manager.nixosModules.default
+          inputs.nix-flatpak.nixosModules.nix-flatpak
+          inputs.stylix.nixosModules.stylix
+        ];
       };
 
-      modules = [
-        ./hosts/roman-nixos/configuration.nix
-        inputs.home-manager.nixosModules.default
-        inputs.nix-flatpak.nixosModules.nix-flatpak
-        inputs.stylix.nixosModules.stylix
-      ];
+      homelab = inputs.nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+
+        specialArgs = {
+          inherit inputs;
+        };
+
+        modules = [
+          ./hosts/homelab/configuration.nix
+        ];
+      };
     };
   };
 }

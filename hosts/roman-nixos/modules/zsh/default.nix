@@ -192,6 +192,8 @@
 
           mimetype = "xdg-mime query filetype $@";
 
+          nan = "nft && ngp && ngs && nup && nhn && ngs && ngb";
+          nhn = "nixos-rebuild switch --flake ~/.nixos#homelab --target-host roman@192.168.70.70 --sudo";
           nmn = "nft && ngp && ngs && nup && ngs && ngb";
           nup = "nh os switch --update --hostname=roman-nixos";
           ngp = "git -C ~/.nixos pull";

@@ -11,7 +11,7 @@
       cheese
       discord
       kooha
-      signal-desktop-bin
+      signal-desktop
       eyedropper
       ffmpeg
       brave

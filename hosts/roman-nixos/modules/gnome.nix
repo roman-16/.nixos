@@ -264,7 +264,7 @@
           action-left-click = "toggle_menu";
           action-middle-click = "none";
           action-right-click = "play_pause";
-          invert-scroll-animation = true;
+          invert-scroll-direction = true;
           target-container = 2;
         };
 
