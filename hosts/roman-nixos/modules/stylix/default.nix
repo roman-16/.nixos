@@ -6,11 +6,11 @@
       polarity = "dark";
       image = ./wallpaper.jpg;
       base16Scheme = {
-        base00 = "1F1F1F";
-        base01 = "181818";
-        base02 = "2B2B2B";
-        base03 = "3C3C3C";
-        base04 = "616161";
+        base00 = "181818";
+        base01 = "1F1F1F";
+        base02 = "313131";
+        base03 = "6E7681";
+        base04 = "868686";
         base05 = "CCCCCC";
         base06 = "D7D7D7";
         base07 = "FFFFFF";
@@ -18,10 +18,10 @@
         base09 = "BB8009";
         base0A = "E2C08D";
         base0B = "2EA043";
-        base0C = "0078D4";
+        base0C = "2A9D9A";
         base0D = "4DAAFC";
-        base0E = "9E6A03";
-        base0F = "6E7681";
+        base0E = "A371F7";
+        base0F = "9E6A03";
       };
 
       cursor = {
