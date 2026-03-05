@@ -16,7 +16,7 @@
 
   gatewayConfig = builtins.toJSON {
     agents.defaults = {
-      model.primary = "openai/claude-opus-4";
+      model.primary = "claude-opus-4";
       thinkingDefault = "high";
     };
 
