@@ -28,14 +28,14 @@
           <model type="virtio"/>
         </interface>
         <!-- Sonoff Zigbee 3.0 USB Dongle Plus -->
-        <hostdev mode="subsystem" type="usb">
+        <hostdev mode="subsystem" type="usb" managed="yes">
           <source>
             <vendor id="0x10c4"/>
             <product id="0xea60"/>
           </source>
         </hostdev>
         <!-- Realtek Bluetooth Radio -->
-        <hostdev mode="subsystem" type="usb">
+        <hostdev mode="subsystem" type="usb" managed="yes">
           <source>
             <vendor id="0x0bda"/>
             <product id="0xb85b"/>
