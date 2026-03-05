@@ -53,8 +53,16 @@ Multi-host NixOS configuration using Nix flakes with home-manager for user confi
 - **Flake Inputs**: nixpkgs-unstable, home-manager, nix-flatpak, stylix (theming)
 - **Module System**: Each module exports both `nixos` and `home` attributes for system and user configuration respectively
 - **Auto-import**: Modules are automatically imported from the host's `modules/` directory via its `configuration.nix`
-- **Hardware**: NVIDIA drivers, systemd-boot, EFI system (roman-nixos host)
-- **Desktop**: GNOME with extensive dconf configuration and custom extensions (roman-nixos host)
+
+### Hosts
+- **roman-nixos** - Desktop/workstation. NVIDIA drivers, systemd-boot, EFI. GNOME with extensive dconf configuration and custom extensions
+- **homelab** (`192.168.70.70`) - Server. Runs containerized services (openclaw, cloudflared) and a HAOS KVM VM. Deployed remotely via `nx-deploy` or `nx-sync-all`
+
+### Home Assistant (HAOS)
+- Runs as a KVM VM on the homelab at `192.168.70.71:8123`
+- SSH access: `ssh hassio@192.168.70.71` (SSH addon with Protection Mode disabled for host D-Bus access)
+- USB passthrough: Sonoff Zigbee dongle + Realtek BT adapter (`0x0bda:0xb85b`)
+- Zigbee2MQTT for Zigbee devices, native BLE for Bluetooth devices
 
 ## Project Structure
 Key directories:
@@ -64,11 +72,16 @@ Key directories:
 - `hosts/roman-nixos/modules/stylix/` - Theming configuration with stylix
 - `hosts/roman-nixos/modules/zsh/` - Shell configuration including fastfetch
 - `hosts/roman-nixos/modules/rclone/` - Cloud storage sync configuration
+- `hosts/homelab/` - Homelab server configuration
+- `hosts/homelab/modules/openclaw/` - Openclaw container config (OCI container, runs as UID 1000)
+- `hosts/homelab/modules/cloudflared/` - Cloudflare tunnel for claw.halerc.xyz
+- `hosts/homelab/modules/haos.nix` - HAOS KVM VM definition (USB passthrough for Zigbee + BT)
 
 Key files:
 - `flake.nix` - Nix flake definition with inputs and all host configurations
 - `hosts/roman-nixos/configuration.nix` - Desktop host config that imports all modules and sets up home-manager
 - `hosts/roman-nixos/hardware-configuration.nix` - Hardware-specific configuration (auto-generated)
+- `hosts/homelab/configuration.nix` - Homelab server config
 
 ## Code Style
 
@@ -161,3 +174,4 @@ Run in this order to fail fast:
 - **Switch**: `sudo nixos-rebuild switch --flake .#roman-nixos` (build and switch to new configuration)
 - **Update**: `nix flake update` (update flake inputs)
 - **Garbage collect**: `sudo nix-collect-garbage -d` (remove old generations)
+- **Deploy homelab**: `nx-deploy` or `nx-sync-all` (aliases), or `nixos-rebuild switch --flake ~/.nixos#homelab --target-host roman@192.168.70.70 --sudo`
