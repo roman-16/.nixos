@@ -80,6 +80,15 @@ in {
     '';
   };
 
+  # Workarounds for libvirt 12.1.0 NixOS regression:
+  # 1. virt-secret-init-encryption.service hardcodes /usr/bin/sh
+  # 2. Same service uses `dd` which isn't in the default systemd PATH
+  systemd.services."virt-secret-init-encryption".path = [pkgs.coreutils];
+
+  systemd.tmpfiles.rules = [
+    "L+ /usr/bin/sh - - - - /bin/sh"
+  ];
+
   virtualisation.libvirtd = {
     allowedBridges = ["br0"];
     enable = true;
