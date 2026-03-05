@@ -9,7 +9,7 @@
   secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
 
   gatewayConfig = builtins.toJSON {
-    agents.defaults.model.primary = "google/gemini-3-flash-preview";
+    agents.defaults.model.primary = "openrouter/free";
 
     channels.whatsapp = {
       allowFrom = ["+436509926961"];
@@ -63,7 +63,7 @@ in {
 
       containers.openclaw = {
         cmd = ["node" "openclaw.mjs" "gateway" "--allow-unconfigured"];
-        environment.GEMINI_API_KEY = secrets.geminiApiKey;
+        environment.OPENROUTER_API_KEY = secrets.openRouterApiKey;
         extraOptions = ["--network=host"];
         image = "ghcr.io/openclaw/openclaw:latest";
         volumes = ["${dataDir}:/home/node/.openclaw"];
