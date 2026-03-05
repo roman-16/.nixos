@@ -6,14 +6,21 @@
   dataDir = "/var/lib/openclaw";
   gatewayPort = 7072;
   lanIp = "192.168.70.70";
+  signalAccount = "+4369010678088";
+  signalCliPort = 8080;
+  signalDataDir = "/var/lib/signal-cli";
   secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
 
   gatewayConfig = builtins.toJSON {
     agents.defaults.model.primary = "openrouter/free";
 
-    channels.whatsapp = {
+    channels.signal = {
+      account = signalAccount;
       allowFrom = ["+436509926961"];
-      dmPolicy = "allowlist";
+      autoStart = false;
+      dmPolicy = "pairing";
+      enabled = true;
+      httpUrl = "http://127.0.0.1:${toString signalCliPort}";
     };
 
     gateway = {
@@ -32,28 +39,49 @@
     };
   };
 in {
+  environment.systemPackages = [pkgs.signal-cli];
+
   networking.firewall.allowedTCPPorts = [gatewayPort];
+
+  systemd.services.signal-cli = {
+    after = ["network.target"];
+    description = "signal-cli JSON-RPC daemon";
+    wantedBy = ["multi-user.target"];
+
+    serviceConfig = {
+      ExecStart = "${pkgs.signal-cli}/bin/signal-cli --config ${signalDataDir} -a ${signalAccount} daemon --http=127.0.0.1:${toString signalCliPort} --receive-mode=on-start --send-read-receipts";
+      Restart = "on-failure";
+      RestartSec = 10;
+      StateDirectory = "signal-cli";
+    };
+  };
 
   systemd.tmpfiles.rules = [
     "d ${dataDir} 0777 root root -"
     "d ${dataDir}/credentials 0777 root root -"
+    "d ${signalDataDir} 0700 root root -"
   ];
 
-  systemd.services.docker-openclaw.serviceConfig.ExecStartPre = lib.mkAfter [
-    (pkgs.writeShellScript "openclaw-seed-config" ''
-      cfg="${dataDir}/openclaw.json"
-      nix_cfg='${gatewayConfig}'
+  systemd.services.docker-openclaw = {
+    after = ["signal-cli.service"];
+    requires = ["signal-cli.service"];
 
-      if [ ! -f "$cfg" ]; then
-        echo "$nix_cfg" > "$cfg"
-        chmod 666 "$cfg"
-      else
-        ${pkgs.jq}/bin/jq --argjson nix "$nix_cfg" 'del(.models.providers) | . * $nix' "$cfg" > "$cfg.tmp"
-        mv "$cfg.tmp" "$cfg"
-        chmod 666 "$cfg"
-      fi
-    '')
-  ];
+    serviceConfig.ExecStartPre = lib.mkAfter [
+      (pkgs.writeShellScript "openclaw-seed-config" ''
+        cfg="${dataDir}/openclaw.json"
+        nix_cfg='${gatewayConfig}'
+
+        if [ ! -f "$cfg" ]; then
+          echo "$nix_cfg" > "$cfg"
+          chmod 666 "$cfg"
+        else
+          ${pkgs.jq}/bin/jq --argjson nix "$nix_cfg" 'del(.models.providers) | . * $nix' "$cfg" > "$cfg.tmp"
+          mv "$cfg.tmp" "$cfg"
+          chmod 666 "$cfg"
+        fi
+      '')
+    ];
+  };
 
   virtualisation = {
     docker.enable = true;
