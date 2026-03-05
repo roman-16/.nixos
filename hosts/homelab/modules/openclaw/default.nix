@@ -105,6 +105,8 @@ in
           "d ${dataDir} 0777 root root -"
           "d ${dataDir}/credentials 0777 root root -"
           "d ${dataDir}/skills 0777 root root -"
+          "d ${dataDir}/cache 0777 root root -"
+          "d ${dataDir}/npm-global 0777 root root -"
         ];
       };
 
@@ -121,6 +123,8 @@ in
             volumes = [
               "${dataDir}:/home/node/.openclaw"
               "${dataDir}/skills:/app/skills"
+              "${dataDir}/cache:/home/node/.cache"
+              "${dataDir}/npm-global:/home/node/.npm"
             ];
           };
         };
