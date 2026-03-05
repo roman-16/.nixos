@@ -56,7 +56,10 @@
     nix = {
       optimise.automatic = true;
       nixPath = ["nixpkgs=${inputs.nixpkgs}"];
-      settings.experimental-features = ["nix-command" "flakes"];
+      settings = {
+        experimental-features = ["nix-command" "flakes"];
+        warn-dirty = false;
+      };
     };
   };
 
