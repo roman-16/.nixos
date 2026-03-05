@@ -16,8 +16,30 @@
 
   gatewayConfig = builtins.toJSON {
     agents.defaults = {
-      model.primary = "claude-opus-4";
+      model.primary = "claude-proxy/claude-opus-4";
       thinkingDefault = "high";
+    };
+
+    models.providers.claude-proxy = {
+      api = "openai-responses";
+      apiKey = "not-needed";
+      baseUrl = "http://127.0.0.1:${toString proxyPort}/v1";
+      models = [
+        {
+          contextWindow = 200000;
+          cost = {
+            cacheRead = 0;
+            cacheWrite = 0;
+            input = 0;
+            output = 0;
+          };
+          id = "claude-opus-4";
+          input = ["text"];
+          maxTokens = 32000;
+          name = "Claude Opus 4 (Max Proxy)";
+          reasoning = true;
+        }
+      ];
     };
 
     channels.signal = {
@@ -121,10 +143,6 @@ in {
 
       containers.openclaw = {
         cmd = ["node" "openclaw.mjs" "gateway" "--allow-unconfigured"];
-        environment = {
-          OPENAI_API_KEY = "not-needed";
-          OPENAI_BASE_URL = "http://127.0.0.1:${toString proxyPort}/v1";
-        };
         extraOptions = ["--network=host"];
         image = "ghcr.io/openclaw/openclaw:latest";
         volumes = ["${dataDir}:/home/node/.openclaw"];
