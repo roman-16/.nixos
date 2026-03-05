@@ -104,6 +104,7 @@ in
         tmpfiles.rules = [
           "d ${dataDir} 0777 root root -"
           "d ${dataDir}/credentials 0777 root root -"
+          "d ${dataDir}/skills 0777 root root -"
         ];
       };
 
@@ -117,7 +118,10 @@ in
             cmd = ["node" "openclaw.mjs" "gateway" "--allow-unconfigured"];
             extraOptions = ["--network=host"];
             image = "ghcr.io/openclaw/openclaw:latest";
-            volumes = ["${dataDir}:/home/node/.openclaw"];
+            volumes = [
+              "${dataDir}:/home/node/.openclaw"
+              "${dataDir}/skills:/app/skills"
+            ];
           };
         };
       };
