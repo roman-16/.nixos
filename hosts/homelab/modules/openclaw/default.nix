@@ -19,11 +19,16 @@
       proxyPort = 3456;
       proxyRepo = "https://github.com/wende/claude-max-api-proxy.git";
 
-      # SSH keys (written to persistent volume via tmpfiles)
-      backupSshKey = pkgs.writeText "backup-ssh-key" secrets.backupSshKey;
-      backupSshPubKey = pkgs.writeText "backup-ssh-pub-key" secrets.backupSshPubKey;
-      obsidianSshKey = pkgs.writeText "obsidian-ssh-key" secrets.obsidianSshKey;
-      obsidianSshPubKey = pkgs.writeText "obsidian-ssh-pub-key" secrets.obsidianSshPubKey;
+      # Shared between claude-max-api-proxy service and openclaw container
+      sharedEnv = {
+        BACKUP_GIT_REMOTE = secrets.backupGitRemote;
+        BACKUP_GIT_SSH_KEY_FILE = "/var/lib/openclaw-backup/ssh_key";
+        BACKUP_GIT_SSH_PUB_KEY_FILE = "/var/lib/openclaw-backup/ssh_key.pub";
+        GIT_CRYPT_KEY = secrets.gitCryptKey;
+        OBSIDIAN_GIT_REMOTE = secrets.obsidianGitRemote;
+        OBSIDIAN_GIT_SSH_KEY_FILE = "/var/lib/openclaw-obsidian/ssh_key";
+        OBSIDIAN_GIT_SSH_PUB_KEY_FILE = "/var/lib/openclaw-obsidian/ssh_key.pub";
+      };
 
       # Signal
       signalAccount = "+4369010678088";
@@ -67,12 +72,6 @@
           models = [
             {
               contextWindow = 200000;
-              cost = {
-                cacheRead = 0;
-                cacheWrite = 0;
-                input = 0;
-                output = 0;
-              };
               id = "claude-opus-4";
               input = ["text"];
               maxTokens = 32000;
@@ -166,18 +165,10 @@
           claude-max-api-proxy = {
             after = ["network.target"];
             description = "Claude Max API Proxy";
-            path = [pkgs.bash pkgs.claude-code pkgs.git pkgs.git-crypt pkgs.nodejs];
+            path = [pkgs.bash pkgs.claude-code pkgs.git pkgs.git-crypt pkgs.nodejs pkgs.openssh];
             wantedBy = ["multi-user.target"];
 
-            environment = {
-              BACKUP_GIT_REMOTE = secrets.backupGitRemote;
-              BACKUP_GIT_SSH_KEY_FILE = "/var/lib/openclaw-backup/ssh_key";
-              BACKUP_GIT_SSH_PUB_KEY_FILE = "/var/lib/openclaw-backup/ssh_key.pub";
-              GIT_CRYPT_KEY = secrets.gitCryptKey;
-              OBSIDIAN_GIT_REMOTE = secrets.obsidianGitRemote;
-              OBSIDIAN_GIT_SSH_KEY_FILE = "/var/lib/openclaw-obsidian/ssh_key";
-              OBSIDIAN_GIT_SSH_PUB_KEY_FILE = "/var/lib/openclaw-obsidian/ssh_key.pub";
-            };
+            environment = sharedEnv;
 
             serviceConfig = {
               ExecStartPre = pkgs.writeShellScript "install-claude-max-api-proxy" ''
@@ -249,13 +240,13 @@
 
           # Backup repo SSH keys
           "d /var/lib/openclaw-backup 0700 roman users -"
-          "C+ /var/lib/openclaw-backup/ssh_key 0600 roman users - ${backupSshKey}"
-          "C+ /var/lib/openclaw-backup/ssh_key.pub 0644 roman users - ${backupSshPubKey}"
+          "C+ /var/lib/openclaw-backup/ssh_key 0600 roman users - ${pkgs.writeText "backup-ssh-key" secrets.backupSshKey}"
+          "C+ /var/lib/openclaw-backup/ssh_key.pub 0644 roman users - ${pkgs.writeText "backup-ssh-pub-key" secrets.backupSshPubKey}"
 
           # Obsidian repo SSH keys
           "d /var/lib/openclaw-obsidian 0700 roman users -"
-          "C+ /var/lib/openclaw-obsidian/ssh_key 0600 roman users - ${obsidianSshKey}"
-          "C+ /var/lib/openclaw-obsidian/ssh_key.pub 0644 roman users - ${obsidianSshPubKey}"
+          "C+ /var/lib/openclaw-obsidian/ssh_key 0600 roman users - ${pkgs.writeText "obsidian-ssh-key" secrets.obsidianSshKey}"
+          "C+ /var/lib/openclaw-obsidian/ssh_key.pub 0644 roman users - ${pkgs.writeText "obsidian-ssh-pub-key" secrets.obsidianSshPubKey}"
 
           # Persist Claude Code auth across VM reboots
           "d /var/lib/claude-auth 0700 roman users -"
@@ -280,16 +271,7 @@
           containers.openclaw = {
             cmd = ["node" "openclaw.mjs" "gateway" "--allow-unconfigured"];
 
-            environment = {
-              BACKUP_GIT_REMOTE = secrets.backupGitRemote;
-              BACKUP_GIT_SSH_KEY_FILE = "/var/lib/openclaw-backup/ssh_key";
-              BACKUP_GIT_SSH_PUB_KEY_FILE = "/var/lib/openclaw-backup/ssh_key.pub";
-              GIT_CRYPT_KEY = secrets.gitCryptKey;
-              OBSIDIAN_GIT_REMOTE = secrets.obsidianGitRemote;
-              OBSIDIAN_GIT_SSH_KEY_FILE = "/var/lib/openclaw-obsidian/ssh_key";
-              OBSIDIAN_GIT_SSH_PUB_KEY_FILE = "/var/lib/openclaw-obsidian/ssh_key.pub";
-            };
-
+            environment = sharedEnv;
             extraOptions = ["--network=host"];
             image = "ghcr.io/openclaw/openclaw:latest";
             volumes = [
