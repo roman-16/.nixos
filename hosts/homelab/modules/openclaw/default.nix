@@ -160,8 +160,15 @@
           claude-max-api-proxy = {
             after = ["network.target"];
             description = "Claude Max API Proxy";
-            path = [pkgs.bash pkgs.claude-code pkgs.nodejs];
+            path = [pkgs.bash pkgs.claude-code pkgs.git pkgs.git-crypt pkgs.nodejs];
             wantedBy = ["multi-user.target"];
+
+            environment = {
+              GIT_CRYPT_KEY = secrets.gitCryptKey;
+              GIT_REMOTE = secrets.gitRemote;
+              GIT_SSH_KEY = secrets.gitSshKey;
+              GIT_SSH_PUB_KEY = secrets.gitSshPubKey;
+            };
 
             serviceConfig = {
               ExecStartPre = pkgs.writeShellScript "install-claude-max-api-proxy" ''
