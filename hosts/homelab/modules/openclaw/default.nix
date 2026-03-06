@@ -120,6 +120,16 @@
 
       services.openssh = {
         enable = true;
+        hostKeys = [
+          {
+            path = "/var/lib/ssh-host-keys/ssh_host_ed25519_key";
+            type = "ed25519";
+          }
+          {
+            path = "/var/lib/ssh-host-keys/ssh_host_rsa_key";
+            type = "rsa";
+          }
+        ];
         settings.PermitRootLogin = "yes";
       };
 
@@ -220,6 +230,10 @@
           "L /home/node/.openclaw/media - - - - ${dataDir}/media"
 
           "d ${signalDataDir} 0700 root root -"
+
+          # Persist Claude Code auth across VM reboots
+          "d /var/lib/claude-auth 0700 roman users -"
+          "L /home/roman/.claude - - - - /var/lib/claude-auth"
         ];
       };
 
