@@ -108,7 +108,7 @@
         ];
       };
 
-      environment.systemPackages = [pkgs.claude-code];
+      environment.systemPackages = [pkgs.claude-code pkgs.git pkgs.git-crypt];
 
       networking = {
         firewall.allowedTCPPorts = [gatewayPort];
@@ -239,6 +239,14 @@
 
           containers.openclaw = {
             cmd = ["node" "openclaw.mjs" "gateway" "--allow-unconfigured"];
+
+            environment = {
+              GIT_CRYPT_KEY = secrets.gitCryptKey;
+              GIT_REMOTE = secrets.gitRemote;
+              GIT_SSH_KEY = secrets.gitSshKey;
+              GIT_SSH_PUB_KEY = secrets.gitSshPubKey;
+            };
+
             extraOptions = ["--network=host"];
             image = "ghcr.io/openclaw/openclaw:latest";
             volumes = [
