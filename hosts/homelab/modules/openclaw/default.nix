@@ -19,6 +19,10 @@
       proxyPort = 3456;
       proxyRepo = "https://github.com/wende/claude-max-api-proxy.git";
 
+      # Backup SSH keys (written to persistent files; env vars can't hold multi-line values)
+      backupSshKey = pkgs.writeText "backup-ssh-key" secrets.gitSshKey;
+      backupSshPubKey = pkgs.writeText "backup-ssh-pub-key" secrets.gitSshPubKey;
+
       # Signal
       signalAccount = "+4369010678088";
       signalCliPort = 8080;
@@ -166,8 +170,8 @@
             environment = {
               GIT_CRYPT_KEY = secrets.gitCryptKey;
               GIT_REMOTE = secrets.gitRemote;
-              GIT_SSH_KEY = secrets.gitSshKey;
-              GIT_SSH_PUB_KEY = secrets.gitSshPubKey;
+              GIT_SSH_KEY_FILE = "/var/lib/openclaw-backup/ssh_key";
+              GIT_SSH_PUB_KEY_FILE = "/var/lib/openclaw-backup/ssh_key.pub";
             };
 
             serviceConfig = {
@@ -238,6 +242,11 @@
 
           "d ${signalDataDir} 0700 root root -"
 
+          # Backup SSH keys (copied from nix store to persistent volume)
+          "d /var/lib/openclaw-backup 0700 roman users -"
+          "C /var/lib/openclaw-backup/ssh_key 0600 roman users - ${backupSshKey}"
+          "C /var/lib/openclaw-backup/ssh_key.pub 0644 roman users - ${backupSshPubKey}"
+
           # Persist Claude Code auth across VM reboots
           "d /var/lib/claude-auth 0700 roman users -"
           "L /home/roman/.claude - - - - /var/lib/claude-auth"
@@ -264,8 +273,8 @@
             environment = {
               GIT_CRYPT_KEY = secrets.gitCryptKey;
               GIT_REMOTE = secrets.gitRemote;
-              GIT_SSH_KEY = secrets.gitSshKey;
-              GIT_SSH_PUB_KEY = secrets.gitSshPubKey;
+              GIT_SSH_KEY_FILE = "/var/lib/openclaw-backup/ssh_key";
+              GIT_SSH_PUB_KEY_FILE = "/var/lib/openclaw-backup/ssh_key.pub";
             };
 
             extraOptions = ["--network=host"];
