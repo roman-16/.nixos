@@ -107,6 +107,11 @@ in
           "d ${dataDir}/skills 0777 root root -"
           "d ${dataDir}/cache 0777 root root -"
           "d ${dataDir}/npm-global 0777 root root -"
+
+          # Container reports media paths as /home/node/.openclaw/media/...
+          # but files live at ${dataDir}/media/ on the host
+          "d /home/node/.openclaw 0755 root root -"
+          "L /home/node/.openclaw/media - - - - ${dataDir}/media"
         ];
       };
 
