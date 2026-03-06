@@ -19,7 +19,7 @@
       proxyPort = 3456;
       proxyRepo = "https://github.com/wende/claude-max-api-proxy.git";
 
-      # Backup SSH keys (written to persistent files; env vars can't hold multi-line values)
+      # Backup SSH keys (written to persistent volume via tmpfiles)
       backupSshKey = pkgs.writeText "backup-ssh-key" secrets.gitSshKey;
       backupSshPubKey = pkgs.writeText "backup-ssh-pub-key" secrets.gitSshPubKey;
 
@@ -242,10 +242,10 @@
 
           "d ${signalDataDir} 0700 root root -"
 
-          # Backup SSH keys (copied from nix store to persistent volume)
+          # Backup SSH keys (declaratively managed, copied from nix store)
           "d /var/lib/openclaw-backup 0700 roman users -"
-          "C /var/lib/openclaw-backup/ssh_key 0600 roman users - ${backupSshKey}"
-          "C /var/lib/openclaw-backup/ssh_key.pub 0644 roman users - ${backupSshPubKey}"
+          "C+ /var/lib/openclaw-backup/ssh_key 0600 roman users - ${backupSshKey}"
+          "C+ /var/lib/openclaw-backup/ssh_key.pub 0644 roman users - ${backupSshPubKey}"
 
           # Persist Claude Code auth across VM reboots
           "d /var/lib/claude-auth 0700 roman users -"
