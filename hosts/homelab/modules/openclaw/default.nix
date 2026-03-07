@@ -19,15 +19,23 @@
       proxyPort = 3456;
       proxyRepo = "https://github.com/wende/claude-max-api-proxy.git";
 
+      gitconfig = pkgs.writeText "gitconfig" ''
+        [user]
+          name = Roman
+          email = roman@lerchster.dev
+      '';
+
       # Shared between claude-max-api-proxy service and openclaw container
       sharedEnv = {
         BACKUP_GIT_REMOTE = secrets.backupGitRemote;
         BACKUP_GIT_SSH_KEY_FILE = "/var/lib/openclaw-backup/ssh_key";
         BACKUP_GIT_SSH_PUB_KEY_FILE = "/var/lib/openclaw-backup/ssh_key.pub";
+        CLAUDE_CODE_OAUTH_TOKEN = secrets.claudeOauthToken;
         GIT_CRYPT_KEY = secrets.gitCryptKey;
         OBSIDIAN_GIT_REMOTE = secrets.obsidianGitRemote;
         OBSIDIAN_GIT_SSH_KEY_FILE = "/var/lib/openclaw-obsidian/ssh_key";
         OBSIDIAN_GIT_SSH_PUB_KEY_FILE = "/var/lib/openclaw-obsidian/ssh_key.pub";
+        TAVILY_API_KEY = secrets.tavilyApiKey;
       };
 
       # Signal
@@ -113,7 +121,10 @@
         ];
       };
 
-      environment.systemPackages = [pkgs.claude-code pkgs.git pkgs.git-crypt];
+      environment = {
+        etc."gitconfig".source = gitconfig;
+        systemPackages = [pkgs.claude-code pkgs.git pkgs.git-crypt];
+      };
 
       networking = {
         firewall.allowedTCPPorts = [gatewayPort];
@@ -168,11 +179,7 @@
             path = [pkgs.bash pkgs.claude-code pkgs.git pkgs.git-crypt pkgs.nodejs pkgs.openssh];
             wantedBy = ["multi-user.target"];
 
-            environment =
-              sharedEnv
-              // {
-                CLAUDE_CODE_OAUTH_TOKEN = secrets.claudeOauthToken;
-              };
+            environment = sharedEnv;
 
             serviceConfig = {
               ExecStartPre = pkgs.writeShellScript "install-claude-max-api-proxy" ''
@@ -280,9 +287,10 @@
             image = "ghcr.io/openclaw/openclaw:latest";
             volumes = [
               "${dataDir}:/home/node/.openclaw"
-              "${dataDir}/skills:/app/skills"
               "${dataDir}/cache:/home/node/.cache"
               "${dataDir}/npm-global:/home/node/.npm"
+              "${dataDir}/skills:/app/skills"
+              "${gitconfig}:/etc/gitconfig:ro"
             ];
           };
         };
