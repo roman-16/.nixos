@@ -168,7 +168,11 @@
             path = [pkgs.bash pkgs.claude-code pkgs.git pkgs.git-crypt pkgs.nodejs pkgs.openssh];
             wantedBy = ["multi-user.target"];
 
-            environment = sharedEnv;
+            environment =
+              sharedEnv
+              // {
+                CLAUDE_CODE_OAUTH_TOKEN = secrets.claudeOauthToken;
+              };
 
             serviceConfig = {
               ExecStartPre = pkgs.writeShellScript "install-claude-max-api-proxy" ''
