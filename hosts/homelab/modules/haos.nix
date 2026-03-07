@@ -1,4 +1,29 @@
 {pkgs, ...}: let
+  # USB devices defined separately so they can be hot-attached after VM boot
+  # (avoids race condition where VM starts before USB subsystem is ready)
+  usbDevices = [
+    {
+      name = "zigbee";
+      vendorId = "0x10c4";
+      productId = "0xea60";
+    }
+    {
+      name = "bluetooth";
+      vendorId = "0x0bda";
+      productId = "0xb85b";
+    }
+  ];
+
+  mkUsbXml = dev:
+    pkgs.writeText "usb-${dev.name}.xml" ''
+      <hostdev mode="subsystem" type="usb" managed="yes">
+        <source>
+          <vendor id="${dev.vendorId}"/>
+          <product id="${dev.productId}"/>
+        </source>
+      </hostdev>
+    '';
+
   haosXml = pkgs.writeText "haos.xml" ''
     <domain type="kvm">
       <name>haos</name>
@@ -27,20 +52,6 @@
           <source bridge="br0"/>
           <model type="virtio"/>
         </interface>
-        <!-- Sonoff Zigbee 3.0 USB Dongle Plus -->
-        <hostdev mode="subsystem" type="usb" managed="yes">
-          <source>
-            <vendor id="0x10c4"/>
-            <product id="0xea60"/>
-          </source>
-        </hostdev>
-        <!-- Realtek Bluetooth Radio -->
-        <hostdev mode="subsystem" type="usb" managed="yes">
-          <source>
-            <vendor id="0x0bda"/>
-            <product id="0xb85b"/>
-          </source>
-        </hostdev>
         <console type="pty"/>
       </devices>
     </domain>
@@ -79,6 +90,26 @@ in {
           if ! virsh domstate haos 2>/dev/null | grep -q "running"; then
             virsh start haos
           fi
+
+          # Hot-attach USB devices with retry (avoids race with USB subsystem)
+          # Detach first to clear stale state from previous VM definitions
+          sleep 5
+          ${builtins.concatStringsSep "\n" (map (dev: ''
+              virsh detach-device haos ${mkUsbXml dev} 2>/dev/null || true
+            '')
+            usbDevices)}
+          sleep 2
+          ${builtins.concatStringsSep "\n" (map (dev: ''
+              for i in $(seq 1 10); do
+                if virsh attach-device haos ${mkUsbXml dev} 2>&1; then
+                  echo "Attached USB device: ${dev.name}"
+                  break
+                fi
+                echo "Waiting for USB device: ${dev.name} (attempt $i/10)"
+                sleep 3
+              done
+            '')
+            usbDevices)}
         '';
       };
 
