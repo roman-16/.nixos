@@ -7,11 +7,14 @@
         "expr": "import (builtins.getFlake \"${workspaceFolder}\").inputs.nixpkgs { }"
       },
       "options": {
-        "nixos": {
-          "expr": "(builtins.getFlake \"${workspaceFolder}\").nixosConfigurations.default.options"
-        },
         "home-manager": {
-          "expr": "(builtins.getFlake \"${workspaceFolder}\").nixosConfigurations.default.options.home-manager.users.type.getSubOptions []"
+          "expr": "(builtins.getFlake \"${workspaceFolder}\").nixosConfigurations.roman-nixos.options.home-manager.users.type.getSubOptions []"
+        },
+        "nixos-homelab": {
+          "expr": "(builtins.getFlake \"${workspaceFolder}\").nixosConfigurations.homelab.options"
+        },
+        "nixos-roman": {
+          "expr": "(builtins.getFlake \"${workspaceFolder}\").nixosConfigurations.roman-nixos.options"
         }
       }
     }
