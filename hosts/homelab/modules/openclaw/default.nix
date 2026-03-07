@@ -236,6 +236,7 @@
           "d ${dataDir}/skills 0777 root root -"
           "d ${dataDir}/cache 0777 root root -"
           "d ${dataDir}/npm-global 0777 root root -"
+          "d ${dataDir}/workspace/self-improving 0777 root root -"
 
           # Container reports media paths as /home/node/.openclaw/media/...
           # but files live at ${dataDir}/media/ on the VM
@@ -285,6 +286,7 @@
               "${dataDir}/cache:/home/node/.cache"
               "${dataDir}/npm-global:/home/node/.npm"
               "${dataDir}/skills:/app/skills"
+              "${dataDir}/workspace/self-improving:/home/node/self-improving"
             ];
           };
         };
