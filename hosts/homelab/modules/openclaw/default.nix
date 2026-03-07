@@ -19,18 +19,16 @@
       proxyPort = 3456;
       proxyRepo = "https://github.com/wende/claude-max-api-proxy.git";
 
-      gitconfig = pkgs.writeText "gitconfig" ''
-        [user]
-          name = Roman
-          email = roman@lerchster.dev
-      '';
-
       # Shared between claude-max-api-proxy service and openclaw container
       sharedEnv = {
         BACKUP_GIT_REMOTE = secrets.backupGitRemote;
         BACKUP_GIT_SSH_KEY_FILE = "/var/lib/openclaw-backup/ssh_key";
         BACKUP_GIT_SSH_PUB_KEY_FILE = "/var/lib/openclaw-backup/ssh_key.pub";
         CLAUDE_CODE_OAUTH_TOKEN = secrets.claudeOauthToken;
+        GIT_AUTHOR_EMAIL = "roman@lerchster.dev";
+        GIT_AUTHOR_NAME = "Roman";
+        GIT_COMMITTER_EMAIL = "roman@lerchster.dev";
+        GIT_COMMITTER_NAME = "Roman";
         GIT_CRYPT_KEY = secrets.gitCryptKey;
         OBSIDIAN_GIT_REMOTE = secrets.obsidianGitRemote;
         OBSIDIAN_GIT_SSH_KEY_FILE = "/var/lib/openclaw-obsidian/ssh_key";
@@ -121,10 +119,7 @@
         ];
       };
 
-      environment = {
-        etc."gitconfig".source = gitconfig;
-        systemPackages = [pkgs.claude-code pkgs.git pkgs.git-crypt];
-      };
+      environment.systemPackages = [pkgs.claude-code pkgs.git pkgs.git-crypt];
 
       networking = {
         firewall.allowedTCPPorts = [gatewayPort];
@@ -290,7 +285,6 @@
               "${dataDir}/cache:/home/node/.cache"
               "${dataDir}/npm-global:/home/node/.npm"
               "${dataDir}/skills:/app/skills"
-              "${gitconfig}:/etc/gitconfig:ro"
             ];
           };
         };
