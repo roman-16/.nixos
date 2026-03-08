@@ -90,7 +90,7 @@
     in {
       microvm = {
         hypervisor = "qemu";
-        mem = 2049; # not 2048: QEMU hangs at exactly 2GB
+        mem = 4096;
         vcpu = 2;
 
         interfaces = [
