@@ -71,6 +71,8 @@
           port = gatewayPort;
         };
 
+        tools.sandbox.tools.allow = ["*"];
+
         models.providers.claude-proxy = {
           api = "openai-completions";
           apiKey = "not-needed";
@@ -254,6 +256,10 @@
           "d /var/lib/openclaw-obsidian 0700 roman users -"
           "C+ /var/lib/openclaw-obsidian/ssh_key 0600 roman users - ${pkgs.writeText "obsidian-ssh-key" secrets.obsidianSshKey}"
           "C+ /var/lib/openclaw-obsidian/ssh_key.pub 0644 roman users - ${pkgs.writeText "obsidian-ssh-pub-key" secrets.obsidianSshPubKey}"
+
+          # npm cache for claude-max-api-proxy (prevent filling tmpfs rootfs)
+          "d /var/lib/claude-max-api-proxy/npm-cache 0755 roman users -"
+          "L /home/roman/.npm - - - - /var/lib/claude-max-api-proxy/npm-cache"
 
           # Persist Claude Code auth across VM reboots
           "d /var/lib/claude-auth 0700 roman users -"
