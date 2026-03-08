@@ -19,6 +19,11 @@
       proxyPort = 3456;
       proxyRepo = "https://github.com/wende/claude-max-api-proxy.git";
 
+      # Wrapper to let Claude agent subprocess run openclaw CLI via docker exec
+      openclawCli = pkgs.writeShellScriptBin "openclaw" ''
+        exec ${pkgs.docker}/bin/docker exec -u node openclaw openclaw "$@"
+      '';
+
       # Shared between claude-max-api-proxy service and openclaw container
       sharedEnv = {
         BACKUP_GIT_REMOTE = secrets.backupGitRemote;
@@ -173,7 +178,7 @@
           claude-max-api-proxy = {
             after = ["network.target"];
             description = "Claude Max API Proxy";
-            path = [pkgs.bash pkgs.claude-code pkgs.git pkgs.git-crypt pkgs.nodejs pkgs.openssh];
+            path = [openclawCli pkgs.bash pkgs.claude-code pkgs.docker pkgs.git pkgs.git-crypt pkgs.nodejs pkgs.openssh];
             wantedBy = ["multi-user.target"];
 
             environment = sharedEnv;
