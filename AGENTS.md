@@ -48,46 +48,59 @@
 9. **Complete**: After all quality gates pass, summarize changes made and ask about committing (see Version Control section)
 
 ## Architecture
+
 Multi-host NixOS configuration using Nix flakes with home-manager for user configuration:
 - **Multi-host**: Each host lives under `hosts/<hostname>/` with its own `configuration.nix`, `hardware-configuration.nix`, and `modules/`
-- **Flake Inputs**: nixpkgs-unstable, home-manager, nix-flatpak, stylix (theming)
+- **Flake Inputs**: nixpkgs-unstable, home-manager, microvm, nix-flatpak, stylix (theming)
 - **Module System**: Each module exports both `nixos` and `home` attributes for system and user configuration respectively
 - **Auto-import**: Modules are automatically imported from the host's `modules/` directory via its `configuration.nix`
 
 ### Hosts
-- **roman-nixos** - Desktop/workstation. NVIDIA drivers, systemd-boot, EFI. GNOME with extensive dconf configuration and custom extensions
-- **homelab** (`192.168.70.70`) - Server. Runs containerized services (openclaw, cloudflared) and a HAOS KVM VM. Deployed remotely via `nx-deploy` or `nx-sync-all`
 
-### Home Assistant (HAOS)
-- Runs as a KVM VM on the homelab at `192.168.70.71:8123`
-- SSH access: `ssh hassio@192.168.70.71` (SSH addon with Protection Mode disabled for host D-Bus access)
-- USB passthrough: Sonoff Zigbee dongle + Realtek BT adapter (`0x0bda:0xb85b`)
-- Zigbee2MQTT for Zigbee devices, native BLE for Bluetooth devices
+#### roman-nixos
+Desktop/workstation. NVIDIA drivers, systemd-boot, EFI. GNOME with extensive dconf configuration and custom extensions.
+
+#### homelab (`192.168.70.70`)
+Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
+- **openclaw microVM** (`192.168.70.72`) — QEMU VM via microvm.nix containing:
+  - Docker container running OpenClaw gateway (port `7072`)
+  - claude-max-api-proxy systemd service (port `3456`)
+  - cloudflared tunnel (`claw.halerc.xyz`)
+  - signal-cli JSON-RPC daemon (port `8080`)
+- **HAOS KVM VM** (`192.168.70.71:8123`) — Home Assistant OS via libvirt/QEMU:
+  - SSH: `ssh hassio@192.168.70.71`
+  - USB passthrough: Sonoff Zigbee dongle + Realtek BT adapter (`0x0bda:0xb85b`)
+  - Zigbee2MQTT for Zigbee devices, native BLE for Bluetooth devices
+
+### SSH Access
+- **homelab**: `ssh roman@192.168.70.70`
+- **openclaw VM**: `ssh -J roman@192.168.70.70 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null roman@192.168.70.72`
+- **HAOS**: `ssh hassio@192.168.70.71` (SSH addon, Protection Mode disabled for host D-Bus access)
 
 ## Project Structure
-Key directories:
-- `hosts/roman-nixos/` - Desktop/workstation host configuration
-- `hosts/roman-nixos/modules/` - NixOS and home-manager modules, each exporting `{ nixos = {...}; home = {...}; }` structure
-- `hosts/roman-nixos/modules/opencode/` - OpenCode AI assistant configuration and secrets
-- `hosts/roman-nixos/modules/stylix/` - Theming configuration with stylix
-- `hosts/roman-nixos/modules/zsh/` - Shell configuration including fastfetch
-- `hosts/roman-nixos/modules/rclone/` - Cloud storage sync configuration
-- `hosts/homelab/` - Homelab server configuration
-- `hosts/homelab/modules/openclaw/` - Openclaw container config (OCI container, runs as UID 1000)
-- `hosts/homelab/modules/cloudflared/` - Cloudflare tunnel for claw.halerc.xyz
-- `hosts/homelab/modules/haos.nix` - HAOS KVM VM definition (USB passthrough for Zigbee + BT)
 
-Key files:
-- `flake.nix` - Nix flake definition with inputs and all host configurations
-- `hosts/roman-nixos/configuration.nix` - Desktop host config that imports all modules and sets up home-manager
-- `hosts/roman-nixos/hardware-configuration.nix` - Hardware-specific configuration (auto-generated)
-- `hosts/homelab/configuration.nix` - Homelab server config
+### Directories
+- `hosts/roman-nixos/` — Desktop/workstation host configuration
+- `hosts/roman-nixos/modules/` — NixOS and home-manager modules, each exporting `{ nixos = {...}; home = {...}; }`
+- `hosts/roman-nixos/modules/opencode/` — OpenCode AI assistant configuration and secrets
+- `hosts/roman-nixos/modules/stylix/` — Theming configuration with stylix
+- `hosts/roman-nixos/modules/zsh/` — Shell configuration including fastfetch
+- `hosts/roman-nixos/modules/rclone/` — Cloud storage sync configuration
+- `hosts/homelab/` — Homelab server configuration
+- `hosts/homelab/modules/openclaw/` — MicroVM: Docker (openclaw gateway), claude-max-api-proxy, cloudflared, signal-cli
+- `hosts/homelab/modules/haos.nix` — HAOS KVM VM definition (USB passthrough for Zigbee + BT)
+
+### Key Files
+- `flake.nix` — Nix flake definition with inputs and all host configurations
+- `hosts/roman-nixos/configuration.nix` — Desktop host config that imports all modules and sets up home-manager
+- `hosts/roman-nixos/hardware-configuration.nix` — Hardware-specific configuration (auto-generated)
+- `hosts/homelab/configuration.nix` — Homelab server config
 
 ## Code Style
 
 ### General Principles
-- **Simplicity**: Straightforward solutions. No unnecessary intermediate variables—directly invoke/access if used once
-- **Paradigm**: Functional only—pure functions, immutability (Nix is inherently functional)
+- **Simplicity**: Straightforward solutions. No unnecessary intermediate variables — directly invoke/access if used once
+- **Paradigm**: Functional only — pure functions, immutability (Nix is inherently functional)
 - **Duplicate Code**: Extract to reusable modules or let bindings
 - **Dependencies**: Check existing flake inputs before adding new ones. Document rationale for major additions
 
@@ -111,7 +124,7 @@ Key files:
 - **Folders**: Only use when module needs additional files (e.g., `stylix/default.nix` with `wallpaper.jpg`)
 
 ### Comments & Documentation
-- **When**: Explain "why" not "what"—business logic, workarounds, non-obvious decisions
+- **When**: Explain "why" not "what" — business logic, workarounds, non-obvious decisions
 - **Avoid**: NEVER restate code. If self-explanatory, no comment needed
 - **TODOs**: `# TODO:` with context
 
@@ -127,9 +140,9 @@ Run in this order to fail fast:
 ## Version Control
 
 ### CRITICAL: Explicit Permission Required
-- **NEVER do ANY git operation without explicit user permission** - This includes: commit, push, stage, unstage, branch operations, merges, rebases, etc.
+- **NEVER do ANY git operation without explicit user permission** — This includes: commit, push, stage, unstage, branch operations, merges, rebases, etc.
 - **ALWAYS use `question_tool` and wait for user confirmation** before executing ANY git command
-- **Even if quality gates pass, even if the user said "commit" earlier in the conversation, even if it seems obvious** - STOP and ask for confirmation with the exact options below
+- **Even if quality gates pass, even if the user said "commit" earlier in the conversation, even if it seems obvious** — STOP and ask for confirmation with the exact options below
 - **No exceptions. No shortcuts. No assuming intent.**
 
 ### Quality Gates & Timing
@@ -152,26 +165,28 @@ Run in this order to fail fast:
     - On other response: treat as instruction (modify message, change files, make more changes, etc.)
     - If file changes made relevant to current commit: restart entire workflow from beginning
   - On other response: treat as instruction (don't start commit workflow)
-- **Commit Message Format**: `emoji type(scope): description`
-  - Examples: `✨ feat(gnome): add blur-my-shell extension` | `🐛 fix(drivers): resolve nvidia sleep issue` | `♻️ refactor(modules): extract common patterns`
-  - **Body**: Keep simple and concise. Skip body for obvious changes. Use bullet list only for meaningful details (key architectural decisions, breaking changes, important context). Avoid exhaustive change lists
-- **Types with Emojis**:
-  - `✨ feat` - New feature
-  - `🐛 fix` - Bug fix
-  - `♻️ refactor` - Code refactoring
-  - `✅ test` - Adding or updating tests
-  - `📚 docs` - Documentation changes
-  - `🔧 chore` - Maintenance tasks
-  - `⚡ perf` - Performance improvements
-  - `🎨 style` - Code style/formatting changes
-  - `🔒 security` - Security improvements
+
+### Commit Messages
+- **Format**: `emoji type(scope): description`
+- **Examples**: `✨ feat(gnome): add blur-my-shell extension` | `🐛 fix(drivers): resolve nvidia sleep issue` | `♻️ refactor(modules): extract common patterns`
+- **Body**: Keep simple and concise. Skip body for obvious changes. Use bullet list only for meaningful details (key architectural decisions, breaking changes, important context). Avoid exhaustive change lists
 - **Scope**: Module name (e.g., `gnome`, `firefox`, `stylix`, `system`, `drivers`)
+- **Types**:
+  - `✨ feat` — New feature
+  - `🐛 fix` — Bug fix
+  - `♻️ refactor` — Code refactoring
+  - `✅ test` — Adding or updating tests
+  - `📚 docs` — Documentation changes
+  - `🔧 chore` — Maintenance tasks
+  - `⚡ perf` — Performance improvements
+  - `🎨 style` — Code style/formatting changes
+  - `🔒 security` — Security improvements
 
 ## Commands
-- **Format**: `alejandra .` (format all Nix files)
-- **Check**: `nix flake check` (validate flake)
-- **Build**: `sudo nixos-rebuild build --flake .#roman-nixos` (build without switching)
-- **Switch**: `sudo nixos-rebuild switch --flake .#roman-nixos` (build and switch to new configuration)
-- **Update**: `nix flake update` (update flake inputs)
-- **Garbage collect**: `sudo nix-collect-garbage -d` (remove old generations)
-- **Deploy homelab**: `nx-deploy` or `nx-sync-all` (aliases), or `nixos-rebuild switch --flake ~/.nixos#homelab --target-host roman@192.168.70.70 --sudo`
+- **Format**: `alejandra .`
+- **Check**: `nix flake check`
+- **Build**: `sudo nixos-rebuild build --flake .#roman-nixos`
+- **Switch**: `sudo nixos-rebuild switch --flake .#roman-nixos`
+- **Update**: `nix flake update`
+- **Garbage collect**: `sudo nix-collect-garbage -d`
+- **Deploy homelab**: `nx-deploy` or `nx-sync-all`, or `nixos-rebuild switch --flake ~/.nixos#homelab --target-host roman@192.168.70.70 --sudo`
