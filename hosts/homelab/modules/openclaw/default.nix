@@ -41,6 +41,7 @@
         OBSIDIAN_GIT_SSH_KEY_FILE = "/var/lib/openclaw-obsidian/ssh_key";
         OBSIDIAN_GIT_SSH_PUB_KEY_FILE = "/var/lib/openclaw-obsidian/ssh_key.pub";
         TAVILY_API_KEY = secrets.tavilyApiKey;
+        TZ = "Europe/Vienna";
       };
 
       # Signal
@@ -137,6 +138,8 @@
       };
 
       security.sudo.wheelNeedsPassword = false;
+
+      time.timeZone = "Europe/Vienna";
 
       services.beszel.agent = {
         enable = true;
