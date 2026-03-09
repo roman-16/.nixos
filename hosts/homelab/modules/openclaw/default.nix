@@ -242,6 +242,9 @@
           # but files live at ${dataDir}/media/ on the VM
           "d /home/node/.openclaw 0755 root root -"
           "L /home/node/.openclaw/media - - - - ${dataDir}/media"
+          "L /home/node/.openclaw/skills - - - - ${dataDir}/skills"
+          "L /home/node/.openclaw/workspace - - - - ${dataDir}/workspace"
+          "L /home/node/self-improving - - - - ${dataDir}/workspace/self-improving"
 
           "d ${signalDataDir} 0700 root root -"
 
