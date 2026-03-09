@@ -62,15 +62,28 @@ Desktop/workstation. NVIDIA drivers, systemd-boot, EFI. GNOME with extensive dco
 
 #### homelab (`192.168.70.70`)
 Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
+- **nginx reverse proxy** (port `8082`) — Single entrypoint for Cloudflare tunnel:
+  - `/` → Homepage dashboard (port `8083`)
+  - `/beszel` → Beszel hub (port `8090`, path-stripped + WebSocket)
+- **cloudflared** — Remote/token-based tunnel with two routes configured in CF dashboard:
+  - `halerc.xyz` → `localhost:8082` (nginx)
+  - `claw.halerc.xyz` → `192.168.70.72:7072` (OpenClaw)
+- **Monitoring stack**:
+  - Homepage dashboard (port `8083`, internal) — `https://halerc.xyz`
+  - Gatus health checks (port `8080`, LAN only) — `http://192.168.70.70:8080`
+  - Beszel hub (port `8090`, `127.0.0.1` + firewall open for agents) — `https://halerc.xyz/beszel`
+  - Beszel agents on homelab and openclaw (SSH-based), HASS (WebSocket addon)
 - **openclaw microVM** (`192.168.70.72`) — QEMU VM via microvm.nix containing:
   - Docker container running OpenClaw gateway (port `7072`)
-  - claude-max-api-proxy systemd service (port `3456`)
-  - cloudflared tunnel (`claw.halerc.xyz`)
-  - signal-cli JSON-RPC daemon (port `8080`)
+  - claude-max-api-proxy systemd service (port `3456`, `127.0.0.1` only)
+  - signal-cli JSON-RPC daemon (port `8080`, `127.0.0.1` only)
+  - Beszel agent
 - **HAOS KVM VM** (`192.168.70.71:8123`) — Home Assistant OS via libvirt/QEMU:
   - SSH: `ssh hassio@192.168.70.71`
   - USB passthrough: Sonoff Zigbee dongle + Realtek BT adapter (`0x0bda:0xb85b`)
   - Zigbee2MQTT for Zigbee devices, native BLE for Bluetooth devices
+  - cloudflared addon — Separate tunnel "hass" for `hass.halerc.xyz` (managed by addon, NOT in NixOS tunnel)
+  - Beszel agent addon (`2dc376b9_beszel-agent`)
 
 ### SSH Access
 - **homelab**: `ssh roman@192.168.70.70`
@@ -82,13 +95,15 @@ Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
 ### Directories
 - `hosts/roman-nixos/` — Desktop/workstation host configuration
 - `hosts/roman-nixos/modules/` — NixOS and home-manager modules, each exporting `{ nixos = {...}; home = {...}; }`
-- `hosts/roman-nixos/modules/opencode/` — OpenCode AI assistant configuration and secrets
+- `hosts/roman-nixos/modules/Claude/` — Claude Code AI assistant configuration and secrets
 - `hosts/roman-nixos/modules/stylix/` — Theming configuration with stylix
 - `hosts/roman-nixos/modules/zsh/` — Shell configuration including fastfetch
 - `hosts/roman-nixos/modules/rclone/` — Cloud storage sync configuration
 - `hosts/homelab/` — Homelab server configuration
-- `hosts/homelab/modules/openclaw/` — MicroVM: Docker (openclaw gateway), claude-max-api-proxy, cloudflared, signal-cli
-- `hosts/homelab/modules/haos.nix` — HAOS KVM VM definition (USB passthrough for Zigbee + BT)
+- `hosts/homelab/modules/cloudflared/` — Cloudflare tunnel service (remote/token-based)
+- `hosts/homelab/modules/hass.nix` — HASS KVM VM definition (USB passthrough for Zigbee + BT)
+- `hosts/homelab/modules/monitoring/` — Homepage dashboard, Gatus health checks, Beszel hub + agent
+- `hosts/homelab/modules/openclaw/` — MicroVM: Docker (openclaw gateway), claude-max-api-proxy, signal-cli, Beszel agent
 
 ### Key Files
 - `flake.nix` — Nix flake definition with inputs and all host configurations
@@ -190,3 +205,4 @@ Run in this order to fail fast:
 - **Update**: `nix flake update`
 - **Garbage collect**: `sudo nix-collect-garbage -d`
 - **Deploy homelab**: `nx-deploy` or `nx-sync-all`, or `nixos-rebuild switch --flake ~/.nixos#homelab --target-host roman@192.168.70.70 --sudo`
+
