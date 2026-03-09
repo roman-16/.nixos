@@ -128,7 +128,7 @@
         ];
       };
 
-      environment.systemPackages = [pkgs.claude-code pkgs.git pkgs.git-crypt];
+      environment.systemPackages = [pkgs.claude-code pkgs.curl pkgs.git pkgs.git-crypt pkgs.jq];
 
       networking = {
         firewall.allowedTCPPorts = [gatewayPort];
@@ -290,10 +290,15 @@
           containers.openclaw = {
             cmd = ["node" "openclaw.mjs" "gateway" "--allow-unconfigured"];
 
-            environment = sharedEnv;
+            environment =
+              sharedEnv
+              // {
+                PATH = "${pkgs.lib.makeBinPath [pkgs.curl pkgs.jq]}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+              };
             extraOptions = ["--network=host"];
             image = "ghcr.io/openclaw/openclaw:latest";
             volumes = [
+              "/nix/store:/nix/store:ro"
               "${dataDir}:/home/node/.openclaw"
               "${dataDir}/cache:/home/node/.cache"
               "${dataDir}/npm-global:/home/node/.npm"
