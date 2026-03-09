@@ -29,6 +29,8 @@
         BACKUP_GIT_REMOTE = secrets.backupGitRemote;
         BACKUP_GIT_SSH_KEY_FILE = "/var/lib/openclaw-backup/ssh_key";
         BACKUP_GIT_SSH_PUB_KEY_FILE = "/var/lib/openclaw-backup/ssh_key.pub";
+        BRING_EMAIL = secrets.bringEmail;
+        BRING_PASSWORD = secrets.bringPassword;
         CLAUDE_CODE_OAUTH_TOKEN = secrets.claudeOauthToken;
         GIT_AUTHOR_EMAIL = "roman@lerchster.dev";
         GIT_AUTHOR_NAME = "Roman";
