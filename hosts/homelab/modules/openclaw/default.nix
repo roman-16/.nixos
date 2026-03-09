@@ -136,6 +136,12 @@
 
       security.sudo.wheelNeedsPassword = false;
 
+      services.beszel.agent = {
+        enable = true;
+        environmentFile = "/var/lib/beszel-agent/env";
+        openFirewall = true;
+      };
+
       services.openssh = {
         enable = true;
         hostKeys = [
@@ -162,19 +168,6 @@
         };
 
         services = {
-          cloudflared = {
-            after = ["network-online.target"];
-            description = "Cloudflare Tunnel for claw.halerc.xyz";
-            requires = ["network-online.target"];
-            wantedBy = ["multi-user.target"];
-
-            serviceConfig = {
-              ExecStart = "${pkgs.cloudflared}/bin/cloudflared tunnel --no-autoupdate run --token ${secrets.tunnelToken}";
-              Restart = "on-failure";
-              RestartSec = 5;
-            };
-          };
-
           claude-max-api-proxy = {
             after = ["network.target"];
             description = "Claude Max API Proxy";
@@ -265,6 +258,9 @@
           # npm cache for claude-max-api-proxy (prevent filling tmpfs rootfs)
           "d /var/lib/claude-max-api-proxy/npm-cache 0755 roman users -"
           "L /home/roman/.npm - - - - /var/lib/claude-max-api-proxy/npm-cache"
+
+          # Beszel agent env (user fills in KEY after hub setup)
+          "f /var/lib/beszel-agent/env 0600 root root -"
 
           # Persist Claude Code auth across VM reboots
           "d /var/lib/claude-auth 0700 roman users -"

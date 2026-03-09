@@ -24,16 +24,16 @@
       </hostdev>
     '';
 
-  haosXml = pkgs.writeText "haos.xml" ''
+  hassXml = pkgs.writeText "hass.xml" ''
     <domain type="kvm">
-      <name>haos</name>
+      <name>hass</name>
       <uuid>edea1db2-cf87-4a7c-9129-86fafab356b8</uuid>
       <memory unit="GiB">2</memory>
       <vcpu>2</vcpu>
       <os>
         <type arch="x86_64" machine="q35">hvm</type>
         <loader readonly="yes" type="pflash">/run/libvirt/nix-ovmf/edk2-x86_64-code.fd</loader>
-        <nvram template="/run/libvirt/nix-ovmf/edk2-i386-vars.fd">/var/lib/libvirt/qemu/nvram/haos_VARS.fd</nvram>
+        <nvram template="/run/libvirt/nix-ovmf/edk2-i386-vars.fd">/var/lib/libvirt/qemu/nvram/hass_VARS.fd</nvram>
         <boot dev="hd"/>
       </os>
       <features>
@@ -44,7 +44,7 @@
       <devices>
         <disk type="file" device="disk">
           <driver name="qemu" type="qcow2"/>
-          <source file="/var/lib/libvirt/images/haos.qcow2"/>
+          <source file="/var/lib/libvirt/images/hass.qcow2"/>
           <target dev="vda" bus="virtio"/>
         </disk>
         <interface type="bridge">
@@ -59,7 +59,7 @@
 in {
   systemd = {
     services = {
-      haos-vm = {
+      hass-vm = {
         after = ["libvirtd.service"];
         description = "Define and start HAOS VM";
         requires = ["libvirtd.service"];
@@ -76,7 +76,7 @@ in {
           mkdir -p /var/lib/libvirt/images /var/lib/libvirt/qemu/nvram
           chmod 755 /var/lib/libvirt/images /var/lib/libvirt/qemu/nvram
 
-          for f in /var/lib/libvirt/images/haos.qcow2 /var/lib/libvirt/qemu/nvram/haos_VARS.fd; do
+          for f in /var/lib/libvirt/images/hass.qcow2 /var/lib/libvirt/qemu/nvram/hass_VARS.fd; do
             [ -f "$f" ] && chmod 666 "$f"
           done
 
@@ -85,23 +85,23 @@ in {
             chmod 666 "$dev" 2>/dev/null || true
           done
 
-          virsh define ${haosXml}
+          virsh define ${hassXml}
 
-          if ! virsh domstate haos 2>/dev/null | grep -q "running"; then
-            virsh start haos
+          if ! virsh domstate hass 2>/dev/null | grep -q "running"; then
+            virsh start hass
           fi
 
           # Hot-attach USB devices with retry (avoids race with USB subsystem)
           # Detach first to clear stale state from previous VM definitions
           sleep 5
           ${builtins.concatStringsSep "\n" (map (dev: ''
-              virsh detach-device haos ${mkUsbXml dev} 2>/dev/null || true
+              virsh detach-device hass ${mkUsbXml dev} 2>/dev/null || true
             '')
             usbDevices)}
           sleep 2
           ${builtins.concatStringsSep "\n" (map (dev: ''
               for i in $(seq 1 10); do
-                if virsh attach-device haos ${mkUsbXml dev} 2>&1; then
+                if virsh attach-device hass ${mkUsbXml dev} 2>&1; then
                   echo "Attached USB device: ${dev.name}"
                   break
                 fi
