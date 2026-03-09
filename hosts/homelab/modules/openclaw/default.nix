@@ -290,15 +290,13 @@
           containers.openclaw = {
             cmd = ["node" "openclaw.mjs" "gateway" "--allow-unconfigured"];
 
-            environment =
-              sharedEnv
-              // {
-                PATH = "${pkgs.lib.makeBinPath [pkgs.curl pkgs.jq]}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
-              };
+            environment = sharedEnv;
             extraOptions = ["--network=host"];
             image = "ghcr.io/openclaw/openclaw:latest";
             volumes = [
               "/nix/store:/nix/store:ro"
+              "${pkgs.curl}/bin/curl:/usr/local/bin/curl:ro"
+              "${pkgs.jq}/bin/jq:/usr/local/bin/jq:ro"
               "${dataDir}:/home/node/.openclaw"
               "${dataDir}/cache:/home/node/.cache"
               "${dataDir}/npm-global:/home/node/.npm"
