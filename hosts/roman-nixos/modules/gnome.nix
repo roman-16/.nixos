@@ -250,9 +250,9 @@
         };
 
         "org/gnome/shell/extensions/dynamic-music-pill" = {
-          action-left-click = "toggle_menu";
+          action-left-click = "play_pause";
           action-middle-click = "none";
-          action-right-click = "play_pause";
+          action-right-click = "toggle_menu";
           invert-scroll-direction = true;
           target-container = 2;
         };
