@@ -65,6 +65,7 @@ Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
 - **nginx reverse proxy** (port `8082`) — Single entrypoint for Cloudflare tunnel:
   - `/` → Homepage dashboard (port `8083`)
   - `/beszel` → Beszel hub (port `8090`, path-stripped + WebSocket)
+
 - **cloudflared** — Remote/token-based tunnel with two routes configured in CF dashboard:
   - `halerc.xyz` → `localhost:8082` (nginx)
   - `claw.halerc.xyz` → `192.168.70.72:7072` (OpenClaw)
@@ -72,7 +73,13 @@ Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
   - Homepage dashboard (port `8083`, internal) — `https://halerc.xyz`
   - Gatus health checks (port `8080`, LAN only) — `http://192.168.70.70:8080`
   - Beszel hub (port `8090`, `127.0.0.1` + firewall open for agents) — `https://halerc.xyz/beszel`
-  - Beszel agents on homelab and openclaw (SSH-based), HASS (WebSocket addon)
+  - Beszel agents on homelab, openclaw, and vpn (SSH-based), HASS (WebSocket addon)
+- **vpn microVM** (`192.168.70.73`) — QEMU VM via microvm.nix (2GB RAM, 2 vCPUs) containing:
+  - Docker container running wg-easy (WireGuard VPN + web UI)
+  - WireGuard tunnel on port `51820/udp`, web UI on port `51821/tcp` (LAN-only, no subpath support)
+  - DuckDNS dynamic DNS updater (`halerc-vpn.duckdns.org`)
+  - Beszel agent
+  - Login: `admin@halerc.xyz` / password in `hosts/homelab/modules/vpn/secrets.json`
 - **openclaw microVM** (`192.168.70.72`) — QEMU VM via microvm.nix containing:
   - Docker container running OpenClaw gateway (port `7072`)
   - claude-max-api-proxy systemd service (port `3456`, `127.0.0.1` only)
@@ -88,6 +95,7 @@ Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
 ### SSH Access
 - **homelab**: `ssh roman@192.168.70.70`
 - **openclaw VM**: `ssh -J roman@192.168.70.70 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null roman@192.168.70.72`
+- **vpn VM**: `ssh -J roman@192.168.70.70 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null roman@192.168.70.73`
 - **HAOS**: `ssh hassio@192.168.70.71` (SSH addon, Protection Mode disabled for host D-Bus access)
 
 ## Project Structure
@@ -103,6 +111,7 @@ Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
 - `hosts/homelab/modules/cloudflared/` — Cloudflare tunnel service (remote/token-based)
 - `hosts/homelab/modules/hass.nix` — HASS KVM VM definition (USB passthrough for Zigbee + BT)
 - `hosts/homelab/modules/monitoring/` — Homepage dashboard, Gatus health checks, Beszel hub + agent
+- `hosts/homelab/modules/vpn/` — MicroVM: Docker (wg-easy WireGuard VPN), DuckDNS updater, Beszel agent
 - `hosts/homelab/modules/openclaw/` — MicroVM: Docker (openclaw gateway), claude-max-api-proxy, signal-cli, Beszel agent
 
 ### Key Files
