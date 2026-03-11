@@ -2,6 +2,7 @@
   hassIp = "192.168.70.71";
   homelabIp = "192.168.70.70";
   openclawIp = "192.168.70.72";
+  vpnIp = "192.168.70.73";
 in {
   networking.firewall.allowedTCPPorts = [
     8082 # nginx reverse proxy (cloudflared routes here)
@@ -64,6 +65,16 @@ in {
             ];
           }
           {
+            name = "WireGuard VPN";
+            group = "Infrastructure";
+            url = "http://${vpnIp}:51821";
+            interval = "5m";
+            conditions = [
+              "[STATUS] < 500"
+              "[RESPONSE_TIME] < 5000"
+            ];
+          }
+          {
             name = "Homelab SSH";
             group = "Network";
             url = "tcp://${homelabIp}:22";
@@ -74,6 +85,13 @@ in {
             name = "Openclaw VM SSH";
             group = "Network";
             url = "tcp://${openclawIp}:22";
+            interval = "5m";
+            conditions = ["[CONNECTED] == true"];
+          }
+          {
+            name = "VPN VM SSH";
+            group = "Network";
+            url = "tcp://${vpnIp}:22";
             interval = "5m";
             conditions = ["[CONNECTED] == true"];
           }
@@ -116,6 +134,15 @@ in {
                 href = "https://claw.halerc.xyz";
                 icon = "mdi-robot";
                 siteMonitor = "http://${openclawIp}:7072";
+                statusStyle = "dot";
+              };
+            }
+            {
+              "WireGuard VPN" = {
+                description = "Remote access VPN";
+                href = "http://${vpnIp}:51821";
+                icon = "wireguard";
+                siteMonitor = "http://${vpnIp}:51821";
                 statusStyle = "dot";
               };
             }
