@@ -6,6 +6,15 @@
       "nixpkgs": {
         "expr": "import (builtins.getFlake \"${workspaceFolder}\").inputs.nixpkgs { }"
       },
+      "formatting": {
+        "command": ["alejandra"]
+      },
+      "diagnostic": {
+        "suppress": [
+          "sema-extra-with",
+          "sema-escaping-with"
+        ]
+      },
       "options": {
         "home-manager": {
           "expr": "(builtins.getFlake \"${workspaceFolder}\").nixosConfigurations.roman-nixos.options.home-manager.users.type.getSubOptions []"

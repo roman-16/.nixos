@@ -4,10 +4,10 @@
       uuid = "dynamic-music-pill@andbal";
       name = "Dynamic Music Pill";
       pname = "dynamic-music-pill";
-      version = "26";
+      version = "29";
       description = "An elegant, pill-shaped music player for your desktop";
       link = "https://extensions.gnome.org/extension/9334/dynamic-music-pill/";
-      sha256 = "sha256-YnFGl+LJRWioq/mPc59+zjrVkGdE516UJc+H9stGRnk=";
+      sha256 = "sha256-f1JYxJ3/L/WZGR/g6AcrpsA8Vf+CpcnAzP2FaiHMgGU=";
       metadata = "eyJ1dWlkIjoiZHluYW1pYy1tdXNpYy1waWxsQGFuZGJhbCIsIm5hbWUiOiJEeW5hbWljIE11c2ljIFBpbGwiLCJkZXNjcmlwdGlvbiI6IkFuIGVsZWdhbnQsIHBpbGwtc2hhcGVkIG11c2ljIHBsYXllciBmb3IgeW91ciBkZXNrdG9wLiIsInNoZWxsLXZlcnNpb24iOlsiNDUiLCI0NiIsIjQ3IiwiNDgiLCI0OSJdLCJ1cmwiOiJodHRwczovL2dpdGh1Yi5jb20vQW5kYmFsMjMvZHluYW1pYy1tdXNpYy1waWxsIn0K";
     };
   in {

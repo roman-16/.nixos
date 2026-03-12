@@ -32,7 +32,6 @@
       file-roller
       pear-desktop
       zip
-      lmstudio
       libreoffice
       qbittorrent
       gradia
