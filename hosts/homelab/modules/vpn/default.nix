@@ -2,16 +2,15 @@
   microvm.vms.vpn = {
     autostart = true;
 
-    config = {pkgs, ...}: let
+    config = {...}: let
       secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
 
       vpnIp = "192.168.70.73";
-      webUiPort = 51821;
-      wgPort = 51820;
+      ztnetPort = 3000;
+      ztPort = 9993;
     in {
       boot = {
-        # Pre-load modules so wg-easy container doesn't need to load them
-        kernelModules = ["ip_tables" "iptable_filter" "iptable_mangle" "iptable_nat" "nf_nat" "wireguard"];
+        kernelModules = ["tun"];
 
         kernel.sysctl = {
           "net.ipv4.conf.all.src_valid_mark" = 1;
@@ -45,15 +44,15 @@
           {
             image = "var.img";
             mountPoint = "/var";
-            size = 1024;
+            size = 40960;
           }
         ];
       };
 
       networking = {
         firewall = {
-          allowedTCPPorts = [webUiPort];
-          allowedUDPPorts = [wgPort];
+          allowedTCPPorts = [ztnetPort];
+          allowedUDPPorts = [ztPort];
         };
         hostName = "vpn";
         useNetworkd = true;
@@ -66,12 +65,6 @@
           enable = true;
           environmentFile = "/var/lib/beszel-agent/env";
           openFirewall = true;
-        };
-
-        duckdns = {
-          enable = true;
-          domains = [secrets.duckdnsDomain];
-          tokenFile = pkgs.writeText "duckdns-token" secrets.duckdnsToken;
         };
 
         openssh = {
@@ -102,10 +95,9 @@
           };
         };
 
-        # Symlink so wg-easy container can find kernel modules
         tmpfiles.rules = [
-          "L /lib/modules - - - - /run/current-system/kernel-modules/lib/modules"
-          "d /var/lib/wg-easy 0700 root root -"
+          "d /var/lib/zerotier-one 0700 root root -"
+          "d /var/lib/ztnet/postgres 0700 root root -"
           "f /var/lib/beszel-agent/env 0600 root root -"
         ];
       };
@@ -126,23 +118,52 @@
         oci-containers = {
           backend = "docker";
 
-          containers.wg-easy = {
+          containers.postgres = {
             environment = {
-              DISABLE_IPV6 = "true";
-              INSECURE = "true";
+              POSTGRES_DB = "ztnet";
+              POSTGRES_PASSWORD = secrets.postgresPassword;
+              POSTGRES_USER = "postgres";
+            };
+            extraOptions = ["--network=host"];
+            image = "postgres:15.2-alpine";
+            volumes = [
+              "/var/lib/ztnet/postgres:/var/lib/postgresql/data"
+            ];
+          };
+
+          containers.zerotier = {
+            environment = {
+              ZT_ALLOW_MANAGEMENT_FROM = "0.0.0.0/0";
+              ZT_OVERRIDE_LOCAL_CONF = "true";
             };
             extraOptions = [
               "--cap-add=NET_ADMIN"
-              "--cap-add=SYS_MODULE"
+              "--cap-add=SYS_ADMIN"
+              "--device=/dev/net/tun:/dev/net/tun"
               "--network=host"
             ];
-            image = "ghcr.io/wg-easy/wg-easy:15";
+            image = "zyclonite/zerotier:latest";
             volumes = [
-              # Nix store for shared libraries + iptables-nft to replace container's legacy iptables
-              "/nix/store:/nix/store:ro"
-              "${pkgs.iptables}/bin/xtables-nft-multi:/usr/sbin/iptables:ro"
-              "/lib/modules:/lib/modules:ro"
-              "/var/lib/wg-easy:/etc/wireguard"
+              "/var/lib/zerotier-one:/var/lib/zerotier-one"
+            ];
+          };
+
+          containers.ztnet = {
+            dependsOn = ["postgres" "zerotier"];
+            environment = {
+              NEXTAUTH_SECRET = secrets.nextauthSecret;
+              NEXTAUTH_URL = "http://${vpnIp}:${toString ztnetPort}";
+              NEXTAUTH_URL_INTERNAL = "http://127.0.0.1:${toString ztnetPort}";
+              POSTGRES_DB = "ztnet";
+              POSTGRES_HOST = "127.0.0.1";
+              POSTGRES_PASSWORD = secrets.postgresPassword;
+              POSTGRES_PORT = "5432";
+              POSTGRES_USER = "postgres";
+            };
+            extraOptions = ["--network=host"];
+            image = "sinamics/ztnet:latest";
+            volumes = [
+              "/var/lib/zerotier-one:/var/lib/zerotier-one"
             ];
           };
         };
