@@ -160,6 +160,7 @@
               POSTGRES_PASSWORD = "ztnet-postgres-2026";
               POSTGRES_PORT = "5432";
               POSTGRES_USER = "postgres";
+              ZT_ADDR = "http://127.0.0.1:9993";
             };
             extraOptions = ["--network=host"];
             image = "sinamics/ztnet:latest";
