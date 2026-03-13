@@ -140,7 +140,7 @@ in {
             {
               "ZeroTier VPN" = {
                 description = "L2 VPN";
-                href = "http://${vpnIp}:3000";
+                href = "https://vpn.halerc.xyz";
                 icon = "zerotier";
                 siteMonitor = "http://${vpnIp}:3000";
                 statusStyle = "dot";
