@@ -20,7 +20,7 @@ in {
       hub = {
         enable = true;
         environment = {
-          APP_URL = "https://halerc.xyz/beszel";
+          APP_URL = "https://beszel.halerc.xyz";
           AUTO_LOGIN = "admin@halerc.xyz";
         };
         host = "127.0.0.1";
@@ -153,14 +153,14 @@ in {
             {
               "Beszel" = {
                 description = "CPU, memory, disk, network";
-                href = "https://halerc.xyz/beszel";
+                href = "https://beszel.halerc.xyz";
                 icon = "mdi-chart-line";
               };
             }
             {
               "Gatus" = {
                 description = "Uptime & health checks";
-                href = "http://${homelabIp}:8080";
+                href = "https://gatus.halerc.xyz";
                 icon = "gatus";
               };
             }
@@ -213,16 +213,6 @@ in {
         locations = {
           "/" = {
             proxyPass = "http://127.0.0.1:8083";
-          };
-
-          "/beszel" = {
-            extraConfig = ''
-              rewrite /beszel/(.*) /$1 break;
-              rewrite /beszel$ / break;
-              proxy_read_timeout 360s;
-            '';
-            proxyPass = "http://127.0.0.1:8090";
-            proxyWebsockets = true;
           };
         };
       };
