@@ -65,9 +65,9 @@ in {
             ];
           }
           {
-            name = "WireGuard VPN";
+            name = "ZeroTier ZTNET";
             group = "Infrastructure";
-            url = "http://${vpnIp}:51821";
+            url = "http://${vpnIp}:3000";
             interval = "5m";
             conditions = [
               "[STATUS] < 500"
@@ -138,11 +138,11 @@ in {
               };
             }
             {
-              "WireGuard VPN" = {
-                description = "Remote access VPN";
-                href = "http://${vpnIp}:51821";
-                icon = "wireguard";
-                siteMonitor = "http://${vpnIp}:51821";
+              "ZeroTier VPN" = {
+                description = "L2 VPN";
+                href = "http://${vpnIp}:3000";
+                icon = "zerotier";
+                siteMonitor = "http://${vpnIp}:3000";
                 statusStyle = "dot";
               };
             }

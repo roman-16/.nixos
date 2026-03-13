@@ -124,7 +124,7 @@
           {
             image = "var.img";
             mountPoint = "/var";
-            size = 20480;
+            size = 40960;
           }
         ];
       };
