@@ -53,8 +53,25 @@
         firewall = {
           allowedTCPPorts = [ztnetPort];
           allowedUDPPorts = [ztPort];
+
+          # Allow ZeroTier clients to forward traffic to LAN
+          extraCommands = ''
+            iptables -A FORWARD -i zt+ -o enp0s4 -j ACCEPT
+            iptables -A FORWARD -i enp0s4 -o zt+ -m state --state RELATED,ESTABLISHED -j ACCEPT
+          '';
+          extraStopCommands = ''
+            iptables -D FORWARD -i zt+ -o enp0s4 -j ACCEPT || true
+            iptables -D FORWARD -i enp0s4 -o zt+ -m state --state RELATED,ESTABLISHED -j ACCEPT || true
+          '';
         };
         hostName = "vpn";
+
+        nat = {
+          enable = true;
+          externalInterface = "enp0s4";
+          internalInterfaces = ["zt+"];
+        };
+
         useNetworkd = true;
       };
 
@@ -90,7 +107,7 @@
           networks."20-lan" = {
             address = ["${vpnIp}/22"];
             dns = ["192.168.70.71" "1.1.1.1"];
-            matchConfig.Type = "ether";
+            matchConfig.Name = "enp0s4";
             routes = [{Gateway = "192.168.68.1";}];
           };
         };
