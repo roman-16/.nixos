@@ -192,14 +192,14 @@
 
           mimetype = "xdg-mime query filetype $@";
 
-          nx-deploy = "nh os switch --hostname homelab --target-host roman@192.168.70.70 --sudo";
+          nx-deploy = "nh os switch --hostname homelab --target-host roman@192.168.70.70 -- --sudo";
           nx-fmt = "alejandra -q ~/.nixos";
           nx-pull = "git -C ~/.nixos pull";
           nx-push = "git -C ~/.nixos commit -m \"$(date '+%Y-%m-%d %H:%M:%S')\"; git -C ~/.nixos push";
           nx-stage = "git -C ~/.nixos add .";
           nx-sync = "nx-fmt && nx-pull && nx-stage && nx-update && nx-stage && nx-push";
           nx-sync-all = "nx-fmt && nx-pull && nx-stage && nx-update && nx-deploy && nx-stage && nx-push";
-          nx-update = "nh os switch --update --hostname=roman-nixos";
+          nx-update = "nh os switch --update --hostname roman-nixos";
 
           tree = "tre";
         };
