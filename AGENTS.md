@@ -60,6 +60,9 @@ Multi-host NixOS configuration using Nix flakes with home-manager for user confi
 #### roman-nixos
 Desktop/workstation. NVIDIA drivers, systemd-boot, EFI. GNOME with extensive dconf configuration and custom extensions.
 
+#### Networking
+All host/VM IPs (`192.168.70.70`–`192.168.70.73`) are assigned via **router DHCP reservations** (MAC-based). NixOS configs use static addressing matching these reservations.
+
 #### homelab (`192.168.70.70`)
 Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
 - **nginx reverse proxy** (port `8082`) — Single entrypoint for Cloudflare tunnel:
