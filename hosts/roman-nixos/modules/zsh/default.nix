@@ -192,7 +192,7 @@
 
           mimetype = "xdg-mime query filetype $@";
 
-          nx-deploy = "nixos-rebuild switch --flake ~/.nixos#homelab --target-host roman@192.168.70.70 --sudo";
+          nx-deploy = "nh os switch --hostname homelab --target-host roman@192.168.70.70 --sudo";
           nx-fmt = "alejandra -q ~/.nixos";
           nx-pull = "git -C ~/.nixos pull";
           nx-push = "git -C ~/.nixos commit -m \"$(date '+%Y-%m-%d %H:%M:%S')\"; git -C ~/.nixos push";
