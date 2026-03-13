@@ -153,7 +153,7 @@
             environment = {
               HOSTNAME = "0.0.0.0";
               NEXTAUTH_SECRET = secrets.nextauthSecret;
-              NEXTAUTH_URL = "http://${vpnIp}:${toString ztnetPort}";
+              NEXTAUTH_URL = "https://vpn.halerc.xyz";
               NEXTAUTH_URL_INTERNAL = "http://127.0.0.1:${toString ztnetPort}";
               POSTGRES_DB = "ztnet";
               POSTGRES_HOST = "127.0.0.1";

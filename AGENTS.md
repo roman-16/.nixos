@@ -66,9 +66,10 @@ Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
   - `/` → Homepage dashboard (port `8083`)
   - `/beszel` → Beszel hub (port `8090`, path-stripped + WebSocket)
 
-- **cloudflared** — Remote/token-based tunnel with two routes configured in CF dashboard:
+- **cloudflared** — Remote/token-based tunnel with routes configured in CF dashboard:
   - `halerc.xyz` → `localhost:8082` (nginx)
   - `claw.halerc.xyz` → `192.168.70.72:7072` (OpenClaw)
+  - `vpn.halerc.xyz` → `192.168.70.73:3000` (ZTNET dashboard)
 - **Monitoring stack**:
   - Homepage dashboard (port `8083`, internal) — `https://halerc.xyz`
   - Gatus health checks (port `8080`, LAN only) — `http://192.168.70.70:8080`
@@ -76,7 +77,7 @@ Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
   - Beszel agents on homelab, openclaw, and vpn (SSH-based), HASS (WebSocket addon)
 - **vpn microVM** (`192.168.70.73`) — QEMU VM via microvm.nix (2GB RAM, 2 vCPUs) containing:
   - Docker containers: PostgreSQL, ZeroTier (controller + node), ZTNET (web UI)
-  - ZeroTier L2 VPN on port `9993/udp`, ZTNET dashboard on port `3000/tcp` (LAN-only)
+  - ZeroTier L2 VPN on port `9993/udp`, ZTNET dashboard on port `3000/tcp` — `https://vpn.halerc.xyz`
   - Beszel agent
   - First registered ZTNET user gets admin. Secrets in `hosts/homelab/modules/vpn/secrets.json`
 - **openclaw microVM** (`192.168.70.72`) — QEMU VM via microvm.nix containing:
