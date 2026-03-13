@@ -121,7 +121,7 @@
           containers.postgres = {
             environment = {
               POSTGRES_DB = "ztnet";
-              POSTGRES_PASSWORD = secrets.postgresPassword;
+              POSTGRES_PASSWORD = "ztnet-postgres-2026";
               POSTGRES_USER = "postgres";
             };
             extraOptions = ["--network=host"];
@@ -151,12 +151,13 @@
           containers.ztnet = {
             dependsOn = ["postgres" "zerotier"];
             environment = {
+              HOSTNAME = "0.0.0.0";
               NEXTAUTH_SECRET = secrets.nextauthSecret;
               NEXTAUTH_URL = "http://${vpnIp}:${toString ztnetPort}";
               NEXTAUTH_URL_INTERNAL = "http://127.0.0.1:${toString ztnetPort}";
               POSTGRES_DB = "ztnet";
               POSTGRES_HOST = "127.0.0.1";
-              POSTGRES_PASSWORD = secrets.postgresPassword;
+              POSTGRES_PASSWORD = "ztnet-postgres-2026";
               POSTGRES_PORT = "5432";
               POSTGRES_USER = "postgres";
             };

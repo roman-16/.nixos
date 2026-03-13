@@ -82,7 +82,7 @@ in {
             conditions = ["[CONNECTED] == true"];
           }
           {
-            name = "Openclaw VM SSH";
+            name = "OpenClaw VM SSH";
             group = "Network";
             url = "tcp://${openclawIp}:22";
             interval = "5m";
