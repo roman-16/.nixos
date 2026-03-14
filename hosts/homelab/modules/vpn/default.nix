@@ -2,12 +2,49 @@
   microvm.vms.vpn = {
     autostart = true;
 
-    config = {...}: let
+    config = {pkgs, ...}: let
       secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
 
       vpnIp = "192.168.70.73";
       ztnetPort = 3000;
       ztPort = 9993;
+      ztDeauthTimeout = 300; # 5 minutes in seconds
+
+      ztAutoDeauth = pkgs.writeShellScript "zt-auto-deauth" ''
+        TOKEN=$(cat /var/lib/zerotier-one/authtoken.secret)
+        API="http://localhost:${toString ztPort}"
+        NOW_MS=$(($(date +%s) * 1000))
+        TIMEOUT_MS=$((${toString ztDeauthTimeout} * 1000))
+
+        # Get controller's own node ID to exclude from deauth
+        SELF=$(${pkgs.curl}/bin/curl -sf -H "X-ZT1-Auth: $TOKEN" "$API/status" | ${pkgs.jq}/bin/jq -r '.address')
+
+        # Get all network IDs
+        NETWORKS=$(${pkgs.curl}/bin/curl -sf -H "X-ZT1-Auth: $TOKEN" "$API/controller/network" | ${pkgs.jq}/bin/jq -r '.[]')
+
+        # Cache peer data once
+        PEERS=$(${pkgs.curl}/bin/curl -sf -H "X-ZT1-Auth: $TOKEN" "$API/peer")
+
+        for NWID in $NETWORKS; do
+          MEMBERS=$(${pkgs.curl}/bin/curl -sf -H "X-ZT1-Auth: $TOKEN" "$API/controller/network/$NWID/member" | ${pkgs.jq}/bin/jq -r 'keys[]')
+
+          for MEMID in $MEMBERS; do
+            [ "$MEMID" = "$SELF" ] && continue
+
+            AUTHORIZED=$(${pkgs.curl}/bin/curl -sf -H "X-ZT1-Auth: $TOKEN" "$API/controller/network/$NWID/member/$MEMID" | ${pkgs.jq}/bin/jq -r '.authorized')
+            [ "$AUTHORIZED" != "true" ] && continue
+
+            LAST_RECEIVE=$(echo "$PEERS" | ${pkgs.jq}/bin/jq -r ".[] | select(.address==\"$MEMID\") | .paths[].lastReceive" 2>/dev/null | sort -rn | head -1)
+
+            if [ -z "$LAST_RECEIVE" ] || [ $((NOW_MS - LAST_RECEIVE)) -gt $TIMEOUT_MS ]; then
+              echo "Deauthorizing offline member $MEMID on network $NWID"
+              ${pkgs.curl}/bin/curl -sf -X POST -H "X-ZT1-Auth: $TOKEN" \
+                -d '{"authorized": false}' \
+                "$API/controller/network/$NWID/member/$MEMID" > /dev/null
+            fi
+          done
+        done
+      '';
     in {
       boot = {
         kernelModules = ["tun"];
@@ -109,6 +146,25 @@
             dns = ["192.168.70.71" "1.1.1.1"];
             matchConfig.Name = "enp0s4";
             routes = [{Gateway = "192.168.68.1";}];
+          };
+        };
+
+        services.zt-auto-deauth = {
+          description = "Deauthorize offline ZeroTier members";
+          after = ["docker-zerotier.service"];
+          requires = ["docker-zerotier.service"];
+          serviceConfig = {
+            ExecStart = ztAutoDeauth;
+            Type = "oneshot";
+          };
+        };
+
+        timers.zt-auto-deauth = {
+          description = "Periodically deauthorize offline ZeroTier members";
+          wantedBy = ["timers.target"];
+          timerConfig = {
+            OnBootSec = "5min";
+            OnUnitActiveSec = "2min";
           };
         };
 
