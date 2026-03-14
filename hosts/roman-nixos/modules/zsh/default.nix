@@ -15,13 +15,12 @@
         lsof
         devbox
         rar
-        comma
         wl-clipboard
       ];
     };
 
     programs = {
-      command-not-found.enable = true;
+      nix-index-database.comma.enable = true;
       zsh.enable = true;
     };
 
