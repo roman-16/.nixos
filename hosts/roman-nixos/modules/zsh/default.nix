@@ -15,6 +15,7 @@
         lsof
         devbox
         rar
+        comma
       ];
     };
 
