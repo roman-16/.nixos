@@ -16,6 +16,7 @@
         devbox
         rar
         comma
+        wl-clipboard
       ];
     };
 
@@ -159,6 +160,8 @@
         '';
 
         settings = {
+          copy_command = "wl-copy";
+          copy_on_select = true;
           on_force_close = "quit";
           pane_frames = false;
           show_release_notes = false;
