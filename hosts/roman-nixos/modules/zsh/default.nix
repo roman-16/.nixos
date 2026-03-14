@@ -61,11 +61,6 @@
         useTheme = "tokyonight_storm";
       };
 
-      pay-respects = {
-        enable = true;
-        enableZshIntegration = true;
-      };
-
       wezterm = {
         enable = true;
         enableZshIntegration = true;
