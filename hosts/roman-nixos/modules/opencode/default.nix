@@ -7,17 +7,11 @@
     # Needed for the chrome devtools workaround
     nixpkgs.config.allowUnfree = true;
 
-    home.file.".config/opencode" = {
-      recursive = true;
-      source = ./config;
-    };
-
     programs.opencode = {
       enable = true;
 
       settings = {
         autoupdate = false;
-        instructions = ["docs/README.md"];
         model = "anthropic/claude-opus-4-6";
 
         mcp = {
@@ -43,14 +37,14 @@
             url = "https://mcp.context7.com/mcp";
 
             headers = {
-              CONTEXT7_API_KEY = secrets.CONTEXT7_API_KEY;
+              CONTEXT7_API_KEY = secrets.context7ApiKey;
             };
           };
 
-          exa = {
+          tavily = {
             enabled = true;
             type = "remote";
-            url = "https://mcp.exa.ai/mcp";
+            url = "https://mcp.tavily.com/mcp/?tavilyApiKey=${secrets.tavilyApiKey}";
           };
         };
       };
