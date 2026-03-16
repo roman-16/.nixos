@@ -2,7 +2,11 @@
   microvm.vms.vpn = {
     autostart = true;
 
-    config = {pkgs, ...}: let
+    config = {
+      lib,
+      pkgs,
+      ...
+    }: let
       secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
 
       vpnIp = "192.168.70.73";
@@ -149,13 +153,23 @@
           };
         };
 
-        services.zt-auto-deauth = {
-          description = "Deauthorize offline ZeroTier members";
-          after = ["docker-zerotier.service"];
-          requires = ["docker-zerotier.service"];
-          serviceConfig = {
-            ExecStart = ztAutoDeauth;
-            Type = "oneshot";
+        services = {
+          docker-zerotier.serviceConfig.ExecStartPre = lib.mkBefore [
+            "${pkgs.docker}/bin/docker pull zyclonite/zerotier:latest"
+          ];
+
+          docker-ztnet.serviceConfig.ExecStartPre = lib.mkBefore [
+            "${pkgs.docker}/bin/docker pull sinamics/ztnet:latest"
+          ];
+
+          zt-auto-deauth = {
+            description = "Deauthorize offline ZeroTier members";
+            after = ["docker-zerotier.service"];
+            requires = ["docker-zerotier.service"];
+            serviceConfig = {
+              ExecStart = ztAutoDeauth;
+              Type = "oneshot";
+            };
           };
         };
 

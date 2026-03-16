@@ -204,6 +204,7 @@
             requires = ["claude-max-api-proxy.service" "signal-cli.service"];
 
             serviceConfig.ExecStartPre = lib.mkAfter [
+              "${pkgs.docker}/bin/docker pull ghcr.io/openclaw/openclaw:latest"
               (pkgs.writeShellScript "openclaw-seed-config" ''
                 cfg="${dataDir}/openclaw.json"
                 nix_cfg='${gatewayConfig}'
