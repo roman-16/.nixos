@@ -155,11 +155,15 @@
 
         services = {
           docker-zerotier.serviceConfig.ExecStartPre = lib.mkBefore [
-            "${pkgs.docker}/bin/docker pull zyclonite/zerotier:latest"
+            (pkgs.writeShellScript "zerotier-pull" ''
+              ${pkgs.docker}/bin/docker pull zyclonite/zerotier:latest || true
+            '')
           ];
 
           docker-ztnet.serviceConfig.ExecStartPre = lib.mkBefore [
-            "${pkgs.docker}/bin/docker pull sinamics/ztnet:latest"
+            (pkgs.writeShellScript "ztnet-pull" ''
+              ${pkgs.docker}/bin/docker pull sinamics/ztnet:latest || true
+            '')
           ];
 
           zt-auto-deauth = {
