@@ -35,7 +35,6 @@
       libreoffice
       qbittorrent
       gradia
-      claude-code
     ];
 
     services.xserver.excludePackages = with pkgs; [
