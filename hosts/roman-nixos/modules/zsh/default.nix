@@ -16,6 +16,8 @@
         devbox
         rar
         wl-clipboard
+        claude-code
+        gh
       ];
     };
 
