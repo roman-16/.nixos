@@ -2,7 +2,8 @@
   nixos = {pkgs, ...}: {
     environment.systemPackages = [
       (pkgs.writeShellScriptBin "pi" ''
-        exec ${pkgs.nodejs_22}/bin/npx --yes @mariozechner/pi-coding-agent@latest "$@"
+        export PATH="${pkgs.nodejs_22}/bin:$PATH"
+        exec npx --yes @mariozechner/pi-coding-agent@latest "$@"
       '')
     ];
   };
