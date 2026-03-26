@@ -1,9 +1,9 @@
 ---
-name: browser-tools
+name: browser
 description: Interactive browser automation via Chrome DevTools Protocol. Use when you need to interact with web pages, test frontends, or when user interaction with a visible browser is required.
 ---
 
-# Browser Tools
+# Browser
 
 Chrome DevTools Protocol tools for agent-assisted web automation. These tools connect to Chrome running on `:9222` with remote debugging enabled.
 
@@ -12,7 +12,7 @@ Chrome DevTools Protocol tools for agent-assisted web automation. These tools co
 Run once before first use:
 
 ```bash
-cd {baseDir}/browser-tools
+cd {baseDir}/browser
 npm install
 ```
 
@@ -23,7 +23,7 @@ npm install
 {baseDir}/browser-start.js MyProfile    # Named profile
 ```
 
-Launch Chrome with remote debugging on `:9222`. Always start with the **Agent** profile (the default). Profiles are stored in `~/.cache/browser-tools/<profile>` and created automatically if they don't exist. The Agent profile persists cookies and state between sessions.
+Launch Chrome with remote debugging on `:9222`. Always start with the **Agent** profile (the default). Profiles are stored in `~/.cache/browser-skill/<profile>` and created automatically if they don't exist. The Agent profile persists cookies and state between sessions.
 
 ## Navigate
 
@@ -129,10 +129,10 @@ Wrap everything in an IIFE to run multi-statement code:
   // Multiple operations
   const data = document.querySelector('#target').textContent;
   const buttons = document.querySelectorAll('button');
-  
+
   // Interactions
   buttons[0].click();
-  
+
   // Return results
   return JSON.stringify({ data, buttonCount: buttons.length });
 })()

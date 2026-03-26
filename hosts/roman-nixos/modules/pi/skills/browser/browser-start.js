@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S node --preserve-symlinks --preserve-symlinks-main
 
 import { spawn, execSync } from "node:child_process";
 import puppeteer from "puppeteer-core";
@@ -12,7 +12,7 @@ if (process.argv[2] === "--help") {
 	process.exit(1);
 }
 
-const BASE_DIR = `${process.env.HOME}/.cache/browser-tools`;
+const BASE_DIR = `${process.env.HOME}/.cache/browser-skill`;
 const PROFILE_DIR = `${BASE_DIR}/${profileName}`;
 
 // Check if already running on :9222
@@ -34,9 +34,11 @@ try {
 	execSync(`rm -f "${BASE_DIR}/SingletonLock" "${BASE_DIR}/SingletonSocket" "${BASE_DIR}/SingletonCookie"`, { stdio: "ignore" });
 } catch {}
 
-// Detect Chrome binary path
+// Detect Chromium-based browser
 const chromePath = (() => {
 	const candidates = [
+		"brave",
+		"brave-browser",
 		"google-chrome-stable",
 		"google-chrome",
 		"chromium-browser",
@@ -49,11 +51,7 @@ const chromePath = (() => {
 			return c;
 		} catch {}
 	}
-	try {
-		execSync(`test -x "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"`, { stdio: "ignore" });
-		return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-	} catch {}
-	throw new Error("Chrome not found");
+	throw new Error("No Chromium-based browser found");
 })();
 
 // Start Chrome with flags to force new instance

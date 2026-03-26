@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S node --preserve-symlinks --preserve-symlinks-main
 
 import puppeteer from "puppeteer-core";
 
