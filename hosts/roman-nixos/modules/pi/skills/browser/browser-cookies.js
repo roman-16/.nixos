@@ -1,7 +1,5 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S node --preserve-symlinks --preserve-symlinks-main
 
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import puppeteer from "puppeteer-core";
 
 const b = await Promise.race([
@@ -23,12 +21,15 @@ if (!p) {
 	process.exit(1);
 }
 
-const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-const filename = `screenshot-${timestamp}.png`;
-const filepath = join(tmpdir(), filename);
+const cookies = await p.cookies();
 
-await p.screenshot({ path: filepath });
-
-console.log(filepath);
+for (const cookie of cookies) {
+	console.log(`${cookie.name}: ${cookie.value}`);
+	console.log(`  domain: ${cookie.domain}`);
+	console.log(`  path: ${cookie.path}`);
+	console.log(`  httpOnly: ${cookie.httpOnly}`);
+	console.log(`  secure: ${cookie.secure}`);
+	console.log("");
+}
 
 await b.disconnect();
