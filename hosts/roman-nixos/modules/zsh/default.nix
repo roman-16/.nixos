@@ -80,7 +80,8 @@
 
       zellij = {
         enable = true;
-        enableZshIntegration = true;
+        # Disabled: no nesting guard, conflicts with VSCode-specific zellij handling in initContent
+        enableZshIntegration = false;
         exitShellOnExit = true;
 
         extraConfig = ''
@@ -203,10 +204,13 @@
           tree = "tre";
         };
         initContent = ''
-          # Start zellij in VSCode terminal (parent zellij session doesn't propagate UI)
+          # VSCode terminals need their own zellij (parent session UI doesn't propagate)
           if [[ "$TERM_PROGRAM" == "vscode" && -z "$ZELLIJ_VSCODE" ]]; then
             export ZELLIJ_VSCODE=1
-            exec zellij attach --create "vscode-''${PWD##*/}"
+            exec zellij
+          # Normal terminals: start zellij if not already inside one
+          elif [[ -z "$ZELLIJ" && "$TERM_PROGRAM" != "vscode" ]]; then
+            exec zellij
           fi
 
           source ${pkgs.zsh-fzf-tab}/share/fzf-tab/fzf-tab.plugin.zsh;
