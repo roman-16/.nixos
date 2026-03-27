@@ -203,6 +203,12 @@
           tree = "tre";
         };
         initContent = ''
+          # Start zellij in VSCode terminal (parent zellij session doesn't propagate UI)
+          if [[ "$TERM_PROGRAM" == "vscode" && -z "$ZELLIJ_VSCODE" ]]; then
+            export ZELLIJ_VSCODE=1
+            exec zellij attach --create "vscode-''${PWD##*/}"
+          fi
+
           source ${pkgs.zsh-fzf-tab}/share/fzf-tab/fzf-tab.plugin.zsh;
 
           gsc() {
