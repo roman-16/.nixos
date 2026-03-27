@@ -8,7 +8,11 @@
     ];
   };
 
-  home = {...}: let
+  home = {
+    pkgs,
+    lib,
+    ...
+  }: let
     extensionsDir = ./extensions;
     extensionFiles = builtins.attrNames (builtins.readDir extensionsDir);
 
@@ -46,13 +50,27 @@
       steeringMode = "all";
       followUpMode = "all";
     };
+    settingsJson = builtins.toJSON settings;
   in {
-    home.file =
-      {
-        ".pi/agent/settings.json".text = builtins.toJSON settings;
-        ".pi/agent/AGENTS.md".source = ./AGENTS.md;
-      }
-      // extensionAttrs
-      // skillAttrs;
+    home = {
+      file =
+        {
+          ".pi/agent/AGENTS.md".source = ./AGENTS.md;
+        }
+        // extensionAttrs
+        // skillAttrs;
+
+      # Merge nix-defined settings onto existing settings.json
+      activation.piSettings = lib.hm.dag.entryAfter ["writeBoundary"] ''
+        settings="$HOME/.pi/agent/settings.json"
+        mkdir -p "$(dirname "$settings")"
+        if [ -f "$settings" ]; then
+          ${pkgs.jq}/bin/jq -s '.[0] * .[1]' "$settings" <(echo '${settingsJson}') > "$settings.tmp"
+          mv "$settings.tmp" "$settings"
+        else
+          echo '${settingsJson}' > "$settings"
+        fi
+      '';
+    };
   };
 }
