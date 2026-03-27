@@ -43,12 +43,13 @@
       skillDirs);
 
     settings = {
-      defaultProvider = "anthropic";
+      compaction.enabled = false;
       defaultModel = "claude-opus-4-6";
+      defaultProvider = "anthropic";
       defaultThinkingLevel = "xhigh";
-      theme = "dark";
-      steeringMode = "all";
       followUpMode = "all";
+      steeringMode = "all";
+      theme = "dark";
     };
     settingsJson = builtins.toJSON settings;
   in {
