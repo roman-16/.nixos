@@ -82,7 +82,6 @@
         enable = true;
         # Disabled: no nesting guard, conflicts with VSCode-specific zellij handling in initContent
         enableZshIntegration = false;
-        exitShellOnExit = true;
 
         extraConfig = ''
           keybinds {
