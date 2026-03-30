@@ -11,8 +11,7 @@
       },
       "diagnostic": {
         "suppress": [
-          "sema-extra-with",
-          "sema-escaping-with"
+          "sema-extra-with"
         ]
       },
       "options": {
