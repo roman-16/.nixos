@@ -40,7 +40,6 @@
         OBSIDIAN_GIT_REMOTE = secrets.obsidianGitRemote;
         OBSIDIAN_GIT_SSH_KEY_FILE = "/var/lib/openclaw-obsidian/ssh_key";
         OBSIDIAN_GIT_SSH_PUB_KEY_FILE = "/var/lib/openclaw-obsidian/ssh_key.pub";
-        TAVILY_API_KEY = secrets.tavilyApiKey;
         TZ = "Europe/Vienna";
       };
 
