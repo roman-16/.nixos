@@ -96,6 +96,7 @@ Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
   - Zigbee2MQTT for Zigbee devices, native BLE for Bluetooth devices
   - cloudflared addon — Separate tunnel "hass" for `hass.halerc.xyz` (managed by addon, NOT in NixOS tunnel)
   - Beszel agent addon (`2dc376b9_beszel-agent`)
+  - API: Long-lived access token in `hosts/homelab/modules/hass/secrets.json`
 
 ### SSH Access
 - **homelab**: `ssh roman@192.168.70.70`
@@ -114,7 +115,7 @@ Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
 - `hosts/roman-nixos/modules/rclone/` — Cloud storage sync configuration
 - `hosts/homelab/` — Homelab server configuration
 - `hosts/homelab/modules/cloudflared/` — Cloudflare tunnel service (remote/token-based)
-- `hosts/homelab/modules/hass.nix` — HASS KVM VM definition (USB passthrough for Zigbee + BT)
+- `hosts/homelab/modules/hass/` — HASS KVM VM definition (USB passthrough for Zigbee + BT), API secrets
 - `hosts/homelab/modules/monitoring/` — Homepage dashboard, Gatus health checks, Beszel hub + agent
 - `hosts/homelab/modules/vpn/` — MicroVM: Docker (ZeroTier + ZTNET L2 VPN), Beszel agent
 - `hosts/homelab/modules/openclaw/` — MicroVM: Docker (openclaw gateway), claude-max-api-proxy, signal-cli, Beszel agent
