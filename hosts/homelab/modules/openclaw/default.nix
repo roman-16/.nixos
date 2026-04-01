@@ -296,7 +296,7 @@
             cmd = ["node" "openclaw.mjs" "gateway" "--allow-unconfigured"];
 
             environment = sharedEnv;
-            extraOptions = ["--network=host"];
+            extraOptions = ["--network=host" "--tmpfs" "/tmp"];
             image = "ghcr.io/openclaw/openclaw:latest";
             volumes = [
               "/nix/store:/nix/store:ro"
