@@ -35,6 +35,7 @@
       libreoffice
       qbittorrent
       gradia
+      rquickshare
     ];
 
     services.xserver.excludePackages = with pkgs; [
