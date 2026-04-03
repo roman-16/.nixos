@@ -3,35 +3,90 @@
 set -euo pipefail
 
 MCP_URL="https://mcp.exa.ai/mcp?tools=web_search_exa,web_search_advanced_exa,get_code_context_exa,crawling_exa"
+LOCK_DIR="/tmp/exa-rate-limit"
+MAX_RETRIES=3
+RETRY_DELAY=3
+
+# Serialize concurrent calls — only one request hits the API at a time
+acquire_lock() {
+  mkdir -p "$LOCK_DIR"
+  local lock_file="$LOCK_DIR/lock"
+  local wait_time=0
+  while ! (set -C; echo $$ > "$lock_file") 2>/dev/null; do
+    sleep 0.5
+    wait_time=$((wait_time + 1))
+    if [ $wait_time -ge 120 ]; then
+      echo "Timed out waiting for rate-limit lock" >&2
+      rm -f "$lock_file"
+      return 1
+    fi
+  done
+}
+
+release_lock() {
+  rm -f "$LOCK_DIR/lock"
+}
+
+# Ensure lock is released on exit/error
+cleanup() { release_lock; }
+trap cleanup EXIT
 
 mcp_call() {
   local tool="$1" args="$2"
-  local response
-  response=$(curl -s -X POST "$MCP_URL" \
-    -H "Content-Type: application/json" \
-    -H "Accept: application/json, text/event-stream" \
-    -d "$(node -e "
-      console.log(JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/call',
-        params: { name: process.argv[1], arguments: JSON.parse(process.argv[2]) }
-      }))
-    " "$tool" "$args")")
+  local attempt=0
 
-  # Parse SSE response: extract data line, then result content text
-  echo "$response" | sed -n 's/^data: //p' | node -e "
-    let d = '';
-    process.stdin.on('data', c => d += c);
-    process.stdin.on('end', () => {
-      try {
-        const r = JSON.parse(d);
-        if (r.error) { console.error(JSON.stringify(r.error)); process.exit(1); }
-        const texts = (r.result?.content || []).filter(c => c.type === 'text').map(c => c.text);
-        console.log(texts.join('\n'));
-      } catch(e) { console.error('Parse error:', e.message); process.exit(1); }
-    });
-  "
+  while [ $attempt -lt $MAX_RETRIES ]; do
+    acquire_lock
+
+    local response
+    response=$(curl -s -w '\n__HTTP_CODE__%{http_code}' -X POST "$MCP_URL" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      --max-time 30 \
+      -d "$(node -e "
+        console.log(JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: process.argv[1], arguments: JSON.parse(process.argv[2]) }
+        }))
+      " "$tool" "$args")")
+
+    release_lock
+
+    local http_code
+    http_code=$(echo "$response" | grep '__HTTP_CODE__' | sed 's/.*__HTTP_CODE__//')
+    response=$(echo "$response" | grep -v '__HTTP_CODE__')
+
+    # Retry on rate limit (429) or server errors (5xx)
+    if [[ "$http_code" =~ ^(429|5[0-9][0-9])$ ]]; then
+      attempt=$((attempt + 1))
+      if [ $attempt -lt $MAX_RETRIES ]; then
+        local delay=$((RETRY_DELAY * attempt))
+        echo "Rate limited (HTTP $http_code), retrying in ${delay}s (attempt $((attempt+1))/$MAX_RETRIES)..." >&2
+        sleep $delay
+        continue
+      else
+        echo "Failed after $MAX_RETRIES attempts (HTTP $http_code)" >&2
+        return 1
+      fi
+    fi
+
+    # Parse SSE response: extract data line, then result content text
+    echo "$response" | sed -n 's/^data: //p' | node -e "
+      let d = '';
+      process.stdin.on('data', c => d += c);
+      process.stdin.on('end', () => {
+        try {
+          const r = JSON.parse(d);
+          if (r.error) { console.error(JSON.stringify(r.error)); process.exit(1); }
+          const texts = (r.result?.content || []).filter(c => c.type === 'text').map(c => c.text);
+          console.log(texts.join('\n'));
+        } catch(e) { console.error('Parse error:', e.message); process.exit(1); }
+      });
+    "
+    return $?
+  done
 }
 
 cmd_search() {
@@ -42,7 +97,6 @@ cmd_search() {
 }
 
 cmd_search_advanced() {
-  # Takes a JSON string with all parameters, passed directly to web_search_advanced_exa
   mcp_call "web_search_advanced_exa" "$1"
 }
 
