@@ -1,10 +1,7 @@
 {
-  nixos = {pkgs, ...}: {
+  nixos = {inputs, ...}: {
     environment.systemPackages = [
-      (pkgs.writeShellScriptBin "pi" ''
-        export PATH="${pkgs.nodejs_22}/bin:$PATH"
-        exec npx --yes @mariozechner/pi-coding-agent@latest "$@"
-      '')
+      inputs.llm-agents.packages.x86_64-linux.pi
     ];
   };
 

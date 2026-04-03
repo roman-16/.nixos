@@ -1,4 +1,4 @@
-{...}: {
+{inputs, ...}: {
   microvm.vms.openclaw = {
     autostart = true;
 
@@ -7,6 +7,8 @@
       lib,
       ...
     }: let
+      claude-code = inputs.llm-agents.packages.x86_64-linux.claude-code;
+
       secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
 
       # OpenClaw gateway
@@ -50,6 +52,7 @@
 
       gatewayConfig = builtins.toJSON {
         agents.defaults = {
+          llm.idleTimeoutSeconds = 300;
           model.primary = "claude-proxy/claude-opus-4";
           thinkingDefault = "high";
         };
@@ -128,7 +131,7 @@
         ];
       };
 
-      environment.systemPackages = [pkgs.claude-code pkgs.curl pkgs.git pkgs.git-crypt pkgs.jq];
+      environment.systemPackages = [claude-code pkgs.curl pkgs.git pkgs.git-crypt pkgs.jq];
 
       networking = {
         firewall.allowedTCPPorts = [gatewayPort];
@@ -175,7 +178,7 @@
           claude-max-api-proxy = {
             after = ["network.target"];
             description = "Claude Max API Proxy";
-            path = [openclawCli pkgs.bash pkgs.claude-code pkgs.docker pkgs.git pkgs.git-crypt pkgs.nodejs pkgs.openssh];
+            path = [openclawCli pkgs.bash claude-code pkgs.docker pkgs.git pkgs.git-crypt pkgs.nodejs pkgs.openssh];
             wantedBy = ["multi-user.target"];
 
             environment = sharedEnv;
