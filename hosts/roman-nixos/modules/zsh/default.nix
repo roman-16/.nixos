@@ -17,6 +17,7 @@
         rar
         wl-clipboard
         gh
+        jq
       ];
     };
 
