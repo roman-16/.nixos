@@ -7,6 +7,8 @@ description: Web research using Exa search via scripts. Provides web search, adv
 
 Web research via the free Exa MCP endpoint. All commands go through `scripts/exa.sh`. No API key required.
 
+**Concurrency**: Multiple parallel calls are safe — the script serializes them automatically via a file lock so only one request hits the API at a time. Others queue up and execute in order. **Set timeout to 60 seconds** on all exa bash calls since queued requests may wait for earlier ones to finish.
+
 ## Commands
 
 ### Search
