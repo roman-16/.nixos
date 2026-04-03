@@ -124,10 +124,6 @@ export default function usage(pi: ExtensionAPI) {
 		startRefreshLoop(ctx);
 	});
 
-	pi.on("session_switch", async (_event, ctx) => {
-		startRefreshLoop(ctx);
-	});
-
 	pi.on("session_shutdown", async () => {
 		if (refreshTimer) clearInterval(refreshTimer);
 	});
