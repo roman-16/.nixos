@@ -12,22 +12,15 @@ cmd_search() {
   local response
   response=$(curl "${args[@]}")
 
-  # Parse JSON with node — available on NixOS, no extra deps
-  echo "$response" | node -e "
-    let d = '';
-    process.stdin.on('data', c => d += c);
-    process.stdin.on('end', () => {
-      const { results = [] } = JSON.parse(d);
-      results.slice(0, 10).forEach(r => {
-        let out = '[' + r.id + '] ' + r.title;
-        if (r.description) out += '\n  ' + r.description;
-        if (r.totalSnippets) out += '\n  Snippets: ' + r.totalSnippets;
-        if (r.trustScore != null) out += '  Trust: ' + r.trustScore;
-        if (r.versions?.length) out += '\n  Versions: ' + r.versions.join(', ');
-        console.log(out + '\n');
-      });
-    });
-  "
+  echo "$response" | jq -r '
+    (.results // [])[:10][] |
+    "[" + .id + "] " + .title
+    + (if .description then "\n  " + .description else "" end)
+    + (if .totalSnippets then "\n  Snippets: " + (.totalSnippets | tostring) else "" end)
+    + (if .trustScore != null then "  Trust: " + (.trustScore | tostring) else "" end)
+    + (if (.versions // [] | length) > 0 then "\n  Versions: " + (.versions | join(", ")) else "" end)
+    + "\n"
+  '
 }
 
 cmd_docs() {
