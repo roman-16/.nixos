@@ -35,6 +35,7 @@
       libreoffice
       qbittorrent
       gradia
+      poppler-utils
     ];
 
     services.xserver.excludePackages = with pkgs; [
