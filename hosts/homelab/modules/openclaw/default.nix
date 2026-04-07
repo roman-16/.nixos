@@ -243,9 +243,9 @@
         };
 
         timers.claude-token-refresh = {
-          description = "Refresh Claude Code OAuth token every 12 hours";
+          description = "Refresh Claude Code OAuth token every 6 hours";
           timerConfig = {
-            OnCalendar = "*-*-* 06,18:30:00";
+            OnCalendar = "*-*-* 00,06,12,18:30:00";
             Persistent = true;
           };
           wantedBy = ["timers.target"];
@@ -288,6 +288,7 @@
           # Persist Claude Code auth across VM reboots
           "d /var/lib/claude-auth 0700 roman users -"
           "L /home/roman/.claude - - - - /var/lib/claude-auth"
+          "L /home/roman/.claude.json - - - - /var/lib/claude-auth/claude.json"
         ];
       };
 
