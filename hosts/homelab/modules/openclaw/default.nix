@@ -16,24 +16,23 @@
       gatewayPort = 7072;
       lanIp = "192.168.70.72";
 
-      # Claude Max API Proxy
-      proxyDir = "/var/lib/claude-max-api-proxy/app";
-      proxyPort = 3456;
-      proxyRepo = "https://github.com/wende/claude-max-api-proxy.git";
+      # OpenClaw Billing Proxy
+      billingProxyDir = "/var/lib/openclaw-billing-proxy/app";
+      billingProxyPort = 18801;
+      billingProxyRepo = "https://github.com/zacdcook/openclaw-billing-proxy.git";
+      billingProxyConfig = pkgs.writeText "billing-proxy-config.json" (builtins.toJSON {
+        credentialsPath = "/var/lib/claude-auth/.credentials.json";
+        port = billingProxyPort;
+      });
 
-      # Wrapper to let Claude agent subprocess run openclaw CLI via docker exec
-      openclawCli = pkgs.writeShellScriptBin "openclaw" ''
-        exec ${pkgs.docker}/bin/docker exec -u node openclaw openclaw "$@"
-      '';
-
-      # Shared between claude-max-api-proxy service and openclaw container
+      # OpenClaw container environment
       sharedEnv = {
+        ANTHROPIC_API_KEY = "not-needed";
         BACKUP_GIT_REMOTE = secrets.backupGitRemote;
         BACKUP_GIT_SSH_KEY_FILE = "/var/lib/openclaw-backup/ssh_key";
         BACKUP_GIT_SSH_PUB_KEY_FILE = "/var/lib/openclaw-backup/ssh_key.pub";
         BRING_EMAIL = secrets.bringEmail;
         BRING_PASSWORD = secrets.bringPassword;
-        CLAUDE_CODE_OAUTH_TOKEN = secrets.claudeOauthToken;
         GIT_AUTHOR_EMAIL = "roman@lerchster.dev";
         GIT_AUTHOR_NAME = "Roman";
         GIT_COMMITTER_EMAIL = "roman@lerchster.dev";
@@ -52,8 +51,8 @@
 
       gatewayConfig = builtins.toJSON {
         agents.defaults = {
-          llm.idleTimeoutSeconds = 300;
-          model.primary = "claude-proxy/claude-opus-4";
+          model.primary = "anthropic/claude-opus-4-6";
+          models."anthropic/claude-opus-4-6".params.context1m = true;
           thinkingDefault = "high";
         };
 
@@ -81,23 +80,21 @@
           port = gatewayPort;
         };
 
-        tools.sandbox.tools.allow = ["*"];
-
-        models.providers.claude-proxy = {
-          api = "openai-completions";
-          apiKey = "not-needed";
-          baseUrl = "http://127.0.0.1:${toString proxyPort}/v1";
+        models.providers.anthropic = {
+          baseUrl = "http://127.0.0.1:${toString billingProxyPort}";
           models = [
             {
-              contextWindow = 200000;
-              id = "claude-opus-4";
+              contextWindow = 1000000;
+              id = "claude-opus-4-6";
               input = ["text"];
-              maxTokens = 32000;
-              name = "Claude Opus 4 (Max Proxy)";
+              maxTokens = 128000;
+              name = "Claude Opus 4.6";
               reasoning = true;
             }
           ];
         };
+
+        tools.sandbox.tools.allow = ["*"];
       };
     in {
       microvm = {
@@ -175,35 +172,20 @@
         };
 
         services = {
-          claude-max-api-proxy = {
-            after = ["network.target"];
-            description = "Claude Max API Proxy";
-            path = [openclawCli pkgs.bash claude-code pkgs.docker pkgs.git pkgs.git-crypt pkgs.nodejs pkgs.openssh];
-            wantedBy = ["multi-user.target"];
-
-            environment = sharedEnv;
+          claude-token-refresh = {
+            description = "Refresh Claude Code OAuth token";
+            path = [claude-code];
 
             serviceConfig = {
-              ExecStartPre = pkgs.writeShellScript "install-claude-max-api-proxy" ''
-                if [ ! -d "${proxyDir}/.git" ]; then
-                  ${pkgs.git}/bin/git clone ${proxyRepo} ${proxyDir}
-                else
-                  ${pkgs.git}/bin/git -C ${proxyDir} pull --ff-only || true
-                fi
-                ${pkgs.nodejs}/bin/npm --prefix ${proxyDir} install
-                ${pkgs.nodejs}/bin/npm --prefix ${proxyDir} run build
-              '';
-              ExecStart = "${pkgs.nodejs}/bin/node ${proxyDir}/dist/server/standalone.js";
-              Restart = "on-failure";
-              RestartSec = 10;
-              StateDirectory = "claude-max-api-proxy";
+              ExecStart = "${claude-code}/bin/claude -p \"ping\" --max-turns 1 --no-session-persistence";
+              Type = "oneshot";
               User = "roman";
             };
           };
 
           docker-openclaw = {
-            after = ["claude-max-api-proxy.service" "signal-cli.service"];
-            requires = ["claude-max-api-proxy.service" "signal-cli.service"];
+            after = ["openclaw-billing-proxy.service" "signal-cli.service"];
+            requires = ["openclaw-billing-proxy.service" "signal-cli.service"];
 
             serviceConfig.ExecStartPre = lib.mkAfter [
               (pkgs.writeShellScript "openclaw-pull" ''
@@ -225,6 +207,27 @@
             ];
           };
 
+          openclaw-billing-proxy = {
+            after = ["network.target"];
+            description = "OpenClaw Billing Proxy";
+            wantedBy = ["multi-user.target"];
+
+            serviceConfig = {
+              ExecStart = "${pkgs.nodejs}/bin/node ${billingProxyDir}/proxy.js --config ${billingProxyConfig}";
+              ExecStartPre = pkgs.writeShellScript "install-openclaw-billing-proxy" ''
+                if [ ! -d "${billingProxyDir}/.git" ]; then
+                  ${pkgs.git}/bin/git clone ${billingProxyRepo} ${billingProxyDir}
+                else
+                  ${pkgs.git}/bin/git -C ${billingProxyDir} pull --ff-only || true
+                fi
+              '';
+              Restart = "on-failure";
+              RestartSec = 10;
+              StateDirectory = "openclaw-billing-proxy";
+              User = "roman";
+            };
+          };
+
           signal-cli = {
             after = ["network.target"];
             description = "signal-cli JSON-RPC daemon";
@@ -237,6 +240,15 @@
               StateDirectory = "signal-cli";
             };
           };
+        };
+
+        timers.claude-token-refresh = {
+          description = "Refresh Claude Code OAuth token every 12 hours";
+          timerConfig = {
+            OnCalendar = "*-*-* 06,18:30:00";
+            Persistent = true;
+          };
+          wantedBy = ["timers.target"];
         };
 
         # 0777: docker container runs as non-root uid that needs write access
@@ -268,9 +280,7 @@
           "C+ /var/lib/openclaw-obsidian/ssh_key 0600 roman users - ${pkgs.writeText "obsidian-ssh-key" secrets.obsidianSshKey}"
           "C+ /var/lib/openclaw-obsidian/ssh_key.pub 0644 roman users - ${pkgs.writeText "obsidian-ssh-pub-key" secrets.obsidianSshPubKey}"
 
-          # npm cache for claude-max-api-proxy (prevent filling tmpfs rootfs)
-          "d /var/lib/claude-max-api-proxy/npm-cache 0755 roman users -"
-          "L /home/roman/.npm - - - - /var/lib/claude-max-api-proxy/npm-cache"
+          "d /var/lib/openclaw-billing-proxy 0755 roman users -"
 
           # Beszel agent env (user fills in KEY after hub setup)
           "f /var/lib/beszel-agent/env 0600 root root -"
@@ -310,6 +320,8 @@
               "${dataDir}/npm-global:/home/node/.npm"
               "${dataDir}/skills:/app/skills"
               "${dataDir}/workspace/self-improving:/home/node/self-improving"
+              "/var/lib/openclaw-backup:/var/lib/openclaw-backup:ro"
+              "/var/lib/openclaw-obsidian:/var/lib/openclaw-obsidian:ro"
             ];
           };
         };
