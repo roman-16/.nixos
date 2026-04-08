@@ -11,13 +11,9 @@
     ...
   }: let
     extensionsDir = ./extensions;
-    extensionFiles = builtins.attrNames (builtins.readDir extensionsDir);
-
-    extensionAttrs = builtins.listToAttrs (map (name: {
-        name = ".pi/agent/extensions/${name}";
-        value.source = extensionsDir + "/${name}";
-      })
-      extensionFiles);
+    extensionAttrs =
+      builtins.listToAttrs
+      (collectFiles ".pi/agent/extensions" extensionsDir);
 
     # Skills: symlink individual files so directories are real (writable for npm install)
     skillsDir = ./skills;
