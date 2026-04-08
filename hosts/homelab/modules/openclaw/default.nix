@@ -1,4 +1,4 @@
-{inputs, ...}: {
+{...}: {
   microvm.vms.openclaw = {
     autostart = true;
 
@@ -7,8 +7,6 @@
       lib,
       ...
     }: let
-      claude-code = inputs.llm-agents.packages.x86_64-linux.claude-code;
-
       secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
 
       # OpenClaw gateway
@@ -43,6 +41,58 @@
         OBSIDIAN_GIT_SSH_PUB_KEY_FILE = "/var/lib/openclaw-obsidian/ssh_key.pub";
         TZ = "Europe/Vienna";
       };
+
+      # OAuth token refresh
+      credentialsPath = "/var/lib/claude-auth/.credentials.json";
+      oauthClientId = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
+      oauthTokenUrl = "https://platform.claude.com/v1/oauth/token";
+      oauthScopes = "user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload";
+
+      tokenRefreshScript = pkgs.writeShellScript "claude-token-refresh" ''
+        set -euo pipefail
+
+        CREDS="${credentialsPath}"
+        if [ ! -f "$CREDS" ]; then
+          echo "Credentials file not found: $CREDS" >&2
+          exit 1
+        fi
+
+        REFRESH_TOKEN=$(${pkgs.jq}/bin/jq -r '.claudeAiOauth.refreshToken // empty' "$CREDS")
+        if [ -z "$REFRESH_TOKEN" ]; then
+          echo "No refresh token in credentials" >&2
+          exit 1
+        fi
+
+        RESPONSE=$(${pkgs.curl}/bin/curl -sf -X POST "${oauthTokenUrl}" \
+          -H "Content-Type: application/json" \
+          -d "$(${pkgs.jq}/bin/jq -n \
+            --arg rt "$REFRESH_TOKEN" \
+            --arg cid "${oauthClientId}" \
+            --arg scope "${oauthScopes}" \
+            '{grant_type: "refresh_token", refresh_token: $rt, client_id: $cid, scope: $scope}')")
+
+        ACCESS_TOKEN=$(echo "$RESPONSE" | ${pkgs.jq}/bin/jq -r '.access_token // empty')
+        NEW_REFRESH=$(echo "$RESPONSE" | ${pkgs.jq}/bin/jq -r '.refresh_token // empty')
+        EXPIRES_IN=$(echo "$RESPONSE" | ${pkgs.jq}/bin/jq -r '.expires_in // empty')
+
+        if [ -z "$ACCESS_TOKEN" ] || [ -z "$EXPIRES_IN" ]; then
+          echo "Token refresh failed: $RESPONSE" >&2
+          exit 1
+        fi
+
+        EXPIRES_AT=$(( $(date +%s%3N) + EXPIRES_IN * 1000 ))
+        NEW_REFRESH="''${NEW_REFRESH:-$REFRESH_TOKEN}"
+
+        ${pkgs.jq}/bin/jq \
+          --arg at "$ACCESS_TOKEN" \
+          --arg rt "$NEW_REFRESH" \
+          --argjson ea "$EXPIRES_AT" \
+          '.claudeAiOauth.accessToken = $at | .claudeAiOauth.refreshToken = $rt | .claudeAiOauth.expiresAt = $ea' \
+          "$CREDS" > "$CREDS.tmp" && mv "$CREDS.tmp" "$CREDS"
+
+        HOURS=$(echo "scale=1; $EXPIRES_IN / 3600" | ${pkgs.bc}/bin/bc)
+        echo "Token refreshed, expires in ''${HOURS}h"
+      '';
 
       # Signal
       signalAccount = "+4369010678088";
@@ -128,7 +178,7 @@
         ];
       };
 
-      environment.systemPackages = [claude-code pkgs.curl pkgs.git pkgs.git-crypt pkgs.jq];
+      environment.systemPackages = [pkgs.curl pkgs.git pkgs.git-crypt pkgs.jq];
 
       networking = {
         firewall.allowedTCPPorts = [gatewayPort];
@@ -174,10 +224,9 @@
         services = {
           claude-token-refresh = {
             description = "Refresh Claude Code OAuth token";
-            path = [claude-code];
 
             serviceConfig = {
-              ExecStart = "${claude-code}/bin/claude -p \"ping\" --max-turns 1 --no-session-persistence";
+              ExecStart = tokenRefreshScript;
               Type = "oneshot";
               User = "roman";
             };
