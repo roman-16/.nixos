@@ -36,6 +36,7 @@
       qbittorrent
       gradia
       poppler-utils
+      claude-code
     ];
 
     services.xserver.excludePackages = with pkgs; [
