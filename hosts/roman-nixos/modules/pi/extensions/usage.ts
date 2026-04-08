@@ -94,6 +94,13 @@ function formatStatusBar(data: UsageData, theme: any): string {
 		parts.push(`${theme.fg("dim", "7d")} ${miniBar(pct, barWidth, theme)} ${theme.fg("text", `${pct}%`)} ${theme.fg("dim", resets)}`);
 	}
 
+	if (data.extra_usage?.is_enabled) {
+		const spent = (data.extra_usage.used_credits / 100).toFixed(2);
+		const fiveHourFull = data.five_hour && data.five_hour.utilization >= 100;
+		const color = fiveHourFull ? "warning" : data.extra_usage.used_credits > 0 ? "text" : "dim";
+		parts.push(theme.fg(color, `$${spent}`));
+	}
+
 	return parts.join(theme.fg("dim", "  │  "));
 }
 
@@ -204,14 +211,18 @@ export default function usage(pi: ExtensionAPI) {
 							add(theme.fg("muted", "   Not enabled"));
 						} else if (extra.monthly_limit === null) {
 							const spent = (extra.used_credits / 100).toFixed(2);
-							add(theme.fg("text", `   $${spent} spent · `) + theme.fg("success", "no limit"));
+							const fiveHourFull = data.five_hour && data.five_hour.utilization >= 100;
+							const spentColor = fiveHourFull ? "warning" : extra.used_credits > 0 ? "text" : "dim";
+							add(theme.fg(spentColor, `   $${spent} spent · `) + theme.fg("success", "no limit"));
 						} else {
 							const spent = (extra.used_credits / 100).toFixed(2);
 							const total = (extra.monthly_limit / 100).toFixed(2);
 							const ratio = extra.utilization ?? extra.used_credits / extra.monthly_limit;
 							const bar = renderBar(ratio, barWidth, theme);
+							const fiveHourFull = data.five_hour && data.five_hour.utilization >= 100;
+							const spentColor = fiveHourFull ? "warning" : extra.used_credits > 0 ? "text" : "dim";
 
-							add(` ${bar} ${theme.fg("text", `$${spent} / $${total}`)}`);
+							add(` ${bar} ${theme.fg(spentColor, `$${spent} / $${total}`)}`);
 						}
 						lines.push("");
 					}
