@@ -1,13 +1,13 @@
 /**
  * Sanitizes "pi" product references in system prompt for Anthropic OAuth billing.
- * Preserves full paths containing pi-coding-agent from being corrupted.
+ * Preserves file paths from being corrupted.
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 function sanitize(s: string): string {
 	const paths: string[] = [];
-	const safe = s.replace(/\S*lib\/node_modules\/@mariozechner\/pi-coding-agent\S*/g, (m) => {
+	const safe = s.replace(/~?(?:\/[\w.@-]+)+\/?/g, (m) => {
 		paths.push(m);
 		return `<<PATH_${paths.length - 1}>>`;
 	});
