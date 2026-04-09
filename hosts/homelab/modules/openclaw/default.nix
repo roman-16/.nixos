@@ -21,6 +21,40 @@
       billingProxyConfig = pkgs.writeText "billing-proxy-config.json" (builtins.toJSON {
         credentialsPath = "/var/lib/claude-auth/.credentials.json";
         port = billingProxyPort;
+
+        # Override default tool renames to exclude "image" — the blind
+        # string replacement of "image" -> "ImageGen" also catches
+        # "type":"image" in vision content blocks, breaking image input
+        toolRenames = [
+          ["exec" "Bash"]
+          ["process" "BashSession"]
+          ["browser" "BrowserControl"]
+          ["canvas" "CanvasView"]
+          ["nodes" "DeviceControl"]
+          ["cron" "Scheduler"]
+          ["message" "SendMessage"]
+          ["tts" "Speech"]
+          ["gateway" "SystemCtl"]
+          ["agents_list" "AgentList"]
+          ["list_tasks" "TaskList"]
+          ["get_history" "TaskHistory"]
+          ["send_to_task" "TaskSend"]
+          ["create_task" "TaskCreate"]
+          ["subagents" "AgentControl"]
+          ["session_status" "StatusCheck"]
+          ["web_search" "WebSearch"]
+          ["web_fetch" "WebFetch"]
+          ["pdf" "PdfParse"]
+          ["memory_search" "KnowledgeSearch"]
+          ["memory_get" "KnowledgeGet"]
+          ["lcm_expand_query" "ContextQuery"]
+          ["lcm_grep" "ContextGrep"]
+          ["lcm_describe" "ContextDescribe"]
+          ["lcm_expand" "ContextExpand"]
+          ["yield_task" "TaskYield"]
+          ["task_store" "TaskStore"]
+          ["task_yield_interrupt" "TaskYieldInterrupt"]
+        ];
       });
 
       # OpenClaw container environment
@@ -148,7 +182,7 @@
             {
               contextWindow = 200000;
               id = "claude-sonnet-4-6";
-              input = ["text"];
+              input = ["text" "image"];
               maxTokens = 128000;
               name = "Claude Sonnet 4.6";
               reasoning = true;
@@ -156,7 +190,7 @@
             {
               contextWindow = 1000000;
               id = "claude-opus-4-6";
-              input = ["text"];
+              input = ["text" "image"];
               maxTokens = 128000;
               name = "Claude Opus 4.6";
               reasoning = true;
