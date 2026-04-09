@@ -9,6 +9,7 @@
 builtins.toJSON {
   agents.defaults = {
     model.primary = "anthropic/claude-sonnet-4-6";
+    params.cacheRetention = "long";
     thinkingDefault = "medium";
   };
 
