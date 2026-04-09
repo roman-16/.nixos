@@ -20,40 +20,6 @@
   billingProxyConfig = pkgs.writeText "billing-proxy-config.json" (builtins.toJSON {
     credentialsPath = credentialsPath;
     port = billingProxyPort;
-
-    # Override default tool renames to exclude "image" — the blind
-    # string replacement of "image" -> "ImageGen" also catches
-    # "type":"image" in vision content blocks, breaking image input
-    toolRenames = [
-      ["exec" "Bash"]
-      ["process" "BashSession"]
-      ["browser" "BrowserControl"]
-      ["canvas" "CanvasView"]
-      ["nodes" "DeviceControl"]
-      ["cron" "Scheduler"]
-      ["message" "SendMessage"]
-      ["tts" "Speech"]
-      ["gateway" "SystemCtl"]
-      ["agents_list" "AgentList"]
-      ["list_tasks" "TaskList"]
-      ["get_history" "TaskHistory"]
-      ["send_to_task" "TaskSend"]
-      ["create_task" "TaskCreate"]
-      ["subagents" "AgentControl"]
-      ["session_status" "StatusCheck"]
-      ["web_search" "WebSearch"]
-      ["web_fetch" "WebFetch"]
-      ["pdf" "PdfParse"]
-      ["memory_search" "KnowledgeSearch"]
-      ["memory_get" "KnowledgeGet"]
-      ["lcm_expand_query" "ContextQuery"]
-      ["lcm_grep" "ContextGrep"]
-      ["lcm_describe" "ContextDescribe"]
-      ["lcm_expand" "ContextExpand"]
-      ["yield_task" "TaskYield"]
-      ["task_store" "TaskStore"]
-      ["task_yield_interrupt" "TaskYieldInterrupt"]
-    ];
   });
 in {
   systemd = {
