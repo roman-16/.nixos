@@ -63,13 +63,26 @@
           exit 1
         fi
 
-        RESPONSE=$(${pkgs.curl}/bin/curl -sf -X POST "${oauthTokenUrl}" \
+        HTTP_CODE=$(${pkgs.curl}/bin/curl -s -o /tmp/token-response.json -w '%{http_code}' -X POST "${oauthTokenUrl}" \
           -H "Content-Type: application/json" \
+          -H "User-Agent: claude-code/2.1.90" \
           -d "$(${pkgs.jq}/bin/jq -n \
             --arg rt "$REFRESH_TOKEN" \
             --arg cid "${oauthClientId}" \
             --arg scope "${oauthScopes}" \
             '{grant_type: "refresh_token", refresh_token: $rt, client_id: $cid, scope: $scope}')")
+        RESPONSE=$(cat /tmp/token-response.json)
+        rm -f /tmp/token-response.json
+
+        if [ "$HTTP_CODE" = "429" ]; then
+          echo "Rate limited — skipping refresh, will retry next cycle" >&2
+          exit 0
+        fi
+
+        if [ "$HTTP_CODE" != "200" ]; then
+          echo "Token refresh failed (HTTP $HTTP_CODE): $RESPONSE" >&2
+          exit 1
+        fi
 
         ACCESS_TOKEN=$(echo "$RESPONSE" | ${pkgs.jq}/bin/jq -r '.access_token // empty')
         NEW_REFRESH=$(echo "$RESPONSE" | ${pkgs.jq}/bin/jq -r '.refresh_token // empty')
@@ -299,9 +312,9 @@
         };
 
         timers.claude-token-refresh = {
-          description = "Refresh Claude Code OAuth token every 6 hours";
+          description = "Refresh Claude Code OAuth token every 12 hours";
           timerConfig = {
-            OnCalendar = "*-*-* 00,06,12,18:30:00";
+            OnCalendar = "*-*-* 06,18:30:00";
             Persistent = true;
           };
           wantedBy = ["timers.target"];
