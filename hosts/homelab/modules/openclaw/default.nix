@@ -198,7 +198,7 @@
         ];
       };
 
-      environment.systemPackages = [pkgs.curl pkgs.git pkgs.git-crypt pkgs.jq];
+      environment.systemPackages = [pkgs.claude-code pkgs.curl pkgs.git pkgs.git-crypt pkgs.jq];
 
       networking = {
         firewall.allowedTCPPorts = [gatewayPort];
