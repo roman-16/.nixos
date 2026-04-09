@@ -1,11 +1,21 @@
 {
   pkgs,
+  secrets,
   credentialsPath,
   billingProxyPort,
 }: let
   billingProxyDir = "/var/lib/openclaw-billing-proxy/app";
   billingProxyRepo = "https://github.com/zacdcook/openclaw-billing-proxy.git";
-  tokenRefreshModule = ./token-refresh.js;
+
+  # Long-lived setup-token (1 year) — no refresh needed
+  credentialsContent = pkgs.writeText "claude-credentials.json" (builtins.toJSON {
+    claudeAiOauth = {
+      accessToken = secrets.claudeOauthToken;
+      expiresAt = 4102444800000; # 2100-01-01, display only
+      scopes = ["user:inference"];
+      subscriptionType = "team";
+    };
+  });
 
   billingProxyConfig = pkgs.writeText "billing-proxy-config.json" (builtins.toJSON {
     credentialsPath = credentialsPath;
@@ -61,13 +71,8 @@ in {
             ${pkgs.git}/bin/git -C ${billingProxyDir} pull --ff-only || true
           fi
 
-          # Inject inline token refresh into the billing proxy
-          cp ${tokenRefreshModule} ${billingProxyDir}/token-refresh.js
-          if ! grep -q 'token-refresh' ${billingProxyDir}/proxy.js; then
-            sed -i "/^const os = require/a const tokenRefresh = require('./token-refresh');" ${billingProxyDir}/proxy.js
-            sed -i "s/req\.on('end', () => {/req.on('end', async () => {/" ${billingProxyDir}/proxy.js
-            sed -i '/try { oauth = getToken/i\      await tokenRefresh.ensureFreshToken(config.credsPath);' ${billingProxyDir}/proxy.js
-          fi
+          cp ${credentialsContent} ${credentialsPath}
+          chmod 600 ${credentialsPath}
         '';
         Restart = "on-failure";
         RestartSec = 10;
