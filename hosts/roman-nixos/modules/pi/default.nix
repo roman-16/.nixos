@@ -1,8 +1,12 @@
 {
   nixos = {inputs, ...}: {
-    environment.systemPackages = [
-      inputs.llm-agents.packages.x86_64-linux.pi
-    ];
+    environment = {
+      sessionVariables.PI_CACHE_RETENTION = "long";
+
+      systemPackages = [
+        inputs.llm-agents.packages.x86_64-linux.pi
+      ];
+    };
   };
 
   home = {
