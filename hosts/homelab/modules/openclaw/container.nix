@@ -37,6 +37,9 @@ in {
       requires = ["openclaw-billing-proxy.service" "signal-cli.service"];
 
       serviceConfig.ExecStartPre = lib.mkAfter [
+        (pkgs.writeShellScript "openclaw-prune" ''
+          ${pkgs.docker}/bin/docker system prune -af || true
+        '')
         (pkgs.writeShellScript "openclaw-pull" ''
           ${pkgs.docker}/bin/docker pull ghcr.io/openclaw/openclaw:latest || true
         '')
