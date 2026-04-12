@@ -11,7 +11,7 @@
       wantedBy = ["multi-user.target"];
 
       serviceConfig = {
-        ExecStart = "${pkgs.signal-cli}/bin/signal-cli --config ${signalDataDir} -a ${signalAccount} daemon --http=127.0.0.1:${toString signalCliPort} --receive-mode=on-start --send-read-receipts";
+        ExecStart = "${pkgs.signal-cli}/bin/signal-cli --config ${signalDataDir} --account ${signalAccount} daemon --http=127.0.0.1:${toString signalCliPort} --receive-mode=on-start --send-read-receipts";
         Restart = "on-failure";
         RestartSec = 10;
         StateDirectory = "signal-cli";
