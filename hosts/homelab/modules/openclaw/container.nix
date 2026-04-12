@@ -38,11 +38,13 @@ in {
 
       serviceConfig = {
         ExecStartPre = lib.mkAfter [
-          (pkgs.writeShellScript "openclaw-prune" ''
-            ${pkgs.docker}/bin/docker system prune --all --force --volumes || true
-          '')
           (pkgs.writeShellScript "openclaw-pull" ''
             ${pkgs.docker}/bin/docker pull ghcr.io/openclaw/openclaw:latest || true
+          '')
+          # Clean up stopped containers, dangling images, unused networks/volumes/build cache
+          # Runs after pull so the freshly tagged :latest image is kept
+          (pkgs.writeShellScript "openclaw-prune" ''
+            ${pkgs.docker}/bin/docker system prune --force --volumes || true
           '')
           (pkgs.writeShellScript "openclaw-seed-config" ''
             cfg="${dataDir}/openclaw.json"
