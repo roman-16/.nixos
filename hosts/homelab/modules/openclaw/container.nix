@@ -38,7 +38,7 @@ in {
 
       serviceConfig.ExecStartPre = lib.mkAfter [
         (pkgs.writeShellScript "openclaw-prune" ''
-          ${pkgs.docker}/bin/docker system prune -af || true
+          ${pkgs.docker}/bin/docker system prune --all --force --volumes || true
         '')
         (pkgs.writeShellScript "openclaw-pull" ''
           ${pkgs.docker}/bin/docker pull ghcr.io/openclaw/openclaw:latest || true
@@ -47,7 +47,7 @@ in {
           cfg="${dataDir}/openclaw.json"
           nix_cfg='${gatewayConfig}'
 
-          if [ ! -f "$cfg" ]; then
+          if [ ! -s "$cfg" ]; then
             echo "$nix_cfg" > "$cfg"
             chmod 666 "$cfg"
           else
