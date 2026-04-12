@@ -36,27 +36,32 @@ in {
       after = ["openclaw-billing-proxy.service" "signal-cli.service"];
       requires = ["openclaw-billing-proxy.service" "signal-cli.service"];
 
-      serviceConfig.ExecStartPre = lib.mkAfter [
-        (pkgs.writeShellScript "openclaw-prune" ''
-          ${pkgs.docker}/bin/docker system prune --all --force --volumes || true
-        '')
-        (pkgs.writeShellScript "openclaw-pull" ''
-          ${pkgs.docker}/bin/docker pull ghcr.io/openclaw/openclaw:latest || true
-        '')
-        (pkgs.writeShellScript "openclaw-seed-config" ''
-          cfg="${dataDir}/openclaw.json"
-          nix_cfg='${gatewayConfig}'
+      serviceConfig = {
+        ExecStartPre = lib.mkAfter [
+          (pkgs.writeShellScript "openclaw-prune" ''
+            ${pkgs.docker}/bin/docker system prune --all --force --volumes || true
+          '')
+          (pkgs.writeShellScript "openclaw-pull" ''
+            ${pkgs.docker}/bin/docker pull ghcr.io/openclaw/openclaw:latest || true
+          '')
+          (pkgs.writeShellScript "openclaw-seed-config" ''
+            cfg="${dataDir}/openclaw.json"
+            nix_cfg='${gatewayConfig}'
 
-          if [ ! -s "$cfg" ]; then
-            echo "$nix_cfg" > "$cfg"
-            chmod 666 "$cfg"
-          else
-            ${pkgs.jq}/bin/jq --argjson nix "$nix_cfg" 'del(.models.providers, .channels) | . * $nix' "$cfg" > "$cfg.tmp"
-            mv "$cfg.tmp" "$cfg"
-            chmod 666 "$cfg"
-          fi
-        '')
-      ];
+            if [ ! -s "$cfg" ]; then
+              echo "$nix_cfg" > "$cfg"
+              chmod 666 "$cfg"
+            else
+              ${pkgs.jq}/bin/jq --argjson nix "$nix_cfg" 'del(.models.providers, .channels) | . * $nix' "$cfg" > "$cfg.tmp"
+              mv "$cfg.tmp" "$cfg"
+              chmod 666 "$cfg"
+            fi
+          '')
+        ];
+
+        Restart = lib.mkForce "always";
+        RestartSec = "10s";
+      };
     };
 
     # 0777: docker container runs as non-root uid that needs write access
