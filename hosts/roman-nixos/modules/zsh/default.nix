@@ -18,6 +18,7 @@
         wl-clipboard
         gh
         jq
+        openssl
       ];
     };
 
