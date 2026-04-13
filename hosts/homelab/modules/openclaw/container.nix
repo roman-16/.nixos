@@ -20,6 +20,9 @@
     GIT_AUTHOR_NAME = "Roman";
     GIT_COMMITTER_EMAIL = "roman@lerchster.dev";
     GIT_COMMITTER_NAME = "Roman";
+    GIT_CONFIG_COUNT = "1";
+    GIT_CONFIG_KEY_0 = "safe.directory";
+    GIT_CONFIG_VALUE_0 = "*";
     GIT_CRYPT_KEY = secrets.gitCryptKey;
     OBSIDIAN_GIT_REMOTE = secrets.obsidianGitRemote;
     OBSIDIAN_GIT_SSH_KEY_FILE = "/var/lib/openclaw-obsidian/ssh_key";
