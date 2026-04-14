@@ -66,7 +66,21 @@ in {
         wantedBy = ["multi-user.target"];
 
         serviceConfig = {
+          ExecStop = pkgs.writeShellScript "hass-vm-stop" ''
+            ${pkgs.libvirt}/bin/virsh shutdown hass 2>/dev/null || true
+            # Wait for HAOS to gracefully stop all addons and power off
+            for i in $(seq 1 60); do
+              if ! ${pkgs.libvirt}/bin/virsh domstate hass 2>/dev/null | grep -q "running"; then
+                echo "HASS VM shut down after ''${i}s"
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "HASS VM did not shut down in 60s, forcing off"
+            ${pkgs.libvirt}/bin/virsh destroy hass 2>/dev/null || true
+          '';
           RemainAfterExit = true;
+          TimeoutStopSec = 75;
           Type = "oneshot";
         };
 
@@ -127,5 +141,10 @@ in {
   virtualisation.libvirtd = {
     allowedBridges = ["br0"];
     enable = true;
+
+    # Default "suspend" saves VM RAM to disk and restores on boot.
+    # This preserves crashed addon state (Z2M, Bluetooth) across host reboots —
+    # the VM resumes mid-crash instead of booting fresh with auto-start addons.
+    onShutdown = "shutdown";
   };
 }
