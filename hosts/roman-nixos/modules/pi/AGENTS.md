@@ -7,4 +7,5 @@
 - **Idempotent changes**: Never apply fixes via one-time local commands (shell exports, manual config, runtime tweaks). Every change must be declarative and self-contained in source files so it works on any machine without manual steps. If that's not possible, come back to the user.
 - **poppler-utils**: Available on the system (pdftotext, pdfinfo, pdfimages, pdftoppm, etc.). Use for PDF text extraction and manipulation.
 - **python3**: Available on the system. Use for scripting, data processing, and quick computations.
+- **jq**: Available on the system. Use for JSON parsing, filtering, and transformation.
 - **CLI flags**: ALWAYS use full-length flag names (`--force`, `--recursive`, `--verbose`) instead of short flags (`-f`, `-r`, `-v`) for readability.
