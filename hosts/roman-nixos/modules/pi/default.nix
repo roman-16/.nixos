@@ -44,6 +44,7 @@
       defaultModel = "claude-opus-4-6";
       defaultProvider = "anthropic";
       defaultThinkingLevel = "xhigh";
+      enableInstallTelemetry = false;
       followUpMode = "all";
       steeringMode = "all";
       theme = "dark";
