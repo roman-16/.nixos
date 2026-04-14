@@ -19,6 +19,7 @@
         gh
         jq
         openssl
+        python3
       ];
     };
 
