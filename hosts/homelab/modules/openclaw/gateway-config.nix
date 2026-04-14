@@ -60,5 +60,11 @@ builtins.toJSON {
     ];
   };
 
+  plugins.entries.memory-core.config.dreaming = {
+    enabled = true;
+    frequency = "30 4 * * *";
+    timezone = "Europe/Vienna";
+  };
+
   tools.sandbox.tools.allow = ["*"];
 }
