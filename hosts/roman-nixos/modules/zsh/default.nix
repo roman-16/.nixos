@@ -1,7 +1,13 @@
 {
-  nixos = {pkgs, ...}: {
+  nixos = {pkgs, ...}: let
+    secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
+  in {
     environment = {
-      sessionVariables.EDITOR = "micro";
+      sessionVariables = {
+        EDITOR = "micro";
+        PROTON_PASSWORD = secrets.PROTON_PASSWORD;
+        PROTON_USER = secrets.PROTON_USER;
+      };
 
       systemPackages = with pkgs; [
         fastfetch
