@@ -8,7 +8,7 @@
 }:
 builtins.toJSON {
   agents.defaults = {
-    heartbeat.every = "0m";
+    heartbeat.every = "30m";
     model.primary = "anthropic/claude-sonnet-4-6";
     params.cacheRetention = "long";
     thinkingDefault = "medium";
