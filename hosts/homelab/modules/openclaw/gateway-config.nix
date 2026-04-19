@@ -60,10 +60,20 @@ builtins.toJSON {
     ];
   };
 
-  plugins.entries.memory-core.config.dreaming = {
-    enabled = true;
-    frequency = "30 4 * * *";
-    timezone = "Europe/Vienna";
+  plugins.entries = {
+    memory-core.config.dreaming = {
+      enabled = true;
+      frequency = "30 4 * * *";
+      timezone = "Europe/Vienna";
+    };
+
+    memory-wiki = {
+      enabled = true;
+      config = {
+        vaultMode = "bridge";
+        bridge.enabled = true;
+      };
+    };
   };
 
   tools.sandbox.tools.allow = ["*"];
