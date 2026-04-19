@@ -46,6 +46,7 @@
       defaultThinkingLevel = "xhigh";
       enableInstallTelemetry = false;
       followUpMode = "all";
+      hideThinkingBlock = false;
       steeringMode = "all";
       theme = "dark";
     };
