@@ -1,1 +1,2 @@
 **/secrets.json filter=git-crypt diff=git-crypt
+hosts/homelab/modules/trader/** filter=git-crypt diff=git-crypt
