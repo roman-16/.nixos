@@ -2,6 +2,7 @@
   hassIp = "192.168.70.71";
   homelabIp = "192.168.70.70";
   openclawIp = "192.168.70.72";
+  traderIp = "192.168.70.74";
   vpnIp = "192.168.70.73";
 
   rebootServer = pkgs.writeScript "reboot-server" ''
@@ -150,6 +151,16 @@ in {
             ];
           }
           {
+            name = "Trader";
+            group = "Infrastructure";
+            url = "http://${traderIp}:8080/health";
+            interval = "5m";
+            conditions = [
+              "[STATUS] == 200"
+              "[RESPONSE_TIME] < 5000"
+            ];
+          }
+          {
             name = "ZeroTier ZTNET";
             group = "Infrastructure";
             url = "http://${vpnIp}:3000";
@@ -219,6 +230,15 @@ in {
                 href = "https://claw.halerc.xyz";
                 icon = "mdi-robot";
                 siteMonitor = "http://${openclawIp}:7072";
+                statusStyle = "dot";
+              };
+            }
+            {
+              "Trader" = {
+                description = "Polymarket Trader";
+                href = "https://trader.halerc.xyz";
+                icon = "mdi-chart-line";
+                siteMonitor = "http://${traderIp}:8080/health";
                 statusStyle = "dot";
               };
             }
