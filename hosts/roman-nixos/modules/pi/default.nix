@@ -47,6 +47,7 @@
       enableInstallTelemetry = false;
       followUpMode = "all";
       hideThinkingBlock = false;
+      images.autoResize = false;
       steeringMode = "all";
       theme = "dark";
     };
