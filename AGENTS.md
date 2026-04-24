@@ -28,7 +28,7 @@ Multi-host NixOS configuration using Nix flakes with home-manager for user confi
 Desktop/workstation. NVIDIA drivers, systemd-boot, EFI. GNOME with extensive dconf configuration and custom extensions.
 
 #### Networking
-All host/VM IPs (`192.168.70.70`–`192.168.70.73`) are assigned via **router DHCP reservations** (MAC-based). NixOS configs use static addressing matching these reservations.
+All host/VM IPs (`192.168.70.70`–`192.168.70.74`) are assigned via **router DHCP reservations** (MAC-based). NixOS configs use static addressing matching these reservations.
 
 #### homelab (`192.168.70.70`)
 Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
@@ -40,13 +40,14 @@ Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
   - `halerc.xyz` → `localhost:8082` (nginx)
   - `claw.halerc.xyz` → `192.168.70.72:7072` (OpenClaw)
   - `vpn.halerc.xyz` → `192.168.70.73:3000` (ZTNET dashboard)
+  - `trader.halerc.xyz` → `192.168.70.74:8080` (trader dashboard)
   - `beszel.halerc.xyz` → `localhost:8090` (Beszel hub)
   - `gatus.halerc.xyz` → `localhost:8080` (Gatus health checks)
 - **Monitoring stack**:
   - Homepage dashboard (port `8083`, internal) — `https://halerc.xyz`
   - Gatus health checks (port `8080`, LAN only) — `https://gatus.halerc.xyz`
   - Beszel hub (port `8090`, `127.0.0.1` + firewall open for agents) — `https://beszel.halerc.xyz`
-  - Beszel agents on homelab, openclaw, and vpn (SSH-based), HASS (WebSocket addon)
+  - Beszel agents on homelab, openclaw, vpn, and trader (SSH-based), HASS (WebSocket addon)
 - **vpn microVM** (`192.168.70.73`) — QEMU VM via microvm.nix (2GB RAM, 2 vCPUs) containing:
   - Docker containers: PostgreSQL, ZeroTier (controller + node), ZTNET (web UI)
   - ZeroTier L2 VPN on port `9993/udp`, ZTNET dashboard on port `3000/tcp` — `https://vpn.halerc.xyz`
@@ -57,6 +58,13 @@ Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
   - claude-max-api-proxy systemd service (port `3456`, `127.0.0.1` only)
   - signal-cli JSON-RPC daemon (port `8080`, `127.0.0.1` only)
   - Beszel agent
+- **trader microVM** (`192.168.70.74`) — QEMU VM via microvm.nix (2GB RAM, 2 vCPUs, 40GB `var.img`) containing:
+  - Polymarket "nothing ever happens" backtester (Python + DuckDB)
+  - Dashboard systemd service on port `8080` — `https://trader.halerc.xyz`
+  - Ingest/backtest/live/resolve systemd timers (hourly prices, daily markets, weekly backtest, hourly live scan, 6-hourly resolve)
+  - Gatus health check at `/health`
+  - Beszel agent
+  - State in `/var/lib/trader/` (DuckDB + reports); rebuildable from Gamma + Goldsky, no external backups
 - **HAOS KVM VM** (`192.168.70.71:8123`) — Home Assistant OS via libvirt/QEMU:
   - SSH: `ssh hassio@192.168.70.71`
   - USB passthrough: Sonoff Zigbee dongle + Realtek BT adapter (`0x0bda:0xb85b`)
@@ -69,6 +77,7 @@ Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
 - **homelab**: `ssh roman@192.168.70.70`
 - **openclaw VM**: `ssh -J roman@192.168.70.70 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null roman@192.168.70.72`
 - **vpn VM**: `ssh -J roman@192.168.70.70 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null roman@192.168.70.73`
+- **trader VM**: `ssh -J roman@192.168.70.70 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null roman@192.168.70.74`
 - **HAOS**: `ssh hassio@192.168.70.71` (SSH addon, Protection Mode disabled for host D-Bus access)
 
 ## Project Structure
@@ -86,6 +95,7 @@ Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
 - `hosts/homelab/modules/monitoring/` — Homepage dashboard, Gatus health checks, Beszel hub + agent
 - `hosts/homelab/modules/vpn/` — MicroVM: Docker (ZeroTier + ZTNET L2 VPN), Beszel agent
 - `hosts/homelab/modules/openclaw/` — MicroVM: Docker (openclaw gateway), claude-max-api-proxy, signal-cli, Beszel agent
+- `hosts/homelab/modules/trader/` — MicroVM: Polymarket backtester (Python + DuckDB), dashboard on :8080, ingest/backtest/live/resolve timers, Beszel agent
 
 ### Key Files
 - `flake.nix` — Nix flake definition with inputs and all host configurations
