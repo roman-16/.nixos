@@ -61,6 +61,11 @@ builtins.toJSON {
   };
 
   plugins.entries = {
+    # mDNS advertising is unused (gateway reached via Cloudflare tunnel) and the
+    # plugin's probe watchdog raises an unhandled promise rejection that crashes
+    # the gateway in a restart loop.
+    bonjour.enabled = false;
+
     memory-core.config.dreaming = {
       enabled = true;
       frequency = "30 4 * * *";
