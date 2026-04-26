@@ -14,8 +14,12 @@ in {
     kernelParams = ["intel_iommu=on"];
 
     loader = {
-      systemd-boot.enable = true;
       efi.canTouchEfiVariables = true;
+
+      systemd-boot = {
+        configurationLimit = 10;
+        enable = true;
+      };
     };
   };
 
@@ -29,6 +33,13 @@ in {
   nix = {
     nixPath = ["nixpkgs=${inputs.nixpkgs}"];
     optimise.automatic = true;
+
+    gc = {
+      automatic = true;
+      dates = "weekly";
+      options = "--delete-older-than 30d";
+      persistent = true;
+    };
 
     settings = {
       experimental-features = ["nix-command" "flakes"];
