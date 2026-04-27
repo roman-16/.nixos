@@ -108,7 +108,18 @@ in {
         cmd = ["node" "openclaw.mjs" "gateway" "--allow-unconfigured"];
 
         environment = sharedEnv;
-        extraOptions = ["--network=host" "--tmpfs" "/tmp"];
+        extraOptions = [
+          "--network=host"
+          "--tmpfs"
+          "/tmp"
+          # Image bakes a healthcheck that probes 127.0.0.1:18789, but we run
+          # the gateway on ${toString gatewayPort}. Override to match.
+          "--health-cmd=node -e \"fetch('http://127.0.0.1:${toString gatewayPort}/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+          "--health-interval=180s"
+          "--health-timeout=10s"
+          "--health-start-period=15s"
+          "--health-retries=3"
+        ];
         image = "ghcr.io/openclaw/openclaw:latest";
         volumes = [
           "/nix/store:/nix/store:ro"
