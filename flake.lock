@@ -99,7 +99,6 @@
           "llm-agents",
           "flake-parts"
         ],
-        "import-tree": "import-tree",
         "nixpkgs": [
           "llm-agents",
           "nixpkgs"
@@ -114,11 +113,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1777322186,
-        "narHash": "sha256-CFlRnym0RphrTymMUg7PfQgfdYdMd6BnMZQJhlwv0fI=",
+        "lastModified": 1777369708,
+        "narHash": "sha256-1xW7cRZNsFNPQD+cE0fwnLVStnDth0HSoASEIFeT7uI=",
         "owner": "nix-community",
         "repo": "bun2nix",
-        "rev": "8985e47786dd0bfa95b7c795f12aeafadd328eb8",
+        "rev": "e659e1cc4b8e1b21d0aa85f1c481f9db61ecfa98",
         "type": "github"
       },
       "original": {
@@ -239,21 +238,6 @@
         "type": "github"
       }
     },
-    "import-tree": {
-      "locked": {
-        "lastModified": 1773693634,
-        "narHash": "sha256-BtZ2dtkBdSUnFPPFc+n0kcMbgaTxzFNPv2iaO326Ffg=",
-        "owner": "vic",
-        "repo": "import-tree",
-        "rev": "c41e7d58045f9057880b0d85e1152d6a4430dbf1",
-        "type": "github"
-      },
-      "original": {
-        "owner": "vic",
-        "repo": "import-tree",
-        "type": "github"
-      }
-    },
     "llm-agents": {
       "inputs": {
         "blueprint": "blueprint",
@@ -266,11 +250,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1777402424,
-        "narHash": "sha256-Ru/AU0bMdtrT+MhdhIX0W9uvYRrr1Nprpc3ZjG5cM7Y=",
+        "lastModified": 1777404585,
+        "narHash": "sha256-UpGkctL4KgIgUXcGZZGAAHiRO/whp+r3Dc2LUDSpNxg=",
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "49735c3cd7915959f5b2b5753cb0523cd5f3c8cf",
+        "rev": "3da587254443070f7b72a2a4e6a5d24fb4cf04fa",
         "type": "github"
       },
       "original": {
