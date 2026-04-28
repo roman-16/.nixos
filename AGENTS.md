@@ -39,7 +39,6 @@ Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
 - **cloudflared** — Remote/token-based tunnel with routes configured in CF dashboard:
   - `halerc.xyz` → `localhost:8082` (nginx)
   - `claw.halerc.xyz` → `192.168.70.72:7072` (OpenClaw)
-  - `vpn.halerc.xyz` → `192.168.70.73:3000` (ZTNET dashboard)
   - `trader.halerc.xyz` → `192.168.70.74:8080` (trader dashboard)
   - `beszel.halerc.xyz` → `localhost:8090` (Beszel hub)
   - `gatus.halerc.xyz` → `localhost:8080` (Gatus health checks)
@@ -47,12 +46,7 @@ Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
   - Homepage dashboard (port `8083`, internal) — `https://halerc.xyz`
   - Gatus health checks (port `8080`, LAN only) — `https://gatus.halerc.xyz`
   - Beszel hub (port `8090`, `127.0.0.1` + firewall open for agents) — `https://beszel.halerc.xyz`
-  - Beszel agents on homelab, openclaw, vpn, and trader (SSH-based), HASS (WebSocket addon)
-- **vpn microVM** (`192.168.70.73`) — QEMU VM via microvm.nix (2GB RAM, 2 vCPUs) containing:
-  - Docker containers: PostgreSQL, ZeroTier (controller + node), ZTNET (web UI)
-  - ZeroTier L2 VPN on port `9993/udp`, ZTNET dashboard on port `3000/tcp` — `https://vpn.halerc.xyz`
-  - Beszel agent
-  - First registered ZTNET user gets admin. Secrets in `hosts/homelab/modules/vpn/secrets.json`
+  - Beszel agents on homelab, openclaw, and trader (SSH-based), HASS (WebSocket addon)
 - **openclaw microVM** (`192.168.70.72`) — QEMU VM via microvm.nix containing:
   - Docker container running OpenClaw gateway (port `7072`)
   - claude-max-api-proxy systemd service (port `3456`, `127.0.0.1` only)
@@ -76,7 +70,6 @@ Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
 ### SSH Access
 - **homelab**: `ssh roman@192.168.70.70`
 - **openclaw VM**: `ssh -J roman@192.168.70.70 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null roman@192.168.70.72`
-- **vpn VM**: `ssh -J roman@192.168.70.70 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null roman@192.168.70.73`
 - **trader VM**: `ssh -J roman@192.168.70.70 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null roman@192.168.70.74`
 - **HAOS**: `ssh hassio@192.168.70.71` (SSH addon, Protection Mode disabled for host D-Bus access)
 
@@ -93,7 +86,6 @@ Server. Deployed remotely via `nx-deploy` or `nx-sync-all`. Runs:
 - `hosts/homelab/modules/cloudflared/` — Cloudflare tunnel service (remote/token-based)
 - `hosts/homelab/modules/hass/` — HASS KVM VM definition (USB passthrough for Zigbee + BT), API secrets
 - `hosts/homelab/modules/monitoring/` — Homepage dashboard, Gatus health checks, Beszel hub + agent
-- `hosts/homelab/modules/vpn/` — MicroVM: Docker (ZeroTier + ZTNET L2 VPN), Beszel agent
 - `hosts/homelab/modules/openclaw/` — MicroVM: Docker (openclaw gateway), claude-max-api-proxy, signal-cli, Beszel agent
 - `hosts/homelab/modules/trader/` — MicroVM: Polymarket backtester (Python + DuckDB), dashboard on :8080, ingest/backtest/live/resolve timers, Beszel agent
 
