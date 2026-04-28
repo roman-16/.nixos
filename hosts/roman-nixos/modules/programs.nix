@@ -7,7 +7,6 @@
       obsidian
       nixd
       google-chrome
-      yt-dlp
       cheese
       discord
       kooha

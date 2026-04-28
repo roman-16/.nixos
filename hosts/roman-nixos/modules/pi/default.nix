@@ -50,6 +50,7 @@
       images.autoResize = true;
       steeringMode = "all";
       theme = "dark";
+      warnings.anthropicExtraUsage = false;
     };
     settingsJson = builtins.toJSON settings;
   in {
