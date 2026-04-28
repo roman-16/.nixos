@@ -3,7 +3,6 @@
   homelabIp = "192.168.70.70";
   openclawIp = "192.168.70.72";
   traderIp = "192.168.70.74";
-  vpnIp = "192.168.70.73";
 
   rebootServer = pkgs.writeScript "reboot-server" ''
     #!${pkgs.python3}/bin/python3
@@ -35,7 +34,7 @@
       <div class="card">
         <div class="icon">&#9889;</div>
         <h1>Reboot Homelab?</h1>
-        <p>This will restart the N100 server and all VMs (HAOS, OpenClaw, VPN).</p>
+        <p>This will restart the N100 server and all VMs (HAOS, OpenClaw, Trader).</p>
         <form method="POST" class="actions">
           <button type="submit">Confirm Reboot</button>
           <a href="/" class="cancel">Cancel</a>
@@ -161,16 +160,6 @@ in {
             ];
           }
           {
-            name = "ZeroTier ZTNET";
-            group = "Infrastructure";
-            url = "http://${vpnIp}:3000";
-            interval = "5m";
-            conditions = [
-              "[STATUS] < 500"
-              "[RESPONSE_TIME] < 5000"
-            ];
-          }
-          {
             name = "Homelab SSH";
             group = "Network";
             url = "tcp://${homelabIp}:22";
@@ -181,13 +170,6 @@ in {
             name = "OpenClaw VM SSH";
             group = "Network";
             url = "tcp://${openclawIp}:22";
-            interval = "5m";
-            conditions = ["[CONNECTED] == true"];
-          }
-          {
-            name = "VPN VM SSH";
-            group = "Network";
-            url = "tcp://${vpnIp}:22";
             interval = "5m";
             conditions = ["[CONNECTED] == true"];
           }
@@ -239,15 +221,6 @@ in {
                 href = "https://trader.halerc.xyz";
                 icon = "mdi-chart-line";
                 siteMonitor = "http://${traderIp}:8080/health";
-                statusStyle = "dot";
-              };
-            }
-            {
-              "ZeroTier VPN" = {
-                description = "L2 VPN";
-                href = "https://vpn.halerc.xyz";
-                icon = "zerotier";
-                siteMonitor = "http://${vpnIp}:3000";
                 statusStyle = "dot";
               };
             }
