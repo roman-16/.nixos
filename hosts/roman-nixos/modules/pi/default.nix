@@ -10,14 +10,21 @@
   };
 
   home = {
+    inputs,
     pkgs,
     lib,
     ...
   }: let
+    pi = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.pi;
+
     extensionsDir = ./extensions;
     extensionAttrs =
       builtins.listToAttrs
       (collectFiles ".pi/agent/extensions" extensionsDir);
+
+    upstreamExtensionAttrs = {
+      ".pi/agent/extensions/questionnaire.ts".source = "${pi}/lib/node_modules/@mariozechner/pi-coding-agent/examples/extensions/questionnaire.ts";
+    };
 
     # Skills: symlink individual files so directories are real (writable for npm install)
     skillsDir = ./skills;
@@ -60,6 +67,7 @@
           ".pi/agent/AGENTS.md".source = ./AGENTS.md;
         }
         // extensionAttrs
+        // upstreamExtensionAttrs
         // skillAttrs;
 
       # Merge nix-defined settings onto existing settings.json
