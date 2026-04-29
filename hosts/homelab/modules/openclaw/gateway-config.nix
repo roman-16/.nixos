@@ -60,6 +60,10 @@ builtins.toJSON {
     ];
   };
 
+  # Override OpenClaw's default daily reset at 04:00 — the homelab reboots at
+  # that time, so push the reset to 06:00 to avoid the overlap.
+  session.reset.atHour = 6;
+
   plugins.entries = {
     # mDNS advertising is unused (gateway reached via Cloudflare tunnel) and the
     # plugin's probe watchdog raises an unhandled promise rejection that crashes
