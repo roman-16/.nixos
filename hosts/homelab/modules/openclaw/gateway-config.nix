@@ -10,8 +10,11 @@ builtins.toJSON {
   agents.defaults = {
     heartbeat.every = "30m";
     model.primary = "anthropic/claude-sonnet-4-6";
-    params.cacheRetention = "long";
-    thinkingDefault = "medium";
+
+    params = {
+      cacheRetention = "long";
+      thinking = "adaptive";
+    };
   };
 
   channels.signal = {
@@ -49,14 +52,6 @@ builtins.toJSON {
         name = "Claude Sonnet 4.6";
         reasoning = true;
       }
-      {
-        contextWindow = 1000000;
-        id = "claude-opus-4-6";
-        input = ["text" "image"];
-        maxTokens = 128000;
-        name = "Claude Opus 4.6";
-        reasoning = true;
-      }
     ];
   };
 
@@ -64,26 +59,10 @@ builtins.toJSON {
   # that time, so push the reset to 06:00 to avoid the overlap.
   session.reset.atHour = 6;
 
-  plugins.entries = {
-    # mDNS advertising is unused (gateway reached via Cloudflare tunnel) and the
-    # plugin's probe watchdog raises an unhandled promise rejection that crashes
-    # the gateway in a restart loop.
-    bonjour.enabled = false;
-
-    memory-core.config.dreaming = {
-      enabled = true;
-      frequency = "30 4 * * *";
-      timezone = "Europe/Vienna";
-    };
-
-    memory-wiki = {
-      enabled = true;
-      config = {
-        vaultMode = "bridge";
-        bridge.enabled = true;
-      };
-    };
-  };
+  # mDNS advertising is unused (gateway reached via Cloudflare tunnel) and the
+  # plugin's probe watchdog raises an unhandled promise rejection that crashes
+  # the gateway in a restart loop.
+  plugins.entries.bonjour.enabled = false;
 
   tools.sandbox.tools.allow = ["*"];
 }
