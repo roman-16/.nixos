@@ -28,11 +28,9 @@ builtins.toJSON {
     };
 
     whatsapp = {
-      ackReaction.emoji = "👀";
       allowFrom = ["+436509926961"];
       dmPolicy = "allowlist";
       enabled = true;
-      reactionLevel = "ack";
       replyToMode = "batched";
       sendReadReceipts = true;
     };
