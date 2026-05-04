@@ -33,6 +33,8 @@
   gatewayConfig = import ./gateway-config.nix {
     inherit secrets signalAccount signalCliPort gatewayPort lanIp billingProxyPort;
   };
+
+  externalPlugins = ["whatsapp"];
 in {
   systemd = {
     services.docker-openclaw = {
@@ -48,6 +50,21 @@ in {
           # Runs after pull so the freshly tagged :latest image is kept
           (pkgs.writeShellScript "openclaw-prune" ''
             ${pkgs.docker}/bin/docker system prune --force --volumes || true
+          '')
+          # Install externalized @openclaw/* plugins into ${dataDir}/npm via a
+          # one-shot container. Skipped per-plugin if the module is already
+          # present, so the install only runs on first boot or when a plugin
+          # is added to externalPlugins.
+          (pkgs.writeShellScript "openclaw-install-plugins" ''
+            for plugin in ${lib.concatStringsSep " " externalPlugins}; do
+              if [ ! -d "${dataDir}/npm/node_modules/@openclaw/$plugin" ]; then
+                ${pkgs.docker}/bin/docker run --rm \
+                  --network=host \
+                  --volume "${dataDir}:/home/node/.openclaw" \
+                  ghcr.io/openclaw/openclaw:latest \
+                  node /app/openclaw.mjs plugins install "@openclaw/$plugin"
+              fi
+            done
           '')
           (pkgs.writeShellScript "openclaw-seed-config" ''
             cfg="${dataDir}/openclaw.json"
@@ -124,6 +141,7 @@ in {
         volumes = [
           "/nix/store:/nix/store:ro"
           "${pkgs.curl}/bin/curl:/usr/local/bin/curl:ro"
+          "${pkgs.git-crypt}/bin/git-crypt:/usr/local/bin/git-crypt:ro"
           "${pkgs.jq}/bin/jq:/usr/local/bin/jq:ro"
           "${dataDir}:/home/node/.openclaw"
           "${dataDir}/cache:/home/node/.cache"

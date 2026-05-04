@@ -69,10 +69,14 @@ builtins.toJSON {
   # at that time, so push the reset to 06:00 to avoid the overlap.
   session.reset.atHour = 6;
 
-  # mDNS advertising is unused (gateway reached via Cloudflare tunnel) and the
-  # plugin's probe watchdog raises an unhandled promise rejection that crashes
-  # the gateway in a restart loop.
-  plugins.entries.bonjour.enabled = false;
+  plugins = {
+    allow = ["whatsapp"];
+
+    # mDNS advertising is unused (gateway reached via Cloudflare tunnel) and
+    # the plugin's probe watchdog raises an unhandled promise rejection that
+    # crashes the gateway in a restart loop.
+    entries.bonjour.enabled = false;
+  };
 
   tools.sandbox.tools.allow = ["*"];
 }
