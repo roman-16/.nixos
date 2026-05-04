@@ -1,7 +1,5 @@
 {
   secrets,
-  signalAccount,
-  signalCliPort,
   gatewayPort,
   lanIp,
   billingProxyPort,
@@ -17,23 +15,12 @@ builtins.toJSON {
     };
   };
 
-  channels = {
-    signal = {
-      account = signalAccount;
-      allowFrom = ["+436509926961"];
-      autoStart = false;
-      dmPolicy = "pairing";
-      enabled = true;
-      httpUrl = "http://127.0.0.1:${toString signalCliPort}";
-    };
-
-    whatsapp = {
-      allowFrom = ["+436509926961"];
-      dmPolicy = "allowlist";
-      enabled = true;
-      replyToMode = "batched";
-      sendReadReceipts = true;
-    };
+  channels.whatsapp = {
+    allowFrom = ["+436509926961"];
+    dmPolicy = "allowlist";
+    enabled = true;
+    replyToMode = "batched";
+    sendReadReceipts = true;
   };
 
   gateway = {

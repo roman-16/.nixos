@@ -15,15 +15,10 @@
 
       billingProxyPort = 18801;
       credentialsPath = "/var/lib/claude-auth/.credentials.json";
-
-      signalAccount = "+4369010678088";
-      signalCliPort = 8080;
-      signalDataDir = "/var/lib/signal-cli";
     in
       lib.mkMerge [
         (import ./billing-proxy.nix {inherit pkgs secrets credentialsPath billingProxyPort;})
-        (import ./signal.nix {inherit pkgs signalAccount signalCliPort signalDataDir;})
-        (import ./container.nix {inherit pkgs lib secrets dataDir gatewayPort lanIp billingProxyPort signalAccount signalCliPort;})
+        (import ./container.nix {inherit pkgs lib secrets dataDir gatewayPort lanIp billingProxyPort;})
 
         {
           microvm = {
