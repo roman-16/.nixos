@@ -65,16 +65,9 @@ builtins.toJSON {
     ];
   };
 
-  session = {
-    # Override OpenClaw's default daily reset at 04:00 — the homelab reboots
-    # at that time, so push the reset to 06:00 to avoid the overlap.
-    reset.atHour = 6;
-
-    # Share one main session across channels so a conversation started on
-    # WhatsApp stays continuous if you fall back to Signal (and vice versa).
-    # Without this, every channel:sender pair gets its own isolated history.
-    scope = "global";
-  };
+  # Override OpenClaw's default daily reset at 04:00 — the homelab reboots
+  # at that time, so push the reset to 06:00 to avoid the overlap.
+  session.reset.atHour = 6;
 
   # mDNS advertising is unused (gateway reached via Cloudflare tunnel) and the
   # plugin's probe watchdog raises an unhandled promise rejection that crashes
