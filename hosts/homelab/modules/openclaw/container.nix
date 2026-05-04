@@ -72,7 +72,7 @@ in {
               echo "$nix_cfg" > "$cfg"
               chmod 666 "$cfg"
             else
-              ${pkgs.jq}/bin/jq --argjson nix "$nix_cfg" 'del(.models.providers, .channels) | . * $nix' "$cfg" > "$cfg.tmp"
+              ${pkgs.jq}/bin/jq --argjson nix "$nix_cfg" 'del(.models.providers, .channels, .plugins.allow) | . * $nix' "$cfg" > "$cfg.tmp"
               mv "$cfg.tmp" "$cfg"
               chmod 666 "$cfg"
             fi
