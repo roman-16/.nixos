@@ -6,8 +6,6 @@
   gatewayPort,
   lanIp,
   billingProxyPort,
-  signalAccount,
-  signalCliPort,
 }: let
   sharedEnv = {
     ANTHROPIC_API_KEY = "not-needed";
@@ -31,15 +29,15 @@
   };
 
   gatewayConfig = import ./gateway-config.nix {
-    inherit secrets signalAccount signalCliPort gatewayPort lanIp billingProxyPort;
+    inherit secrets gatewayPort lanIp billingProxyPort;
   };
 
   externalPlugins = ["whatsapp"];
 in {
   systemd = {
     services.docker-openclaw = {
-      after = ["openclaw-billing-proxy.service" "signal-cli.service"];
-      requires = ["openclaw-billing-proxy.service" "signal-cli.service"];
+      after = ["openclaw-billing-proxy.service"];
+      requires = ["openclaw-billing-proxy.service"];
 
       serviceConfig = {
         ExecStartPre = lib.mkAfter [
