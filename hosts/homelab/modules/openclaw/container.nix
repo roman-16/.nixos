@@ -22,6 +22,7 @@
     GIT_CONFIG_KEY_0 = "safe.directory";
     GIT_CONFIG_VALUE_0 = "*";
     GIT_CRYPT_KEY = secrets.gitCryptKey;
+    MISTRAL_API_KEY = secrets.mistralApiKey;
     OBSIDIAN_GIT_REMOTE = secrets.obsidianGitRemote;
     OBSIDIAN_GIT_SSH_KEY_FILE = "/var/lib/openclaw-obsidian/ssh_key";
     OBSIDIAN_GIT_SSH_PUB_KEY_FILE = "/var/lib/openclaw-obsidian/ssh_key.pub";
