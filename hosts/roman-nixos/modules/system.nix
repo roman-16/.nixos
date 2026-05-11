@@ -13,17 +13,15 @@
       };
     };
 
+    documentation.nixos.enable = false;
+
     networking = {
       hostName = "roman-nixos";
       networkmanager.enable = true;
       wireless.enable = lib.mkForce false;
     };
 
-    programs.nix-ld.enable = true;
-
-    security = {
-      rtkit.enable = true;
-    };
+    security.rtkit.enable = true;
 
     services = {
       printing.enable = true;
@@ -41,25 +39,26 @@
       '';
     };
 
-    users.users.roman = {
-      isNormalUser = true;
-      description = "Roman";
-      extraGroups = ["networkmanager" "wheel"];
-    };
-
-    nixpkgs.config.allowUnfree = true;
-
     powerManagement.cpuFreqGovernor = "performance";
 
-    documentation.nixos.enable = false;
-
     nix = {
-      optimise.automatic = true;
       nixPath = ["nixpkgs=${inputs.nixpkgs}"];
+      optimise.automatic = true;
+
       settings = {
         experimental-features = ["nix-command" "flakes"];
         warn-dirty = false;
       };
+    };
+
+    nixpkgs.config.allowUnfree = true;
+
+    programs.nix-ld.enable = true;
+
+    users.users.roman = {
+      isNormalUser = true;
+      description = "Roman";
+      extraGroups = ["networkmanager" "wheel"];
     };
   };
 

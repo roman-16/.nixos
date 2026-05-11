@@ -17,18 +17,7 @@
         LC_TIME = "de_AT.UTF-8";
       };
     };
-
-    services.xserver.xkb = {
-      layout = "at";
-      variant = "nodeadkeys";
-    };
   };
 
-  home = {...}: {
-    dconf.settings = {
-      "system/locale" = {
-        region = "de_AT.UTF-8";
-      };
-    };
-  };
+  home = {...}: {};
 }
