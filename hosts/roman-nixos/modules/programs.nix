@@ -29,7 +29,6 @@
       gimp3-with-plugins
       gparted
       file-roller
-      pear-desktop
       zip
       libreoffice
       qbittorrent

@@ -327,14 +327,6 @@
           X-GNOME-Autostart-enabled=true
         '';
 
-        "autostart/pear-desktop.desktop".text = ''
-          [Desktop Entry]
-          Name=Pear Desktop
-          Exec=pear-desktop
-          Type=Application
-          X-GNOME-Autostart-enabled=true
-        '';
-
         "burn-my-windows/profiles/1728415013431728.conf".text = ''
           [burn-my-windows-profile]
           fire-enable-effect=false
