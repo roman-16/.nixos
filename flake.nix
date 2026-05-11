@@ -20,6 +20,10 @@
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    nixos-wsl = {
+      url = "github:nix-community/NixOS-WSL";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     stylix.url = "github:danth/stylix";
   };
 
@@ -36,6 +40,20 @@
           inputs.nix-flatpak.nixosModules.nix-flatpak
           inputs.nix-index-database.nixosModules.default
           inputs.stylix.nixosModules.stylix
+        ];
+      };
+
+      roman-windows = inputs.nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+
+        specialArgs = {
+          inherit inputs;
+        };
+
+        modules = [
+          ./hosts/roman-windows/configuration.nix
+          inputs.home-manager.nixosModules.default
+          inputs.nixos-wsl.nixosModules.default
         ];
       };
 
