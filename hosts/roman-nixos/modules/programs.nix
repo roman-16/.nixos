@@ -2,7 +2,6 @@
   nixos = {pkgs, ...}: {
     environment.systemPackages = with pkgs; [
       vscode
-      appimage-run
       obsidian
       google-chrome
       cheese
@@ -10,7 +9,6 @@
       kooha
       signal-desktop
       eyedropper
-      ffmpeg
       brave
       foliate
       (prismlauncher.override {
@@ -27,11 +25,9 @@
       gimp3-with-plugins
       gparted
       file-roller
-      zip
       libreoffice
       qbittorrent
       gradia
-      poppler-utils
     ];
 
     services.xserver.excludePackages = with pkgs; [
