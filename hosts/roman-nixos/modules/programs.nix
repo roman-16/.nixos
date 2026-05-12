@@ -3,9 +3,7 @@
     environment.systemPackages = with pkgs; [
       vscode
       appimage-run
-      alejandra
       obsidian
-      nixd
       google-chrome
       cheese
       discord
