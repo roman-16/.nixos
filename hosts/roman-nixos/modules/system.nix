@@ -1,9 +1,5 @@
 {
-  nixos = {
-    inputs,
-    lib,
-    ...
-  }: {
+  nixos = {lib, ...}: {
     boot = {
       kernelParams = ["nvidia-drm.modeset=1"];
 
@@ -13,19 +9,27 @@
       };
     };
 
-    documentation.nixos.enable = false;
-
     networking = {
       hostName = "roman-nixos";
       networkmanager.enable = true;
       wireless.enable = lib.mkForce false;
     };
 
+    powerManagement.cpuFreqGovernor = "performance";
+
     security.rtkit.enable = true;
 
     services = {
       printing.enable = true;
-      xserver.enable = true;
+
+      xserver = {
+        enable = true;
+
+        xkb = {
+          layout = "at";
+          variant = "nodeadkeys";
+        };
+      };
 
       udev.extraRules = ''
         # HW.1, Nano
@@ -39,25 +43,8 @@
       '';
     };
 
-    powerManagement.cpuFreqGovernor = "performance";
-
-    nix = {
-      nixPath = ["nixpkgs=${inputs.nixpkgs}"];
-      optimise.automatic = true;
-
-      settings = {
-        experimental-features = ["nix-command" "flakes"];
-        warn-dirty = false;
-      };
-    };
-
-    nixpkgs.config.allowUnfree = true;
-
-    programs.nix-ld.enable = true;
-
     users.users.roman = {
       isNormalUser = true;
-      description = "Roman";
       extraGroups = ["networkmanager" "wheel"];
     };
   };

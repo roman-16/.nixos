@@ -17,11 +17,6 @@
         LC_TIME = "de_AT.UTF-8";
       };
     };
-
-    services.xserver.xkb = {
-      layout = "at";
-      variant = "nodeadkeys";
-    };
   };
 
   home = {...}: {

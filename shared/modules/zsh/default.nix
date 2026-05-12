@@ -202,7 +202,7 @@
           nx-stage = "git -C ~/.nixos add .";
           nx-sync = "nx-fmt && nx-pull && nx-stage && nx-update && nx-stage && nx-push";
           nx-sync-all = "nx-fmt && nx-pull && nx-stage && nx-update && nx-deploy && nx-stage && nx-push";
-          nx-update = "nh os switch --update --hostname roman-nixos";
+          nx-update = "nh os switch --update --hostname $(hostname)";
 
           tree = "tre";
         };

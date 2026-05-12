@@ -53,7 +53,9 @@
         modules = [
           ./hosts/roman-windows/configuration.nix
           inputs.home-manager.nixosModules.default
+          inputs.nix-index-database.nixosModules.default
           inputs.nixos-wsl.nixosModules.default
+          inputs.stylix.nixosModules.stylix
         ];
       };
 
