@@ -85,14 +85,15 @@ in {
       };
     };
 
-    # 0777: docker container runs as non-root uid that needs write access
+    # uid 1000 matches the `node` user inside the container, so the gateway
+    # can chmod its working tree without EPERM.
     tmpfiles.rules = [
-      "d ${dataDir} 0777 root root -"
-      "d ${dataDir}/credentials 0777 root root -"
-      "d ${dataDir}/skills 0777 root root -"
-      "d ${dataDir}/cache 0777 root root -"
-      "d ${dataDir}/npm-global 0777 root root -"
-      "d ${dataDir}/workspace/self-improving 0777 root root -"
+      "d ${dataDir} 0777 1000 1000 -"
+      "d ${dataDir}/credentials 0777 1000 1000 -"
+      "d ${dataDir}/skills 0777 1000 1000 -"
+      "d ${dataDir}/cache 0777 1000 1000 -"
+      "d ${dataDir}/npm-global 0777 1000 1000 -"
+      "d ${dataDir}/workspace/self-improving 0777 1000 1000 -"
 
       # Container reports media paths as /home/node/.openclaw/media/...
       # but files live at ${dataDir}/media/ on the VM
@@ -143,6 +144,11 @@ in {
           "${pkgs.git-crypt}/bin/git-crypt:/usr/local/bin/git-crypt:ro"
           "${pkgs.jq}/bin/jq:/usr/local/bin/jq:ro"
           "${dataDir}:/home/node/.openclaw"
+          # Defensive mirror: the billing proxy's reverse-map can leak its
+          # sanitized name (`.ocplatform`) into tool-call paths; mounting
+          # both paths at the same inode keeps leaked writes persistent.
+          # Ref: https://github.com/zacdcook/openclaw-billing-proxy/issues/35
+          "${dataDir}:/home/node/.ocplatform"
           "${dataDir}/cache:/home/node/.cache"
           "${dataDir}/npm-global:/home/node/.npm"
           "${dataDir}/skills:/app/skills"
