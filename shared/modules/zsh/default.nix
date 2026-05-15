@@ -44,6 +44,11 @@
 
   home = {pkgs, ...}: {
     programs = {
+      atuin = {
+        enable = true;
+        enableZshIntegration = true;
+      };
+
       carapace = {
         enable = true;
         enableZshIntegration = true;
