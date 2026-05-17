@@ -38,8 +38,8 @@
         gnomeExtensions.blur-my-shell
         gnomeExtensions.burn-my-windows
         gnomeExtensions.dash-to-panel
-        gnomeExtensions.ddterm
         gnomeExtensions.pip-on-top
+        gnomeExtensions.quake-terminal
         gnomeExtensions.rounded-window-corners-reborn
         gnomeExtensions.smile-complementary-extension
         gnomeExtensions.user-themes
@@ -64,16 +64,6 @@
       dconf.settings = {
         "ca/desrt/dconf-editor" = {
           show-warning = false;
-        };
-
-        "com/github/amezin/ddterm" = {
-          ddterm-toggle-hotkey = ["F10"];
-          hide-when-focus-lost = true;
-          panel-icon-type = "none";
-          show-scrollbar = false;
-          tab-policy = "automatic";
-          window-resizable = false;
-          window-size = 0.41;
         };
 
         "it/mijorus/smile" = {
@@ -209,8 +199,8 @@
             gnomeExtensions.blur-my-shell.extensionUuid
             gnomeExtensions.burn-my-windows.extensionUuid
             gnomeExtensions.dash-to-panel.extensionUuid
-            gnomeExtensions.ddterm.extensionUuid
             gnomeExtensions.pip-on-top.extensionUuid
+            gnomeExtensions.quake-terminal.extensionUuid
             gnomeExtensions.rounded-window-corners-reborn.extensionUuid
             gnomeExtensions.smile-complementary-extension.extensionUuid
             gnomeExtensions.user-themes.extensionUuid
@@ -247,6 +237,24 @@
           trans-use-custom-bg = true;
           trans-use-custom-opacity = true;
           tray-size = 14;
+        };
+
+        "org/gnome/shell/extensions/quake-terminal" = {
+          always-on-top = true;
+          animation-time = 250;
+          auto-hide-window = true;
+          horizontal-size = 100;
+          launch-args-map = [
+            (mkDictionaryEntry [
+              "org.wezfurlong.wezterm.desktop"
+              "-- zellij attach --create dropdown"
+            ])
+          ];
+          render-on-current-monitor = true;
+          skip-taskbar = true;
+          terminal-id = "org.wezfurlong.wezterm.desktop";
+          terminal-shortcut = ["F10"];
+          vertical-size = 42;
         };
 
         "org/gnome/shell/extensions/dynamic-music-pill" = {

@@ -73,13 +73,17 @@
       wezterm = {
         enable = true;
         enableZshIntegration = true;
+
         extraConfig = ''
           return {
+            disable_default_key_bindings = true,
             enable_kitty_keyboard = true,
+            enable_tab_bar = false,
             enable_wayland = false,
-            hide_tab_bar_if_only_one_tab = true,
             keys = {
-              { key = "Enter", mods = "ALT", action = wezterm.action.DisableDefaultAssignment },
+              { key = "c",   mods = "CTRL|SHIFT", action = wezterm.action.CopyTo "Clipboard" },
+              { key = "v",   mods = "CTRL|SHIFT", action = wezterm.action.PasteFrom "Clipboard" },
+              { key = "F11",                      action = wezterm.action.ToggleFullScreen },
             },
             skip_close_confirmation_for_processes_named = { 'zellij' },
             window_close_confirmation = "NeverPrompt",
@@ -93,72 +97,25 @@
         enableZshIntegration = false;
 
         extraConfig = ''
-          keybinds {
-              entersearch {
-                  unbind "Ctrl c"
-                  bind "Ctrl Alt c" { SwitchToMode "Scroll"; }
-              }
-              locked {
-                  unbind "Ctrl g"
-                  bind "Ctrl Alt g" { SwitchToMode "Normal"; }
-              }
-              pane {
-                  unbind "Ctrl p" "x"
-                  bind "Ctrl Alt p" { SwitchToMode "Normal"; }
-                  bind "w" { CloseFocus; SwitchToMode "Normal"; }
-              }
-              resize {
-                  unbind "Ctrl n"
-                  bind "Ctrl Alt n" { SwitchToMode "Normal"; }
-              }
-              scroll {
-                  unbind "Ctrl s" "Ctrl c"
-                  bind "Ctrl Alt c" { ScrollToBottom; SwitchToMode "Normal"; }
-                  bind "Ctrl Alt s" { SwitchToMode "Normal"; }
-              }
-              search {
-                  unbind "Ctrl s" "Ctrl c"
-                  bind "Ctrl Alt c" { ScrollToBottom; SwitchToMode "Normal"; }
-                  bind "Ctrl Alt s" { SwitchToMode "Normal"; }
-              }
-              session {
-                  unbind "Ctrl o" "Ctrl s"
-                  bind "Ctrl Alt o" { SwitchToMode "Normal"; }
-                  bind "Ctrl Alt s" { SwitchToMode "Scroll"; }
-              }
-              tab {
-                  unbind "Ctrl t" "x"
-                  bind "Ctrl Alt t" { SwitchToMode "Normal"; }
-                  bind "w" { CloseTab; SwitchToMode "Normal"; }
-              }
-
-              shared_except "entersearch" "locked" {
-                  unbind "Ctrl s"
-                  bind "Ctrl Alt s" { SwitchToMode "Scroll"; }
-              }
-              shared_except "locked" {
-                  unbind "Ctrl g" "Ctrl h" "Ctrl q"
-                  bind "Ctrl Alt g" { SwitchToMode "Locked"; }
-              }
-              shared_except "pane" "locked" {
-                  unbind "Ctrl p"
-                  bind "Ctrl Alt p" { SwitchToMode "Pane"; }
-              }
-              shared_except "resize" "locked" {
-                  unbind "Ctrl n"
-                  bind "Ctrl Alt n" { SwitchToMode "Resize"; }
-              }
-              shared_except "scroll" "locked" {
-                  unbind "Ctrl s"
-                  bind "Ctrl Alt s" { SwitchToMode "Scroll"; }
-              }
-              shared_except "session" "locked" {
-                  unbind "Ctrl o"
-                  bind "Ctrl Alt o" { SwitchToMode "Session"; }
-              }
-              shared_except "tab" "locked" {
-                  unbind "Ctrl t"
-                  bind "Ctrl Alt t" { SwitchToMode "Tab"; }
+          keybinds clear-defaults=true {
+              shared {
+                  bind "Ctrl Shift t"        { NewTab; }
+                  bind "Ctrl Shift w"        { CloseTab; }
+                  bind "Ctrl Tab"            { ToggleTab; }
+                  bind "Ctrl PageDown"       { GoToNextTab; }
+                  bind "Ctrl PageUp"         { GoToPreviousTab; }
+                  bind "Ctrl Shift PageDown" { MoveTab "Right"; }
+                  bind "Ctrl Shift PageUp"   { MoveTab "Left"; }
+                  bind "Ctrl 1"              { GoToTab 1; }
+                  bind "Ctrl 2"              { GoToTab 2; }
+                  bind "Ctrl 3"              { GoToTab 3; }
+                  bind "Ctrl 4"              { GoToTab 4; }
+                  bind "Ctrl 5"              { GoToTab 5; }
+                  bind "Ctrl 6"              { GoToTab 6; }
+                  bind "Ctrl 7"              { GoToTab 7; }
+                  bind "Ctrl 8"              { GoToTab 8; }
+                  bind "Ctrl 9"              { GoToTab 9; }
+                  bind "Ctrl 0"              { GoToTab 10; }
               }
           }
         '';
@@ -166,10 +123,13 @@
         settings = {
           copy_command = "wl-copy";
           copy_on_select = true;
+          default_layout = "compact";
+          default_mode = "locked";
           on_force_close = "quit";
           pane_frames = false;
           show_release_notes = false;
           show_startup_tips = false;
+          support_kitty_keyboard_protocol = true;
         };
       };
 
@@ -188,7 +148,7 @@
 
           cd = "z";
 
-          fastfetch = "fastfetch -l small -c ~/.nixos/hosts/roman-nixos/modules/zsh/fastfetch.jsonc";
+          fastfetch = "fastfetch -l small -c ~/.nixos/shared/modules/zsh/fastfetch.jsonc";
 
           du = "dua interactive /";
 
