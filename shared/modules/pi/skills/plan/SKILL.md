@@ -21,7 +21,7 @@ Anything that mutates the project, the system, processes, network state, package
 
 Lean on existing skills as needed: `/skill:exa` for web research, `/skill:context7` for library and framework docs, `/skill:browser` for live web pages.
 
-For your own clarifications, state assumptions inline (e.g. "Assuming X means Y…") and continue. Only ask the user when an unresolved branch genuinely blocks producing a useful plan — use the `questionnaire` tool for a single targeted question with a recommended option, or defer to `/skill:grill-me` when you need to extract substantial information from the user. Don't ask just to be thorough.
+For your own clarifications, state assumptions inline (e.g. "Assuming X means Y…") and continue. Only ask the user when an unresolved branch genuinely blocks producing a useful plan — use the `questionnaire` tool for a single targeted question with a recommended option. Don't ask just to be thorough.
 
 ## Output
 
