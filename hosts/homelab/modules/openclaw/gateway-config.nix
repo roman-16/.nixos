@@ -2,7 +2,7 @@
   secrets,
   gatewayPort,
   lanIp,
-  billingProxyPort,
+  shimPort,
 }:
 builtins.toJSON {
   agents.defaults = {
@@ -16,7 +16,7 @@ builtins.toJSON {
   };
 
   channels.whatsapp = {
-    allowFrom = ["+436509926961"];
+    allowFrom = [secrets.mainNumber];
     dmPolicy = "allowlist";
     enabled = true;
     replyToMode = "batched";
@@ -39,7 +39,7 @@ builtins.toJSON {
   };
 
   models.providers.anthropic = {
-    baseUrl = "http://127.0.0.1:${toString billingProxyPort}";
+    baseUrl = "http://127.0.0.1:${toString shimPort}";
     models = [
       {
         contextWindow = 200000;

@@ -13,12 +13,12 @@
       gatewayPort = 7072;
       lanIp = "192.168.70.72";
 
-      billingProxyPort = 18801;
+      shimPort = 18801;
       credentialsPath = "/var/lib/claude-auth/.credentials.json";
     in
       lib.mkMerge [
-        (import ./billing-proxy.nix {inherit pkgs secrets credentialsPath billingProxyPort;})
-        (import ./container.nix {inherit pkgs lib secrets dataDir gatewayPort lanIp billingProxyPort;})
+        (import ./claude-shim.nix {inherit pkgs secrets credentialsPath shimPort;})
+        (import ./container.nix {inherit pkgs lib secrets dataDir gatewayPort lanIp shimPort;})
 
         {
           microvm = {
