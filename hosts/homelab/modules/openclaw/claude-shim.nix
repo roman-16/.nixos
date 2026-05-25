@@ -2,11 +2,8 @@
   pkgs,
   secrets,
   credentialsPath,
-  billingProxyPort,
+  shimPort,
 }: let
-  billingProxyDir = "/var/lib/openclaw-billing-proxy/app";
-  billingProxyRepo = "https://github.com/zacdcook/openclaw-billing-proxy.git";
-
   # Long-lived setup-token (1 year) — no refresh needed
   credentialsContent = pkgs.writeText "claude-credentials.json" (builtins.toJSON {
     claudeAiOauth = {
@@ -16,40 +13,35 @@
       subscriptionType = "team";
     };
   });
-
-  billingProxyConfig = pkgs.writeText "billing-proxy-config.json" (builtins.toJSON {
-    credentialsPath = credentialsPath;
-    port = billingProxyPort;
-  });
 in {
   systemd = {
-    services.openclaw-billing-proxy = {
+    services.openclaw-claude-shim = {
       after = ["network.target"];
-      description = "OpenClaw Billing Proxy";
+      description = "OpenClaw Claude Shim (subscription billing wrapper)";
       wantedBy = ["multi-user.target"];
 
-      serviceConfig = {
-        ExecStart = "${pkgs.nodejs}/bin/node ${billingProxyDir}/proxy.js --config ${billingProxyConfig}";
-        ExecStartPre = pkgs.writeShellScript "install-openclaw-billing-proxy" ''
-          if [ ! -d "${billingProxyDir}/.git" ]; then
-            ${pkgs.git}/bin/git clone ${billingProxyRepo} ${billingProxyDir}
-          else
-            ${pkgs.git}/bin/git -C ${billingProxyDir} pull --ff-only || true
-          fi
+      environment = {
+        CREDS_PATH = credentialsPath;
+        DOCKER_BIN = "${pkgs.docker}/bin/docker";
+        NOTIFY_TARGET = secrets.mainNumber;
+        PORT = toString shimPort;
+        STATE_PATH = "/var/lib/openclaw-claude-shim/state.json";
+      };
 
+      serviceConfig = {
+        ExecStart = "${pkgs.nodejs}/bin/node ${./claude-shim/proxy.mjs}";
+        ExecStartPre = pkgs.writeShellScript "install-claude-credentials" ''
           cp ${credentialsContent} ${credentialsPath}
           chmod 600 ${credentialsPath}
         '';
         Restart = "on-failure";
         RestartSec = 10;
-        StateDirectory = "openclaw-billing-proxy";
+        StateDirectory = "openclaw-claude-shim";
         User = "roman";
       };
     };
 
     tmpfiles.rules = [
-      "d /var/lib/openclaw-billing-proxy 0755 roman users -"
-
       # Persist Claude Code auth across VM reboots
       "d /var/lib/claude-auth 0700 roman users -"
       "L /home/roman/.claude - - - - /var/lib/claude-auth"

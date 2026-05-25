@@ -5,7 +5,7 @@
   dataDir,
   gatewayPort,
   lanIp,
-  billingProxyPort,
+  shimPort,
 }: let
   sharedEnv = {
     ANTHROPIC_API_KEY = "not-needed";
@@ -30,15 +30,15 @@
   };
 
   gatewayConfig = import ./gateway-config.nix {
-    inherit secrets gatewayPort lanIp billingProxyPort;
+    inherit secrets gatewayPort lanIp shimPort;
   };
 
   externalPlugins = ["whatsapp"];
 in {
   systemd = {
     services.docker-openclaw = {
-      after = ["openclaw-billing-proxy.service"];
-      requires = ["openclaw-billing-proxy.service"];
+      after = ["openclaw-claude-shim.service"];
+      requires = ["openclaw-claude-shim.service"];
 
       serviceConfig = {
         ExecStartPre = lib.mkAfter [
