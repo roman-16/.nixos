@@ -105,7 +105,7 @@ function readToken() {
 // persisted so the debounce survives shim restarts.
 function loadState() {
   try { return JSON.parse(fs.readFileSync(STATE_PATH, 'utf8')); }
-  catch { return {lastNotifiedAt: 0, detectionsSinceBoot: 0, lastSeenAt: 0}; }
+  catch { return {lastNotifiedAt: 0, detectionsTotal: 0, lastSeenAt: 0}; }
 }
 
 function saveState(s) {
@@ -115,8 +115,8 @@ function saveState(s) {
 
 function notifyDetection() {
   const state = loadState();
+  state.detectionsTotal += 1;
   const now = Date.now();
-  state.detectionsSinceBoot += 1;
   state.lastSeenAt = now;
   if (now - state.lastNotifiedAt < NOTIFY_WINDOW_MS) {
     saveState(state);
@@ -130,7 +130,7 @@ function notifyDetection() {
   state.lastNotifiedAt = now;
   saveState(state);
   const when = new Date(now).toISOString().slice(11, 16) + ' UTC';
-  const msg = `\u26a0\ufe0f openclaw-claude-shim: subscription billing rejected (extra-usage detection). ${state.detectionsSinceBoot} events since boot, last at ${when}. Most recent request failed.`;
+  const msg = `\u26a0\ufe0f openclaw-claude-shim: subscription billing rejected (extra-usage detection). ${state.detectionsTotal} events total, last at ${when}. Most recent request failed.`;
   const child = spawn(
     DOCKER_BIN,
     ['exec', 'openclaw', 'node', '/app/openclaw.mjs', 'message', 'send', '--channel', 'whatsapp', '--target', NOTIFY_TARGET, '--message', msg],
