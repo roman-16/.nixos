@@ -20,6 +20,7 @@
         jq
         openssl
         python3
+        tesseract
       ];
     };
 
