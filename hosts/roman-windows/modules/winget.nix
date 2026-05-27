@@ -75,7 +75,17 @@
 
     config = {
       windows.winget.packages = [
+        {id = "7zip.7zip";}
+        {id = "Brave.Brave";}
+        {id = "direnv.direnv";}
+        {id = "Git.Git";}
+        {id = "GitHub.cli";}
+        {id = "Microsoft.PowerToys";}
+        {id = "Microsoft.VisualStudioCode";}
+        {id = "Microsoft.WindowsTerminal";}
+        {id = "Notepad++.Notepad++";}
         {id = "Valve.Steam";}
+        {id = "WinDirStat.WinDirStat";}
       ];
 
       # Applies the generated DSC configuration via winget on every home-manager
