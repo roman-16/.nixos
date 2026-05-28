@@ -1,16 +1,14 @@
 {pkgs, ...}: let
-  # USB devices defined separately so they can be hot-attached after VM boot
-  # (avoids race condition where VM starts before USB subsystem is ready)
+  # Zigbee dongle (CP210x serial) is hot-attached after VM boot to avoid a
+  # race where the VM starts before the host USB subsystem is ready.
+  # Bluetooth (Realtek RTL8761B) is attached at define-time instead — see
+  # hassXml — because it re-enumerates during firmware load and any hot
+  # attach/detach cycle leaves libvirt with a stale handle.
   usbDevices = [
     {
       name = "zigbee";
       vendorId = "0x10c4";
       productId = "0xea60";
-    }
-    {
-      name = "bluetooth";
-      vendorId = "0x0bda";
-      productId = "0xb85b";
     }
   ];
 
@@ -52,6 +50,12 @@
           <source bridge="br0"/>
           <model type="virtio"/>
         </interface>
+        <hostdev mode="subsystem" type="usb" managed="yes">
+          <source>
+            <vendor id="0x0bda"/>
+            <product id="0xb85b"/>
+          </source>
+        </hostdev>
         <console type="pty"/>
       </devices>
     </domain>

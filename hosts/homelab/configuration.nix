@@ -10,6 +10,11 @@ in {
     ++ modules;
 
   boot = {
+    # Prevent host from claiming the Realtek RTL8761B BT dongle (0bda:b85b)
+    # passed through to the HAOS VM. Otherwise btusb on the host races
+    # libvirt's managed detach and can hold the device, breaking passthrough.
+    blacklistedKernelModules = ["btusb"];
+
     # IOMMU for USB passthrough to VMs
     kernelParams = ["intel_iommu=on"];
 
