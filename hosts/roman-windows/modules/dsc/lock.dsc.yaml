@@ -47,7 +47,7 @@ resources:
     properties:
       id: Notepad++.Notepad++
       source: winget
-      version: 8.9.5
+      version: 8.9.6
   - name: Steam
     type: Microsoft.WinGet/Package
     properties:
