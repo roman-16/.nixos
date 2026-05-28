@@ -1,27 +1,12 @@
 {pkgs, ...}: let
-  # Zigbee dongle (CP210x serial) is hot-attached after VM boot to avoid a
-  # race where the VM starts before the host USB subsystem is ready.
-  # Bluetooth (Realtek RTL8761B) is attached at define-time instead — see
-  # hassXml — because it re-enumerates during firmware load and any hot
-  # attach/detach cycle leaves libvirt with a stale handle.
-  usbDevices = [
-    {
-      name = "zigbee";
-      vendorId = "0x10c4";
-      productId = "0xea60";
-    }
-  ];
-
-  mkUsbXml = dev:
-    pkgs.writeText "usb-${dev.name}.xml" ''
-      <hostdev mode="subsystem" type="usb" managed="yes">
-        <source>
-          <vendor id="${dev.vendorId}"/>
-          <product id="${dev.productId}"/>
-        </source>
-      </hostdev>
-    '';
-
+  # Both USB dongles are passed through at libvirt define-time (persistent
+  # <hostdev> entries in the domain XML below) rather than hot-attached after
+  # VM boot. The host's matching kernel drivers (`btusb` for the Realtek BT
+  # chip, `cp210x` for the CP210x serial bridge) are either blacklisted on
+  # the host (btusb, see hosts/homelab/configuration.nix) or harmless
+  # (cp210x), so libvirt's `managed="yes"` detach has no race to lose.
+  # Define-time also means the devices survive guest reboots without manual
+  # re-attach, since they're part of the persistent domain definition.
   hassXml = pkgs.writeText "hass.xml" ''
     <domain type="kvm">
       <name>hass</name>
@@ -50,6 +35,12 @@
           <source bridge="br0"/>
           <model type="virtio"/>
         </interface>
+        <hostdev mode="subsystem" type="usb" managed="yes">
+          <source>
+            <vendor id="0x10c4"/>
+            <product id="0xea60"/>
+          </source>
+        </hostdev>
         <hostdev mode="subsystem" type="usb" managed="yes">
           <source>
             <vendor id="0x0bda"/>
@@ -108,26 +99,6 @@ in {
           if ! virsh domstate hass 2>/dev/null | grep -q "running"; then
             virsh start hass
           fi
-
-          # Hot-attach USB devices with retry (avoids race with USB subsystem)
-          # Detach first to clear stale state from previous VM definitions
-          sleep 5
-          ${builtins.concatStringsSep "\n" (map (dev: ''
-              virsh detach-device hass ${mkUsbXml dev} 2>/dev/null || true
-            '')
-            usbDevices)}
-          sleep 2
-          ${builtins.concatStringsSep "\n" (map (dev: ''
-              for i in $(seq 1 10); do
-                if virsh attach-device hass ${mkUsbXml dev} 2>&1; then
-                  echo "Attached USB device: ${dev.name}"
-                  break
-                fi
-                echo "Waiting for USB device: ${dev.name} (attempt $i/10)"
-                sleep 3
-              done
-            '')
-            usbDevices)}
         '';
       };
 
