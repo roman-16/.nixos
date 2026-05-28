@@ -48,7 +48,7 @@
 
     settings = {
       compaction.enabled = false;
-      defaultModel = "claude-opus-4-7";
+      defaultModel = "claude-opus-4-8";
       defaultProvider = "anthropic";
       defaultThinkingLevel = "xhigh";
       enableInstallTelemetry = false;
