@@ -11,7 +11,7 @@ resources:
     properties:
       id: Brave.Brave
       source: winget
-      version: 148.1.90.124
+      version: 148.1.90.128
   - name: direnv
     type: Microsoft.WinGet/Package
     properties:
@@ -29,7 +29,7 @@ resources:
     properties:
       id: GitHub.cli
       source: winget
-      version: 2.92.0
+      version: 2.93.0
   - name: Microsoft DSC
     type: Microsoft.WinGet/Package
     properties:
@@ -59,7 +59,7 @@ resources:
     properties:
       id: Microsoft.VisualStudioCode
       source: winget
-      version: 1.121.0
+      version: 1.122.0
   - name: WinDirStat
     type: Microsoft.WinGet/Package
     properties:
