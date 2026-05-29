@@ -3,7 +3,7 @@
  * Preserves file paths from being corrupted.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 function sanitize(s: string): string {
 	const paths: string[] = [];
