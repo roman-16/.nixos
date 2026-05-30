@@ -7,6 +7,7 @@
 - **Idempotent changes**: Never apply fixes via one-time local commands (shell exports, manual config, runtime tweaks). Every change must be declarative and self-contained in source files so it works on any machine without manual steps. If that's not possible, come back to the user.
 - **poppler-utils**: Available on the system (pdftotext, pdfinfo, pdfimages, pdftoppm, etc.). Use for PDF text extraction and manipulation.
 - **tesseract**: Available on the system. Use for OCR (extracting text from images and scanned PDFs).
+- **magick**: ImageMagick CLI available on the system. Use for image conversion, resizing, cropping, format changes, compositing, and other image manipulation.
 - **proton-cli**: Available on the system. Unofficial CLI for Proton services (Mail, Drive, Calendar, Pass, Contacts). Handles SRP auth and E2E encryption. Use for reading/sending mail, browsing Drive, managing Calendar/Contacts, and accessing Pass entries. Supports `--output json/yaml` for scripting.
 - **python3**: Available on the system. Use for scripting, data processing, and quick computations.
 - **jq**: Available on the system. Use for JSON parsing, filtering, and transformation.
