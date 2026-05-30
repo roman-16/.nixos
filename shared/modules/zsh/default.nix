@@ -21,6 +21,7 @@
         openssl
         python3
         tesseract
+        imagemagick
       ];
     };
 
