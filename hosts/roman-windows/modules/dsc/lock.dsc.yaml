@@ -59,7 +59,7 @@ resources:
     properties:
       id: Microsoft.VisualStudioCode
       source: winget
-      version: 1.122.0
+      version: 1.122.1
   - name: WinDirStat
     type: Microsoft.WinGet/Package
     properties:
