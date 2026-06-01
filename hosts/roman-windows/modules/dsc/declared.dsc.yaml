@@ -18,6 +18,12 @@ resources:
       id: direnv.direnv
       source: winget
       useLatest: true
+  - name: Discord
+    type: Microsoft.WinGet/Package
+    properties:
+      id: Discord.Discord
+      source: winget
+      useLatest: true
   - name: Git
     type: Microsoft.WinGet/Package
     properties:

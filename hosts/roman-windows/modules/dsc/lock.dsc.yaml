@@ -18,6 +18,12 @@ resources:
       id: direnv.direnv
       source: winget
       version: 2.37.1
+  - name: Discord
+    type: Microsoft.WinGet/Package
+    properties:
+      id: Discord.Discord
+      source: winget
+      version: 1.0.9239
   - name: Git
     type: Microsoft.WinGet/Package
     properties:
