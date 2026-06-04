@@ -13,3 +13,7 @@
 - **jq**: Available on the system. Use for JSON parsing, filtering, and transformation.
 - **zellij**: Available on the system. Every terminal runs inside a zellij session. Use `zellij` CLI to list, attach, or interact with other terminal sessions/panes.
 - **CLI flags**: ALWAYS use full-length flag names (`--force`, `--recursive`, `--verbose`) instead of short flags (`-f`, `-r`, `-v`) for readability.
+
+## Code
+
+- **Comments**: Only add a comment when it's needed, and only to explain *why* (non-obvious decisions, workarounds, gotchas) — never to restate *what* the code already says.
