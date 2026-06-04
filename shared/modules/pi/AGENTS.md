@@ -17,3 +17,7 @@
 ## Code
 
 - **Comments**: Only add a comment when it's needed, and only to explain *why* (non-obvious decisions, workarounds, gotchas) — never to restate *what* the code already says.
+
+## Interaction
+
+- **Questionnaire**: PREFER the `questionnaire` tool over a plain-text question whenever the answer is a choice among predefined options (including yes/no) — clarifying requirements, settling design trade-offs, or confirming a decision.
