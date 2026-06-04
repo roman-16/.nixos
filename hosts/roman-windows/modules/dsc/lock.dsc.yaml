@@ -23,7 +23,7 @@ resources:
     properties:
       id: Discord.Discord
       source: winget
-      version: 1.0.9239
+      version: 1.0.9240
   - name: Git
     type: Microsoft.WinGet/Package
     properties:
@@ -53,7 +53,7 @@ resources:
     properties:
       id: Notepad++.Notepad++
       source: winget
-      version: 8.9.6
+      version: 8.9.6.4
   - name: Steam
     type: Microsoft.WinGet/Package
     properties:
@@ -65,13 +65,13 @@ resources:
     properties:
       id: Microsoft.VisualStudioCode
       source: winget
-      version: 1.122.1
+      version: 1.123.0
   - name: WinDirStat
     type: Microsoft.WinGet/Package
     properties:
       id: WinDirStat.WinDirStat
       source: winget
-      version: 2.6.1
+      version: 2.6.2
   - name: Windows Terminal
     type: Microsoft.WinGet/Package
     properties:

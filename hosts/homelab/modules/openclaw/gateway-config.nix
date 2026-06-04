@@ -6,6 +6,8 @@
 }:
 builtins.toJSON {
   agents.defaults = {
+    blockStreamingBreak = "text_end";
+    blockStreamingDefault = "on";
     heartbeat.every = "30m";
     model.primary = "anthropic/claude-sonnet-4-6";
 
@@ -17,6 +19,7 @@ builtins.toJSON {
 
   channels.whatsapp = {
     allowFrom = [secrets.mainNumber];
+    blockStreaming = true;
     dmPolicy = "allowlist";
     enabled = true;
     replyToMode = "batched";
