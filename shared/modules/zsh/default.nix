@@ -183,6 +183,12 @@
             exec zellij
           fi
 
+          # fzf-tab needs the native menu off to capture the completion prefix;
+          # override oh-my-zsh's `menu select` on its own more-specific pattern.
+          zstyle ':completion:*' menu no
+          zstyle ':completion:*:*:*:*:*' menu no
+          zstyle ':completion:*:descriptions' format '[%d]'
+
           source ${pkgs.zsh-fzf-tab}/share/fzf-tab/fzf-tab.plugin.zsh;
 
           gsc() {
