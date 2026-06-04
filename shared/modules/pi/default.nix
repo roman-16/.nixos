@@ -13,6 +13,7 @@
     inputs,
     pkgs,
     lib,
+    config,
     ...
   }: let
     pi = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.pi;
@@ -66,27 +67,37 @@
     };
     keybindingsJson = builtins.toJSON keybindings;
   in {
-    home = {
-      file =
-        {
-          ".pi/agent/AGENTS.md".source = ./AGENTS.md;
-          ".pi/agent/keybindings.json".text = keybindingsJson;
-        }
-        // extensionAttrs
-        // upstreamExtensionAttrs
-        // skillAttrs;
+    options.pi.agentsMd = lib.mkOption {
+      type = lib.types.lines;
+      default = "";
+      description = "Contents of ~/.pi/agent/AGENTS.md; host modules append sections.";
+    };
 
-      # Merge nix-defined settings onto existing settings.json
-      activation.piSettings = lib.hm.dag.entryAfter ["writeBoundary"] ''
-        settings="$HOME/.pi/agent/settings.json"
-        mkdir -p "$(dirname "$settings")"
-        if [ -f "$settings" ]; then
-          ${pkgs.jq}/bin/jq -s '.[0] * .[1]' "$settings" <(echo '${settingsJson}') > "$settings.tmp"
-          mv "$settings.tmp" "$settings"
-        else
-          echo '${settingsJson}' > "$settings"
-        fi
-      '';
+    config = {
+      pi.agentsMd = builtins.readFile ./AGENTS.md;
+
+      home = {
+        file =
+          {
+            ".pi/agent/AGENTS.md".text = config.pi.agentsMd;
+            ".pi/agent/keybindings.json".text = keybindingsJson;
+          }
+          // extensionAttrs
+          // upstreamExtensionAttrs
+          // skillAttrs;
+
+        # Merge nix-defined settings onto existing settings.json
+        activation.piSettings = lib.hm.dag.entryAfter ["writeBoundary"] ''
+          settings="$HOME/.pi/agent/settings.json"
+          mkdir -p "$(dirname "$settings")"
+          if [ -f "$settings" ]; then
+            ${pkgs.jq}/bin/jq -s '.[0] * .[1]' "$settings" <(echo '${settingsJson}') > "$settings.tmp"
+            mv "$settings.tmp" "$settings"
+          else
+            echo '${settingsJson}' > "$settings"
+          fi
+        '';
+      };
     };
   };
 }
