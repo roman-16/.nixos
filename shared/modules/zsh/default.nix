@@ -86,15 +86,6 @@
               { key = "c",   mods = "CTRL|SHIFT", action = wezterm.action.CopyTo "Clipboard" },
               { key = "v",   mods = "CTRL|SHIFT", action = wezterm.action.PasteFrom "Clipboard" },
               { key = "F11",                      action = wezterm.action.ToggleFullScreen },
-              -- Swallow media keys: with kitty keyboard on, TUIs (pi) otherwise
-              -- insert them as Private-Use glyphs (e.g. VolumeUp = U+E05F).
-              { key = "VolumeUp",       action = wezterm.action.Nop },
-              { key = "VolumeDown",     action = wezterm.action.Nop },
-              { key = "VolumeMute",     action = wezterm.action.Nop },
-              { key = "MediaPlayPause", action = wezterm.action.Nop },
-              { key = "MediaNextTrack", action = wezterm.action.Nop },
-              { key = "MediaPrevTrack", action = wezterm.action.Nop },
-              { key = "MediaStop",      action = wezterm.action.Nop },
             },
             skip_close_confirmation_for_processes_named = { 'zellij' },
             window_close_confirmation = "NeverPrompt",
