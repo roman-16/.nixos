@@ -1,92 +1,205 @@
 $schema: https://aka.ms/dsc/schemas/v3/bundled/config/document.json
 resources:
-  - name: 7zip
+  - name: HideFileExt
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      valueName: HideFileExt
+      valueData:
+        DWord: 0
+  - name: Hidden
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      valueName: Hidden
+      valueData:
+        DWord: 1
+  - name: TaskbarAl
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      valueName: TaskbarAl
+      valueData:
+        DWord: 0
+  - name: ShowTaskViewButton
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      valueName: ShowTaskViewButton
+      valueData:
+        DWord: 0
+  - name: TaskbarDa
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+      valueName: TaskbarDa
+      valueData:
+        DWord: 0
+  - name: AppsUseLightTheme
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize
+      valueName: AppsUseLightTheme
+      valueData:
+        DWord: 0
+  - name: SystemUsesLightTheme
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize
+      valueName: SystemUsesLightTheme
+      valueData:
+        DWord: 0
+  - name: SearchboxTaskbarMode
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: HKCU\Software\Microsoft\Windows\CurrentVersion\Search
+      valueName: SearchboxTaskbarMode
+      valueData:
+        DWord: 0
+  - name: MouseSpeed
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: HKCU\Control Panel\Mouse
+      valueName: MouseSpeed
+      valueData:
+        String: "0"
+  - name: MouseThreshold1
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: HKCU\Control Panel\Mouse
+      valueName: MouseThreshold1
+      valueData:
+        String: "0"
+  - name: MouseThreshold2
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: HKCU\Control Panel\Mouse
+      valueName: MouseThreshold2
+      valueData:
+        String: "0"
+  - name: 7zip.7zip
     type: Microsoft.WinGet/Package
     properties:
       id: 7zip.7zip
       source: winget
+      useLatest: true
       version: "26.01"
-  - name: AutoHotkey
+  - name: AutoHotkey.AutoHotkey
     type: Microsoft.WinGet/Package
     properties:
       id: AutoHotkey.AutoHotkey
       source: winget
+      useLatest: true
       version: 2.0.26
-  - name: Brave
+  - name: Brave.Brave
     type: Microsoft.WinGet/Package
     properties:
       id: Brave.Brave
       source: winget
-      version: 148.1.90.128
-  - name: direnv
+      useLatest: true
+      version: 149.1.91.168
+  - name: direnv.direnv
     type: Microsoft.WinGet/Package
     properties:
       id: direnv.direnv
       source: winget
+      useLatest: true
       version: 2.37.1
-  - name: Discord
+  - name: Discord.Discord
     type: Microsoft.WinGet/Package
     properties:
       id: Discord.Discord
       source: winget
+      useLatest: true
       version: 1.0.9240
-  - name: Git
+  - name: Git.Git
     type: Microsoft.WinGet/Package
     properties:
       id: Git.Git
       source: winget
+      useLatest: true
       version: 2.54.0
-  - name: GitHub CLI
+  - name: GitHub.cli
     type: Microsoft.WinGet/Package
     properties:
       id: GitHub.cli
       source: winget
+      useLatest: true
       version: 2.93.0
-  - name: Logi Options+
+  - name: Logitech.OptionsPlus
     type: Microsoft.WinGet/Package
     properties:
       id: Logitech.OptionsPlus
       source: winget
+      useLatest: true
       version: 2.4.895597
-  - name: Microsoft DSC
+  - name: Microsoft.DSC
     type: Microsoft.WinGet/Package
     properties:
       id: Microsoft.DSC
       source: winget
+      useLatest: true
       version: 3.2.1.0
-  - name: Microsoft PowerToys
+  - name: Microsoft.PowerToys
     type: Microsoft.WinGet/Package
     properties:
       id: Microsoft.PowerToys
       source: winget
+      useLatest: true
       version: 0.99.1
-  - name: Notepad Plus Plus
+  - name: Notepad++.Notepad++
     type: Microsoft.WinGet/Package
     properties:
       id: Notepad++.Notepad++
       source: winget
+      useLatest: true
       version: 8.9.6.4
-  - name: Steam
+  - name: Valve.Steam
     type: Microsoft.WinGet/Package
     properties:
       id: Valve.Steam
       source: winget
+      useLatest: true
       version: 2.10.91.91
-  - name: Visual Studio Code
+  - name: Microsoft.VisualStudioCode
     type: Microsoft.WinGet/Package
     properties:
       id: Microsoft.VisualStudioCode
       source: winget
+      useLatest: true
       version: 1.123.0
-  - name: WinDirStat
+  - name: WinDirStat.WinDirStat
     type: Microsoft.WinGet/Package
     properties:
       id: WinDirStat.WinDirStat
       source: winget
+      useLatest: true
       version: 2.6.2
-  - name: Windows Terminal
+  - name: Microsoft.WindowsTerminal
     type: Microsoft.WinGet/Package
     properties:
       id: Microsoft.WindowsTerminal
       source: winget
+      useLatest: true
       version: 1.24.11321.0
+  - name: Brave
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: HKCU\Software\Microsoft\Windows\CurrentVersion\Run
+      valueName: Brave
+      valueData:
+        String: '"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"'
+  - name: Discord
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: HKCU\Software\Microsoft\Windows\CurrentVersion\Run
+      valueName: Discord
+      valueData:
+        String: '"C:\Users\roman\AppData\Local\Discord\Update.exe" --processStart Discord.exe'
+  - name: CenterWindow autostart
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: HKCU\Software\Microsoft\Windows\CurrentVersion\Run
+      valueName: CenterWindow
+      valueData:
+        String: '"C:\Users\roman\AppData\Local\Programs\AutoHotkey\v2\AutoHotkey64.exe" "C:\Users\roman\ahk\center-window.ahk"'
