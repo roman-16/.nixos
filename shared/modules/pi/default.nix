@@ -60,11 +60,17 @@
       warnings.anthropicExtraUsage = false;
     };
     settingsJson = builtins.toJSON settings;
+
+    keybindings = {
+      "app.clipboard.pasteImage" = ["ctrl+v" "alt+v"];
+    };
+    keybindingsJson = builtins.toJSON keybindings;
   in {
     home = {
       file =
         {
           ".pi/agent/AGENTS.md".source = ./AGENTS.md;
+          ".pi/agent/keybindings.json".text = keybindingsJson;
         }
         // extensionAttrs
         // upstreamExtensionAttrs
