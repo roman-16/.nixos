@@ -13,6 +13,7 @@
         };
       }) [
         "7zip.7zip"
+        "AltSnap.AltSnap"
         "AutoHotkey.AutoHotkey"
         "Brave.Brave"
         "direnv.direnv"
