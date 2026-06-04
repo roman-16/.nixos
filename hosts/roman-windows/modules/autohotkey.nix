@@ -66,8 +66,7 @@
           if (DllCall("GetAncestor", "Ptr", hwnd, "UInt", GA_ROOT, "Ptr") != hwnd)
               return
           seen[hwnd] := true
-          ; defer so the window has settled to its final size and min/max state
-          SetTimer(() => MaybeCenter(hwnd), -120)
+          MaybeCenter(hwnd)
       }
 
       MaybeCenter(hwnd) {
