@@ -6,6 +6,12 @@ resources:
       id: 7zip.7zip
       source: winget
       version: "26.01"
+  - name: AutoHotkey
+    type: Microsoft.WinGet/Package
+    properties:
+      id: AutoHotkey.AutoHotkey
+      source: winget
+      version: 2.0.26
   - name: Brave
     type: Microsoft.WinGet/Package
     properties:

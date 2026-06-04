@@ -6,6 +6,12 @@ resources:
       id: 7zip.7zip
       source: winget
       useLatest: true
+  - name: AutoHotkey
+    type: Microsoft.WinGet/Package
+    properties:
+      id: AutoHotkey.AutoHotkey
+      source: winget
+      useLatest: true
   - name: Brave
     type: Microsoft.WinGet/Package
     properties:
