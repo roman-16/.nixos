@@ -13,16 +13,11 @@
     kbmFile = "${kbmDir}/default.json";
 
     # Virtual-key codes are semicolon-separated: 91/92 = Left/Right Win,
-    # 160 = Left Shift, 164 = Left Alt, 220 = '\', 44 = PrintScreen, 81 = Q,
-    # 83 = S, 84 = T, 9 = Tab, 115 = F4, 121 = F10.
+    # 164 = Left Alt, 220 = '\', 84 = T, 81 = Q, 9 = Tab, 115 = F4, 121 = F10.
     keyRemaps = [
       {
         originalKeys = "121"; # F10
         newRemapKeys = "91;220"; # -> Win+\
-      }
-      {
-        originalKeys = "44"; # PrintScreen
-        newRemapKeys = "91;160;83"; # -> Win+Shift+S (snip overlay)
       }
     ];
 
