@@ -183,11 +183,12 @@
             exec zellij
           fi
 
-          # fzf-tab needs the native menu off to capture the completion prefix;
-          # override oh-my-zsh's `menu select` on its own more-specific pattern.
+          # carapace's file completion isn't zsh-conformant, so fzf-tab's default
+          # query-string is the whole typed path and matches nothing (the 0/N); empty
+          # it. menu no (on oh-my-zsh's own pattern) lets fzf-tab capture the prefix.
           zstyle ':completion:*' menu no
           zstyle ':completion:*:*:*:*:*' menu no
-          zstyle ':completion:*:descriptions' format '[%d]'
+          zstyle ':fzf-tab:*' query-string ""
 
           source ${pkgs.zsh-fzf-tab}/share/fzf-tab/fzf-tab.plugin.zsh;
 
