@@ -36,6 +36,12 @@ resources:
       id: GitHub.cli
       source: winget
       version: 2.93.0
+  - name: Logi Options+
+    type: Microsoft.WinGet/Package
+    properties:
+      id: Logitech.OptionsPlus
+      source: winget
+      version: 2.4.895597
   - name: Microsoft DSC
     type: Microsoft.WinGet/Package
     properties:
