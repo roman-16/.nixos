@@ -13,14 +13,7 @@
     kbmFile = "${kbmDir}/default.json";
 
     # Virtual-key codes are semicolon-separated: 91/92 = Left/Right Win,
-    # 164 = Left Alt, 220 = '\', 84 = T, 81 = Q, 9 = Tab, 115 = F4, 121 = F10.
-    keyRemaps = [
-      {
-        originalKeys = "121"; # F10
-        newRemapKeys = "91;220"; # -> Win+\
-      }
-    ];
-
+    # 164 = Left Alt, 84 = T, 81 = Q, 9 = Tab, 115 = F4.
     shortcutRemaps = map (r:
       r
       // {
@@ -58,7 +51,7 @@
     ];
 
     kbmConfig = pkgs.writeText "powertoys-kbm-default.json" (builtins.toJSON {
-      remapKeys.inProcess = keyRemaps;
+      remapKeys.inProcess = [];
       remapKeysToText.inProcess = [];
       remapShortcuts = {
         appSpecific = [];
