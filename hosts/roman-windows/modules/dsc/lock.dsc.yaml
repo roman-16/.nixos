@@ -84,6 +84,13 @@ resources:
       source: winget
       useLatest: true
       version: "26.01"
+  - name: AltSnap.AltSnap
+    type: Microsoft.WinGet/Package
+    properties:
+      id: AltSnap.AltSnap
+      source: winget
+      useLatest: true
+      version: "1.67"
   - name: AutoHotkey.AutoHotkey
     type: Microsoft.WinGet/Package
     properties:
@@ -196,10 +203,17 @@ resources:
       valueName: Discord
       valueData:
         String: '"C:\Users\roman\AppData\Local\Discord\Update.exe" --processStart Discord.exe'
-  - name: CenterWindow autostart
+  - name: AutoHotkey autostart
     type: Microsoft.Windows/Registry
     properties:
       keyPath: HKCU\Software\Microsoft\Windows\CurrentVersion\Run
-      valueName: CenterWindow
+      valueName: AutoHotkey
       valueData:
-        String: '"C:\Users\roman\AppData\Local\Programs\AutoHotkey\v2\AutoHotkey64.exe" "C:\Users\roman\ahk\center-window.ahk"'
+        String: '"C:\Users\roman\AppData\Local\Programs\AutoHotkey\v2\AutoHotkey64.exe" "C:\Users\roman\.default.ahk"'
+  - name: AltSnap autostart
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: HKCU\Software\Microsoft\Windows\CurrentVersion\Run
+      valueName: AltSnap
+      valueData:
+        String: '"C:\Users\roman\AppData\Roaming\AltSnap\AltSnap.exe" -hide'

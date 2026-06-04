@@ -6,16 +6,17 @@
     pkgs,
     ...
   }: let
-    scriptWin = "C:\\Users\\roman\\ahk\\center-window.ahk";
-    scriptWsl = "/mnt/c/Users/roman/ahk/center-window.ahk";
+    scriptWin = "C:\\Users\\roman\\.default.ahk";
+    scriptWsl = "/mnt/c/Users/roman/.default.ahk";
 
     # winget installs AutoHotkey per-user (not into Program Files); the v2
     # interpreter runs the script directly.
     ahkExe = "C:\\Users\\roman\\AppData\\Local\\Programs\\AutoHotkey\\v2\\AutoHotkey64.exe";
 
-    centerScript = pkgs.writeText "center-window.ahk" ''
+    ahkScript = pkgs.writeText "default.ahk" ''
       #Requires AutoHotkey v2.0
       #SingleInstance Force
+      #NoTrayIcon
 
       #c:: {
           hwnd := WinExist("A")
@@ -38,11 +39,11 @@
   in {
     windows.dsc = [
       {
-        name = "CenterWindow autostart";
+        name = "AutoHotkey autostart";
         type = "Microsoft.Windows/Registry";
         properties = {
           keyPath = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-          valueName = "CenterWindow";
+          valueName = "AutoHotkey";
           valueData.String = "\"${ahkExe}\" \"${scriptWin}\"";
         };
       }
@@ -53,7 +54,7 @@
         echo "Windows user profile not found; skipping AutoHotkey script." >&2
         exit 0
       fi
-      $DRY_RUN_CMD install -D -m 0644 ${centerScript} "${scriptWsl}"
+      $DRY_RUN_CMD install -D -m 0644 ${ahkScript} "${scriptWsl}"
     '';
   };
 }
