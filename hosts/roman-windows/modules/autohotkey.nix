@@ -73,6 +73,11 @@
           static WS_EX_TOOLWINDOW := 0x80, WS_CAPTION := 0xC00000
           if !WinExist(hwnd)
               return
+          ; never recenter shell UI (Start menu / Search) or Windows Terminal,
+          ; whose quake dropdown must stay top-docked
+          proc := WinGetProcessName(hwnd)
+          if (proc = "StartMenuExperienceHost.exe" || proc = "SearchHost.exe" || proc = "WindowsTerminal.exe")
+              return
           if !DllCall("IsWindowVisible", "Ptr", hwnd)
               return
           if (WinGetExStyle(hwnd) & WS_EX_TOOLWINDOW)
