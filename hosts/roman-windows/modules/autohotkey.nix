@@ -40,6 +40,14 @@
 
       #c:: CenterWindow(WinExist("A"))
 
+      ; F10 is Windows Terminal's globalSummon (quake toggle). When WT isn't
+      ; running yet there is no hotkey to catch, so launch the quake here for the
+      ; first press; `~` lets the key still reach WT's globalSummon once it runs.
+      ~F10:: {
+          if !ProcessExist("WindowsTerminal.exe")
+              Run('"C:\Users\roman\AppData\Local\Microsoft\WindowsApps\wt.exe" -w _quake')
+      }
+
       EVENT_OBJECT_DESTROY := 0x8001, EVENT_OBJECT_SHOW := 0x8002
       WINEVENT_OUTOFCONTEXT := 0x0, WINEVENT_SKIPOWNPROCESS := 0x2
       seen := Map()
