@@ -1,12 +1,5 @@
 $schema: https://aka.ms/dsc/schemas/v3/bundled/config/document.json
 resources:
-  - name: Windows Terminal headless autostart
-    type: Microsoft.Windows/Registry
-    properties:
-      keyPath: HKCU\Software\Microsoft\Windows\CurrentVersion\Run
-      valueName: WindowsTerminal
-      valueData:
-        String: '"C:\Users\roman\AppData\Local\Microsoft\WindowsApps\wt.exe" --headless'
   - name: HideFileExt
     type: Microsoft.Windows/Registry
     properties:
