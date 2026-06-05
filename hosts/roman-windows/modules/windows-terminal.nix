@@ -8,9 +8,6 @@
   }: let
     settingsWsl = "/mnt/c/Users/roman/AppData/Local/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json";
 
-    # WindowsApps execution alias: launches reliably and is version-independent.
-    wtExe = "C:\\Users\\roman\\AppData\\Local\\Microsoft\\WindowsApps\\wt.exe";
-
     settings = pkgs.writeText "windows-terminal-settings.json" (builtins.toJSON {
       "$help" = "https://aka.ms/terminal-documentation";
       "$schema" = "https://aka.ms/terminal-profiles-schema";
@@ -81,18 +78,6 @@
       };
     });
   in {
-    windows.dsc = [
-      {
-        name = "Windows Terminal headless autostart";
-        type = "Microsoft.Windows/Registry";
-        properties = {
-          keyPath = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-          valueName = "WindowsTerminal";
-          valueData.String = "\"${wtExe}\" --headless";
-        };
-      }
-    ];
-
     home.activation.windowsTerminal = lib.hm.dag.entryAfter ["writeBoundary"] ''
       if [ ! -d "/mnt/c/Users/roman" ]; then
         echo "Windows user profile not found; skipping Windows Terminal settings." >&2

@@ -74,9 +74,11 @@
           if !WinExist(hwnd)
               return
           ; never recenter shell UI (Start menu / Search) or Windows Terminal,
-          ; whose quake dropdown must stay top-docked
-          proc := WinGetProcessName(hwnd)
-          if (proc = "StartMenuExperienceHost.exe" || proc = "SearchHost.exe" || proc = "WindowsTerminal.exe")
+          ; whose quake dropdown must stay top-docked. WinGetProcessName throws
+          ; on elevated windows we cannot query, so skip those as well.
+          proc := ""
+          try proc := WinGetProcessName(hwnd)
+          if (proc = "" || proc = "StartMenuExperienceHost.exe" || proc = "SearchHost.exe" || proc = "WindowsTerminal.exe")
               return
           if !DllCall("IsWindowVisible", "Ptr", hwnd)
               return
