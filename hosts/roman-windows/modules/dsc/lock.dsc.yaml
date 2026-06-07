@@ -139,7 +139,7 @@ resources:
       id: Logitech.OptionsPlus
       source: winget
       useLatest: true
-      version: 2.4.895597
+      version: 2.4.903778
   - name: Microsoft.DSC
     type: Microsoft.WinGet/Package
     properties:
