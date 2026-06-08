@@ -14,6 +14,8 @@
       # Keep WT alive windowless so the F10 global hotkey stays registered.
       "compatibility.allowHeadless" = true;
       "warning.largePaste" = false;
+      # Drops the quake's taskbar button on focus loss, like the F10 toggle.
+      autoHideWindow = true;
       copyFormatting = "none";
       copyOnSelect = true;
       defaultProfile = "{4cb2f6db-5e45-53e6-9040-071c7edd5568}";
