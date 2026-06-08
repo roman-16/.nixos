@@ -24,6 +24,7 @@
         "Microsoft.DSC"
         "Microsoft.PowerToys"
         "Notepad++.Notepad++"
+        "Obsidian.Obsidian"
         "Valve.Steam"
         "Microsoft.VisualStudioCode"
         "WinDirStat.WinDirStat"

@@ -161,6 +161,13 @@ resources:
       source: winget
       useLatest: true
       version: 8.9.6.4
+  - name: Obsidian.Obsidian
+    type: Microsoft.WinGet/Package
+    properties:
+      id: Obsidian.Obsidian
+      source: winget
+      useLatest: true
+      version: 1.12.7
   - name: Valve.Steam
     type: Microsoft.WinGet/Package
     properties:
