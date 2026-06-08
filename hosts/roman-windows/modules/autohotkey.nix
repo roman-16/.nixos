@@ -35,7 +35,9 @@
               }
           }
           MonitorGetWorkArea(target, &L, &T, &R, &B)
-          WinMove(L + (R - L - w) // 2, T + (B - T - h) // 2, , , hwnd)
+          ; Elevated windows reject WinMove with "(5) Access is denied" even when
+          ; WinGetProcessName succeeded; centering is best-effort, so swallow it.
+          try WinMove(L + (R - L - w) // 2, T + (B - T - h) // 2, , , hwnd)
       }
 
       #c:: CenterWindow(WinExist("A"))
