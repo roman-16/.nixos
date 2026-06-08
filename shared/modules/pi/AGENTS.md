@@ -16,7 +16,7 @@
 
 ## Code
 
-- **Comments**: Only add a comment when it's needed, and only to explain *why* (non-obvious decisions, workarounds, gotchas) — never to restate *what* the code already says.
+- **Comments**: Default to NONE. Add one only when the *why* is genuinely non-obvious (workaround, gotcha, surprising decision) and would otherwise be lost — never to restate *what* the code does. Don't narrate or over-explain. When in doubt, leave it out.
 
 ## Interaction
 

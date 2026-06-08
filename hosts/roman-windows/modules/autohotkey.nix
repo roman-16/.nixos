@@ -45,9 +45,13 @@
       ; F10 is Windows Terminal's globalSummon (quake toggle). When WT isn't
       ; running yet there is no hotkey to catch, so launch the quake here for the
       ; first press; `~` lets the key still reach WT's globalSummon once it runs.
+      ; The fresh process opens without foreground focus, so activate its window.
       ~F10:: {
-          if !ProcessExist("WindowsTerminal.exe")
-              Run('"C:\Users\roman\AppData\Local\Microsoft\WindowsApps\wt.exe" -w _quake')
+          if ProcessExist("WindowsTerminal.exe")
+              return
+          Run('"C:\Users\roman\AppData\Local\Microsoft\WindowsApps\wt.exe" -w _quake')
+          if WinWait("ahk_exe WindowsTerminal.exe", , 5)
+              WinActivate()
       }
 
       EVENT_OBJECT_DESTROY := 0x8001, EVENT_OBJECT_SHOW := 0x8002
