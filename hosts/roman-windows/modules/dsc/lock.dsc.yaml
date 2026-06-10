@@ -181,7 +181,7 @@ resources:
       id: Microsoft.VisualStudioCode
       source: winget
       useLatest: true
-      version: 1.123.1
+      version: 1.123.2
   - name: WinDirStat.WinDirStat
     type: Microsoft.WinGet/Package
     properties:
