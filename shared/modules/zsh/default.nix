@@ -22,6 +22,7 @@
         python3
         tesseract
         imagemagick
+        wget
       ];
     };
 
