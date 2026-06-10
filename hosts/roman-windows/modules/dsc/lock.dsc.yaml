@@ -104,7 +104,7 @@ resources:
       id: Brave.Brave
       source: winget
       useLatest: true
-      version: 149.1.91.168
+      version: 149.1.91.171
   - name: direnv.direnv
     type: Microsoft.WinGet/Package
     properties:
@@ -118,7 +118,7 @@ resources:
       id: Discord.Discord
       source: winget
       useLatest: true
-      version: 1.0.9240
+      version: 1.0.9241
   - name: Git.Git
     type: Microsoft.WinGet/Package
     properties:
@@ -146,7 +146,7 @@ resources:
       id: Microsoft.DSC
       source: winget
       useLatest: true
-      version: 3.2.1.0
+      version: 3.2.2.0
   - name: Microsoft.PowerToys
     type: Microsoft.WinGet/Package
     properties:
@@ -181,7 +181,7 @@ resources:
       id: Microsoft.VisualStudioCode
       source: winget
       useLatest: true
-      version: 1.123.0
+      version: 1.123.1
   - name: WinDirStat.WinDirStat
     type: Microsoft.WinGet/Package
     properties:
