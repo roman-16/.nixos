@@ -153,7 +153,7 @@ resources:
       id: Microsoft.PowerToys
       source: winget
       useLatest: true
-      version: 0.99.1
+      version: 0.100.0
   - name: Notepad++.Notepad++
     type: Microsoft.WinGet/Package
     properties:
@@ -181,7 +181,7 @@ resources:
       id: Microsoft.VisualStudioCode
       source: winget
       useLatest: true
-      version: 1.123.2
+      version: 1.124.0
   - name: WinDirStat.WinDirStat
     type: Microsoft.WinGet/Package
     properties:
