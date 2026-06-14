@@ -210,13 +210,6 @@ resources:
       valueName: Discord
       valueData:
         String: '"C:\Users\roman\AppData\Local\Discord\Update.exe" --processStart Discord.exe'
-  - name: Steam
-    type: Microsoft.Windows/Registry
-    properties:
-      keyPath: HKCU\Software\Microsoft\Windows\CurrentVersion\Run
-      valueName: Steam
-      valueData:
-        String: '"C:\Program Files (x86)\Steam\steam.exe" -silent'
   - name: AutoHotkey autostart
     type: Microsoft.Windows/Registry
     properties:
