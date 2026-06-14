@@ -25,6 +25,7 @@
         "Microsoft.PowerToys"
         "Notepad++.Notepad++"
         "Obsidian.Obsidian"
+        "PrismLauncher.PrismLauncher"
         "Valve.Steam"
         "Microsoft.VisualStudioCode"
         "WinDirStat.WinDirStat"

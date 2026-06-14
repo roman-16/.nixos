@@ -168,6 +168,13 @@ resources:
       source: winget
       useLatest: true
       version: 1.12.7
+  - name: PrismLauncher.PrismLauncher
+    type: Microsoft.WinGet/Package
+    properties:
+      id: PrismLauncher.PrismLauncher
+      source: winget
+      useLatest: true
+      version: 11.0.2
   - name: Valve.Steam
     type: Microsoft.WinGet/Package
     properties:
