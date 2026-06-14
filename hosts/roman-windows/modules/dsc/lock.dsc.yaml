@@ -104,7 +104,7 @@ resources:
       id: Brave.Brave
       source: winget
       useLatest: true
-      version: 149.1.91.171
+      version: 149.1.91.172
   - name: direnv.direnv
     type: Microsoft.WinGet/Package
     properties:
@@ -132,7 +132,7 @@ resources:
       id: GitHub.cli
       source: winget
       useLatest: true
-      version: 2.93.0
+      version: 2.94.0
   - name: Logitech.OptionsPlus
     type: Microsoft.WinGet/Package
     properties:
@@ -181,7 +181,7 @@ resources:
       id: Microsoft.VisualStudioCode
       source: winget
       useLatest: true
-      version: 1.124.0
+      version: 1.124.2
   - name: WinDirStat.WinDirStat
     type: Microsoft.WinGet/Package
     properties:

@@ -49,7 +49,7 @@
 
     settings = {
       compaction.enabled = false;
-      defaultModel = "claude-fabel-5";
+      defaultModel = "claude-opus-4-8";
       defaultProjectTrust = "always";
       defaultProvider = "anthropic";
       defaultThinkingLevel = "xhigh";
