@@ -9,6 +9,7 @@ builtins.toJSON {
     blockStreamingBreak = "text_end";
     blockStreamingDefault = "on";
     heartbeat.every = "30m";
+    humanDelay.mode = "off";
     model.primary = "anthropic/claude-sonnet-4-6";
 
     params = {
@@ -24,6 +25,11 @@ builtins.toJSON {
     enabled = true;
     replyToMode = "batched";
     sendReadReceipts = true;
+
+    blockStreamingCoalesce = {
+      idleMs = 0;
+      minChars = 1;
+    };
   };
 
   gateway = {
