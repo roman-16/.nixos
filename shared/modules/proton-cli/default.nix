@@ -7,7 +7,7 @@
 
       src = pkgs.fetchurl {
         url = "https://github.com/roman-16/proton-cli/releases/latest/download/proton-cli_linux_amd64";
-        hash = "sha256-uXHysMROY5fEIo0GOugPGBFgw4qwc4duoo2d989a3cE=";
+        hash = "sha256-+Ru46lQMYkOe2BEXqpGTXVySU+kHxnC69wIsAn5qUZw=";
       };
 
       dontUnpack = true;
