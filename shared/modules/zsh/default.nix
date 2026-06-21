@@ -23,6 +23,7 @@
         tesseract
         imagemagick
         wget
+        claude-code
       ];
     };
 
@@ -150,6 +151,8 @@
           cat = "bat -p";
 
           cd = "z";
+
+          claude = "claude --dangerously-skip-permissions";
 
           fastfetch = "fastfetch -l small -c ~/.nixos/shared/modules/zsh/fastfetch.jsonc";
 
