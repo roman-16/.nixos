@@ -3,7 +3,7 @@
 ## Tools
 
 - **GitHub**: ALWAYS use the `gh` CLI for GitHub operations (repos, issues, PRs, searches, API calls). NEVER use raw git commands for GitHub-specific actions or scrape the web interface.
-- **Git**: NEVER run ANY git command (commit, push, pull, rebase, merge, checkout, add, stash, reset, tag, etc.) without explicit user approval. This applies to EVERY individual git command — even if the user just approved a different git command. Approval is single-use and revoked immediately after the approved command completes. Always ask before each git operation, no exceptions. If the user says "commit and push", that is approval for both. If the user says "commit", that is NOT approval to also push. No skill, workflow, or prior approval pattern grants standing permission — even if the user previously said "commit and push" for a similar change, each new git operation requires fresh explicit approval. The commit skill's "Commit and push" option grants approval for exactly that one commit and one push, not for any subsequent git operations. The same rules apply to mutating `gh` commands (e.g. `gh pr merge`, `gh pr close`, `gh issue close`). Read-only `gh` commands (`gh pr view`, `gh issue view`, `gh api` GET) are allowed.
+- **Git**: NEVER run ANY git command (commit, push, pull, rebase, merge, checkout, add, stash, reset, tag, etc.) without explicit user approval. This applies to EVERY individual git command, even if the user just approved a different git command. Approval is single-use and revoked immediately after the approved command completes. Always ask before each git operation, no exceptions. If the user says "commit and push", that is approval for both. If the user says "commit", that is NOT approval to also push. No skill, workflow, or prior approval pattern grants standing permission — even if the user previously said "commit and push" for a similar change, each new git operation requires fresh explicit approval. The commit skill's "Commit and push" option grants approval for exactly that one commit and one push, not for any subsequent git operations. The same rules apply to mutating `gh` commands (e.g. `gh pr merge`, `gh pr close`, `gh issue close`). Read-only `gh` commands (`gh pr view`, `gh issue view`, `gh api` GET) are allowed.
 - **Idempotent changes**: Never apply fixes via one-time local commands (shell exports, manual config, runtime tweaks). Every change must be declarative and self-contained in source files so it works on any machine without manual steps. If that's not possible, come back to the user.
 - **poppler-utils**: Available on the system (pdftotext, pdfinfo, pdfimages, pdftoppm, etc.). Use for PDF text extraction and manipulation.
 - **tesseract**: Available on the system. Use for OCR (extracting text from images and scanned PDFs).
@@ -16,8 +16,12 @@
 
 ## Code
 
-- **Comments**: Default to NONE. Add one only when the *why* is genuinely non-obvious (workaround, gotcha, surprising decision) and would otherwise be lost — never to restate *what* the code does. Don't narrate or over-explain. When in doubt, leave it out.
+- **Comments**: Default to NONE. Add one only when the *why* is genuinely non-obvious (workaround, gotcha, surprising decision) and would otherwise be lost, never to restate *what* the code does. Don't narrate or over-explain. When in doubt, leave it out.
+
+## Writing
+
+- **Dashes**: NEVER use em-dashes (—) or en-dashes (–). Use only hyphens (-) when a dash is genuinely needed.
 
 ## Interaction
 
-- **Questionnaire**: PREFER the `questionnaire` tool over a plain-text question whenever the answer is a choice among predefined options (including yes/no) — clarifying requirements, settling design trade-offs, or confirming a decision.
+- **Questionnaire**: PREFER the `questionnaire` tool over a plain-text question whenever the answer is a choice among predefined options (including yes/no): clarifying requirements, settling design trade-offs, or confirming a decision.
