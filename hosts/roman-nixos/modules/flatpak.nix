@@ -14,6 +14,10 @@
         }
       ];
 
+      overrides = {
+        "com.hypixel.HytaleLauncher".Context.devices = ["input"];
+      };
+
       update.onActivation = true;
     };
   };
