@@ -7,15 +7,16 @@
 // `gateway.models.providers.anthropic.baseUrl = http://127.0.0.1:18801`.
 //
 // Per-request pipeline:
-//   forward  - swap auth header, rename OpenClaw tool names to Claude Code
-//              PascalCase convention, inject a billing-header block into the
-//              `system` array
+//   forward  - swap auth header, strip stale `thinking` blocks from replayed
+//              history, rename OpenClaw tool names to Claude Code PascalCase
+//              convention, inject a billing-header block into the `system` array
 //   upstream - HTTPS POST to api.anthropic.com/v1/messages
 //   response - reverse the tool-name rename so OpenClaw sees its own names
 //
-// On a 400 reply containing "extra usage" the proxy fires a one-shot WhatsApp
+// On a 400 reply containing "extra usage" (subscription billing rejection) or a
+// rejected thinking-block signature the proxy fires a one-shot WhatsApp
 // notification via the openclaw CLI, debounced to one message per
-// NOTIFY_WINDOW_MS.
+// NOTIFY_WINDOW_MS per kind.
 
 import http from 'node:http';
 import https from 'node:https';
@@ -71,17 +72,7 @@ function saveState(s) {
   catch (e) { console.error(`[notify] state write failed: ${e.message}`); }
 }
 
-function notifyDetection() {
-  const state = loadState();
-  state.detectionsTotal += 1;
-  const now = Date.now();
-  state.lastSeenAt = now;
-  if (now - state.lastNotifiedAt < NOTIFY_WINDOW_MS) { saveState(state); return; }
-  if (!NOTIFY_TARGET) { saveState(state); console.error('[notify] NOTIFY_TARGET unset; skipping WhatsApp send'); return; }
-  state.lastNotifiedAt = now;
-  saveState(state);
-  const when = new Date(now).toISOString().slice(11, 16) + ' UTC';
-  const msg = `\u26a0\ufe0f openclaw-claude-shim: subscription billing rejected (extra-usage detection). ${state.detectionsTotal} events total, last at ${when}. Most recent request failed.`;
+function sendWhatsApp(msg) {
   const child = spawn(
     DOCKER_BIN,
     ['exec', 'openclaw', 'node', '/app/openclaw.mjs', 'message', 'send', '--channel', 'whatsapp', '--target', NOTIFY_TARGET, '--message', msg],
@@ -89,6 +80,23 @@ function notifyDetection() {
   );
   child.on('error', e => console.error(`[notify] spawn failed: ${e.message}`));
   child.unref();
+}
+
+// Debounced WhatsApp alert, one per NOTIFY_WINDOW_MS per `kind`. `buildMessage`
+// receives the running per-kind event count and a HH:MM UTC stamp.
+function notify(kind, buildMessage) {
+  const state = loadState();
+  const now = Date.now();
+  const totalKey = `${kind}Total`;
+  const lastKey = `${kind}LastNotifiedAt`;
+  state[totalKey] = (state[totalKey] ?? 0) + 1;
+  state.lastSeenAt = now;
+  if (now - (state[lastKey] ?? 0) < NOTIFY_WINDOW_MS) { saveState(state); return; }
+  if (!NOTIFY_TARGET) { saveState(state); console.error('[notify] NOTIFY_TARGET unset; skipping WhatsApp send'); return; }
+  state[lastKey] = now;
+  saveState(state);
+  const when = new Date(now).toISOString().slice(11, 16) + ' UTC';
+  sendWhatsApp(buildMessage(state[totalKey], when));
 }
 
 // ─── Body transforms ────────────────────────────────────────────────────────
@@ -134,8 +142,44 @@ function injectBilling(body) {
   return '{"system":[' + BILLING_BLOCK + '],' + body.slice(1);
 }
 
+// Anthropic permanently 400s a session once a replayed `thinking` block from a
+// completed prior turn no longer validates (signatures expire ~45-60min / the
+// closed-turn structure no longer matches what they were minted against). Every
+// retry replays the same poisoned history, so the session never recovers, and
+// OpenClaw's native-Anthropic path has no knob to drop them. Anthropic only
+// requires thinking on the latest assistant message of an *active* tool loop
+// (the one immediately followed by tool_result blocks); blocks from closed
+// turns may be omitted on replay. So strip thinking everywhere except there.
+// Ref: openclaw/openclaw#94228, anthropics/anthropic-sdk-python#1598
+function stripStaleThinking(body) {
+  let parsed;
+  try { parsed = JSON.parse(body); } catch { return body; }
+  const messages = parsed?.messages;
+  if (!Array.isArray(messages)) return body;
+
+  let lastAssistant = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]?.role === 'assistant') { lastAssistant = i; break; }
+  }
+  const midToolLoop = i => {
+    const next = messages[i + 1];
+    return next?.role === 'user' && Array.isArray(next.content)
+      && next.content.some(b => b?.type === 'tool_result');
+  };
+
+  let changed = false;
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    if (msg?.role !== 'assistant' || !Array.isArray(msg.content)) continue;
+    if (i === lastAssistant && midToolLoop(i)) continue;
+    const kept = msg.content.filter(b => b?.type !== 'thinking' && b?.type !== 'redacted_thinking');
+    if (kept.length !== msg.content.length && kept.length > 0) { msg.content = kept; changed = true; }
+  }
+  return changed ? JSON.stringify(parsed) : body;
+}
+
 function processBody(body) {
-  return injectBilling(renameForward(body));
+  return injectBilling(renameForward(stripStaleThinking(body)));
 }
 
 // ─── Server ─────────────────────────────────────────────────────────────────
@@ -195,7 +239,13 @@ const server = http.createServer((req, res) => {
         if (status < 200 || status >= 300) {
           if (respBody.includes('extra usage')) {
             console.error(`[${ts}] #${n} [DETECTION] upstream rejected with extra-usage flag. body=${outBuf.length}b`);
-            notifyDetection();
+            notify('detections', (total, when) =>
+              `\u26a0\ufe0f openclaw-claude-shim: subscription billing rejected (extra-usage detection). ${total} events total, last at ${when}. Most recent request failed.`);
+          }
+          if (respBody.includes('signature') && respBody.includes('thinking')) {
+            console.error(`[${ts}] #${n} [SIGNATURE] upstream rejected a thinking-block signature. body=${outBuf.length}b`);
+            notify('signatureFailures', (total, when) =>
+              `\u26a0\ufe0f openclaw-claude-shim: Anthropic rejected a thinking-block signature \u2014 LLM replies are failing. ${total} events total, last at ${when}.`);
           }
         }
         respBody = renameReverse(respBody);
