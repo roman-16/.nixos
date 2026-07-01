@@ -10,7 +10,7 @@ builtins.toJSON {
     blockStreamingDefault = "on";
     heartbeat.every = "30m";
     humanDelay.mode = "off";
-    model.primary = "anthropic/claude-sonnet-4-6";
+    model.primary = "anthropic/claude-sonnet-5";
 
     params = {
       cacheRetention = "long";
@@ -52,10 +52,10 @@ builtins.toJSON {
     models = [
       {
         contextWindow = 200000;
-        id = "claude-sonnet-4-6";
+        id = "claude-sonnet-5";
         input = ["text" "image"];
         maxTokens = 128000;
-        name = "Claude Sonnet 4.6";
+        name = "Claude Sonnet 5";
         reasoning = true;
       }
     ];
