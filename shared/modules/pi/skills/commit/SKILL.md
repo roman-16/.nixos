@@ -19,7 +19,13 @@ Generate a [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/
 
 ## Workflow
 
-### 1. Inspect the staged changes (read-only)
+### 1. Run quality gates (if defined)
+
+Before anything else, check the project's instructions (`AGENTS.md`, `CLAUDE.md`, docs, etc.) for defined quality gates - formatters, linters, type checks, tests, build/check commands, or a dedicated "Quality Gates" section. If any are defined, run them **first**, in the order given.
+
+**If any gate fails, stop and tell the user.** Do not proceed to inspect, confirm, or commit until the gates pass. If no quality gates are defined, skip this step.
+
+### 2. Inspect the staged changes (read-only)
 
 ```bash
 git diff --staged          # the changes to be committed — base the message on these
@@ -32,19 +38,19 @@ git remote                 # is there a remote to push to?
 **If nothing is staged, stop and tell the user** there is nothing staged to commit. Do not stage
 anything yourself.
 
-### 2. Generate the message
+### 3. Generate the message
 
 Follow the format below, basing it **only on the staged diff**. The subject must capture the essence
 of the change; the body explains *why* when it isn't obvious. Cover all the staged changes.
 
-### 3. Confirm via questionnaire
+### 4. Confirm via questionnaire
 
 Show the full proposed commit message, then a horizontal rule (`---`), then ask with the
 `questionnaire` tool to confirm with a single `Commit and push` option.
 
 Any other free-form reply is an instruction: apply it and regenerate/re-confirm the message.
 
-### 4. Commit and push
+### 5. Commit and push
 
 - Commit with a heredoc so the body and footers keep their formatting:
 
