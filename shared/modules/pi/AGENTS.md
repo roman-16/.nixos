@@ -21,6 +21,7 @@
 ## Writing
 
 - **Dashes**: NEVER use em-dashes (—) or en-dashes (–). Use only hyphens (-) when a dash is genuinely needed.
+- **Line breaks**: NEVER insert manual line breaks to align text to a hypothetical maximum line width. Let lines flow and wrap naturally; only break where a break is semantically meaningful (new paragraph, list item, etc.).
 
 ## Interaction
 
