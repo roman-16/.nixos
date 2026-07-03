@@ -65,6 +65,10 @@ builtins.toJSON {
   # at that time, so push the reset to 06:00 to avoid the overlap.
   session.reset.atHour = 6;
 
+  # Skill proposals applied via chat have no reachable approval surface from
+  # WhatsApp, so pending approvals just time out.
+  skills.workshop.approvalPolicy = "auto";
+
   # mDNS advertising is unused (gateway reached via Cloudflare tunnel) and the
   # plugin's probe watchdog raises an unhandled promise rejection that crashes
   # the gateway in a restart loop.
