@@ -125,6 +125,8 @@
         "org/gnome/desktop/wm/keybindings" = {
           close = ["<Super>q"];
           move-to-center = ["<Super>c"];
+          switch-input-source = [];
+          switch-input-source-backward = [];
           toggle-message-tray = [];
         };
 
@@ -194,6 +196,7 @@
           enabled-extensions = with pkgs; [
             "dynamic-music-pill@andbal"
             "lockkeys@vaina.lt"
+            "voice-type@roman"
             gnomeExtensions.alphabetical-app-grid.extensionUuid
             gnomeExtensions.appindicator.extensionUuid
             gnomeExtensions.blur-my-shell.extensionUuid

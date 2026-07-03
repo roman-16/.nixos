@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.voice-type" path="/org/gnome/shell/extensions/voice-type/">
+    <key name="toggle-recording" type="as">
+      <default><![CDATA[['<Super>space']]]></default>
+      <summary>Toggle voice recording</summary>
+      <description>Start or stop push-to-talk voice transcription.</description>
+    </key>
+  </schema>
+</schemalist>
