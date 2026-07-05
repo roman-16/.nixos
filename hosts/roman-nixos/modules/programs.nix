@@ -25,7 +25,6 @@
       gimp3-with-plugins
       gparted
       file-roller
-      libreoffice
       qbittorrent
       gradia
     ];
