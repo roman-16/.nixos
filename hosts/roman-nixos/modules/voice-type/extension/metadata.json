@@ -1,8 +1,0 @@
-{
-  "uuid": "voice-type@roman",
-  "name": "Voice Type",
-  "description": "Push-to-talk voice transcription via Mistral Voxtral realtime. Super+Space opens a centered overlay that records and shows the live transcription with a countdown; Enter or Super+Space stops and inserts the text into the focused field, Esc cancels.",
-  "shell-version": ["47", "48", "49", "50"],
-  "settings-schema": "org.gnome.shell.extensions.voice-type",
-  "gettext-domain": "voice-type"
-}

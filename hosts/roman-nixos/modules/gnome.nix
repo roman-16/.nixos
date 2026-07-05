@@ -196,7 +196,6 @@
           enabled-extensions = with pkgs; [
             "dynamic-music-pill@andbal"
             "lockkeys@vaina.lt"
-            "voice-type@roman"
             gnomeExtensions.alphabetical-app-grid.extensionUuid
             gnomeExtensions.appindicator.extensionUuid
             gnomeExtensions.blur-my-shell.extensionUuid
