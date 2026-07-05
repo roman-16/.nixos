@@ -64,7 +64,10 @@
         nix-direnv.enable = true;
       };
 
-      fzf.enable = true;
+      fzf = {
+        enable = true;
+        historyWidget.zsh.command = "";
+      };
 
       micro.enable = true;
 
