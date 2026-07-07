@@ -2,8 +2,6 @@
 
 Multi-host NixOS flake with home-manager. Formatter: Alejandra.
 
-> Git, GitHub, questionnaire, and general tooling rules live in the user-level `~/.pi/agent/AGENTS.md`. Never run git operations without explicit approval.
-
 ## Layout
 
 - `flake.nix` — inputs (nixpkgs-unstable, home-manager, stylix, microvm, nix-flatpak, nix-index-database, nixos-wsl, llm-agents) + host configs.
