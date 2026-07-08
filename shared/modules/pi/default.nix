@@ -65,6 +65,8 @@
 
     keybindings = {
       "app.clipboard.pasteImage" = ["ctrl+v" "alt+v"];
+      "app.message.followUp" = [];
+      "tui.input.newLine" = ["shift+enter" "ctrl+j" "alt+enter"];
     };
     keybindingsJson = builtins.toJSON keybindings;
   in {

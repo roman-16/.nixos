@@ -84,7 +84,6 @@
         extraConfig = ''
           return {
             disable_default_key_bindings = true,
-            enable_kitty_keyboard = true,
             enable_tab_bar = false,
             enable_wayland = false,
             keys = {
