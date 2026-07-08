@@ -1,5 +1,9 @@
 # User Guidelines
 
+## About
+
+- **Location**: The user is from Austria. Assume the Central European context for locale, timezone (CET/CEST), currency (EUR), metric units, and date formatting (DD.MM.YYYY) unless stated otherwise.
+
 ## Tools
 
 - **GitHub**: ALWAYS use the `gh` CLI for GitHub operations (repos, issues, PRs, searches, API calls). NEVER use raw git commands for GitHub-specific actions or scrape the web interface.
@@ -17,6 +21,7 @@
 ## Code
 
 - **Comments**: Default to NONE. Add one only when the *why* is genuinely non-obvious (workaround, gotcha, surprising decision) and would otherwise be lost, never to restate *what* the code does. Don't narrate or over-explain. When in doubt, leave it out.
+- **Ordering**: When the order of fields, list items, keys, arguments, imports, or similar has no functional or semantic significance, order them alphabetically.
 
 ## Writing
 
