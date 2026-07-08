@@ -174,7 +174,7 @@
         };
 
         "org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2" = {
-          binding = "<Super><Shift>period";
+          binding = "<Super>period";
           command = "smile";
           name = "Smile";
         };
