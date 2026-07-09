@@ -1,5 +1,5 @@
 {
-  nixos = {pkgs, ...}: {
+  nixos = { pkgs, ... }: {
     services.flatpak = {
       enable = true;
 
@@ -15,12 +15,12 @@
       ];
 
       overrides = {
-        "com.hypixel.HytaleLauncher".Context.devices = ["input"];
+        "com.hypixel.HytaleLauncher".Context.devices = [ "input" ];
       };
 
       update.onActivation = true;
     };
   };
 
-  home = {};
+  home = { };
 }

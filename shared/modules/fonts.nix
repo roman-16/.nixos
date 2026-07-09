@@ -1,5 +1,5 @@
 {
-  nixos = {pkgs, ...}: {
+  nixos = { pkgs, ... }: {
     fonts.packages = with pkgs; [
       fira-code
       fira-mono
@@ -39,5 +39,5 @@
     };
   };
 
-  home = {};
+  home = { };
 }

@@ -1,5 +1,5 @@
 {
-  nixos = {...}: {
+  nixos = { ... }: {
     wsl = {
       defaultUser = "roman";
       enable = true;
@@ -7,5 +7,5 @@
     };
   };
 
-  home = {};
+  home = { };
 }

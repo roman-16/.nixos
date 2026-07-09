@@ -1,5 +1,5 @@
 {
-  nixos = {config, ...}: {
+  nixos = { config, ... }: {
     hardware = {
       graphics = {
         enable = true;
@@ -16,8 +16,8 @@
       };
     };
 
-    services.xserver.videoDrivers = ["nvidia"];
+    services.xserver.videoDrivers = [ "nvidia" ];
   };
 
-  home = {};
+  home = { };
 }

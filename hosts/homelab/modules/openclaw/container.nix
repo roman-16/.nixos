@@ -6,7 +6,8 @@
   gatewayPort,
   lanIp,
   shimPort,
-}: let
+}:
+let
   sharedEnv = {
     ANTHROPIC_API_KEY = "not-needed";
     BACKUP_GIT_REMOTE = secrets.backupGitRemote;
@@ -38,12 +39,13 @@
       ;
   };
 
-  externalPlugins = ["whatsapp"];
-in {
+  externalPlugins = [ "whatsapp" ];
+in
+{
   systemd = {
     services.docker-openclaw = {
-      after = ["openclaw-claude-shim.service"];
-      requires = ["openclaw-claude-shim.service"];
+      after = [ "openclaw-claude-shim.service" ];
+      requires = [ "openclaw-claude-shim.service" ];
 
       serviceConfig = {
         ExecStartPre = lib.mkAfter [

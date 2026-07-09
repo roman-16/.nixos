@@ -1,4 +1,5 @@
-{pkgs, ...}: let
+{ pkgs, ... }:
+let
   hassIp = "192.168.70.71";
   homelabIp = "192.168.70.70";
   openclawIp = "192.168.70.72";
@@ -88,7 +89,8 @@
 
     HTTPServer(("127.0.0.1", 8084), Handler).serve_forever()
   '';
-in {
+in
+{
   networking.firewall.allowedTCPPorts = [
     8082 # caddy reverse proxy (cloudflared routes here)
     8090 # Beszel hub (needed for agents on other machines)
@@ -164,14 +166,14 @@ in {
             group = "Network";
             url = "tcp://${homelabIp}:22";
             interval = "5m";
-            conditions = ["[CONNECTED] == true"];
+            conditions = [ "[CONNECTED] == true" ];
           }
           {
             name = "OpenClaw VM SSH";
             group = "Network";
             url = "tcp://${openclawIp}:22";
             interval = "5m";
-            conditions = ["[CONNECTED] == true"];
+            conditions = [ "[CONNECTED] == true" ];
           }
         ];
 
@@ -302,8 +304,8 @@ in {
   systemd = {
     services.reboot-server = {
       description = "Reboot confirmation HTTP server";
-      after = ["network.target"];
-      wantedBy = ["multi-user.target"];
+      after = [ "network.target" ];
+      wantedBy = [ "multi-user.target" ];
 
       serviceConfig = {
         ExecStart = rebootServer;

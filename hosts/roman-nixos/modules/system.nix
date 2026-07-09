@@ -1,7 +1,7 @@
 {
-  nixos = {lib, ...}: {
+  nixos = { lib, ... }: {
     boot = {
-      kernelParams = ["nvidia-drm.modeset=1"];
+      kernelParams = [ "nvidia-drm.modeset=1" ];
 
       loader = {
         efi.canTouchEfiVariables = true;
@@ -52,5 +52,5 @@
     };
   };
 
-  home = {};
+  home = { };
 }

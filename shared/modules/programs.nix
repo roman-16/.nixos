@@ -1,5 +1,5 @@
 {
-  nixos = {pkgs, ...}: {
+  nixos = { pkgs, ... }: {
     environment.systemPackages = with pkgs; [
       appimage-run
       ffmpeg
@@ -8,5 +8,5 @@
     ];
   };
 
-  home = {};
+  home = { };
 }

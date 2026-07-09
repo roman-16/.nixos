@@ -1,7 +1,7 @@
 {
-  nixos = {};
+  nixos = { };
 
-  home = {lib, ...}: {
+  home = { lib, ... }: {
     pi.agentsMd = lib.mkAfter (builtins.readFile ./AGENTS.md);
   };
 }

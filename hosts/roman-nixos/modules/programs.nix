@@ -1,5 +1,5 @@
 {
-  nixos = {pkgs, ...}: {
+  nixos = { pkgs, ... }: {
     environment.systemPackages = with pkgs; [
       vscode
       obsidian
@@ -42,5 +42,5 @@
     };
   };
 
-  home = {};
+  home = { };
 }

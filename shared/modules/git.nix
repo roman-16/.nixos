@@ -1,12 +1,12 @@
 {
-  nixos = {pkgs, ...}: {
+  nixos = { pkgs, ... }: {
     environment.systemPackages = with pkgs; [
       git
       git-crypt
     ];
   };
 
-  home = {...}: {
+  home = { ... }: {
     programs.git = {
       enable = true;
 

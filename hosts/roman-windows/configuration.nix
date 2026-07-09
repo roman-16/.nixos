@@ -1,10 +1,13 @@
-{inputs, ...}: let
-  loadModules = dir: map (name: import (dir + "/${name}")) (builtins.attrNames (builtins.readDir dir));
+{ inputs, ... }:
+let
+  loadModules =
+    dir: map (name: import (dir + "/${name}")) (builtins.attrNames (builtins.readDir dir));
 
   modules = loadModules ../../shared/modules ++ loadModules ./modules;
   nixosModules = map (m: m.nixos) modules;
   homeModules = map (m: m.home) modules;
-in {
+in
+{
   imports = nixosModules;
 
   home-manager = {

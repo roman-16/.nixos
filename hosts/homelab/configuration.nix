@@ -1,22 +1,23 @@
-{inputs, ...}: let
+{ inputs, ... }:
+let
   modulesDir = ./modules;
   entries = builtins.readDir modulesDir;
   modules = map (name: modulesDir + "/${name}") (builtins.attrNames entries);
-in {
-  imports =
-    [
-      ./hardware-configuration.nix
-    ]
-    ++ modules;
+in
+{
+  imports = [
+    ./hardware-configuration.nix
+  ]
+  ++ modules;
 
   boot = {
     # Prevent host from claiming the Realtek RTL8761B BT dongle (0bda:b85b)
     # passed through to the HAOS VM. Otherwise btusb on the host races
     # libvirt's managed detach and can hold the device, breaking passthrough.
-    blacklistedKernelModules = ["btusb"];
+    blacklistedKernelModules = [ "btusb" ];
 
     # IOMMU for USB passthrough to VMs
-    kernelParams = ["intel_iommu=on"];
+    kernelParams = [ "intel_iommu=on" ];
 
     loader = {
       efi.canTouchEfiVariables = true;
@@ -36,7 +37,7 @@ in {
   };
 
   nix = {
-    nixPath = ["nixpkgs=${inputs.nixpkgs}"];
+    nixPath = [ "nixpkgs=${inputs.nixpkgs}" ];
     optimise.automatic = true;
 
     gc = {
@@ -110,7 +111,7 @@ in {
     timers.scheduled-reboot = {
       description = "Daily reboot at 04:00";
       timerConfig.OnCalendar = "*-*-* 04:00:00";
-      wantedBy = ["timers.target"];
+      wantedBy = [ "timers.target" ];
     };
   };
 

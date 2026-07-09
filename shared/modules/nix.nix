@@ -1,33 +1,35 @@
 {
-  nixos = {
-    inputs,
-    pkgs,
-    ...
-  }: {
-    documentation.nixos.enable = false;
+  nixos =
+    {
+      inputs,
+      pkgs,
+      ...
+    }:
+    {
+      documentation.nixos.enable = false;
 
-    environment.systemPackages = with pkgs; [
-      nixd
-      nixfmt
-    ];
+      environment.systemPackages = with pkgs; [
+        nixd
+        nixfmt
+      ];
 
-    nix = {
-      nixPath = ["nixpkgs=${inputs.nixpkgs}"];
-      optimise.automatic = true;
+      nix = {
+        nixPath = [ "nixpkgs=${inputs.nixpkgs}" ];
+        optimise.automatic = true;
 
-      settings = {
-        experimental-features = [
-          "nix-command"
-          "flakes"
-        ];
-        warn-dirty = false;
+        settings = {
+          experimental-features = [
+            "nix-command"
+            "flakes"
+          ];
+          warn-dirty = false;
+        };
       };
+
+      nixpkgs.config.allowUnfree = true;
+
+      programs.nix-ld.enable = true;
     };
 
-    nixpkgs.config.allowUnfree = true;
-
-    programs.nix-ld.enable = true;
-  };
-
-  home = {};
+  home = { };
 }

@@ -1,7 +1,7 @@
 {
-  nixos = {};
+  nixos = { };
 
-  home = {...}: {
+  home = { ... }: {
     programs.tealdeer = {
       enable = true;
       enableAutoUpdates = true;

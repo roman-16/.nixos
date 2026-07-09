@@ -19,7 +19,7 @@ builtins.toJSON {
   };
 
   channels.whatsapp = {
-    allowFrom = [secrets.mainNumber];
+    allowFrom = [ secrets.mainNumber ];
     blockStreaming = true;
     dmPolicy = "allowlist";
     enabled = true;
@@ -77,5 +77,5 @@ builtins.toJSON {
   # the gateway in a restart loop.
   plugins.entries.bonjour.enabled = false;
 
-  tools.sandbox.tools.allow = ["*"];
+  tools.sandbox.tools.allow = [ "*" ];
 }

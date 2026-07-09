@@ -1,7 +1,7 @@
 {
-  nixos = {...}: {
+  nixos = { ... }: {
     users.users.roman.description = "Roman";
   };
 
-  home = {};
+  home = { };
 }

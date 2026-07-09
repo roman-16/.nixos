@@ -1,5 +1,5 @@
 {
-  nixos = {...}: {
+  nixos = { ... }: {
     programs.nh = {
       enable = true;
       flake = "/home/roman/.nixos";
@@ -11,5 +11,5 @@
     };
   };
 
-  home = {};
+  home = { };
 }

@@ -1,21 +1,23 @@
-{...}: {
+{ ... }: {
   microvm.vms.openclaw = {
     autostart = true;
 
-    config = {
-      pkgs,
-      lib,
-      ...
-    }: let
-      secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
+    config =
+      {
+        pkgs,
+        lib,
+        ...
+      }:
+      let
+        secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
 
-      dataDir = "/var/lib/openclaw";
-      gatewayPort = 7072;
-      lanIp = "192.168.70.72";
+        dataDir = "/var/lib/openclaw";
+        gatewayPort = 7072;
+        lanIp = "192.168.70.72";
 
-      shimPort = 18801;
-      credentialsPath = "/var/lib/claude-auth/.credentials.json";
-    in
+        shimPort = 18801;
+        credentialsPath = "/var/lib/claude-auth/.credentials.json";
+      in
       lib.mkMerge [
         (import ./claude-shim.nix {
           inherit
@@ -78,7 +80,7 @@
           ];
 
           networking = {
-            firewall.allowedTCPPorts = [gatewayPort];
+            firewall.allowedTCPPorts = [ gatewayPort ];
             hostName = "openclaw";
             useNetworkd = true;
           };

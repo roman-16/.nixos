@@ -1,4 +1,5 @@
-{pkgs, ...}: let
+{ pkgs, ... }:
+let
   # Both USB dongles are passed through at libvirt define-time (persistent
   # <hostdev> entries in the domain XML below) rather than hot-attached after
   # VM boot. The host's matching kernel drivers (`btusb` for the Realtek BT
@@ -51,14 +52,15 @@
       </devices>
     </domain>
   '';
-in {
+in
+{
   systemd = {
     services = {
       hass-vm = {
-        after = ["libvirtd.service"];
+        after = [ "libvirtd.service" ];
         description = "Define and start HAOS VM";
-        requires = ["libvirtd.service"];
-        wantedBy = ["multi-user.target"];
+        requires = [ "libvirtd.service" ];
+        wantedBy = [ "multi-user.target" ];
 
         serviceConfig = {
           ExecStop = pkgs.writeShellScript "hass-vm-stop" ''
@@ -79,7 +81,7 @@ in {
           Type = "oneshot";
         };
 
-        path = [pkgs.libvirt];
+        path = [ pkgs.libvirt ];
 
         script = ''
           mkdir -p /var/lib/libvirt/images /var/lib/libvirt/qemu/nvram
@@ -105,7 +107,7 @@ in {
       # Workarounds for libvirt 12.1.0 NixOS regression:
       # 1. virt-secret-init-encryption.service hardcodes /usr/bin/sh
       # 2. Same service uses `dd` which isn't in the default systemd PATH
-      "virt-secret-init-encryption".path = [pkgs.coreutils];
+      "virt-secret-init-encryption".path = [ pkgs.coreutils ];
     };
 
     tmpfiles.rules = [
@@ -114,7 +116,7 @@ in {
   };
 
   virtualisation.libvirtd = {
-    allowedBridges = ["br0"];
+    allowedBridges = [ "br0" ];
     enable = true;
 
     # Default "suspend" saves VM RAM to disk and restores on boot.

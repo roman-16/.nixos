@@ -1,5 +1,5 @@
 {
-  nixos = {pkgs, ...}: {
+  nixos = { pkgs, ... }: {
     programs = {
       gamemode.enable = true;
 
@@ -16,5 +16,5 @@
     };
   };
 
-  home = {};
+  home = { };
 }

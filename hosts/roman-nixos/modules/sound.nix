@@ -1,5 +1,5 @@
 {
-  nixos = {pkgs, ...}: {
+  nixos = { pkgs, ... }: {
     environment.systemPackages = with pkgs; [
       alsa-utils
       wireplumber
@@ -39,5 +39,5 @@
     };
   };
 
-  home = {};
+  home = { };
 }

@@ -1,5 +1,5 @@
 {
-  nixos = {pkgs, ...}: {
+  nixos = { pkgs, ... }: {
     stylix = {
       autoEnable = true;
       enable = true;
@@ -32,7 +32,7 @@
     };
   };
 
-  home = {pkgs, ...}: {
+  home = { pkgs, ... }: {
     gtk.iconTheme = {
       package = pkgs.papirus-icon-theme;
       name = "Papirus-Dark";

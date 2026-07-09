@@ -1,66 +1,71 @@
 {
-  nixos = {pkgs, ...}: let
-    dynamic-music-pill = pkgs.gnomeExtensions.buildShellExtension {
-      uuid = "dynamic-music-pill@andbal";
-      name = "Dynamic Music Pill";
-      pname = "dynamic-music-pill";
-      version = "29";
-      description = "An elegant, pill-shaped music player for your desktop";
-      link = "https://extensions.gnome.org/extension/9334/dynamic-music-pill/";
-      sha256 = "sha256-f1JYxJ3/L/WZGR/g6AcrpsA8Vf+CpcnAzP2FaiHMgGU=";
-      metadata = "eyJ1dWlkIjoiZHluYW1pYy1tdXNpYy1waWxsQGFuZGJhbCIsIm5hbWUiOiJEeW5hbWljIE11c2ljIFBpbGwiLCJkZXNjcmlwdGlvbiI6IkFuIGVsZWdhbnQsIHBpbGwtc2hhcGVkIG11c2ljIHBsYXllciBmb3IgeW91ciBkZXNrdG9wLiIsInNoZWxsLXZlcnNpb24iOlsiNDUiLCI0NiIsIjQ3IiwiNDgiLCI0OSJdLCJ1cmwiOiJodHRwczovL2dpdGh1Yi5jb20vQW5kYmFsMjMvZHluYW1pYy1tdXNpYy1waWxsIn0K";
-    };
-  in {
-    environment = {
-      gnome.excludePackages = with pkgs; [
-        gnome-connections
-        evince
-        gnome-characters
-        gnome-logs
-        gnome-font-viewer
-        gnome-tour
-        yelp
-        epiphany
-        gnome-music
-        geary
-        gnome-software
-        decibels
-        gnome-console
-      ];
+  nixos =
+    { pkgs, ... }:
+    let
+      dynamic-music-pill = pkgs.gnomeExtensions.buildShellExtension {
+        uuid = "dynamic-music-pill@andbal";
+        name = "Dynamic Music Pill";
+        pname = "dynamic-music-pill";
+        version = "29";
+        description = "An elegant, pill-shaped music player for your desktop";
+        link = "https://extensions.gnome.org/extension/9334/dynamic-music-pill/";
+        sha256 = "sha256-f1JYxJ3/L/WZGR/g6AcrpsA8Vf+CpcnAzP2FaiHMgGU=";
+        metadata = "eyJ1dWlkIjoiZHluYW1pYy1tdXNpYy1waWxsQGFuZGJhbCIsIm5hbWUiOiJEeW5hbWljIE11c2ljIFBpbGwiLCJkZXNjcmlwdGlvbiI6IkFuIGVsZWdhbnQsIHBpbGwtc2hhcGVkIG11c2ljIHBsYXllciBmb3IgeW91ciBkZXNrdG9wLiIsInNoZWxsLXZlcnNpb24iOlsiNDUiLCI0NiIsIjQ3IiwiNDgiLCI0OSJdLCJ1cmwiOiJodHRwczovL2dpdGh1Yi5jb20vQW5kYmFsMjMvZHluYW1pYy1tdXNpYy1waWxsIn0K";
+      };
+    in
+    {
+      environment = {
+        gnome.excludePackages = with pkgs; [
+          gnome-connections
+          evince
+          gnome-characters
+          gnome-logs
+          gnome-font-viewer
+          gnome-tour
+          yelp
+          epiphany
+          gnome-music
+          geary
+          gnome-software
+          decibels
+          gnome-console
+        ];
 
-      systemPackages = with pkgs; [
-        dconf-editor
-        gnome-tweaks
-        dynamic-music-pill
-        gnome49Extensions."lockkeys@vaina.lt"
-        gnomeExtensions.alphabetical-app-grid
-        gnomeExtensions.appindicator
-        gnomeExtensions.blur-my-shell
-        gnomeExtensions.burn-my-windows
-        gnomeExtensions.dash-to-panel
-        gnomeExtensions.pip-on-top
-        gnomeExtensions.quake-terminal
-        gnomeExtensions.rounded-window-corners-reborn
-        gnomeExtensions.smile-complementary-extension
-        gnomeExtensions.user-themes
-        gnomeExtensions.vitals
-        smile
-      ];
+        systemPackages = with pkgs; [
+          dconf-editor
+          gnome-tweaks
+          dynamic-music-pill
+          gnome49Extensions."lockkeys@vaina.lt"
+          gnomeExtensions.alphabetical-app-grid
+          gnomeExtensions.appindicator
+          gnomeExtensions.blur-my-shell
+          gnomeExtensions.burn-my-windows
+          gnomeExtensions.dash-to-panel
+          gnomeExtensions.pip-on-top
+          gnomeExtensions.quake-terminal
+          gnomeExtensions.rounded-window-corners-reborn
+          gnomeExtensions.smile-complementary-extension
+          gnomeExtensions.user-themes
+          gnomeExtensions.vitals
+          smile
+        ];
+      };
+
+      services = {
+        desktopManager.gnome.enable = true;
+        displayManager.gdm.enable = true;
+      };
     };
 
-    services = {
-      desktopManager.gnome.enable = true;
-      displayManager.gdm.enable = true;
-    };
-  };
-
-  home = {
-    config,
-    pkgs,
-    lib,
-    ...
-  }:
-    with lib.hm.gvariant; {
+  home =
+    {
+      config,
+      pkgs,
+      lib,
+      ...
+    }:
+    with lib.hm.gvariant;
+    {
       dconf.settings = {
         "ca/desrt/dconf-editor" = {
           show-warning = false;
@@ -123,11 +128,11 @@
         };
 
         "org/gnome/desktop/wm/keybindings" = {
-          close = ["<Super>q"];
-          move-to-center = ["<Super>c"];
-          switch-input-source = [];
-          switch-input-source-backward = [];
-          toggle-message-tray = [];
+          close = [ "<Super>q" ];
+          move-to-center = [ "<Super>c" ];
+          switch-input-source = [ ];
+          switch-input-source-backward = [ ];
+          toggle-message-tray = [ ];
         };
 
         "org/gnome/desktop/wm/preferences" = {
@@ -255,7 +260,7 @@
           render-on-current-monitor = true;
           skip-taskbar = true;
           terminal-id = "org.wezfurlong.wezterm.desktop";
-          terminal-shortcut = ["F10"];
+          terminal-shortcut = [ "F10" ];
           vertical-size = 42;
         };
 

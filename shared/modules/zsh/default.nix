@@ -1,5 +1,5 @@
 {
-  nixos = {pkgs, ...}: {
+  nixos = { pkgs, ... }: {
     environment = {
       sessionVariables.EDITOR = "micro";
 
@@ -46,7 +46,7 @@
     };
   };
 
-  home = {pkgs, ...}: {
+  home = { pkgs, ... }: {
     programs = {
       atuin = {
         enable = true;

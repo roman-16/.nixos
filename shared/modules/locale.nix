@@ -1,5 +1,5 @@
 {
-  nixos = {...}: {
+  nixos = { ... }: {
     time.timeZone = "Europe/Vienna";
 
     i18n = {
@@ -19,7 +19,7 @@
     };
   };
 
-  home = {...}: {
+  home = { ... }: {
     dconf.settings = {
       "system/locale" = {
         region = "de_AT.UTF-8";

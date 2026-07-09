@@ -1,13 +1,13 @@
 {
-  nixos = {};
+  nixos = { };
 
-  home = {...}: {
+  home = { ... }: {
     services.easyeffects = {
       enable = false;
       preset = "default";
 
       extraPresets.default.input = {
-        blocklist = [];
+        blocklist = [ ];
 
         "compressor#0" = {
           attack = 15.0;
