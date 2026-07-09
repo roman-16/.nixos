@@ -2,6 +2,7 @@
 
 ## About
 
+- **GitHub username**: `roman-16`.
 - **Location**: The user is from Austria. Assume the Central European context for locale, timezone (CET/CEST), currency (EUR), metric units, and date formatting (DD.MM.YYYY) unless stated otherwise.
 
 ## Tools
