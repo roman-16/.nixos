@@ -112,13 +112,17 @@
           touch $out
         '';
 
-        # Unit tests, hermetic (temp dirs, no network). Heavy deps stay lazy-imported,
-        # so the suite only needs pytest + requests.
+        # Unit tests, hermetic (temp dirs, no network). Daemon tests lazy-import
+        # their heavy deps; the backtest suite needs pandas/numpy/duckdb (test-only
+        # closure - the deployed daemon never gets them).
         trader-pytest =
           pkgs.runCommand "trader-pytest"
             {
               nativeBuildInputs = [
                 (pkgs.python3.withPackages (ps: [
+                  ps.duckdb
+                  ps.numpy
+                  ps.pandas
                   ps.pytest
                   ps.requests
                 ]))
