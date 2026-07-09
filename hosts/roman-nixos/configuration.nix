@@ -1,6 +1,5 @@
 {inputs, ...}: let
-  loadModules = dir:
-    map (name: import (dir + "/${name}")) (builtins.attrNames (builtins.readDir dir));
+  loadModules = dir: map (name: import (dir + "/${name}")) (builtins.attrNames (builtins.readDir dir));
 
   modules = loadModules ../../shared/modules ++ loadModules ./modules;
   nixosModules = map (m: m.nixos) modules;

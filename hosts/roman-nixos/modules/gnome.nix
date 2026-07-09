@@ -281,7 +281,12 @@
         };
 
         "org/gnome/shell/extensions/vitals" = {
-          hot-sensors = ["_processor_usage_" "_gpu#1_utilization_" "_memory_usage_" "__temperature_avg__"];
+          hot-sensors = [
+            "_processor_usage_"
+            "_gpu#1_utilization_"
+            "_memory_usage_"
+            "__temperature_avg__"
+          ];
           icon-style = 1;
           menu-centered = true;
           position-in-panel = 4;
@@ -297,8 +302,18 @@
                 "Graz"
                 "LOWG"
                 true
-                [(mkTuple [0.82030474843733492 0.269362475406694])]
-                [(mkTuple [0.82146830708976193 0.2696533694331239])]
+                [
+                  (mkTuple [
+                    0.82030474843733492
+                    0.269362475406694
+                  ])
+                ]
+                [
+                  (mkTuple [
+                    0.82146830708976193
+                    0.2696533694331239
+                  ])
+                ]
               ]))
             ]))
           ];
@@ -312,8 +327,18 @@
                 "Graz"
                 "LOWG"
                 true
-                [(mkTuple [0.82030474843733492 0.269362475406694])]
-                [(mkTuple [0.82146830708976193 0.2696533694331239])]
+                [
+                  (mkTuple [
+                    0.82030474843733492
+                    0.269362475406694
+                  ])
+                ]
+                [
+                  (mkTuple [
+                    0.82146830708976193
+                    0.2696533694331239
+                  ])
+                ]
               ]))
             ]))
           ];

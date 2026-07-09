@@ -12,9 +12,11 @@
       type = "Microsoft.Windows/Registry";
       properties = {inherit keyPath valueName valueData;};
     };
-    dword = keyPath: valueName: n: registry keyPath valueName {DWord = n;};
+    dword = keyPath: valueName: n:
+      registry keyPath valueName {DWord = n;};
     # Pointer-accel values are REG_SZ, not DWORD.
-    str = keyPath: valueName: s: registry keyPath valueName {String = s;};
+    str = keyPath: valueName: s:
+      registry keyPath valueName {String = s;};
   in {
     windows.dsc = [
       (dword advanced "HideFileExt" 0) # show known file extensions

@@ -14,21 +14,26 @@
 
     # Virtual-key codes are semicolon-separated: 91/92 = Left/Right Win,
     # 164 = Left Alt, 84 = T, 81 = Q, 9 = Tab, 115 = F4.
-    shortcutRemaps = map (r:
-      r
-      // {
-        exactMatch = false;
-        operationType = 0;
-      }) [
-      {
-        originalKeys = "91;9"; # Win+Tab
-        newRemapKeys = "164;9"; # -> Alt+Tab
-      }
-      {
-        originalKeys = "91;81"; # Win+Q
-        newRemapKeys = "164;115"; # -> Alt+F4
-      }
-    ];
+    shortcutRemaps =
+      map
+      (
+        r:
+          r
+          // {
+            exactMatch = false;
+            operationType = 0;
+          }
+      )
+      [
+        {
+          originalKeys = "91;9"; # Win+Tab
+          newRemapKeys = "164;9"; # -> Alt+Tab
+        }
+        {
+          originalKeys = "91;81"; # Win+Q
+          newRemapKeys = "164;115"; # -> Alt+F4
+        }
+      ];
 
     # operationType 1 = run a program. The WindowsApps alias path launches
     # reliably (bare "wt.exe" does not) and is version independent; PowerToys
@@ -50,18 +55,20 @@
       (runProgram "92;84" terminal) # RWin+T -> Windows Terminal
     ];
 
-    kbmConfig = pkgs.writeText "powertoys-kbm-default.json" (builtins.toJSON {
-      remapKeys.inProcess = [];
-      remapKeysToText.inProcess = [];
-      remapShortcuts = {
-        appSpecific = [];
-        global = shortcutRemaps ++ programRemaps;
-      };
-      remapShortcutsToText = {
-        appSpecific = [];
-        global = [];
-      };
-    });
+    kbmConfig = pkgs.writeText "powertoys-kbm-default.json" (
+      builtins.toJSON {
+        remapKeys.inProcess = [];
+        remapKeysToText.inProcess = [];
+        remapShortcuts = {
+          appSpecific = [];
+          global = shortcutRemaps ++ programRemaps;
+        };
+        remapShortcutsToText = {
+          appSpecific = [];
+          global = [];
+        };
+      }
+    );
   in {
     home.activation.powertoysKeyboardManager = lib.hm.dag.entryAfter ["writeBoundary"] ''
       if [ ! -d "/mnt/c/Users/roman" ]; then

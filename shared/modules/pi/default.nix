@@ -19,9 +19,7 @@
     pi = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.pi;
 
     extensionsDir = ./extensions;
-    extensionAttrs =
-      builtins.listToAttrs
-      (collectFiles ".pi/agent/extensions" extensionsDir);
+    extensionAttrs = builtins.listToAttrs (collectFiles ".pi/agent/extensions" extensionsDir);
 
     upstreamExtensionAttrs = {
       ".pi/agent/extensions/questionnaire.ts".source = "${pi}/lib/node_modules/@earendil-works/pi-coding-agent/examples/extensions/questionnaire.ts";
@@ -32,20 +30,28 @@
     skillDirs = builtins.attrNames (builtins.readDir skillsDir);
 
     collectFiles = prefix: dir:
-      builtins.concatLists (builtins.attrValues (builtins.mapAttrs (name: type:
-        if type == "directory"
-        then collectFiles "${prefix}/${name}" (dir + "/${name}")
-        else [
-          {
-            name = "${prefix}/${name}";
-            value.source = dir + "/${name}";
-          }
-        ])
-      (builtins.readDir dir)));
+      builtins.concatLists (
+        builtins.attrValues (
+          builtins.mapAttrs (
+            name: type:
+              if type == "directory"
+              then collectFiles "${prefix}/${name}" (dir + "/${name}")
+              else [
+                {
+                  name = "${prefix}/${name}";
+                  value.source = dir + "/${name}";
+                }
+              ]
+          ) (builtins.readDir dir)
+        )
+      );
 
-    skillAttrs = builtins.listToAttrs (builtins.concatMap
-      (name: collectFiles ".pi/agent/skills/${name}" (skillsDir + "/${name}"))
-      skillDirs);
+    skillAttrs = builtins.listToAttrs (
+      builtins.concatMap (
+        name: collectFiles ".pi/agent/skills/${name}" (skillsDir + "/${name}")
+      )
+      skillDirs
+    );
 
     settings = {
       compaction.enabled = false;
@@ -64,9 +70,16 @@
     settingsJson = builtins.toJSON settings;
 
     keybindings = {
-      "app.clipboard.pasteImage" = ["ctrl+v" "alt+v"];
+      "app.clipboard.pasteImage" = [
+        "ctrl+v"
+        "alt+v"
+      ];
       "app.message.followUp" = [];
-      "tui.input.newLine" = ["shift+enter" "ctrl+j" "alt+enter"];
+      "tui.input.newLine" = [
+        "shift+enter"
+        "ctrl+j"
+        "alt+enter"
+      ];
     };
     keybindingsJson = builtins.toJSON keybindings;
   in {

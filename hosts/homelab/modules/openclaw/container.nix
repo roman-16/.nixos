@@ -30,7 +30,12 @@
   };
 
   gatewayConfig = import ./gateway-config.nix {
-    inherit secrets gatewayPort lanIp shimPort;
+    inherit
+      secrets
+      gatewayPort
+      lanIp
+      shimPort
+      ;
   };
 
   externalPlugins = ["whatsapp"];
@@ -122,7 +127,12 @@ in {
       backend = "docker";
 
       containers.openclaw = {
-        cmd = ["node" "openclaw.mjs" "gateway" "--allow-unconfigured"];
+        cmd = [
+          "node"
+          "openclaw.mjs"
+          "gateway"
+          "--allow-unconfigured"
+        ];
 
         environment = sharedEnv;
         extraOptions = [

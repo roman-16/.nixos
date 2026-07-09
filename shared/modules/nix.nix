@@ -7,8 +7,8 @@
     documentation.nixos.enable = false;
 
     environment.systemPackages = with pkgs; [
-      alejandra
       nixd
+      nixfmt
     ];
 
     nix = {
@@ -16,7 +16,10 @@
       optimise.automatic = true;
 
       settings = {
-        experimental-features = ["nix-command" "flakes"];
+        experimental-features = [
+          "nix-command"
+          "flakes"
+        ];
         warn-dirty = false;
       };
     };

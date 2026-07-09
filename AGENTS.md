@@ -1,6 +1,6 @@
 # Agent Guidelines
 
-Multi-host NixOS flake with home-manager. Formatter: Alejandra.
+Multi-host NixOS flake with home-manager. Formatter: nixfmt.
 
 ## Layout
 
@@ -32,7 +32,7 @@ SSH into a VM jumps through homelab, e.g. trader:
 
 ## Code style
 
-- Alejandra formatting; trailing newline; blank lines between logical blocks.
+- nixfmt formatting; trailing newline; blank lines between logical blocks.
 - Alphabetical attributes by default; single values before nested sets.
 - Group related attrs under a shared parent (`systemd = { services = ...; timers = ...; }`) instead of repeating dotted prefixes. Same for `xdg.configFile`, `home.file`, `dconf.settings`, `environment`.
 - `lib.mkIf`/`lib.mkForce` for conditionals; prefer home-manager options over manual file management.
@@ -41,7 +41,7 @@ SSH into a VM jumps through homelab, e.g. trader:
 
 ## Commands
 
-- Format: `alejandra .` (alias `nx-fmt`)
+- Format: `nix fmt` (alias `nx-fmt`)
 - Check: `nix flake check` (must pass before committing)
 - Switch local: `nx-update` (`nh os switch --update --hostname $(hostname)`)
 - Deploy homelab: `nx-deploy`

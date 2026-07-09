@@ -15,7 +15,14 @@
     extraModulePackages = [];
     kernelModules = ["kvm-intel"];
     initrd = {
-      availableKernelModules = ["xhci_pci" "ahci" "nvme" "usbhid" "usb_storage" "sd_mod"];
+      availableKernelModules = [
+        "xhci_pci"
+        "ahci"
+        "nvme"
+        "usbhid"
+        "usb_storage"
+        "sd_mod"
+      ];
       kernelModules = [];
     };
   };
@@ -28,7 +35,10 @@
   fileSystems."/boot" = {
     device = "/dev/disk/by-uuid/81A4-18DD";
     fsType = "vfat";
-    options = ["fmask=0022" "dmask=0022"];
+    options = [
+      "fmask=0022"
+      "dmask=0022"
+    ];
   };
 
   swapDevices = [];

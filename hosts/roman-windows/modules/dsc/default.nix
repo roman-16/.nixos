@@ -21,14 +21,19 @@
     wslpath = "/bin/wslpath";
 
     # Every module's windows.dsc contributions merged into one DSC document.
-    document = pkgs.writeText "windows.dsc.json" (builtins.toJSON {
-      "$schema" = "https://aka.ms/dsc/schemas/v3/bundled/config/document.json";
-      resources = config.windows.dsc;
-    });
+    document = pkgs.writeText "windows.dsc.json" (
+      builtins.toJSON {
+        "$schema" = "https://aka.ms/dsc/schemas/v3/bundled/config/document.json";
+        resources = config.windows.dsc;
+      }
+    );
 
     updateScript = pkgs.writeShellApplication {
       name = "dsc-update";
-      runtimeInputs = [pkgs.coreutils pkgs.yq-go];
+      runtimeInputs = [
+        pkgs.coreutils
+        pkgs.yq-go
+      ];
       excludeShellChecks = ["SC2016"];
       text = ''
         if ! command -v dsc.exe >/dev/null 2>&1; then

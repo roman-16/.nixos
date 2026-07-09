@@ -5,14 +5,16 @@
   shimPort,
 }: let
   # Long-lived setup-token (1 year) — no refresh needed
-  credentialsContent = pkgs.writeText "claude-credentials.json" (builtins.toJSON {
-    claudeAiOauth = {
-      accessToken = secrets.claudeOauthToken;
-      expiresAt = 4102444800000; # 2100-01-01, display only
-      scopes = ["user:inference"];
-      subscriptionType = "team";
-    };
-  });
+  credentialsContent = pkgs.writeText "claude-credentials.json" (
+    builtins.toJSON {
+      claudeAiOauth = {
+        accessToken = secrets.claudeOauthToken;
+        expiresAt = 4102444800000; # 2100-01-01, display only
+        scopes = ["user:inference"];
+        subscriptionType = "team";
+      };
+    }
+  );
 in {
   systemd = {
     services.openclaw-claude-shim = {

@@ -53,7 +53,10 @@ builtins.toJSON {
       {
         contextWindow = 200000;
         id = "claude-sonnet-5";
-        input = ["text" "image"];
+        input = [
+          "text"
+          "image"
+        ];
         maxTokens = 128000;
         name = "Claude Sonnet 5";
         reasoning = true;

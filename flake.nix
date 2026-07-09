@@ -43,6 +43,8 @@
   };
 
   outputs = inputs: {
+    formatter.x86_64-linux = inputs.nixpkgs.legacyPackages.x86_64-linux.nixfmt-tree;
+
     nixosConfigurations = {
       roman-nixos = inputs.nixpkgs.lib.nixosSystem {
         specialArgs = {
@@ -92,23 +94,33 @@
       pkgs = inputs.nixpkgs.legacyPackages.x86_64-linux;
       traderBot = ./hosts/homelab/modules/trader/bot;
     in {
-      # Lint + format gate for the trader bot (ruff), mirroring how Alejandra gates Nix.
-      trader-lint =
-        pkgs.runCommand "trader-lint" {nativeBuildInputs = [pkgs.ruff];}
-        ''
-          cp -r ${traderBot} bot
-          chmod -R u+w bot
-          cd bot
-          ruff check .
-          ruff format --check .
-          touch $out
-        '';
+      # Formatting gate for all Nix files (nixfmt).
+      nixfmt-check = pkgs.runCommand "nixfmt-check" {nativeBuildInputs = [pkgs.nixfmt];} ''
+        find ${./.} -name '*.nix' -print0 | xargs -0 nixfmt --check
+        touch $out
+      '';
+
+      # Lint + format gate for the trader bot (ruff).
+      trader-lint = pkgs.runCommand "trader-lint" {nativeBuildInputs = [pkgs.ruff];} ''
+        cp -r ${traderBot} bot
+        chmod -R u+w bot
+        cd bot
+        ruff check .
+        ruff format --check .
+        touch $out
+      '';
 
       # Unit tests, hermetic (temp dirs, no network). Heavy deps stay lazy-imported,
       # so the suite only needs pytest + requests.
       trader-pytest =
-        pkgs.runCommand "trader-pytest" {
-          nativeBuildInputs = [(pkgs.python3.withPackages (ps: [ps.pytest ps.requests]))];
+        pkgs.runCommand "trader-pytest"
+        {
+          nativeBuildInputs = [
+            (pkgs.python3.withPackages (ps: [
+              ps.pytest
+              ps.requests
+            ]))
+          ];
         }
         ''
           cp -r ${traderBot} bot

@@ -169,7 +169,7 @@
           mimetype = "xdg-mime query filetype $@";
 
           nx-deploy = "nh os switch --hostname homelab --target-host roman@192.168.70.70 --elevation-strategy passwordless";
-          nx-fmt = "alejandra --quiet ~/.nixos";
+          nx-fmt = "find ~/.nixos -name '*.nix' -not -path '*/.git/*' -print0 | xargs -0 nixfmt --quiet";
           nx-pull = "git -C ~/.nixos pull";
           nx-push = "git -C ~/.nixos commit --message \"$(date '+%Y-%m-%d %H:%M:%S')\"; git -C ~/.nixos push";
           nx-stage = "git -C ~/.nixos add .";
@@ -209,7 +209,11 @@
         '';
         oh-my-zsh = {
           enable = true;
-          plugins = ["direnv" "git" "git-auto-fetch"];
+          plugins = [
+            "direnv"
+            "git"
+            "git-auto-fetch"
+          ];
         };
       };
     };

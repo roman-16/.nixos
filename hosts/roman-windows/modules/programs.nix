@@ -3,7 +3,8 @@
 
   home = {lib, ...}: {
     windows.dsc =
-      map (id: {
+      map
+      (id: {
         name = id;
         type = "Microsoft.WinGet/Package";
         properties = {
@@ -11,7 +12,8 @@
           source = "winget";
           useLatest = true;
         };
-      }) [
+      })
+      [
         "7zip.7zip"
         "AltSnap.AltSnap"
         "AutoHotkey.AutoHotkey"
