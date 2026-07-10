@@ -1,17 +1,48 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import { type ExtensionAPI, estimateTokens } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 
 interface LoadContextDetails {
-  paths: string[];
-  files: string[];
+  excludedCount: number;
   fileCount: number;
+  files: string[];
+  paths: string[];
   tokens: number;
 }
 
 const BINARY_SCAN_BYTES = 8192;
+
+// Basenames matching these globs are skipped when a directory is expanded:
+// lockfiles, minified bundles, source maps, and other generated files that
+// cost huge token counts (dense hashes/URLs tokenize far below the SDK's
+// 4-chars/token estimate) while rarely adding useful context. An explicitly
+// named file is always honored, and --all bypasses the list entirely.
+const DEFAULT_EXCLUDES = [
+  "*.lock",
+  "*.lockfile",
+  "*.map",
+  "*.min.css",
+  "*.min.js",
+  "*.min.mjs",
+  "*.tsbuildinfo",
+  "bun.lockb",
+  "go.sum",
+  "go.work.sum",
+  "npm-shrinkwrap.json",
+  "package-lock.json",
+  "packages.lock.json",
+  "pnpm-lock.yaml",
+];
+
+const EXCLUDE_RES = DEFAULT_EXCLUDES.map(
+  (g) => new RegExp(`^${g.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`),
+);
+
+function isExcluded(name: string): boolean {
+  return EXCLUDE_RES.some((re) => re.test(name));
+}
 
 // A NUL byte in the first few KB is git's own heuristic for "binary".
 function isBinary(buf: Buffer): boolean {
@@ -99,6 +130,7 @@ export default function (pi: ExtensionAPI) {
       theme.fg("accent", "📎 ") +
       theme.fg("toolTitle", theme.bold("load-context ")) +
       theme.fg("muted", `${details.fileCount} file(s) · ~${details.tokens.toLocaleString()} tokens`) +
+      (details.excludedCount ? theme.fg("muted", ` · ${details.excludedCount} skipped`) : "") +
       theme.fg("dim", ` from ${details.paths.join(", ")}`);
 
     if (expanded && details.files.length > 0) {
@@ -109,16 +141,19 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("load-context", {
-    description: "Recursively load a path's files into context (gitignore-aware, with confirmation)",
+    description:
+      "Recursively load a path's files into context (gitignore-aware, skips lockfiles/minified/generated, with confirmation)",
     handler: async (args, ctx) => {
       if (!ctx.hasUI) {
         ctx.ui.notify("load-context requires interactive mode", "error");
         return;
       }
 
-      const rawPaths = tokenize(args);
+      const argTokens = tokenize(args);
+      const includeAll = argTokens.some((t) => t === "--all" || t === "--no-exclude");
+      const rawPaths = argTokens.filter((t) => t !== "--all" && t !== "--no-exclude");
       if (rawPaths.length === 0) {
-        ctx.ui.notify("Usage: /load-context <path> [path...]", "warning");
+        ctx.ui.notify("Usage: /load-context [--all] <path> [path...]", "warning");
         return;
       }
 
@@ -132,11 +167,17 @@ export default function (pi: ExtensionAPI) {
 
       const seen = new Set<string>();
       const files: string[] = [];
+      let excludedCount = 0;
       for (const p of resolvedPaths) {
-        const candidates = statSync(p).isDirectory() ? await listFiles(pi, p) : [p];
+        const isDir = statSync(p).isDirectory();
+        const candidates = isDir ? await listFiles(pi, p) : [p];
         for (const f of candidates) {
           if (seen.has(f)) continue;
           seen.add(f);
+          if (isDir && !includeAll && isExcluded(basename(f))) {
+            excludedCount++;
+            continue;
+          }
           files.push(f);
         }
       }
@@ -161,18 +202,20 @@ export default function (pi: ExtensionAPI) {
       const body = entries.map((e) => `===== ${e.rel} =====\n${e.content}`).join("\n\n");
       const content = `Loaded ${entries.length} file(s) into context from ${displayPaths.join(", ")} at the user's request:\n\n${body}`;
 
-      const tokens = estimateTokens({
+      const estimated = estimateTokens({
         role: "user",
         content: [{ type: "text", text: content }],
         timestamp: Date.now(),
       } as Parameters<typeof estimateTokens>[0]);
 
       const contextWindow = ctx.getContextUsage()?.contextWindow ?? ctx.model?.contextWindow;
-      const pctStr = contextWindow ? ` (~${Math.round((tokens / contextWindow) * 100)}% of context)` : "";
+      const pctStr = contextWindow ? ` (~${Math.round((estimated / contextWindow) * 100)}% of context)` : "";
+      const skippedNote =
+        excludedCount > 0 ? `\nskipped ${excludedCount} lockfile/minified/generated file(s) (use --all to include)` : "";
 
       const ok = await ctx.ui.confirm(
         "Load into context?",
-        `${entries.length} file(s) · ~${tokens.toLocaleString()} tokens${pctStr}\n${displayPaths.join("\n")}`,
+        `${entries.length} file(s) · ~${estimated.toLocaleString()} tokens${pctStr}\n${displayPaths.join("\n")}${skippedNote}`,
       );
       if (!ok) {
         ctx.ui.notify("Cancelled", "info");
@@ -184,12 +227,19 @@ export default function (pi: ExtensionAPI) {
           customType: "load-context",
           content,
           display: true,
-          details: { paths: displayPaths, files: entries.map((e) => e.rel), fileCount: entries.length, tokens },
+          details: {
+            excludedCount,
+            fileCount: entries.length,
+            files: entries.map((e) => e.rel),
+            paths: displayPaths,
+            tokens: estimated,
+          },
         },
         { deliverAs: "nextTurn" },
       );
 
-      ctx.ui.notify(`Loaded ${entries.length} file(s) (~${tokens.toLocaleString()} tokens)`, "info");
+      const skippedSuffix = excludedCount > 0 ? `, skipped ${excludedCount}` : "";
+      ctx.ui.notify(`Loaded ${entries.length} file(s) (~${estimated.toLocaleString()} tokens${skippedSuffix})`, "info");
     },
   });
 }
