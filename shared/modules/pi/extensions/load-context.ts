@@ -5,7 +5,7 @@ import { type ExtensionAPI, estimateTokens } from "@earendil-works/pi-coding-age
 import { Text } from "@earendil-works/pi-tui";
 
 interface LoadContextDetails {
-  excludedCount: number;
+  excluded: string[];
   fileCount: number;
   files: string[];
   paths: string[];
@@ -15,10 +15,11 @@ interface LoadContextDetails {
 const BINARY_SCAN_BYTES = 8192;
 
 // Basenames matching these globs are skipped when a directory is expanded:
-// lockfiles, minified bundles, source maps, and other generated files that
-// cost huge token counts (dense hashes/URLs tokenize far below the SDK's
-// 4-chars/token estimate) while rarely adding useful context. An explicitly
-// named file is always honored, and --all bypasses the list entirely.
+// lockfiles, minified bundles, source maps, other generated files (which cost
+// huge token counts because dense hashes/URLs tokenize far below the SDK's
+// 4-chars/token estimate), and secrets (which should not land in the LLM
+// transcript). All rarely add useful context. An explicitly named file is
+// always honored, and --all bypasses the list entirely.
 const DEFAULT_EXCLUDES = [
   "*.lock",
   "*.lockfile",
@@ -30,10 +31,12 @@ const DEFAULT_EXCLUDES = [
   "bun.lockb",
   "go.sum",
   "go.work.sum",
+  "lock.dsc.yaml",
   "npm-shrinkwrap.json",
   "package-lock.json",
   "packages.lock.json",
   "pnpm-lock.yaml",
+  "secrets.json",
 ];
 
 const EXCLUDE_RES = DEFAULT_EXCLUDES.map(
@@ -130,11 +133,14 @@ export default function (pi: ExtensionAPI) {
       theme.fg("accent", "📎 ") +
       theme.fg("toolTitle", theme.bold("load-context ")) +
       theme.fg("muted", `${details.fileCount} file(s) · ~${details.tokens.toLocaleString()} tokens`) +
-      (details.excludedCount ? theme.fg("muted", ` · ${details.excludedCount} skipped`) : "") +
+      (details.excluded?.length ? theme.fg("muted", ` · ${details.excluded.length} skipped`) : "") +
       theme.fg("dim", ` from ${details.paths.join(", ")}`);
 
     if (expanded && details.files.length > 0) {
       text += "\n" + details.files.map((f) => theme.fg("dim", `  ${f}`)).join("\n");
+    }
+    if (expanded && details.excluded?.length) {
+      text += "\n" + details.excluded.map((f) => theme.fg("dim", `  - ${f} (skipped)`)).join("\n");
     }
 
     return new Text(text, 0, 0);
@@ -167,7 +173,7 @@ export default function (pi: ExtensionAPI) {
 
       const seen = new Set<string>();
       const files: string[] = [];
-      let excludedCount = 0;
+      const excluded: string[] = [];
       for (const p of resolvedPaths) {
         const isDir = statSync(p).isDirectory();
         const candidates = isDir ? await listFiles(pi, p) : [p];
@@ -175,12 +181,13 @@ export default function (pi: ExtensionAPI) {
           if (seen.has(f)) continue;
           seen.add(f);
           if (isDir && !includeAll && isExcluded(basename(f))) {
-            excludedCount++;
+            excluded.push(relative(ctx.cwd, f) || f);
             continue;
           }
           files.push(f);
         }
       }
+      excluded.sort();
 
       const entries: { rel: string; content: string }[] = [];
       for (const file of files) {
@@ -211,7 +218,9 @@ export default function (pi: ExtensionAPI) {
       const contextWindow = ctx.getContextUsage()?.contextWindow ?? ctx.model?.contextWindow;
       const pctStr = contextWindow ? ` (~${Math.round((estimated / contextWindow) * 100)}% of context)` : "";
       const skippedNote =
-        excludedCount > 0 ? `\nskipped ${excludedCount} lockfile/minified/generated file(s) (use --all to include)` : "";
+        excluded.length > 0
+          ? `\n\nskipped ${excluded.length} lockfile/minified/generated/secret file(s) (use --all to include):\n${excluded.map((f) => `  ${f}`).join("\n")}`
+          : "";
 
       const ok = await ctx.ui.confirm(
         "Load into context?",
@@ -228,7 +237,7 @@ export default function (pi: ExtensionAPI) {
           content,
           display: true,
           details: {
-            excludedCount,
+            excluded,
             fileCount: entries.length,
             files: entries.map((e) => e.rel),
             paths: displayPaths,
@@ -238,7 +247,7 @@ export default function (pi: ExtensionAPI) {
         { deliverAs: "nextTurn" },
       );
 
-      const skippedSuffix = excludedCount > 0 ? `, skipped ${excludedCount}` : "";
+      const skippedSuffix = excluded.length > 0 ? `, skipped ${excluded.length}` : "";
       ctx.ui.notify(`Loaded ${entries.length} file(s) (~${estimated.toLocaleString()} tokens${skippedSuffix})`, "info");
     },
   });
