@@ -17,20 +17,31 @@ const BINARY_SCAN_BYTES = 8192;
 // Basenames matching these globs are skipped when a directory is expanded:
 // lockfiles, minified bundles, source maps, other generated files (which cost
 // huge token counts because dense hashes/URLs tokenize far below the SDK's
-// 4-chars/token estimate), and secrets (which should not land in the LLM
-// transcript). All rarely add useful context. An explicitly named file is
-// always honored, and --all bypasses the list entirely.
+// 4-chars/token estimate), and secrets / private keys / keystores (which must
+// not land in the LLM transcript). All rarely add useful context. An explicitly
+// named file is always honored, and --all bypasses the list entirely.
 const DEFAULT_EXCLUDES = [
+  "*.jks",
+  "*.key",
+  "*.keystore",
   "*.lock",
   "*.lockfile",
   "*.map",
   "*.min.css",
   "*.min.js",
   "*.min.mjs",
+  "*.p12",
+  "*.pem",
+  "*.pfx",
+  "*.ppk",
   "*.tsbuildinfo",
   "bun.lockb",
   "go.sum",
   "go.work.sum",
+  "id_dsa",
+  "id_ecdsa",
+  "id_ed25519",
+  "id_rsa",
   "lock.dsc.yaml",
   "npm-shrinkwrap.json",
   "package-lock.json",
@@ -45,6 +56,17 @@ const EXCLUDE_RES = DEFAULT_EXCLUDES.map(
 
 function isExcluded(name: string): boolean {
   return EXCLUDE_RES.some((re) => re.test(name));
+}
+
+const PRIVATE_KEY_RE = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----/;
+
+// A PEM / OpenSSH / PGP private-key block must never reach the transcript,
+// whatever the file is named. Detected by content (not extension) so an
+// arbitrarily named key (deploy_key, id_ed25519, notes.txt, ...) is caught too.
+// Unlike the name excludes this also blocks an explicitly named file; --all
+// still bypasses it.
+function containsPrivateKey(buf: Buffer): boolean {
+  return PRIVATE_KEY_RE.test(buf.toString("utf8", 0, BINARY_SCAN_BYTES));
 }
 
 // A NUL byte in the first few KB is git's own heuristic for "binary".
@@ -187,18 +209,23 @@ export default function (pi: ExtensionAPI) {
           files.push(f);
         }
       }
-      excluded.sort();
 
       const entries: { rel: string; content: string }[] = [];
       for (const file of files) {
         try {
           const buf = readFileSync(file);
           if (isBinary(buf)) continue;
-          entries.push({ rel: relative(ctx.cwd, file) || file, content: buf.toString("utf8") });
+          const rel = relative(ctx.cwd, file) || file;
+          if (!includeAll && containsPrivateKey(buf)) {
+            excluded.push(rel);
+            continue;
+          }
+          entries.push({ rel, content: buf.toString("utf8") });
         } catch {
           // skip unreadable
         }
       }
+      excluded.sort();
 
       if (entries.length === 0) {
         ctx.ui.notify("No readable (non-binary, non-ignored) files found", "warning");
