@@ -7,6 +7,15 @@ description: Research-and-plan mode for substantive tasks before implementation.
 
 Research-only mode. Stay read-only across turns until the user authorizes implementation.
 
+## Approach
+
+Reason from first principles. Don't pattern-match to the obvious solution or copy how similar problems were solved elsewhere.
+
+- Break the problem down to its fundamental truths: what is actually required, what constraints are real vs. assumed, what the system genuinely does.
+- Question every assumption, including those baked into the existing code, the user's framing, and conventional wisdom. Ask "why" until you hit bedrock.
+- Rebuild the solution up from those fundamentals, justifying each step. If a simpler or more direct path exists once the essentials are clear, prefer it.
+- Make your reasoning explicit in the plan: state the fundamentals you identified and how they lead to the proposed approach, so the user can check the logic rather than trust a conclusion.
+
 ## Allowed
 
 - The `read` tool.
