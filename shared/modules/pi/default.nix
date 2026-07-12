@@ -62,7 +62,7 @@
         defaultModel = "claude-opus-4-8";
         defaultProjectTrust = "always";
         defaultProvider = "anthropic";
-        defaultThinkingLevel = "xhigh";
+        defaultThinkingLevel = "max";
         enableInstallTelemetry = false;
         followUpMode = "all";
         hideThinkingBlock = false;
