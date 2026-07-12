@@ -1,10 +1,15 @@
+import { join } from "node:path";
+
 import { pino } from "pino";
 
 import { createApolloSession, deliver, onAssistantText } from "./agent";
 import { loadConfig } from "./config";
-import { healthHandler } from "./health";
+import { renderPage, renderState } from "./dashboard";
 import { isAllowed } from "./messages";
 import { startWhatsApp, type WhatsApp } from "./whatsapp";
+
+const publicDir = join(import.meta.dir, "../dist/public");
+const htmlHeaders = { "content-type": "text/html; charset=utf-8" };
 
 export async function main(): Promise<void> {
   const config = loadConfig();
@@ -19,8 +24,9 @@ export async function main(): Promise<void> {
 
   let wa: WhatsApp | undefined;
   let target: string | undefined;
+  let linking = false;
+  let lastStatusBody: string | undefined;
 
-  // Each completed assistant text block goes straight back to the last allowed chat.
   onAssistantText(session, (text) => {
     if (!wa || !target) return;
     void wa.send(target, text).catch((error) => logger.error({ error }, "send failed"));
@@ -47,12 +53,46 @@ export async function main(): Promise<void> {
         void wa?.send(message.from, `⚠️ ${error instanceof Error ? error.message : String(error)}`);
       }
     },
-    pairingNumber: config.pairingNumber,
     whatsappDir: config.whatsappDir,
   });
 
-  Bun.serve({ fetch: healthHandler, port: config.port });
-  logger.info({ port: config.port }, "health endpoint listening");
+  const whatsapp = wa;
+
+  Bun.serve({
+    fetch: async (req) => {
+      const { pathname } = new URL(req.url);
+
+      if (pathname === "/health") return new Response("ok");
+      if (pathname === "/app.css") return new Response(Bun.file(join(publicDir, "app.css")));
+      if (pathname === "/htmx.min.js")
+        return new Response(Bun.file(join(publicDir, "htmx.min.js")));
+      if (pathname === "/") {
+        lastStatusBody = undefined;
+        return new Response(renderPage(), { headers: htmlHeaders });
+      }
+
+      if (pathname === "/link" && req.method === "POST") {
+        linking = true;
+        whatsapp.relink();
+        lastStatusBody = await renderState(whatsapp.getState(), linking);
+        return new Response(lastStatusBody, { headers: htmlHeaders });
+      }
+
+      if (pathname === "/status") {
+        const state = whatsapp.getState();
+        if (state.status === "connected") linking = false;
+        const body = await renderState(state, linking);
+        if (body === lastStatusBody) return new Response(null, { status: 204 });
+        lastStatusBody = body;
+        return new Response(body, { headers: htmlHeaders });
+      }
+
+      return new Response("Not found", { status: 404 });
+    },
+    port: config.port,
+  });
+
+  logger.info({ port: config.port }, "dashboard + health listening");
 }
 
 if (import.meta.main) {

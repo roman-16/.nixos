@@ -11,7 +11,6 @@ export interface Config {
   logLevel: string;
   maxMessageChars: number;
   model: string;
-  pairingNumber: string | undefined;
   port: number;
   sessionDir: string;
   systemPromptFile: string;
@@ -34,7 +33,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     logLevel: env.APOLLO_LOG_LEVEL ?? "info",
     maxMessageChars: Number(env.APOLLO_MAX_MESSAGE_CHARS ?? 4000),
     model: env.APOLLO_MODEL ?? "anthropic/claude-sonnet-5",
-    pairingNumber: env.APOLLO_PAIRING_NUMBER ? digits(env.APOLLO_PAIRING_NUMBER) : undefined,
     port: Number(env.PORT ?? 8080),
     sessionDir: join(agentDir, "sessions"),
     systemPromptFile: join(agentDir, "SYSTEM_PROMPT.md"),

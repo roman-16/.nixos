@@ -3,7 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun build ./src/index.ts --target bun --outdir dist",
+    "build": "bun run build:web && bun build ./src/index.ts --target bun --outdir dist",
+    "build:assets": "mkdir -p dist/public && cp node_modules/htmx.org/dist/htmx.min.js dist/public/htmx.min.js",
+    "build:css": "tailwindcss -i ./src/styles.css -o ./dist/public/app.css --minify",
+    "build:web": "bun run build:assets && bun run build:css",
     "dev": "bun --watch run ./src/index.ts",
     "lint": "oxfmt && oxlint",
     "start": "bun run ./src/index.ts",
@@ -12,11 +15,16 @@
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^0.80.6",
     "@whiskeysockets/baileys": "^7.0.0-rc13",
-    "pino": "^9.5.0"
+    "htmx.org": "^2.0.10",
+    "pino": "^10.3.1",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
-    "@types/bun": "latest",
+    "@tailwindcss/cli": "4.3.2",
+    "@types/bun": "^1.3.14",
+    "@types/qrcode": "^1.5.6",
     "oxfmt": "^0.58.0",
-    "oxlint": "^1.73.0"
+    "oxlint": "^1.73.0",
+    "tailwindcss": "4.3.2"
   }
 }

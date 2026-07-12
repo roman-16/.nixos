@@ -1,3 +1,5 @@
+import { rm } from "node:fs/promises";
+
 import type { ImageContent } from "@earendil-works/pi-ai";
 import makeWASocket, {
   Browsers,
@@ -14,6 +16,14 @@ import { numberFromJid, splitMessage } from "./messages";
 type Socket = ReturnType<typeof makeWASocket>;
 type Content = NonNullable<WAMessage["message"]>;
 
+export type WhatsAppStatus = "connected" | "connecting" | "loggedOut" | "qr";
+
+export interface WhatsAppState {
+  qr: string | undefined;
+  status: WhatsAppStatus;
+  user: string | undefined;
+}
+
 export interface InboundMessage {
   from: string;
   images: ImageContent[];
@@ -22,6 +32,8 @@ export interface InboundMessage {
 }
 
 export interface WhatsApp {
+  getState: () => WhatsAppState;
+  relink: () => void;
   send: (to: string, text: string) => Promise<void>;
   stop: () => Promise<void>;
 }
@@ -30,7 +42,6 @@ export interface WhatsAppOptions {
   logger: Logger;
   maxChars: number;
   onMessage: (message: InboundMessage) => Promise<void> | void;
-  pairingNumber: string | undefined;
   whatsappDir: string;
 }
 
@@ -87,72 +98,90 @@ async function toInbound(
   return { from, images, number: numberFromJid(from), text };
 }
 
-async function requestPairing(sock: Socket, number: string, logger: Logger): Promise<void> {
-  try {
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-    const code = await sock.requestPairingCode(number);
-    logger.warn(
-      `WhatsApp pairing code for +${number}: ${code} (enter it in WhatsApp > Linked devices > Link with phone number)`,
-    );
-  } catch (error) {
-    logger.error({ error }, "failed to request pairing code");
-  }
-}
-
-/** Connect to WhatsApp via Baileys, persisting creds and dispatching inbound messages. */
+/** Connect to WhatsApp via Baileys, tracking link state and dispatching inbound messages. */
 export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp> {
-  const { saveCreds, state } = await useMultiFileAuthState(options.whatsappDir);
-  let pairingRequested = false;
+  let auth = await useMultiFileAuthState(options.whatsappDir);
+  let sock: Socket | undefined;
+  let status: WhatsAppStatus = "connecting";
+  let qr: string | undefined;
+  let user: string | undefined;
+  let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function scheduleReconnect(delayMs: number): void {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = undefined;
+      sock = connect();
+    }, delayMs);
+  }
 
   function connect(): Socket {
-    const sock = makeWASocket({
-      auth: state,
+    const socket = makeWASocket({
+      auth: auth.state,
       browser: Browsers.ubuntu("Apollo"),
       logger: options.logger,
     });
 
-    sock.ev.on("creds.update", saveCreds);
+    socket.ev.on("creds.update", auth.saveCreds);
 
-    sock.ev.on("connection.update", (update) => {
-      const { connection, lastDisconnect, qr } = update;
-      if (qr && !sock.authState.creds.registered && options.pairingNumber && !pairingRequested) {
-        pairingRequested = true;
-        void requestPairing(sock, options.pairingNumber, options.logger);
+    socket.ev.on("connection.update", async (update) => {
+      const { connection, lastDisconnect, qr: nextQr } = update;
+      if (nextQr) {
+        qr = nextQr;
+        status = "qr";
       }
-      if (connection === "open") options.logger.info("whatsapp connected");
+      if (connection === "open") {
+        qr = undefined;
+        status = "connected";
+        user = socket.user?.id;
+        options.logger.info("whatsapp connected");
+      }
       if (connection === "close") {
-        const status = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)
+        const code = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)
           ?.output?.statusCode;
-        if (status === DisconnectReason.loggedOut) {
-          options.logger.error("whatsapp logged out; clear the creds dir and re-pair");
+        if (code === DisconnectReason.loggedOut) {
+          options.logger.warn("whatsapp logged out; clearing creds and re-issuing a QR");
+          status = "loggedOut";
+          qr = undefined;
+          user = undefined;
+          await rm(options.whatsappDir, { force: true, recursive: true });
+          auth = await useMultiFileAuthState(options.whatsappDir);
+          scheduleReconnect(1000);
         } else {
-          options.logger.warn({ status }, "whatsapp connection closed, reconnecting");
-          current = connect();
+          status = "connecting";
+          scheduleReconnect(2000);
         }
       }
     });
 
-    sock.ev.on("messages.upsert", async ({ messages, type }) => {
+    socket.ev.on("messages.upsert", async ({ messages, type }) => {
       if (type !== "notify") return;
       for (const message of messages) {
-        const inbound = await toInbound(sock, message, options.logger);
+        const inbound = await toInbound(socket, message, options.logger);
         if (inbound) await options.onMessage(inbound);
       }
     });
 
-    return sock;
+    return socket;
   }
 
-  let current = connect();
+  sock = connect();
 
   return {
+    getState: () => ({ qr, status, user: user ? numberFromJid(user) : undefined }),
+    relink: () => {
+      qr = undefined;
+      status = "connecting";
+      sock?.end(undefined);
+      scheduleReconnect(500);
+    },
     send: async (to, text) => {
       for (const chunk of splitMessage(text, options.maxChars)) {
-        await current.sendMessage(to, { text: chunk });
+        await sock?.sendMessage(to, { text: chunk });
       }
     },
     stop: async () => {
-      current.end(undefined);
+      sock?.end(undefined);
     },
   };
 }

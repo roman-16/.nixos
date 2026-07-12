@@ -31,6 +31,8 @@
               pkgs.coreutils
             ]
           }:$PATH
+          # Tailwind's native engine (oxide) needs libstdc++/libgcc at build time
+          export LD_LIBRARY_PATH=${lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ]}
 
           agentDir="$HOME/.pi/agent"
           mkdir -p "$agentDir/sessions" "$agentDir/skills" "$HOME/whatsapp" "$HOME/app"
@@ -50,6 +52,7 @@
           cp -r ${./src} "$HOME/app/src"
           cd "$HOME/app"
           bun install --frozen-lockfile
+          bun run build:web
         '';
 
         start = pkgs.writeShellScript "apollo-start" ''
@@ -152,7 +155,6 @@
             environment = {
               APOLLO_ALLOW_FROM = secrets.mainNumber;
               APOLLO_MODEL = "anthropic/claude-sonnet-5";
-              APOLLO_PAIRING_NUMBER = secrets.mainNumber;
               APOLLO_THINKING = "medium";
               APOLLO_WORKSPACE = "%t/apollo/workspace";
               HOME = "%S/apollo";

@@ -14,7 +14,6 @@ describe("loadConfig", () => {
     expect(config.model).toBe("anthropic/claude-sonnet-5");
     expect(config.thinkingLevel).toBe("medium");
     expect(config.port).toBe(8080);
-    expect(config.pairingNumber).toBeUndefined();
     expect(config.workspace).toBe("/tmp/apollo/workspace");
     expect(config.whatsappDir).toBe("/tmp/apollo/whatsapp");
     expect(config.systemPromptFile.endsWith("SYSTEM_PROMPT.md")).toBe(true);
@@ -24,12 +23,10 @@ describe("loadConfig", () => {
   it("reads overrides from the environment", () => {
     const config = loadConfig({
       APOLLO_MODEL: "anthropic/claude-opus-4-8",
-      APOLLO_PAIRING_NUMBER: "+43 699 1234 5678",
       APOLLO_THINKING: "high",
       PORT: "9090",
     });
     expect(config.model).toBe("anthropic/claude-opus-4-8");
-    expect(config.pairingNumber).toBe("4369912345678");
     expect(config.thinkingLevel).toBe("high");
     expect(config.port).toBe(9090);
   });

@@ -1,0 +1,97 @@
+import QRCode from "qrcode";
+
+import type { WhatsAppState } from "./whatsapp";
+
+/** Full page shell. The #app region polls /status and swaps its own contents. */
+export function renderPage(): string {
+  return `<!doctype html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Apollo</title>
+    <link rel="stylesheet" href="/app.css" />
+    <script src="/htmx.min.js"></script>
+  </head>
+  <body class="h-full bg-neutral-950 text-neutral-100 antialiased">
+    <main class="flex min-h-full items-center justify-center p-6">
+      <div class="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-900 p-8 shadow-2xl">
+        <div class="mb-6 flex items-center gap-3">
+          <div class="grid h-9 w-9 place-items-center rounded-xl bg-indigo-500/20 font-bold text-indigo-300">A</div>
+          <div>
+            <h1 class="text-lg font-semibold leading-none">Apollo</h1>
+            <p class="mt-1 text-xs text-neutral-400">WhatsApp assistant</p>
+          </div>
+        </div>
+        <div id="app" hx-get="/status" hx-trigger="load, every 2s" hx-swap="innerHTML">
+          ${statusRow("bg-neutral-500", "Loading…")}
+        </div>
+      </div>
+    </main>
+  </body>
+</html>`;
+}
+
+function statusRow(dotClass: string, label: string): string {
+  return `<div class="flex items-center gap-2">
+    <span class="h-2.5 w-2.5 rounded-full ${dotClass}"></span>
+    <span class="text-sm text-neutral-300">${label}</span>
+  </div>`;
+}
+
+const LINK_BUTTON = `<button hx-post="/link" hx-target="#app" hx-swap="innerHTML"
+  class="w-full rounded-xl bg-indigo-500 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-400">
+  Link device
+</button>`;
+
+function linked(user: string | undefined): string {
+  return `<div class="space-y-5">
+    ${statusRow("bg-emerald-400", "Linked")}
+    <div class="rounded-xl border border-neutral-800 bg-neutral-950 p-4">
+      <p class="text-xs text-neutral-500">Connected as</p>
+      <p class="mt-0.5 text-sm font-medium text-neutral-100">${user ? `+${user}` : "WhatsApp"}</p>
+    </div>
+    <p class="text-sm text-neutral-400">Apollo is online and listening on WhatsApp.</p>
+  </div>`;
+}
+
+function idle(status: WhatsAppState["status"]): string {
+  const label =
+    status === "connecting" ? "Connecting…" : status === "loggedOut" ? "Logged out" : "Not linked";
+  const dot = status === "connecting" ? "bg-amber-400 animate-pulse" : "bg-neutral-500";
+  return `<div class="space-y-5">
+    ${statusRow(dot, label)}
+    <p class="text-sm text-neutral-400">Link your WhatsApp account to start chatting with Apollo.</p>
+    ${LINK_BUTTON}
+  </div>`;
+}
+
+async function scanning(state: WhatsAppState): Promise<string> {
+  const code = state.qr
+    ? `<div class="grid place-items-center rounded-xl bg-white p-4">${await QRCode.toString(
+        state.qr,
+        {
+          margin: 1,
+          type: "svg",
+          width: 240,
+        },
+      )}</div>`
+    : `<div class="rounded-xl border border-dashed border-neutral-700 p-10 text-center text-sm text-neutral-500">Generating QR…</div>`;
+
+  return `<div class="space-y-5">
+    ${statusRow("bg-amber-400 animate-pulse", "Waiting for scan…")}
+    ${code}
+    <p class="text-center text-xs text-neutral-400">WhatsApp → Linked devices → Link a device</p>
+    <button hx-post="/link" hx-target="#app" hx-swap="innerHTML"
+      class="w-full rounded-xl border border-neutral-700 py-2 text-xs text-neutral-300 transition hover:bg-neutral-800">
+      Refresh QR
+    </button>
+  </div>`;
+}
+
+/** Render the #app fragment for the current link state. */
+export async function renderState(state: WhatsAppState, linking: boolean): Promise<string> {
+  if (state.status === "connected") return linked(state.user);
+  if (linking) return scanning(state);
+  return idle(state.status);
+}
