@@ -92,7 +92,7 @@
           services = {
             beszel.agent = {
               enable = true;
-              environmentFile = "/var/lib/beszel-agent/env";
+              environment.KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILRp6cIsh8pO+LF+s1qe1Zl5v/sZWlR23GcCow7g6D7L";
               openFirewall = true;
             };
 
@@ -121,10 +121,6 @@
                 networkConfig.DHCP = "yes";
               };
             };
-
-            tmpfiles.rules = [
-              "f /var/lib/beszel-agent/env 0600 root root -"
-            ];
           };
 
           users.users.roman = {
