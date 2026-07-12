@@ -1,0 +1,81 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import {
+  type AgentSession,
+  AuthStorage,
+  createAgentSession,
+  DefaultResourceLoader,
+  ModelRegistry,
+  resolveCliModel,
+  SessionManager,
+  SettingsManager,
+} from "@earendil-works/pi-coding-agent";
+import type { ImageContent } from "@earendil-works/pi-ai";
+
+import type { Config } from "./config.ts";
+
+/** SYSTEM_PROMPT.md fully replaces pi's default system prompt (skills and date/cwd are still appended). */
+function systemPrompt(file: string): string | undefined {
+  return existsSync(file) ? readFileSync(file, "utf8") : undefined;
+}
+
+/** Build the single, persistent, auto-compacting pi session Apollo talks to. */
+export async function createApolloSession(config: Config): Promise<AgentSession> {
+  const authStorage = AuthStorage.create(join(config.agentDir, "auth.json"));
+  const modelRegistry = ModelRegistry.create(authStorage, join(config.agentDir, "models.json"));
+
+  const resolved = resolveCliModel({
+    cliModel: config.model,
+    cliThinking: config.thinkingLevel,
+    modelRegistry,
+  });
+  if (resolved.error) throw new Error(`model "${config.model}": ${resolved.error}`);
+  if (resolved.warning) console.warn(resolved.warning);
+
+  const settingsManager = SettingsManager.create(config.workspace, config.agentDir);
+  settingsManager.applyOverrides({ compaction: { enabled: true } });
+
+  const resourceLoader = new DefaultResourceLoader({
+    agentDir: config.agentDir,
+    cwd: config.workspace,
+    settingsManager,
+    systemPromptOverride: () => systemPrompt(config.systemPromptFile),
+  });
+  await resourceLoader.reload();
+
+  const { session } = await createAgentSession({
+    agentDir: config.agentDir,
+    authStorage,
+    cwd: config.workspace,
+    model: resolved.model,
+    modelRegistry,
+    resourceLoader,
+    sessionManager: SessionManager.continueRecent(config.workspace, config.sessionDir),
+    settingsManager,
+    thinkingLevel: resolved.thinkingLevel ?? config.thinkingLevel,
+  });
+  return session;
+}
+
+/** Fire `onText` the instant a normal assistant text block completes (skips thinking/tool output). */
+export function onAssistantText(session: AgentSession, onText: (text: string) => void): () => void {
+  return session.subscribe((event) => {
+    if (event.type === "message_update" && event.assistantMessageEvent.type === "text_end") {
+      const content = event.assistantMessageEvent.content.trim();
+      if (content) onText(content);
+    }
+  });
+}
+
+/** Send a user message into the session, queueing as a follow-up if a run is already streaming. */
+export async function deliver(
+  session: AgentSession,
+  text: string,
+  images: ImageContent[],
+): Promise<void> {
+  const base = images.length > 0 ? { images } : {};
+  await (session.isStreaming
+    ? session.prompt(text, { ...base, streamingBehavior: "followUp" })
+    : session.prompt(text, base));
+}

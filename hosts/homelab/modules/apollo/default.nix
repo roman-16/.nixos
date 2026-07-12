@@ -4,9 +4,58 @@
     autostart = true;
 
     config =
-      { pkgs, ... }:
+      { lib, pkgs, ... }:
       let
         port = 8080;
+
+        secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
+
+        authJson = pkgs.writeText "apollo-auth.json" (
+          builtins.toJSON {
+            anthropic = {
+              access = secrets.anthropicOauth;
+              # Long-lived setup token with no refresh token; far-future expiry so pi
+              # uses it directly and never attempts a refresh.
+              expires = 4102444800000;
+              refresh = "";
+              type = "oauth";
+            };
+          }
+        );
+
+        setup = pkgs.writeShellScript "apollo-setup" ''
+          set -euo pipefail
+          export PATH=${
+            lib.makeBinPath [
+              pkgs.bun
+              pkgs.coreutils
+            ]
+          }:$PATH
+
+          agentDir="$HOME/.pi/agent"
+          mkdir -p "$agentDir/sessions" "$agentDir/skills" "$HOME/whatsapp" "$HOME/app"
+
+          # SYSTEM_PROMPT.md is the agent's system prompt
+          ln -sfn ${./agent/SYSTEM_PROMPT.md} "$agentDir/SYSTEM_PROMPT.md"
+
+          # Seed OAuth credentials once; pi refreshes and persists them afterwards
+          if [ ! -s "$agentDir/auth.json" ]; then
+            install -m600 ${authJson} "$agentDir/auth.json"
+          fi
+
+          # Writable app tree + dependencies
+          install -m644 ${./package.json} "$HOME/app/package.json"
+          install -m644 ${./bun.lock} "$HOME/app/bun.lock"
+          rm -rf "$HOME/app/src"
+          cp -r ${./src} "$HOME/app/src"
+          cd "$HOME/app"
+          bun install --frozen-lockfile
+        '';
+
+        start = pkgs.writeShellScript "apollo-start" ''
+          cd "$HOME/app"
+          exec ${pkgs.bun}/bin/bun run src/index.ts
+        '';
       in
       {
         microvm = {
@@ -39,6 +88,14 @@
             }
           ];
         };
+
+        environment.systemPackages = with pkgs; [
+          bun
+          curl
+          git
+          jq
+          ripgrep
+        ];
 
         networking = {
           firewall.allowedTCPPorts = [ port ];
@@ -86,21 +143,41 @@
           };
 
           services.apollo = {
-            description = "Apollo hello-world (Bun)";
+            description = "Apollo WhatsApp assistant (pi SDK + Baileys)";
 
             after = [ "network-online.target" ];
             requires = [ "network-online.target" ];
             wantedBy = [ "multi-user.target" ];
 
+            environment = {
+              APOLLO_ALLOW_FROM = secrets.mainNumber;
+              APOLLO_MODEL = "anthropic/claude-sonnet-5";
+              APOLLO_PAIRING_NUMBER = secrets.mainNumber;
+              APOLLO_THINKING = "medium";
+              APOLLO_WORKSPACE = "%t/apollo/workspace";
+              HOME = "%S/apollo";
+              PORT = toString port;
+              SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
+            };
+
+            path = with pkgs; [
+              bun
+              coreutils
+              curl
+              git
+              gnugrep
+              gnused
+              jq
+              ripgrep
+            ];
+
             serviceConfig = {
               DynamicUser = true;
-              Environment = [
-                "HOME=%S/apollo"
-                "PORT=${toString port}"
-              ];
-              ExecStart = "${pkgs.bun}/bin/bun ${./src}/index.ts";
+              ExecStart = start;
+              ExecStartPre = setup;
               Restart = "on-failure";
               RestartSec = "10s";
+              RuntimeDirectory = "apollo/workspace";
               StateDirectory = "apollo";
               WorkingDirectory = "%S/apollo";
             };
