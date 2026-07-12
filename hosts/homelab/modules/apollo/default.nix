@@ -163,7 +163,7 @@ in
             environment = {
               APOLLO_ALLOW_FROM = secrets.mainNumber;
               APOLLO_MODEL = "anthropic/claude-sonnet-5";
-              APOLLO_THINKING = "medium";
+              APOLLO_THINKING = "high";
               APOLLO_WORKSPACE = "%t/apollo/workspace";
               HOME = "%S/apollo";
               PORT = toString port;
