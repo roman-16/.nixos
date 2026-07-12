@@ -1,5 +1,6 @@
 { pkgs, ... }:
 let
+  apolloIp = "192.168.70.73";
   hassIp = "192.168.70.71";
   homelabIp = "192.168.70.70";
   openclawIp = "192.168.70.72";
@@ -122,6 +123,16 @@ in
       settings = {
         endpoints = [
           {
+            name = "Apollo";
+            group = "Infrastructure";
+            url = "http://${apolloIp}:8080/health";
+            interval = "5m";
+            conditions = [
+              "[STATUS] == 200"
+              "[RESPONSE_TIME] < 5000"
+            ];
+          }
+          {
             name = "Cloudflared Tunnel";
             group = "Infrastructure";
             url = "https://claw.halerc.xyz";
@@ -199,6 +210,15 @@ in
       services = [
         {
           "Services" = [
+            {
+              "Apollo" = {
+                description = "Personal pi-SDK agent";
+                href = "https://apollo.halerc.xyz";
+                icon = "mdi-robot";
+                siteMonitor = "http://${apolloIp}:8080/health";
+                statusStyle = "dot";
+              };
+            }
             {
               "Home Assistant" = {
                 description = "Home automation";
