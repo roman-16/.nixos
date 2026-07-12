@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { pino } from "pino";
@@ -12,6 +14,24 @@ import { startWhatsApp, type WhatsApp } from "./whatsapp";
 
 const publicDir = join(import.meta.dir, "../dist/public");
 const htmlHeaders = { "content-type": "text/html; charset=utf-8" };
+
+/** Content hash of the built assets, used to cache-bust the CSS/JS/favicon URLs. */
+const assetsVersion = ((): string => {
+  try {
+    const hash = createHash("sha256");
+    for (const name of ["app.css", "htmx.min.js", "favicon.svg"])
+      hash.update(readFileSync(join(publicDir, name)));
+    return hash.digest("hex").slice(0, 12);
+  } catch {
+    return "dev";
+  }
+})();
+
+function asset(name: string, type: string): Response {
+  return new Response(Bun.file(join(publicDir, name)), {
+    headers: { "cache-control": "public, max-age=31536000, immutable", "content-type": type },
+  });
+}
 
 export async function main(): Promise<void> {
   const config = loadConfig();
@@ -103,14 +123,12 @@ export async function main(): Promise<void> {
       const { pathname } = new URL(req.url);
 
       if (pathname === "/health") return new Response("ok");
-      if (pathname === "/app.css") return new Response(Bun.file(join(publicDir, "app.css")));
-      if (pathname === "/htmx.min.js")
-        return new Response(Bun.file(join(publicDir, "htmx.min.js")));
-      if (pathname === "/favicon.svg")
-        return new Response(Bun.file(join(publicDir, "favicon.svg")));
+      if (pathname === "/app.css") return asset("app.css", "text/css");
+      if (pathname === "/htmx.min.js") return asset("htmx.min.js", "text/javascript");
+      if (pathname === "/favicon.svg") return asset("favicon.svg", "image/svg+xml");
       if (pathname === "/") {
         lastStatusBody = undefined;
-        return new Response(renderPage(), { headers: htmlHeaders });
+        return new Response(renderPage(assetsVersion), { headers: htmlHeaders });
       }
 
       if (pathname === "/link" && req.method === "POST") {

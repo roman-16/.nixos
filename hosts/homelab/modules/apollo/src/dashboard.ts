@@ -4,16 +4,16 @@ import { renderUsage, type UsageData } from "./usage";
 import type { WhatsAppState } from "./whatsapp";
 
 /** Full page shell. The #app region polls /status and swaps its own contents. */
-export function renderPage(): string {
+export function renderPage(version: string): string {
   return `<!doctype html>
 <html lang="en" class="h-full">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Apollo</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="stylesheet" href="/app.css" />
-    <script src="/htmx.min.js"></script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=${version}" />
+    <link rel="stylesheet" href="/app.css?v=${version}" />
+    <script src="/htmx.min.js?v=${version}"></script>
   </head>
   <body class="h-full bg-neutral-950 text-neutral-100 antialiased">
     <main class="flex min-h-full items-center justify-center p-6">
@@ -113,13 +113,13 @@ export function renderAnthropic(data: UsageData | null, authUrl: string, error?:
   }
   return `<div class="space-y-4">
     ${statusRow("bg-neutral-500", "Not connected to Anthropic")}
-    <p class="text-sm text-neutral-400">Authorize with your Claude account, then paste the code it gives you.</p>
+    <p class="text-sm text-neutral-400">Authorize with your Claude account. You'll be redirected to a localhost page that won't load - that's expected: copy that URL (or the code in it) and paste it below.</p>
     <a href="${authUrl}" target="_blank" rel="noreferrer"
       class="block w-full rounded-xl bg-indigo-500 py-2.5 text-center text-sm font-medium text-white transition hover:bg-indigo-400">
       Authorize with Anthropic
     </a>
     <form hx-post="/connect" hx-target="#anthropic" hx-swap="innerHTML" class="flex gap-2">
-      <input name="code" placeholder="Paste code (CODE#STATE)" autocomplete="off" spellcheck="false"
+      <input name="code" placeholder="Paste code or redirect URL" autocomplete="off" spellcheck="false"
         class="min-w-0 flex-1 rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600" />
       <button class="rounded-xl border border-neutral-700 px-4 py-2 text-sm text-neutral-200 transition hover:bg-neutral-800">Connect</button>
     </form>

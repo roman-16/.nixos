@@ -11,12 +11,12 @@ const state = (over: Partial<WhatsAppState>): WhatsAppState => ({
 });
 
 describe("renderPage", () => {
-  it("includes the polling app region and assets", () => {
-    const html = renderPage();
+  it("includes the polling app region and version-busted assets", () => {
+    const html = renderPage("abc123");
     expect(html).toContain(`id="app"`);
     expect(html).toContain(`hx-get="/status"`);
-    expect(html).toContain("/app.css");
-    expect(html).toContain("/htmx.min.js");
+    expect(html).toContain("/app.css?v=abc123");
+    expect(html).toContain("/htmx.min.js?v=abc123");
   });
 });
 
