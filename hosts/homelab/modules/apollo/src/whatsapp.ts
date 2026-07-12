@@ -5,6 +5,8 @@ import makeWASocket, {
   Browsers,
   DisconnectReason,
   downloadMediaMessage,
+  isJidGroup,
+  isLidUser,
   jidNormalizedUser,
   useMultiFileAuthState,
   type WAMessage,
@@ -63,9 +65,15 @@ async function toInbound(
 ): Promise<InboundMessage | undefined> {
   const remote = message.key.remoteJid;
   if (!remote || message.key.fromMe || !message.message) return undefined;
+  // Individual chats only (skip groups, status broadcast, newsletters).
+  if (isJidGroup(remote) || remote.endsWith("@broadcast") || remote.endsWith("@newsletter")) {
+    return undefined;
+  }
 
-  const from = jidNormalizedUser(remote);
-  if (!from.endsWith("@s.whatsapp.net")) return undefined; // individual chats only
+  // remoteJid may be a LID (@lid) or a phone JID (@s.whatsapp.net); the phone
+  // number used for the allowlist lives on remoteJidAlt when addressed by LID.
+  const phoneJid = isLidUser(remote) ? (message.key.remoteJidAlt ?? remote) : remote;
+  const from = jidNormalizedUser(phoneJid);
 
   const content = unwrap(message.message);
   const image = content.imageMessage;
@@ -157,6 +165,14 @@ export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp>
     socket.ev.on("messages.upsert", async ({ messages, type }) => {
       if (type !== "notify") return;
       for (const message of messages) {
+        options.logger.info(
+          {
+            fromMe: message.key.fromMe,
+            remoteJid: message.key.remoteJid,
+            remoteJidAlt: message.key.remoteJidAlt,
+          },
+          "inbound message",
+        );
         const inbound = await toInbound(socket, message, options.logger);
         if (inbound) await options.onMessage(inbound);
       }
