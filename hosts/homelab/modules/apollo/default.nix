@@ -53,19 +53,6 @@ in
 
         secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
 
-        authJson = pkgs.writeText "apollo-auth.json" (
-          builtins.toJSON {
-            anthropic = {
-              access = secrets.anthropicOauth;
-              # Long-lived setup token with no refresh token; far-future expiry so pi
-              # uses it directly and never attempts a refresh.
-              expires = 4102444800000;
-              refresh = "";
-              type = "oauth";
-            };
-          }
-        );
-
         setup = pkgs.writeShellScript "apollo-setup" ''
           set -euo pipefail
           export PATH=${lib.makeBinPath [ pkgs.coreutils ]}:$PATH
@@ -75,11 +62,6 @@ in
 
           # SYSTEM_PROMPT.md is the agent's system prompt
           ln -sfn ${./agent/SYSTEM_PROMPT.md} "$agentDir/SYSTEM_PROMPT.md"
-
-          # Seed OAuth credentials once; pi refreshes and persists them afterwards
-          if [ ! -s "$agentDir/auth.json" ]; then
-            install -m600 ${authJson} "$agentDir/auth.json"
-          fi
         '';
       in
       {

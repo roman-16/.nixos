@@ -20,8 +20,14 @@ function systemPrompt(file: string): string | undefined {
   return existsSync(file) ? readFileSync(file, "utf8") : undefined;
 }
 
+export interface ApolloSession {
+  /** Credential store for reading/setting the Anthropic OAuth token. */
+  authStorage: AuthStorage;
+  session: AgentSession;
+}
+
 /** Build the single, persistent, auto-compacting pi session Apollo talks to. */
-export async function createApolloSession(config: Config): Promise<AgentSession> {
+export async function createApolloSession(config: Config): Promise<ApolloSession> {
   const authStorage = AuthStorage.create(join(config.agentDir, "auth.json"));
   const modelRegistry = ModelRegistry.create(authStorage, join(config.agentDir, "models.json"));
 
@@ -55,7 +61,7 @@ export async function createApolloSession(config: Config): Promise<AgentSession>
     settingsManager,
     thinkingLevel: resolved.thinkingLevel ?? config.thinkingLevel,
   });
-  return session;
+  return { authStorage, session };
 }
 
 /** Fire `onText` the instant a normal assistant text block completes (skips thinking/tool output). */

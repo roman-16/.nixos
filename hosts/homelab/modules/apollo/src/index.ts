@@ -4,8 +4,10 @@ import { pino } from "pino";
 
 import { createApolloSession, deliver, onAssistantText } from "./agent";
 import { loadConfig } from "./config";
-import { renderPage, renderState } from "./dashboard";
+import { renderAnthropic, renderPage, renderState } from "./dashboard";
 import { isAllowed } from "./messages";
+import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
+import { fetchUsage } from "./usage";
 import { startWhatsApp, type WhatsApp } from "./whatsapp";
 
 const publicDir = join(import.meta.dir, "../dist/public");
@@ -19,8 +21,12 @@ export async function main(): Promise<void> {
     logger.warn("APOLLO_ALLOW_FROM is empty; every inbound message will be ignored");
   }
 
-  const session = await createApolloSession(config);
+  const { authStorage, session } = await createApolloSession(config);
   logger.info({ model: config.model, workspace: config.workspace }, "pi session ready");
+
+  // Anthropic OAuth login state for the dashboard: one verifier held until it's used.
+  let pendingVerifier: string | undefined;
+  const loginUrl = () => authorizeUrl((pendingVerifier ??= createVerifier()));
 
   let wa: WhatsApp | undefined;
   let target: string | undefined;
@@ -121,6 +127,36 @@ export async function main(): Promise<void> {
         if (body === lastStatusBody) return new Response(null, { status: 204 });
         lastStatusBody = body;
         return new Response(body, { headers: htmlHeaders });
+      }
+
+      if (pathname === "/anthropic") {
+        const token = await authStorage.getApiKey("anthropic");
+        const data = token ? await fetchUsage(token) : null;
+        return new Response(renderAnthropic(data, data ? "" : loginUrl()), {
+          headers: htmlHeaders,
+        });
+      }
+
+      if (pathname === "/connect" && req.method === "POST") {
+        const code = parseCode(new URLSearchParams(await req.text()).get("code") ?? "");
+        const cred =
+          code && pendingVerifier ? await exchangeCode(code, pendingVerifier) : undefined;
+        if (cred) {
+          authStorage.set("anthropic", { type: "oauth", ...cred });
+          pendingVerifier = undefined;
+          logger.info("anthropic connected via dashboard");
+          return new Response(renderAnthropic(await fetchUsage(cred.access), ""), {
+            headers: htmlHeaders,
+          });
+        }
+        return new Response(
+          renderAnthropic(
+            null,
+            loginUrl(),
+            "That code didn't work. Authorize again and paste the new code.",
+          ),
+          { headers: htmlHeaders },
+        );
       }
 
       return new Response("Not found", { status: 404 });

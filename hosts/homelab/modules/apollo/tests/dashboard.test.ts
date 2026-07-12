@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { renderPage, renderState } from "../src/dashboard";
+import { renderAnthropic, renderPage, renderState } from "../src/dashboard";
 import type { WhatsAppState } from "../src/whatsapp";
 
 const state = (over: Partial<WhatsAppState>): WhatsAppState => ({
@@ -44,5 +44,26 @@ describe("renderState", () => {
     const html = await renderState(state({ status: "connecting" }), true);
     expect(html).toContain("Generating QR");
     expect(html).not.toContain("<svg");
+  });
+});
+
+describe("renderAnthropic", () => {
+  it("shows connected + usage bars when data is present", () => {
+    const html = renderAnthropic({ five_hour: { resets_at: null, utilization: 30 } }, "");
+    expect(html).toContain("Connected to Anthropic");
+    expect(html).toContain("Session (5h)");
+    expect(html).not.toContain('hx-post="/connect"');
+  });
+
+  it("shows a login form with the auth URL when not connected", () => {
+    const html = renderAnthropic(null, "https://claude.ai/oauth/authorize?x=1");
+    expect(html).toContain("Not connected to Anthropic");
+    expect(html).toContain("https://claude.ai/oauth/authorize?x=1");
+    expect(html).toContain('hx-post="/connect"');
+    expect(html).toContain('name="code"');
+  });
+
+  it("surfaces an error message when provided", () => {
+    expect(renderAnthropic(null, "url", "nope")).toContain("nope");
   });
 });

@@ -1,5 +1,6 @@
 import QRCode from "qrcode";
 
+import { renderUsage, type UsageData } from "./usage";
 import type { WhatsAppState } from "./whatsapp";
 
 /** Full page shell. The #app region polls /status and swaps its own contents. */
@@ -26,6 +27,11 @@ export function renderPage(): string {
         </div>
         <div id="app" hx-get="/status" hx-trigger="load, every 2s" hx-swap="innerHTML">
           ${statusRow("bg-neutral-500", "Loading…")}
+        </div>
+        <div class="mt-6 border-t border-neutral-800 pt-5">
+          <div id="anthropic" hx-get="/anthropic" hx-trigger="load, every 60s" hx-swap="innerHTML">
+            <p class="text-xs text-neutral-500">Loading…</p>
+          </div>
         </div>
       </div>
     </main>
@@ -95,4 +101,28 @@ export async function renderState(state: WhatsAppState, linking: boolean): Promi
   if (state.status === "connected") return linked(state.user);
   if (linking) return scanning(state);
   return idle(state.status);
+}
+
+/** Render the #anthropic fragment: usage bars when connected, else a login form. */
+export function renderAnthropic(data: UsageData | null, authUrl: string, error?: string): string {
+  if (data) {
+    return `<div class="space-y-3">
+      ${statusRow("bg-emerald-400", "Connected to Anthropic")}
+      ${renderUsage(data)}
+    </div>`;
+  }
+  return `<div class="space-y-4">
+    ${statusRow("bg-neutral-500", "Not connected to Anthropic")}
+    <p class="text-sm text-neutral-400">Authorize with your Claude account, then paste the code it gives you.</p>
+    <a href="${authUrl}" target="_blank" rel="noreferrer"
+      class="block w-full rounded-xl bg-indigo-500 py-2.5 text-center text-sm font-medium text-white transition hover:bg-indigo-400">
+      Authorize with Anthropic
+    </a>
+    <form hx-post="/connect" hx-target="#anthropic" hx-swap="innerHTML" class="flex gap-2">
+      <input name="code" placeholder="Paste code (CODE#STATE)" autocomplete="off" spellcheck="false"
+        class="min-w-0 flex-1 rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600" />
+      <button class="rounded-xl border border-neutral-700 px-4 py-2 text-sm text-neutral-200 transition hover:bg-neutral-800">Connect</button>
+    </form>
+    ${error ? `<p class="text-xs text-red-400">${error}</p>` : ""}
+  </div>`;
 }
