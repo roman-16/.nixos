@@ -62,6 +62,10 @@ in
 
           # SYSTEM_PROMPT.md is the agent's system prompt
           ln -sfn ${./agent/SYSTEM_PROMPT.md} "$agentDir/SYSTEM_PROMPT.md"
+
+          # Skills pi discovers from $agentDir/skills (read-only; shared with the host pi setup)
+          ln -sfn ${../../../../shared/modules/pi/skills/context7} "$agentDir/skills/context7"
+          ln -sfn ${../../../../shared/modules/pi/skills/exa} "$agentDir/skills/exa"
         '';
       in
       {
