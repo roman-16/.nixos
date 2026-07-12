@@ -48,8 +48,9 @@
           # Writable app tree + dependencies
           install -m644 ${./package.json} "$HOME/app/package.json"
           install -m644 ${./bun.lock} "$HOME/app/bun.lock"
+          chmod -R u+w "$HOME/app/src" 2>/dev/null || true
           rm -rf "$HOME/app/src"
-          cp -r ${./src} "$HOME/app/src"
+          cp -r --no-preserve=mode ${./src} "$HOME/app/src"
           cd "$HOME/app"
           bun install --frozen-lockfile
           bun run build:web

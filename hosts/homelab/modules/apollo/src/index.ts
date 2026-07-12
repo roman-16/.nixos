@@ -66,6 +66,8 @@ export async function main(): Promise<void> {
       if (pathname === "/app.css") return new Response(Bun.file(join(publicDir, "app.css")));
       if (pathname === "/htmx.min.js")
         return new Response(Bun.file(join(publicDir, "htmx.min.js")));
+      if (pathname === "/favicon.svg")
+        return new Response(Bun.file(join(publicDir, "favicon.svg")));
       if (pathname === "/") {
         lastStatusBody = undefined;
         return new Response(renderPage(), { headers: htmlHeaders });
