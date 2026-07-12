@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
 import { pino } from "pino";
 
 import { createApolloSession, deliver, onAssistantText } from "./agent";
+import { parseTranscript, renderChat } from "./chat";
 import { loadConfig } from "./config";
 import { renderAnthropic, renderPage, renderState } from "./dashboard";
 import { isAllowed } from "./messages";
@@ -52,6 +54,22 @@ export async function main(): Promise<void> {
   let target: string | undefined;
   let linking = false;
   let lastStatusBody: string | undefined;
+  let lastChatBody: string | undefined;
+  let chatCache: { body: string; mtimeMs: number } | undefined;
+
+  async function renderChatBody(): Promise<string> {
+    const file = session.sessionFile;
+    if (!file) return renderChat([]);
+    try {
+      const { mtimeMs } = await stat(file);
+      if (!chatCache || chatCache.mtimeMs !== mtimeMs) {
+        chatCache = { body: renderChat(parseTranscript(await readFile(file, "utf8"))), mtimeMs };
+      }
+      return chatCache.body;
+    } catch {
+      return renderChat([]);
+    }
+  }
 
   onAssistantText(session, (text) => {
     if (!wa || !target) return;
@@ -128,7 +146,15 @@ export async function main(): Promise<void> {
       if (pathname === "/favicon.svg") return asset("favicon.svg", "image/svg+xml");
       if (pathname === "/") {
         lastStatusBody = undefined;
+        lastChatBody = undefined;
         return new Response(renderPage(assetsVersion), { headers: htmlHeaders });
+      }
+
+      if (pathname === "/chat") {
+        const body = await renderChatBody();
+        if (body === lastChatBody) return new Response(null, { status: 204 });
+        lastChatBody = body;
+        return new Response(body, { headers: htmlHeaders });
       }
 
       if (pathname === "/link" && req.method === "POST") {

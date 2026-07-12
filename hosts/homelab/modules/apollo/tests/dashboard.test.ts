@@ -15,6 +15,8 @@ describe("renderPage", () => {
     const html = renderPage("abc123");
     expect(html).toContain(`id="app"`);
     expect(html).toContain(`hx-get="/status"`);
+    expect(html).toContain(`id="chat"`);
+    expect(html).toContain(`hx-get="/chat"`);
     expect(html).toContain("/app.css?v=abc123");
     expect(html).toContain("/htmx.min.js?v=abc123");
   });

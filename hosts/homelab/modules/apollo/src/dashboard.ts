@@ -16,8 +16,8 @@ export function renderPage(version: string): string {
     <script src="/htmx.min.js?v=${version}"></script>
   </head>
   <body class="h-full bg-neutral-950 text-neutral-100 antialiased">
-    <main class="flex min-h-full items-center justify-center p-6">
-      <div class="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-900 p-8 shadow-2xl">
+    <main class="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-6 lg:flex-row">
+      <aside class="w-full shrink-0 rounded-2xl border border-neutral-800 bg-neutral-900 p-8 shadow-2xl lg:w-96">
         <div class="mb-6 flex items-center gap-3">
           <div class="grid h-9 w-9 place-items-center rounded-xl bg-indigo-500/20 font-bold text-indigo-300">A</div>
           <div>
@@ -33,7 +33,15 @@ export function renderPage(version: string): string {
             <p class="text-xs text-neutral-500">Loading…</p>
           </div>
         </div>
-      </div>
+      </aside>
+      <section class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900 shadow-2xl">
+        <header class="border-b border-neutral-800 px-5 py-3 text-sm font-semibold text-neutral-200">Chat log</header>
+        <div id="chat" class="min-h-0 flex-1 space-y-3 overflow-y-auto p-4"
+          hx-get="/chat" hx-trigger="load, every 2s" hx-swap="innerHTML"
+          hx-on::after-settle="this.scrollTop = this.scrollHeight">
+          <p class="text-xs text-neutral-500">Loading…</p>
+        </div>
+      </section>
     </main>
   </body>
 </html>`;
