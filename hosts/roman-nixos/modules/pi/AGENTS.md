@@ -1,0 +1,3 @@
+## Environment
+
+- Hostname: **roman-nixos**.
