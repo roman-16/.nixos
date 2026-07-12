@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { isAllowed, numberFromJid, splitMessage } from "../src/messages.ts";
+import { isAllowed, numberFromJid, splitMessage } from "../src/messages";
 
 describe("numberFromJid", () => {
   it("strips domain and device suffix", () => {

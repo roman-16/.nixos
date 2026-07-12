@@ -1,10 +1,10 @@
 import { pino } from "pino";
 
-import { createApolloSession, deliver, onAssistantText } from "./agent.ts";
-import { loadConfig } from "./config.ts";
-import { healthHandler } from "./health.ts";
-import { isAllowed } from "./messages.ts";
-import { startWhatsApp, type WhatsApp } from "./whatsapp.ts";
+import { createApolloSession, deliver, onAssistantText } from "./agent";
+import { loadConfig } from "./config";
+import { healthHandler } from "./health";
+import { isAllowed } from "./messages";
+import { startWhatsApp, type WhatsApp } from "./whatsapp";
 
 export async function main(): Promise<void> {
   const config = loadConfig();

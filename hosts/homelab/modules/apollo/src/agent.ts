@@ -13,7 +13,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { ImageContent } from "@earendil-works/pi-ai";
 
-import type { Config } from "./config.ts";
+import type { Config } from "./config";
 
 /** SYSTEM_PROMPT.md fully replaces pi's default system prompt (skills and date/cwd are still appended). */
 function systemPrompt(file: string): string | undefined {

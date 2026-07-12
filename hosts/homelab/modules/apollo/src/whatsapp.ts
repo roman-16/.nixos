@@ -9,7 +9,7 @@ import makeWASocket, {
 } from "@whiskeysockets/baileys";
 import type { Logger } from "pino";
 
-import { numberFromJid, splitMessage } from "./messages.ts";
+import { numberFromJid, splitMessage } from "./messages";
 
 type Socket = ReturnType<typeof makeWASocket>;
 type Content = NonNullable<WAMessage["message"]>;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { healthHandler } from "../src/health.ts";
+import { healthHandler } from "../src/health";
 
 describe("healthHandler", () => {
   it("returns ok on /health", async () => {

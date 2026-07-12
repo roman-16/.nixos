@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { loadConfig } from "../src/config.ts";
+import { loadConfig } from "../src/config";
 
 describe("loadConfig", () => {
   it("parses the allowlist into bare digits and drops empties", () => {
