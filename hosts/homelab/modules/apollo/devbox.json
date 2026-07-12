@@ -4,9 +4,6 @@
     "bun": "latest"
   },
   "shell": {
-    "init_hook": [
-      "if [ -f .env ]; then set -a; . ./.env; set +a; fi",
-      "bun install"
-    ]
+    "init_hook": ["if [ -f .env ]; then set -a; . ./.env; set +a; fi", "bun install"]
   }
 }
