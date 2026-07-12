@@ -94,6 +94,8 @@
       let
         pkgs = inputs.nixpkgs.legacyPackages.x86_64-linux;
         traderBot = ./hosts/homelab/modules/trader/bot;
+        traderRecorder = ./hosts/homelab/modules/trader/recorder;
+        traderRuff = ./hosts/homelab/modules/trader/ruff.toml;
       in
       {
         # Formatting gate for all Nix files (nixfmt).
@@ -102,19 +104,24 @@
           touch $out
         '';
 
-        # Lint + format gate for the trader bot (ruff).
+        # Lint + format gate for all trader-module Python: the bot (its own
+        # bot/pyproject.toml config) and the recorder (inherits ./ruff.toml).
         trader-lint = pkgs.runCommand "trader-lint" { nativeBuildInputs = [ pkgs.ruff ]; } ''
-          cp -r ${traderBot} bot
-          chmod -R u+w bot
-          cd bot
+          mkdir t
+          cp -r ${traderBot} t/bot
+          cp -r ${traderRecorder} t/recorder
+          cp ${traderRuff} t/ruff.toml
+          chmod -R u+w t
+          cd t
           ruff check .
           ruff format --check .
           touch $out
         '';
 
-        # Unit tests, hermetic (temp dirs, no network). Daemon tests lazy-import
-        # their heavy deps; the backtest suite needs pandas/numpy/duckdb (test-only
-        # closure - the deployed daemon never gets them).
+        # Unit tests, hermetic (temp dirs, no network) for the bot and recorder.
+        # Daemon tests lazy-import their heavy deps; the backtest suite needs
+        # pandas/numpy/duckdb (test-only closure - the deployed daemon never gets
+        # them), a superset of the recorder's duckdb/requests.
         trader-pytest =
           pkgs.runCommand "trader-pytest"
             {
@@ -129,10 +136,12 @@
               ];
             }
             ''
-              cp -r ${traderBot} bot
-              chmod -R u+w bot
-              cd bot
-              python -m pytest
+              mkdir t
+              cp -r ${traderBot} t/bot
+              cp -r ${traderRecorder} t/recorder
+              chmod -R u+w t
+              ( cd t/bot && python -m pytest )
+              ( cd t/recorder && python -m pytest )
               touch $out
             '';
       };
