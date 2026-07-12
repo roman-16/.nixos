@@ -36,6 +36,7 @@ const DEFAULT_EXCLUDES = [
   "*.ppk",
   "*.tsbuildinfo",
   "bun.lockb",
+  "bun.nix",
   "go.sum",
   "go.work.sum",
   "id_dsa",
