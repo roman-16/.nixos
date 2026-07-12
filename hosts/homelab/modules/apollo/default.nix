@@ -98,7 +98,7 @@
                 "HOME=%S/apollo"
                 "PORT=${toString port}"
               ];
-              ExecStart = "${pkgs.bun}/bin/bun ${./app}/index.ts";
+              ExecStart = "${pkgs.bun}/bin/bun ${./src}/index.ts";
               Restart = "on-failure";
               RestartSec = "10s";
               StateDirectory = "apollo";
