@@ -31,12 +31,33 @@ describe("renderUsage", () => {
     );
   });
 
-  it("shows extra usage spend when enabled", () => {
+  it("shows extra usage spend against a monthly cap", () => {
     const html = renderUsage({
       extra_usage: { is_enabled: true, monthly_limit: 1000, used_credits: 250, utilization: 25 },
     });
     expect(html).toContain("Extra usage");
     expect(html).toContain("$2.50 / $10.00");
+  });
+
+  it("shows extra usage with no cap", () => {
+    const html = renderUsage({
+      extra_usage: { is_enabled: true, monthly_limit: null, used_credits: 500, utilization: null },
+    });
+    expect(html).toContain("$5.00");
+    expect(html).toContain("no limit");
+  });
+
+  it("shows Not enabled when extra usage is disabled", () => {
+    const html = renderUsage({
+      extra_usage: { is_enabled: false, monthly_limit: null, used_credits: 0, utilization: null },
+    });
+    expect(html).toContain("Extra usage");
+    expect(html).toContain("Not enabled");
+  });
+
+  it("hides extra usage when absent from the response", () => {
+    const html = renderUsage({ five_hour: { resets_at: null, utilization: 10 } });
+    expect(html).not.toContain("Extra usage");
   });
 
   it("reports when no limits are present", () => {

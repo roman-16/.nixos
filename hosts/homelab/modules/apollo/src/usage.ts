@@ -50,6 +50,7 @@ function barColor(pct: number): string {
   return pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
 }
 
+/** A labelled progress bar for a resettable limit (session / weekly). */
 function bar(title: string, limit: UsageLimit | undefined): string {
   if (!limit) return "";
   const pct = Math.min(100, Math.max(0, Math.round(limit.utilization)));
@@ -64,27 +65,29 @@ function bar(title: string, limit: UsageLimit | undefined): string {
   </div>`;
 }
 
-/** Render the usage fragment (progress bars) for the dashboard. */
+/** Extra usage (per-token overage) as a plain dollar value, like pi's usage extension. */
+function extraUsage(extra: ExtraUsage | undefined): string {
+  if (!extra) return "";
+  const spent = (extra.used_credits / 100).toFixed(2);
+  const value = !extra.is_enabled
+    ? "Not enabled"
+    : extra.monthly_limit == null
+      ? `$${spent} \u00b7 no limit`
+      : `$${spent} / $${(extra.monthly_limit / 100).toFixed(2)}`;
+  return `<div class="flex justify-between text-xs text-neutral-400"><span>Extra usage</span><span>${value}</span></div>`;
+}
+
+/** Render the usage fragment for the dashboard: limit bars plus the extra-usage value. */
 export function renderUsage(data: UsageData | null): string {
   if (!data) return `<p class="text-xs text-neutral-500">Usage data unavailable.</p>`;
 
-  const bars = [
+  const rows = [
     bar("Session (5h)", data.five_hour),
     bar("Weekly (all models)", data.seven_day),
     bar("Weekly (Sonnet)", data.seven_day_sonnet),
+    extraUsage(data.extra_usage),
   ].filter(Boolean);
 
-  let extra = "";
-  if (data.extra_usage?.is_enabled) {
-    const spent = (data.extra_usage.used_credits / 100).toFixed(2);
-    const cap =
-      data.extra_usage.monthly_limit == null
-        ? ""
-        : ` / $${(data.extra_usage.monthly_limit / 100).toFixed(2)}`;
-    extra = `<div class="flex justify-between text-xs text-neutral-400"><span>Extra usage</span><span>$${spent}${cap}</span></div>`;
-  }
-
-  if (bars.length === 0 && !extra)
-    return `<p class="text-xs text-neutral-500">No usage limits reported.</p>`;
-  return `<div class="space-y-3">${bars.join("")}${extra}</div>`;
+  if (rows.length === 0) return `<p class="text-xs text-neutral-500">No usage limits reported.</p>`;
+  return `<div class="space-y-3">${rows.join("")}</div>`;
 }
