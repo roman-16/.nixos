@@ -32,6 +32,37 @@ export async function main(): Promise<void> {
     void wa.send(target, text).catch((error) => logger.error({ error }, "send failed"));
   });
 
+  // WhatsApp's "typing…" indicator auto-expires after a few seconds, so refresh it
+  // on a loop while the agent works and clear it only once the agent is fully
+  // settled (after all tool calls / queued follow-ups).
+  let typingTimer: ReturnType<typeof setInterval> | undefined;
+
+  function stopTyping() {
+    if (typingTimer) {
+      clearInterval(typingTimer);
+      typingTimer = undefined;
+    }
+    if (wa && target) void wa.presence(target, "paused");
+  }
+
+  function startTyping() {
+    stopTyping();
+    if (!wa || !target) return;
+    void wa.presence(target, "composing");
+    let ticks = 0;
+    typingTimer = setInterval(() => {
+      if (!wa || !target || (ticks += 1) > 60) {
+        stopTyping();
+        return;
+      }
+      void wa.presence(target, "composing");
+    }, 8000);
+  }
+
+  session.subscribe((event) => {
+    if (event.type === "agent_settled") stopTyping();
+  });
+
   wa = await startWhatsApp({
     logger,
     maxChars: config.maxMessageChars,
@@ -41,6 +72,8 @@ export async function main(): Promise<void> {
         return;
       }
       target = message.from;
+      void wa?.read(message.key); // blue checkmarks so Roman knows it arrived
+      startTyping();
       const text = message.text || "(image)";
       logger.info(
         { chars: text.length, from: message.number, images: message.images.length },
@@ -50,6 +83,7 @@ export async function main(): Promise<void> {
         await deliver(session, text, message.images);
       } catch (error) {
         logger.error({ error }, "prompt failed");
+        stopTyping();
         void wa?.send(message.from, `⚠️ ${error instanceof Error ? error.message : String(error)}`);
       }
     },

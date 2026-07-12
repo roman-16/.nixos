@@ -29,12 +29,15 @@ export interface WhatsAppState {
 export interface InboundMessage {
   from: string;
   images: ImageContent[];
+  key: WAMessage["key"];
   number: string;
   text: string;
 }
 
 export interface WhatsApp {
   getState: () => WhatsAppState;
+  presence: (to: string, state: "available" | "composing" | "paused") => Promise<void>;
+  read: (key: WAMessage["key"]) => Promise<void>;
   relink: () => void;
   send: (to: string, text: string) => Promise<void>;
   stop: () => Promise<void>;
@@ -103,7 +106,7 @@ async function toInbound(
     ""
   ).trim();
   if (!text && images.length === 0) return undefined;
-  return { from, images, number: numberFromJid(from), text };
+  return { from, images, key: message.key, number: numberFromJid(from), text };
 }
 
 /** Connect to WhatsApp via Baileys, tracking link state and dispatching inbound messages. */
@@ -143,6 +146,7 @@ export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp>
         status = "connected";
         user = socket.user?.id;
         options.logger.info("whatsapp connected");
+        void socket.sendPresenceUpdate("available");
       }
       if (connection === "close") {
         const code = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)
@@ -185,6 +189,20 @@ export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp>
 
   return {
     getState: () => ({ qr, status, user: user ? numberFromJid(user) : undefined }),
+    presence: async (to, state) => {
+      try {
+        await sock?.sendPresenceUpdate(state, to);
+      } catch {
+        // presence is best-effort
+      }
+    },
+    read: async (key) => {
+      try {
+        await sock?.readMessages([key]);
+      } catch {
+        // read receipt is best-effort
+      }
+    },
     relink: () => {
       qr = undefined;
       status = "connecting";
