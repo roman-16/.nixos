@@ -35,6 +35,7 @@ const DEFAULT_EXCLUDES = [
   "*.pfx",
   "*.ppk",
   "*.tsbuildinfo",
+  ".env",
   "bun.lockb",
   "bun.nix",
   "go.sum",
