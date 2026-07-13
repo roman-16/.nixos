@@ -178,9 +178,12 @@ export async function main(): Promise<void> {
       }
 
       if (pathname === "/anthropic") {
-        const token = await authStorage.getApiKey("anthropic");
+        // Connection status is whether a credential exists (no refresh, no network),
+        // so a usage-endpoint blip or brief token-refresh window never shows "not connected".
+        const connected = authStorage.hasAuth("anthropic");
+        const token = connected ? await authStorage.getApiKey("anthropic") : undefined;
         const data = token ? await fetchUsage(token) : null;
-        return new Response(renderAnthropic(data, data ? "" : loginUrl()), {
+        return new Response(renderAnthropic(connected, data, connected ? "" : loginUrl()), {
           headers: htmlHeaders,
         });
       }
@@ -193,12 +196,13 @@ export async function main(): Promise<void> {
           authStorage.set("anthropic", { type: "oauth", ...cred });
           pendingVerifier = undefined;
           logger.info("anthropic connected via dashboard");
-          return new Response(renderAnthropic(await fetchUsage(cred.access), ""), {
+          return new Response(renderAnthropic(true, await fetchUsage(cred.access), ""), {
             headers: htmlHeaders,
           });
         }
         return new Response(
           renderAnthropic(
+            false,
             null,
             loginUrl(),
             "That code didn't work. Authorize again and paste the new code.",

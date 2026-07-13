@@ -30,11 +30,6 @@ export function renderPage(version: string): string {
           ${statusRow("bg-neutral-500", "Loading…")}
         </div>
         <div class="mt-6 border-t border-neutral-800 pt-5">
-          <div id="context" hx-get="/context" hx-trigger="load, every 5s" hx-swap="innerHTML">
-            <p class="text-xs text-neutral-500">Loading…</p>
-          </div>
-        </div>
-        <div class="mt-6 border-t border-neutral-800 pt-5">
           <div id="anthropic" hx-get="/anthropic" hx-trigger="load, every 60s" hx-swap="innerHTML">
             <p class="text-xs text-neutral-500">Loading…</p>
           </div>
@@ -47,6 +42,11 @@ export function renderPage(version: string): string {
           hx-on::after-settle="this.scrollTop = this.scrollHeight">
           <p class="text-xs text-neutral-500">Loading…</p>
         </div>
+        <footer class="border-t border-neutral-800 px-4 py-2.5">
+          <div id="context" hx-get="/context" hx-trigger="load, every 5s" hx-swap="innerHTML">
+            <p class="text-xs text-neutral-500">Loading…</p>
+          </div>
+        </footer>
       </section>
     </main>
   </body>
@@ -117,12 +117,17 @@ export async function renderState(state: WhatsAppState, linking: boolean): Promi
   return idle(state.status);
 }
 
-/** Render the #anthropic fragment: usage bars when connected, else a login form. */
-export function renderAnthropic(data: UsageData | null, authUrl: string, error?: string): string {
-  if (data) {
+/** Render the #anthropic fragment: connection status (a credential exists) plus best-effort usage bars, else a login form. */
+export function renderAnthropic(
+  connected: boolean,
+  data: UsageData | null,
+  authUrl: string,
+  error?: string,
+): string {
+  if (connected) {
     return `<div class="space-y-3">
       ${statusRow("bg-emerald-400", "Connected to Anthropic")}
-      ${renderUsage(data)}
+      ${data ? renderUsage(data) : `<p class="text-xs text-neutral-500">Usage data unavailable right now.</p>`}
     </div>`;
   }
   return `<div class="space-y-4">
