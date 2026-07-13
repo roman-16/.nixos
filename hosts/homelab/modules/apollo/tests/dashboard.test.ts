@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { renderAnthropic, renderPage, renderState } from "../src/dashboard";
+import { renderAnthropic, renderContext, renderPage, renderState } from "../src/dashboard";
 import type { WhatsAppState } from "../src/whatsapp";
 
 const state = (over: Partial<WhatsAppState>): WhatsAppState => ({
@@ -67,5 +67,29 @@ describe("renderAnthropic", () => {
 
   it("surfaces an error message when provided", () => {
     expect(renderAnthropic(null, "url", "nope")).toContain("nope");
+  });
+});
+
+describe("renderContext", () => {
+  it("shows percent and humanized window with a bar", () => {
+    const html = renderContext({ contextWindow: 1000000, percent: 54.7, tokens: 547000 });
+    expect(html).toContain("54.7% / 1.0M");
+    expect(html).toContain("width:54.7%");
+  });
+
+  it("colors high usage red", () => {
+    expect(renderContext({ contextWindow: 1000000, percent: 95, tokens: 950000 })).toContain(
+      "bg-red-500",
+    );
+  });
+
+  it("shows the window but no bar when tokens are unknown (post-compaction)", () => {
+    const html = renderContext({ contextWindow: 1000000, percent: null, tokens: null });
+    expect(html).toContain("1.0M");
+    expect(html).not.toContain("width:");
+  });
+
+  it("reports unavailable when usage is undefined", () => {
+    expect(renderContext(undefined)).toContain("unavailable");
   });
 });

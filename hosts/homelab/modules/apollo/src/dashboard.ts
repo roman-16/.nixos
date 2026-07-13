@@ -1,3 +1,4 @@
+import type { ContextUsage } from "@earendil-works/pi-coding-agent";
 import QRCode from "qrcode";
 
 import { renderUsage, type UsageData } from "./usage";
@@ -27,6 +28,11 @@ export function renderPage(version: string): string {
         </div>
         <div id="app" hx-get="/status" hx-trigger="load, every 2s" hx-swap="innerHTML">
           ${statusRow("bg-neutral-500", "Loading…")}
+        </div>
+        <div class="mt-6 border-t border-neutral-800 pt-5">
+          <div id="context" hx-get="/context" hx-trigger="load, every 5s" hx-swap="innerHTML">
+            <p class="text-xs text-neutral-500">Loading…</p>
+          </div>
         </div>
         <div class="mt-6 border-t border-neutral-800 pt-5">
           <div id="anthropic" hx-get="/anthropic" hx-trigger="load, every 60s" hx-swap="innerHTML">
@@ -132,5 +138,34 @@ export function renderAnthropic(data: UsageData | null, authUrl: string, error?:
       <button class="rounded-xl border border-neutral-700 px-4 py-2 text-sm text-neutral-200 transition hover:bg-neutral-800">Connect</button>
     </form>
     ${error ? `<p class="text-xs text-red-400">${error}</p>` : ""}
+  </div>`;
+}
+
+function humanTokens(n: number): string {
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `${Math.round(n / 1e3)}K`;
+  return String(n);
+}
+
+/** Render the #context fragment: how much of the model's context window the session is using. */
+export function renderContext(usage: ContextUsage | undefined): string {
+  if (!usage || usage.contextWindow <= 0) {
+    return `<p class="text-xs text-neutral-500">Context usage unavailable.</p>`;
+  }
+  const window = humanTokens(usage.contextWindow);
+  if (usage.tokens == null || usage.percent == null) {
+    return `<div class="flex justify-between text-xs text-neutral-400">
+      <span>Context</span><span>… / ${window}</span>
+    </div>`;
+  }
+  const pct = Math.min(100, Math.max(0, usage.percent));
+  const color = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
+  return `<div>
+    <div class="mb-1 flex justify-between text-xs text-neutral-400">
+      <span>Context</span><span>${pct.toFixed(1)}% / ${window}</span>
+    </div>
+    <div class="h-2 overflow-hidden rounded-full bg-neutral-800">
+      <div class="h-full rounded-full ${color}" style="width:${pct}%"></div>
+    </div>
   </div>`;
 }

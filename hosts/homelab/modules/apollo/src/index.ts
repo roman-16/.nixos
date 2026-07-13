@@ -8,7 +8,7 @@ import { pino } from "pino";
 import { createApolloSession, deliver, onAssistantText } from "./agent";
 import { parseTranscript, renderChat } from "./chat";
 import { loadConfig } from "./config";
-import { renderAnthropic, renderPage, renderState } from "./dashboard";
+import { renderAnthropic, renderContext, renderPage, renderState } from "./dashboard";
 import { isAllowed } from "./messages";
 import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
 import { fetchUsage } from "./usage";
@@ -171,6 +171,10 @@ export async function main(): Promise<void> {
         if (body === lastStatusBody) return new Response(null, { status: 204 });
         lastStatusBody = body;
         return new Response(body, { headers: htmlHeaders });
+      }
+
+      if (pathname === "/context") {
+        return new Response(renderContext(session.getContextUsage()), { headers: htmlHeaders });
       }
 
       if (pathname === "/anthropic") {
