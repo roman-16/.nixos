@@ -159,10 +159,20 @@ def dm(date: str) -> str:
 
 def render_day(date: str):
     path = day_path(date)
-    if not path.exists():
-        print(f"nothing logged for {date} yet")
+    if path.exists():
+        day = load(path, {})
+    elif GOAL_FILE.exists():
+        # Nothing logged yet: still show the day's targets, derived from the ledger.
+        g = load(GOAL_FILE, {})
+        prevcum = prev_cumulative(date, g.get("phase"))
+        floor = g["tdee"] - 500 if g["dailyGoal"] <= g["tdee"] else g["tdee"]
+        day = {"date": date, "tdee": g["tdee"], "dailyGoal": g["dailyGoal"],
+               "proteinGoal": g["proteinGoal"], "cumulative": prevcum,
+               "target": max(g["dailyGoal"] - prevcum, floor),
+               "weight": None, "entries": []}
+    else:
+        print(f"nothing logged for {date} yet - set a goal first with goal-set")
         return
-    day = load(path, {})
     label = f"Today ({dm(date)})" if date == today() else dm(date)
     entries = day["entries"]
     protein_goal = day["proteinGoal"]
