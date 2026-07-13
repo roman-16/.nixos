@@ -229,6 +229,18 @@ in
                 SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
               };
 
+              # writeBunApplication's runtimeInputs only populate the build
+              # closure, not the unit's PATH, so the tools the agent shells out
+              # to (incl. python3 for the macros skill) are added here.
+              path = with pkgs; [
+                bash
+                curl
+                git
+                jq
+                python3
+                ripgrep
+              ];
+
               serviceConfig = {
                 DynamicUser = true;
                 ExecStart = "${apolloApp}/bin/apollo";
