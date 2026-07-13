@@ -11,11 +11,13 @@ import { loadConfig } from "./config";
 import { renderAnthropic, renderContext, renderPage, renderState } from "./dashboard";
 import { isAllowed } from "./messages";
 import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
-import { fetchUsage } from "./usage";
+import { fetchUsage, type UsageData } from "./usage";
 import { startWhatsApp, type WhatsApp } from "./whatsapp";
 
 const publicDir = join(import.meta.dir, "../dist/public");
 const htmlHeaders = { "content-type": "text/html; charset=utf-8" };
+/** The Anthropic usage endpoint rate-limits hard, so fetch it at most this often. */
+const usageTtlMs = 5 * 60 * 1000;
 
 /** Content hash of the built assets, used to cache-bust the CSS/JS/favicon URLs. */
 const assetsVersion = ((): string => {
@@ -56,6 +58,7 @@ export async function main(): Promise<void> {
   let lastStatusBody: string | undefined;
   let lastChatBody: string | undefined;
   let chatCache: { body: string; mtimeMs: number } | undefined;
+  let usage: { data: UsageData | null; fetchedAt: number } | undefined;
 
   async function renderChatBody(): Promise<string> {
     const file = session.sessionFile;
@@ -181,11 +184,19 @@ export async function main(): Promise<void> {
         // Connection status is whether a credential exists (no refresh, no network),
         // so a usage-endpoint blip or brief token-refresh window never shows "not connected".
         const connected = authStorage.hasAuth("anthropic");
-        const token = connected ? await authStorage.getApiKey("anthropic") : undefined;
-        const data = token ? await fetchUsage(token) : null;
-        return new Response(renderAnthropic(connected, data, connected ? "" : loginUrl()), {
-          headers: htmlHeaders,
-        });
+        // Usage endpoint rate-limits aggressively: fetch at most once per TTL (stamp the
+        // time before awaiting so concurrent polls dedupe), and keep the last good value
+        // across failures so the bars never blank out on a transient 429.
+        if (connected && (!usage || Date.now() - usage.fetchedAt >= usageTtlMs)) {
+          usage = { data: usage?.data ?? null, fetchedAt: Date.now() };
+          const token = await authStorage.getApiKey("anthropic");
+          const fresh = token ? await fetchUsage(token) : null;
+          if (fresh) usage = { data: fresh, fetchedAt: usage.fetchedAt };
+        }
+        return new Response(
+          renderAnthropic(connected, usage?.data ?? null, connected ? "" : loginUrl()),
+          { headers: htmlHeaders },
+        );
       }
 
       if (pathname === "/connect" && req.method === "POST") {
@@ -196,9 +207,9 @@ export async function main(): Promise<void> {
           authStorage.set("anthropic", { type: "oauth", ...cred });
           pendingVerifier = undefined;
           logger.info("anthropic connected via dashboard");
-          return new Response(renderAnthropic(true, await fetchUsage(cred.access), ""), {
-            headers: htmlHeaders,
-          });
+          const fresh = await fetchUsage(cred.access);
+          usage = { data: fresh, fetchedAt: Date.now() };
+          return new Response(renderAnthropic(true, fresh, ""), { headers: htmlHeaders });
         }
         return new Response(
           renderAnthropic(

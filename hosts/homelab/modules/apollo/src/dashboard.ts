@@ -30,7 +30,7 @@ export function renderPage(version: string): string {
           ${statusRow("bg-neutral-500", "Loading…")}
         </div>
         <div class="mt-6 border-t border-neutral-800 pt-5">
-          <div id="anthropic" hx-get="/anthropic" hx-trigger="load, every 60s" hx-swap="innerHTML">
+          <div id="anthropic" hx-get="/anthropic" hx-trigger="load, every 300s" hx-swap="innerHTML">
             <p class="text-xs text-neutral-500">Loading…</p>
           </div>
         </div>
