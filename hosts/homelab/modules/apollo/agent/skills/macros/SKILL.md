@@ -63,8 +63,9 @@ Look up before estimating; use the default serving when no amount is given. Only
 ## Fixing mistakes
 
 ```bash
+{baseDir}/scripts/macros.py entries        # the day's entries with their index numbers
 {baseDir}/scripts/macros.py rm --last
-{baseDir}/scripts/macros.py rm --index 2      # remove the 2nd entry of the day
+{baseDir}/scripts/macros.py rm --index 2   # remove the 2nd entry (use `entries` to find the number)
 ```
 
 ## Meal prep (batch cooking)
@@ -73,9 +74,12 @@ Cooking changes weight, so a batch is tracked by its whole-batch macros and the 
 
 ```bash
 {baseDir}/scripts/macros.py prep-add --name "Bolognese" --kcal 1800 --protein 120 --fat 90 --carbs 110
-{baseDir}/scripts/macros.py prep-eat --name bolognese --fraction 1/5    # also accepts 20% or 0.2
-{baseDir}/scripts/macros.py prep-list
+{baseDir}/scripts/macros.py prep-eat --name bolognese --fraction 1/5   # 1/5 of the WHOLE batch (also 20% or 0.2)
+{baseDir}/scripts/macros.py prep-eat --name bolognese --remaining      # finish whatever is left
+{baseDir}/scripts/macros.py prep-list                                  # each batch with its remaining kcal/protein
 ```
+
+`--fraction` is always a share of the original batch, not of what remains, and it errors if it exceeds what is left. To eat the rest, use `--remaining`.
 
 ## Repairing the ledger
 

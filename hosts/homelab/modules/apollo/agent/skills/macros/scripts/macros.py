@@ -272,6 +272,19 @@ def cmd_rm(args):
     render_day(date)
 
 
+def cmd_entries(args):
+    date = args.date or today()
+    path = day_path(date)
+    entries = load(path, {}).get("entries", []) if path.exists() else []
+    if not entries:
+        print(f"nothing logged for {date}")
+        return
+    for i, e in enumerate(entries, 1):
+        note = f" [{e['note']}]" if e.get("note") else ""
+        print(f"{i}. {e.get('time') or '--:--'}  {e['item']} - "
+              f"{e['kcal']} kcal, {round(e['protein'])}g P{note}")
+
+
 def cmd_food_get(args):
     _, food = find(load(FOOD_FILE, {}), args.query)
     if not food:
@@ -322,7 +335,20 @@ def cmd_prep_eat(args):
     key, batch = find(prep, args.name)
     if not batch:
         die(f'no prep named "{args.name}"')
-    frac = parse_fraction(args.fraction)
+    remaining = batch["remaining"]
+    # --fraction is always relative to the *whole* batch; --remaining finishes it.
+    if args.remaining:
+        frac = remaining
+    elif args.fraction is not None:
+        frac = parse_fraction(args.fraction)
+    else:
+        die("give --fraction F (of the whole batch) or --remaining to finish it")
+    if frac <= 0:
+        die("fraction must be positive")
+    if frac > remaining + 1e-6:
+        die(f'only {round(remaining * 100)}% of "{batch["name"]}" is left '
+            f"({round(batch['total']['kcal'] * remaining)} kcal); cannot eat "
+            f"{round(frac * 100)}%. Use --remaining to finish it.")
     t = batch["total"]
     date = args.date or today()
     add_entry(
@@ -330,10 +356,11 @@ def cmd_prep_eat(args):
         round(t["kcal"] * frac), r1(t["protein"] * frac), r1(t["fat"] * frac), r1(t["carbs"] * frac),
         "prep",
     )
-    batch["remaining"] -= frac
-    if batch["remaining"] <= 0.0001:
+    left = remaining - frac
+    if left <= 0.0001:
         del prep[key]
     else:
+        batch["remaining"] = left
         prep[key] = batch
     save(PREP_FILE, prep)
     render_day(date)
@@ -345,7 +372,9 @@ def cmd_prep_list(args):
         print("no preps saved")
         return
     for v in prep.values():
-        print(f"- {v['name']}: {round(v['remaining'] * 100)}% left")
+        r, t = v["remaining"], v["total"]
+        print(f"- {v['name']}: {round(r * 100)}% left "
+              f"({round(t['kcal'] * r)} kcal, {r1(t['protein'] * r)}g P)")
 
 
 def cmd_recompute(args):
@@ -399,6 +428,10 @@ def build_parser() -> argparse.ArgumentParser:
     rm.add_argument("--index", type=int)
     rm.add_argument("--date")
 
+    en = sub.add_parser("entries")
+    en.set_defaults(func=cmd_entries)
+    en.add_argument("--date")
+
     fg = sub.add_parser("food-get")
     fg.set_defaults(func=cmd_food_get)
     fg.add_argument("query")
@@ -426,7 +459,8 @@ def build_parser() -> argparse.ArgumentParser:
     pe = sub.add_parser("prep-eat")
     pe.set_defaults(func=cmd_prep_eat)
     pe.add_argument("--name", required=True)
-    pe.add_argument("--fraction", required=True)
+    pe.add_argument("--fraction")
+    pe.add_argument("--remaining", action="store_true")
     pe.add_argument("--date")
 
     sub.add_parser("prep-list").set_defaults(func=cmd_prep_list)
