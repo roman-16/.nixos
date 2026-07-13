@@ -21,6 +21,7 @@
 
 ## Code
 
+- **Ahistorical**: Write code as if it had no history, as if you were writing it for the first time. Never reference, explain, or hint at prior states or the fact that something changed. This applies to code, comments, and everything surrounding it: express what *is*, never what *changed* or *used to be*.
 - **Comments**: Default to NONE. Add one only when the *why* is genuinely non-obvious (workaround, gotcha, surprising decision) and would otherwise be lost, never to restate *what* the code does. Don't narrate or over-explain. When in doubt, leave it out.
 - **Ordering**: When the order of fields, list items, keys, arguments, imports, or similar has no functional or semantic significance, order them alphabetically.
 
