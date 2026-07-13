@@ -18,6 +18,10 @@ Tracks daily nutrition as JSON under `macros/` in the working directory. Every r
 - **You:** read the message, identify the food and amount, and get its macros - look it up with `food-get` first, otherwise estimate from knowledge or a photo and pass `--note estimated`. Then call `log`.
 - **The script:** stores entries, computes every total and the balance ledger, and prints the reply to send. It owns all numbers.
 
+## Replying
+
+Whenever a command prints a day summary or list (`log`, `show`, `entries`, `prep-eat`, `prep-list`, `food-list`, `goal`), your reply **is** that output, sent back verbatim: the exact lines the script printed, in full and unchanged. Do not summarize it, rephrase it, reformat it, turn it into prose, trim it, or wrap it in your own commentary - the user wants to read the list itself.
+
 ## Setup (once, or when targets change)
 
 ```bash
@@ -36,7 +40,7 @@ Tracks daily nutrition as JSON under `macros/` in the working directory. Every r
 {baseDir}/scripts/macros.py log --item "Burger and fries" --kcal 900 --protein 40 --fat 45 --carbs 80 --note estimated
 ```
 
-`log` prints the day summary - relay that as the reply.
+`log` prints the day summary - send that exact output back as your reply, verbatim (see [Replying](#replying)).
 
 ## Viewing a day
 
@@ -93,6 +97,6 @@ After a manual JSON edit or a phase change, re-fold the balance forward:
 
 - Dates and times come from the system clock; only pass `--date`/`--time` to correct a past entry.
 - Estimate freely for vague inputs or photos and pass `--note estimated` - the totals stay exact regardless.
-- Keep chat replies short: relay the script's summary as-is.
+- Relay the script's output verbatim (see [Replying](#replying)) - never paraphrase its numbers, shorten its summary, or reformat the list.
 
 `{baseDir}` = this skill's directory. Always resolve to the absolute path before executing.
