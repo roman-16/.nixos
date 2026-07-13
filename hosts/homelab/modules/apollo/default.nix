@@ -67,6 +67,62 @@ in
           ln -sfn ${../../../../shared/modules/pi/skills/context7} "$agentDir/skills/context7"
           ln -sfn ${../../../../shared/modules/pi/skills/exa} "$agentDir/skills/exa"
         '';
+
+        # GitHub's ed25519 host key, pinned so the backup push never needs a TOFU prompt.
+        knownHosts = pkgs.writeText "apollo-known-hosts" ''
+          github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+        '';
+
+        # Provision the workspace repo + backup deploy key. Shared by the app and
+        # the backup timer (both run as the "apollo" dynamic user, so they see the
+        # same $HOME and workspace). The private key lands in the world-readable
+        # /nix/store, an accepted trade-off on this single-purpose VM (as with
+        # trader's wallet key); its blast radius is one private repo.
+        gitBootstrap = pkgs.writeShellScript "apollo-git-bootstrap" ''
+          set -euo pipefail
+          export PATH=${
+            lib.makeBinPath [
+              pkgs.coreutils
+              pkgs.git
+              pkgs.openssh
+            ]
+          }:$PATH
+
+          install -d -m 700 "$HOME/.ssh"
+          install -m 600 ${pkgs.writeText "apollo-ssh-key" secrets.workspaceSshKey} "$HOME/.ssh/id_apollo"
+          install -m 644 ${knownHosts} "$HOME/.ssh/known_hosts"
+
+          mkdir -p "$APOLLO_WORKSPACE"
+          if [ ! -e "$APOLLO_WORKSPACE/.git" ]; then
+            git -C "$APOLLO_WORKSPACE" init -b main
+          fi
+          git -C "$APOLLO_WORKSPACE" remote add origin "${secrets.workspaceGitRemote}" 2>/dev/null \
+            || git -C "$APOLLO_WORKSPACE" remote set-url origin "${secrets.workspaceGitRemote}"
+        '';
+
+        # Commit the whole workspace and push. Fired every 6h by the timer.
+        backup = pkgs.writeShellScript "apollo-backup" ''
+          set -euo pipefail
+          export PATH=${
+            lib.makeBinPath [
+              pkgs.coreutils
+              pkgs.git
+              pkgs.openssh
+            ]
+          }:$PATH
+
+          export GIT_AUTHOR_NAME=Roman GIT_COMMITTER_NAME=Roman
+          export GIT_AUTHOR_EMAIL=roman@lerchster.dev GIT_COMMITTER_EMAIL=roman@lerchster.dev
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0='*'
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/id_apollo -o IdentitiesOnly=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes"
+
+          cd "$APOLLO_WORKSPACE"
+          git add -A
+          git diff --cached --quiet || git commit -m "$(date '+%Y-%m-%d %H:%M:%S')"
+          if git rev-parse --verify --quiet HEAD >/dev/null; then
+            git push -u origin main
+          fi
+        '';
       in
       {
         microvm = {
@@ -153,33 +209,74 @@ in
             };
           };
 
-          services.apollo = {
-            description = "Apollo WhatsApp assistant (pi SDK + Baileys)";
+          services = {
+            apollo = {
+              description = "Apollo WhatsApp assistant (pi SDK + Baileys)";
 
-            after = [ "network-online.target" ];
-            requires = [ "network-online.target" ];
-            wantedBy = [ "multi-user.target" ];
+              after = [ "network-online.target" ];
+              requires = [ "network-online.target" ];
+              wantedBy = [ "multi-user.target" ];
 
-            environment = {
-              APOLLO_ALLOW_FROM = secrets.mainNumber;
-              APOLLO_MODEL = "anthropic/claude-sonnet-5";
-              APOLLO_THINKING = "high";
-              APOLLO_WORKSPACE = "%t/apollo/workspace";
-              HOME = "%S/apollo";
-              PORT = toString port;
-              SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
+              environment = {
+                APOLLO_ALLOW_FROM = secrets.mainNumber;
+                APOLLO_MODEL = "anthropic/claude-sonnet-5";
+                APOLLO_THINKING = "high";
+                APOLLO_WORKSPACE = "%S/apollo/workspace";
+                HOME = "%S/apollo";
+                PORT = toString port;
+                SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
+              };
+
+              serviceConfig = {
+                DynamicUser = true;
+                ExecStart = "${apolloApp}/bin/apollo";
+                ExecStartPre = [
+                  setup
+                  gitBootstrap
+                ];
+                Restart = "on-failure";
+                RestartSec = "10s";
+                StateDirectory = "apollo";
+                # Shared identity with apollo-backup so the timer pushes the
+                # workspace as the same user that owns it.
+                User = "apollo";
+                WorkingDirectory = "%S/apollo";
+              };
             };
 
-            serviceConfig = {
-              DynamicUser = true;
-              ExecStart = "${apolloApp}/bin/apollo";
-              ExecStartPre = setup;
-              Restart = "on-failure";
-              RestartSec = "10s";
-              RuntimeDirectory = "apollo/workspace";
-              StateDirectory = "apollo";
-              WorkingDirectory = "%S/apollo";
+            apollo-backup = {
+              description = "Back up the Apollo workspace to git";
+
+              after = [ "network-online.target" ];
+              wants = [ "network-online.target" ];
+
+              environment = {
+                APOLLO_WORKSPACE = "%S/apollo/workspace";
+                HOME = "%S/apollo";
+                SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
+              };
+
+              serviceConfig = {
+                DynamicUser = true;
+                ExecStart = backup;
+                ExecStartPre = gitBootstrap;
+                StateDirectory = "apollo";
+                Type = "oneshot";
+                User = "apollo";
+                WorkingDirectory = "%S/apollo";
+              };
             };
+          };
+
+          timers.apollo-backup = {
+            description = "Back up the Apollo workspace every 6 hours";
+
+            timerConfig = {
+              OnCalendar = "*-*-* 00/06:00:00";
+              Persistent = true;
+            };
+
+            wantedBy = [ "timers.target" ];
           };
         };
 
