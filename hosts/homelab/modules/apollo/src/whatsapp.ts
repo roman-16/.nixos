@@ -27,6 +27,7 @@ export interface WhatsAppState {
 }
 
 export interface InboundMessage {
+  audio: { data: Buffer; mimeType: string; seconds: number | undefined } | undefined;
   from: string;
   images: ImageContent[];
   key: WAMessage["key"];
@@ -99,14 +100,34 @@ async function toInbound(
     }
   }
 
+  const audioMessage = content.audioMessage;
+  let audio: InboundMessage["audio"];
+  if (audioMessage) {
+    try {
+      const buffer = await downloadMediaMessage(
+        message,
+        "buffer",
+        {},
+        { logger, reuploadRequest: sock.updateMediaMessage },
+      );
+      audio = {
+        data: buffer,
+        mimeType: audioMessage.mimetype ?? "audio/ogg",
+        seconds: audioMessage.seconds ?? undefined,
+      };
+    } catch (error) {
+      logger.error({ error }, "failed to download audio");
+    }
+  }
+
   const text = (
     content.conversation ??
     content.extendedTextMessage?.text ??
     image?.caption ??
     ""
   ).trim();
-  if (!text && images.length === 0) return undefined;
-  return { from, images, key: message.key, number: numberFromJid(from), text };
+  if (!text && images.length === 0 && !audio) return undefined;
+  return { audio, from, images, key: message.key, number: numberFromJid(from), text };
 }
 
 /** Connect to WhatsApp via Baileys, tracking link state and dispatching inbound messages. */

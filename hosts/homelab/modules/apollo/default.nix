@@ -15,6 +15,7 @@ let
     bash
     coreutils
     curl
+    ffmpeg-headless
     git
     gnugrep
     gnused
@@ -210,6 +211,7 @@ in
                 APOLLO_THINKING = "high";
                 APOLLO_WORKSPACE = "%S/apollo/workspace";
                 HOME = "%S/apollo";
+                MISTRAL_API_KEY = secrets.mistralApiKey;
                 PORT = toString port;
                 SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
               };

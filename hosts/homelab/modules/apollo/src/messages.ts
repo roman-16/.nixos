@@ -6,6 +6,12 @@ export function numberFromJid(jid: string): string {
   return (user.split(":")[0] ?? "").replace(/\D/g, "");
 }
 
+/** Mark a transcribed voice note so it reads as spoken in the chat log and to the agent. */
+export function voiceText(transcript: string): string {
+  const trimmed = transcript.trim();
+  return trimmed ? `🎤 ${trimmed}` : "🎤 (empty voice message)";
+}
+
 /** True when the sender's number is on the allowlist (both sides normalized to digits). */
 export function isAllowed(number: string, allowFrom: string[]): boolean {
   const normalized = number.replace(/\D/g, "");

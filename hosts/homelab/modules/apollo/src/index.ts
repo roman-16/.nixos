@@ -9,8 +9,9 @@ import { createApolloSession, deliver, onAssistantText } from "./agent";
 import { parseTranscript, renderChat } from "./chat";
 import { loadConfig } from "./config";
 import { renderAnthropic, renderContext, renderPage, renderState } from "./dashboard";
-import { isAllowed } from "./messages";
+import { isAllowed, voiceText } from "./messages";
 import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
+import { transcribeAudio } from "./transcribe";
 import { fetchUsage, type UsageData } from "./usage";
 import { startWhatsApp, type WhatsApp } from "./whatsapp";
 
@@ -121,13 +122,41 @@ export async function main(): Promise<void> {
       target = message.from;
       void wa?.read(message.key); // blue checkmarks so Roman knows it arrived
       startTyping();
-      const text = message.text || "(image)";
+
+      let text = message.text;
+      if (message.audio) {
+        try {
+          text = voiceText(
+            await transcribeAudio(message.audio.data, {
+              apiKey: config.mistralApiKey,
+              model: config.transcribeModel,
+            }),
+          );
+        } catch (error) {
+          logger.error({ error }, "transcription failed");
+          stopTyping();
+          void wa?.send(
+            message.from,
+            `🎤 Couldn't transcribe that voice note: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+          return;
+        }
+      }
+
+      const prompt = text || "(image)";
       logger.info(
-        { chars: text.length, from: message.number, images: message.images.length },
+        {
+          chars: prompt.length,
+          from: message.number,
+          images: message.images.length,
+          voice: Boolean(message.audio),
+        },
         "prompt",
       );
       try {
-        await deliver(session, text, message.images);
+        await deliver(session, prompt, message.images);
       } catch (error) {
         logger.error({ error }, "prompt failed");
         stopTyping();

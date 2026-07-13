@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { isAllowed, numberFromJid, splitMessage } from "../src/messages";
+import { isAllowed, numberFromJid, splitMessage, voiceText } from "../src/messages";
 
 describe("numberFromJid", () => {
   it("strips domain and device suffix", () => {
@@ -46,5 +46,19 @@ describe("splitMessage", () => {
     const chunks = splitMessage("x".repeat(500), 100);
     expect(chunks.length).toBe(5);
     for (const chunk of chunks) expect(chunk.length).toBe(100);
+  });
+});
+
+describe("voiceText", () => {
+  it("prefixes a transcript with the voice marker", () => {
+    expect(voiceText("turn on the lights")).toBe("🎤 turn on the lights");
+  });
+
+  it("trims surrounding whitespace", () => {
+    expect(voiceText("  hello  ")).toBe("🎤 hello");
+  });
+
+  it("marks an empty transcript", () => {
+    expect(voiceText("   ")).toBe("🎤 (empty voice message)");
   });
 });
