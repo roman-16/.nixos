@@ -68,11 +68,7 @@ in
           ln -sfn ${../../../../shared/modules/pi/skills/context7} "$agentDir/skills/context7"
           ln -sfn ${../../../../shared/modules/pi/skills/exa} "$agentDir/skills/exa"
           ln -sfn ${./agent/skills/macros} "$agentDir/skills/macros"
-
-          # The backup skill runs the exact same script the 6h timer runs (below).
-          mkdir -p "$agentDir/skills/backup/scripts"
-          ln -sfn ${./agent/skills/backup/SKILL.md} "$agentDir/skills/backup/SKILL.md"
-          ln -sfn ${backup} "$agentDir/skills/backup/scripts/backup.sh"
+          ln -sfn ${./agent/skills/backup} "$agentDir/skills/backup"
         '';
 
         # GitHub's ed25519 host key, pinned so the backup push never needs a TOFU prompt.
@@ -107,42 +103,6 @@ in
             || git -C "$APOLLO_WORKSPACE" remote set-url origin "${secrets.workspaceGitRemote}"
         '';
 
-        # Commit the whole workspace and push. Shared by the 6h timer
-        # (apollo-backup.service) and the on-demand "backup" skill; both run as
-        # the apollo user. The message stays a timestamp so the history reads as
-        # uniform backups regardless of what triggered them.
-        backup = pkgs.writeShellScript "apollo-backup" ''
-          set -euo pipefail
-          export PATH=${
-            lib.makeBinPath [
-              pkgs.coreutils
-              pkgs.git
-              pkgs.openssh
-            ]
-          }:$PATH
-
-          export GIT_AUTHOR_NAME=Roman GIT_COMMITTER_NAME=Roman
-          export GIT_AUTHOR_EMAIL=roman@lerchster.dev GIT_COMMITTER_EMAIL=roman@lerchster.dev
-          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0='*'
-          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/id_apollo -o IdentitiesOnly=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes"
-
-          cd "$APOLLO_WORKSPACE"
-          git add -A
-          if git diff --cached --quiet; then
-            committed=""
-          else
-            git commit -q -m "$(date '+%Y-%m-%d %H:%M:%S')"
-            committed="$(git rev-parse --short HEAD)"
-          fi
-          if git rev-parse --verify --quiet HEAD >/dev/null; then
-            git push -q -u origin main
-          fi
-          if [ -n "$committed" ]; then
-            echo "Backed up and pushed (commit $committed)."
-          else
-            echo "Nothing new to back up."
-          fi
-        '';
       in
       {
         microvm = {
@@ -255,6 +215,7 @@ in
                 curl
                 git
                 jq
+                openssh
                 python3
                 ripgrep
               ];
@@ -288,9 +249,15 @@ in
                 SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
               };
 
+              path = with pkgs; [
+                coreutils
+                git
+                openssh
+              ];
+
               serviceConfig = {
                 DynamicUser = true;
-                ExecStart = backup;
+                ExecStart = "${./agent/skills/backup}/scripts/backup.sh";
                 ExecStartPre = gitBootstrap;
                 StateDirectory = "apollo";
                 Type = "oneshot";
