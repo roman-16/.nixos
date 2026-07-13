@@ -68,6 +68,11 @@ in
           ln -sfn ${../../../../shared/modules/pi/skills/context7} "$agentDir/skills/context7"
           ln -sfn ${../../../../shared/modules/pi/skills/exa} "$agentDir/skills/exa"
           ln -sfn ${./agent/skills/macros} "$agentDir/skills/macros"
+
+          # The backup skill runs the exact same script the 6h timer runs (below).
+          mkdir -p "$agentDir/skills/backup/scripts"
+          ln -sfn ${./agent/skills/backup/SKILL.md} "$agentDir/skills/backup/SKILL.md"
+          ln -sfn ${backup} "$agentDir/skills/backup/scripts/backup.sh"
         '';
 
         # GitHub's ed25519 host key, pinned so the backup push never needs a TOFU prompt.
@@ -102,7 +107,10 @@ in
             || git -C "$APOLLO_WORKSPACE" remote set-url origin "${secrets.workspaceGitRemote}"
         '';
 
-        # Commit the whole workspace and push. Fired every 6h by the timer.
+        # Commit the whole workspace and push. Shared by the 6h timer
+        # (apollo-backup.service) and the on-demand "backup" skill; both run as
+        # the apollo user. The message stays a timestamp so the history reads as
+        # uniform backups regardless of what triggered them.
         backup = pkgs.writeShellScript "apollo-backup" ''
           set -euo pipefail
           export PATH=${
@@ -120,9 +128,19 @@ in
 
           cd "$APOLLO_WORKSPACE"
           git add -A
-          git diff --cached --quiet || git commit -m "$(date '+%Y-%m-%d %H:%M:%S')"
+          if git diff --cached --quiet; then
+            committed=""
+          else
+            git commit -q -m "$(date '+%Y-%m-%d %H:%M:%S')"
+            committed="$(git rev-parse --short HEAD)"
+          fi
           if git rev-parse --verify --quiet HEAD >/dev/null; then
-            git push -u origin main
+            git push -q -u origin main
+          fi
+          if [ -n "$committed" ]; then
+            echo "Backed up and pushed (commit $committed)."
+          else
+            echo "Nothing new to back up."
           fi
         '';
       in
