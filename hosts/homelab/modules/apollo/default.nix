@@ -250,6 +250,7 @@ in
               };
 
               path = with pkgs; [
+                bash
                 coreutils
                 git
                 openssh
