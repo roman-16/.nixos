@@ -38,6 +38,7 @@ let
       gnugrep
       gnused
       jq
+      python3
       ripgrep
     ];
   };
@@ -63,9 +64,10 @@ in
           # SYSTEM_PROMPT.md is the agent's system prompt
           ln -sfn ${./agent/SYSTEM_PROMPT.md} "$agentDir/SYSTEM_PROMPT.md"
 
-          # Skills pi discovers from $agentDir/skills (read-only; shared with the host pi setup)
+          # Skills pi discovers from $agentDir/skills (read-only)
           ln -sfn ${../../../../shared/modules/pi/skills/context7} "$agentDir/skills/context7"
           ln -sfn ${../../../../shared/modules/pi/skills/exa} "$agentDir/skills/exa"
+          ln -sfn ${./agent/skills/macros} "$agentDir/skills/macros"
         '';
 
         # GitHub's ed25519 host key, pinned so the backup push never needs a TOFU prompt.
