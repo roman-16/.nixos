@@ -41,7 +41,7 @@ export function renderPage(version: string): string {
           <span id="reload-status" class="text-xs"></span>
           <button hx-post="/reload" hx-target="#reload-status" hx-swap="innerHTML" hx-disabled-elt="this"
             class="ml-auto rounded-lg border border-neutral-700 px-3 py-1 text-xs text-neutral-300 transition hover:bg-neutral-800 disabled:opacity-50">
-            Reload
+            Reload Session
           </button>
         </header>
         <div id="chat" class="min-h-0 flex-1 space-y-3 overflow-y-auto p-4"
