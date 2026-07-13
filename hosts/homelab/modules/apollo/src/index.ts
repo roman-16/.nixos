@@ -8,7 +8,7 @@ import { pino } from "pino";
 import { createApolloSession, deliver, onAssistantText } from "./agent";
 import { parseTranscript, renderChat } from "./chat";
 import { loadConfig } from "./config";
-import { renderAnthropic, renderContext, renderPage, renderState } from "./dashboard";
+import { reloadStatus, renderAnthropic, renderContext, renderPage, renderState } from "./dashboard";
 import { isAllowed, voiceText } from "./messages";
 import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
 import { transcribeAudio } from "./transcribe";
@@ -203,6 +203,24 @@ export async function main(): Promise<void> {
         if (body === lastStatusBody) return new Response(null, { status: 204 });
         lastStatusBody = body;
         return new Response(body, { headers: htmlHeaders });
+      }
+
+      if (pathname === "/reload" && req.method === "POST") {
+        if (!session.isIdle) return new Response(reloadStatus("busy"), { headers: htmlHeaders });
+        try {
+          await session.reload();
+          // reload() rebuilds settings from disk, dropping in-memory overrides; re-assert the
+          // auto-compaction override the startup applies (getCompactionEnabled reads it live).
+          session.settingsManager.applyOverrides({ compaction: { enabled: true } });
+          session.sessionManager.appendCustomEntry("apollo_reload", {
+            at: new Date().toISOString(),
+          });
+          logger.info("reloaded via dashboard");
+          return new Response(reloadStatus("ok"), { headers: htmlHeaders });
+        } catch (error) {
+          logger.error({ error }, "reload failed");
+          return new Response(reloadStatus("error"), { headers: htmlHeaders });
+        }
       }
 
       if (pathname === "/context") {

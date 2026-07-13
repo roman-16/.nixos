@@ -1,6 +1,12 @@
 import { describe, expect, it } from "bun:test";
 
-import { renderAnthropic, renderContext, renderPage, renderState } from "../src/dashboard";
+import {
+  reloadStatus,
+  renderAnthropic,
+  renderContext,
+  renderPage,
+  renderState,
+} from "../src/dashboard";
 import type { WhatsAppState } from "../src/whatsapp";
 
 const state = (over: Partial<WhatsAppState>): WhatsAppState => ({
@@ -19,6 +25,16 @@ describe("renderPage", () => {
     expect(html).toContain(`hx-get="/chat"`);
     expect(html).toContain("/app.css?v=abc123");
     expect(html).toContain("/htmx.min.js?v=abc123");
+    expect(html).toContain(`hx-post="/reload"`);
+    expect(html).toContain(`id="reload-status"`);
+  });
+});
+
+describe("reloadStatus", () => {
+  it("renders success, busy, and error variants", () => {
+    expect(reloadStatus("ok")).toContain("Reloaded");
+    expect(reloadStatus("busy")).toContain("Busy");
+    expect(reloadStatus("error")).toContain("failed");
   });
 });
 

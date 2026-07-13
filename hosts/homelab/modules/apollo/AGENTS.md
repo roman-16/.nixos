@@ -8,6 +8,10 @@ After any code change, run all of the following and make sure they pass before c
 - `bun run build` - bundles with `bun build` to verify the app compiles.
 - `bun run test` - runs the test suite with `bun test`.
 
+## Dashboard
+
+The dashboard must stay responsive - everything has to work on both mobile and desktop.
+
 ## Tests
 
 - Tests live under `tests/`, mirroring the `src/` tree: `src/foo/bar.ts` is tested by `tests/foo/bar.test.ts`.

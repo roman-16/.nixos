@@ -115,6 +115,10 @@ export function parseTranscript(jsonl: string): LogItem[] {
       items.push({ kind: "divider", label: "Branch summary" });
       continue;
     }
+    if (entry.type === "custom" && entry.customType === "apollo_reload") {
+      items.push({ kind: "divider", label: "Reloaded" });
+      continue;
+    }
     if (entry.type !== "message") continue;
 
     const message = entry.message;

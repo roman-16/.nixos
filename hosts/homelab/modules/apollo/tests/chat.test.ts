@@ -106,6 +106,36 @@ describe("parseTranscript", () => {
     ]);
   });
 
+  it("renders a reload marker as a divider", () => {
+    const jsonl = [
+      JSON.stringify({
+        customType: "apollo_reload",
+        data: {},
+        id: "r",
+        parentId: null,
+        timestamp: "t",
+        type: "custom",
+      }),
+      message("a", { content: "hi", role: "user" }),
+    ].join("\n");
+
+    expect(parseTranscript(jsonl)).toEqual([
+      { kind: "divider", label: "Reloaded" },
+      { images: [], kind: "user", text: "hi" },
+    ]);
+  });
+
+  it("ignores custom entries of other types", () => {
+    const jsonl = JSON.stringify({
+      customType: "something_else",
+      id: "x",
+      parentId: null,
+      timestamp: "t",
+      type: "custom",
+    });
+    expect(parseTranscript(jsonl)).toEqual([]);
+  });
+
   it("renders bash-execution messages with command and exit code", () => {
     const items = parseTranscript(
       message("a", { command: "echo hi", exitCode: 0, output: "hi", role: "bashExecution" }),

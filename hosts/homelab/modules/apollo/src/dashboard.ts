@@ -36,7 +36,14 @@ export function renderPage(version: string): string {
         </div>
       </aside>
       <section class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900 shadow-2xl">
-        <header class="border-b border-neutral-800 px-5 py-3 text-sm font-semibold text-neutral-200">Chat log</header>
+        <header class="flex items-center gap-3 border-b border-neutral-800 px-5 py-3">
+          <span class="text-sm font-semibold text-neutral-200">Chat log</span>
+          <span id="reload-status" class="text-xs"></span>
+          <button hx-post="/reload" hx-target="#reload-status" hx-swap="innerHTML" hx-disabled-elt="this"
+            class="ml-auto rounded-lg border border-neutral-700 px-3 py-1 text-xs text-neutral-300 transition hover:bg-neutral-800 disabled:opacity-50">
+            Reload
+          </button>
+        </header>
         <div id="chat" class="min-h-0 flex-1 space-y-3 overflow-y-auto p-4"
           hx-get="/chat" hx-trigger="load, every 2s" hx-swap="innerHTML"
           hx-on::after-settle="this.scrollTop = this.scrollHeight">
@@ -58,6 +65,17 @@ function statusRow(dotClass: string, label: string): string {
     <span class="h-2.5 w-2.5 rounded-full ${dotClass}"></span>
     <span class="text-sm text-neutral-300">${label}</span>
   </div>`;
+}
+
+/** Inline #reload-status fragment shown after the dashboard Reload button is pressed. */
+export function reloadStatus(kind: "busy" | "error" | "ok"): string {
+  const { color, label } =
+    kind === "ok"
+      ? { color: "text-emerald-400", label: "Reloaded ✓" }
+      : kind === "busy"
+        ? { color: "text-amber-400", label: "Busy, try again" }
+        : { color: "text-red-400", label: "Reload failed" };
+  return `<span class="${color}">${label}</span>`;
 }
 
 const LINK_BUTTON = `<button hx-post="/link" hx-target="#app" hx-swap="innerHTML"
