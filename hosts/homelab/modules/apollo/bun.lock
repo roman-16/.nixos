@@ -5,6 +5,7 @@
     "": {
       "name": "apollo",
       "dependencies": {
+        "@earendil-works/pi-ai": "^0.80.6",
         "@earendil-works/pi-coding-agent": "^0.80.6",
         "@whiskeysockets/baileys": "^7.0.0-rc13",
         "pino": "^10.3.1",
