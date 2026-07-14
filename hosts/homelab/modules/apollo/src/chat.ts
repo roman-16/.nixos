@@ -209,7 +209,7 @@ function dayLabel(date: Date, now: Date): string {
   return `${two(date.getDate())}.${two(date.getMonth() + 1)}.${date.getFullYear()}`;
 }
 
-function dayDivider(label: string): string {
+function chipDivider(label: string): string {
   return `<div class="flex justify-center py-1">
     <span class="rounded-full border border-white/10 bg-neutral-900/90 px-3 py-1 text-[11px] font-medium text-neutral-400">${escapeHtml(label)}</span>
   </div>`;
@@ -232,7 +232,8 @@ function images(list: ChatImage[]): string {
     .map(
       (image) =>
         `<img src="data:${escapeHtml(image.mimeType)};base64,${image.data}" alt="image"
-          class="max-h-40 rounded-xl" />`,
+          class="max-h-40 cursor-zoom-in rounded-xl"
+          onclick="const box = document.getElementById('lightbox'); box.querySelector('img').src = this.src; box.showModal()" />`,
     )
     .join("");
   return `<div class="mt-1 flex flex-wrap gap-2">${tags}</div>`;
@@ -280,21 +281,19 @@ function renderItem(item: LogItem): string {
       const meta =
         item.tokensBefore == undefined ? "" : ` · ~${humanTokens(item.tokensBefore)} tokens`;
       const detail = item.summary
-        ? `<div class="mx-auto mt-2 max-w-lg rounded-xl border border-white/5 bg-neutral-950/60 px-3 py-2 text-left text-xs">${pre(
+        ? `<div class="mt-2 rounded-xl border border-white/5 bg-neutral-950/60 px-3 py-2 text-left text-xs">${pre(
             item.summary,
           )}</div>`
         : "";
       return `<details class="group py-1 text-center">
-        <summary class="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full border border-white/10 bg-neutral-900/90 px-3 py-1 text-[11px] font-medium text-neutral-500 transition hover:text-neutral-300">
+        <summary class="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full border border-white/10 bg-neutral-900/90 px-3 py-1 text-[11px] font-medium text-neutral-400 transition hover:text-neutral-200">
           Context compacted${meta}<span class="transition group-open:rotate-180">▾</span>
         </summary>
         ${detail}
       </details>`;
     }
     case "divider":
-      return `<div class="flex items-center gap-3 py-1 text-[11px] uppercase tracking-wide text-neutral-600">
-        <span class="h-px flex-1 bg-white/5"></span>${escapeHtml(item.label)}<span class="h-px flex-1 bg-white/5"></span>
-      </div>`;
+      return chipDivider(item.label);
     case "thinking":
       return disclosure(
         `<span class="italic text-neutral-500">thinking</span>`,
@@ -337,7 +336,7 @@ export function renderChat(items: LogItem[], now: Date = new Date()): string {
       const date = new Date(item.time);
       const day = date.toDateString();
       if (day !== lastDay) {
-        parts.push(dayDivider(dayLabel(date, now)));
+        parts.push(chipDivider(dayLabel(date, now)));
         lastDay = day;
       }
     }

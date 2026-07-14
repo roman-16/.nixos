@@ -220,11 +220,13 @@ describe("renderChat", () => {
     expect(html).toContain("more chars");
   });
 
-  it("embeds user images as data URIs", () => {
+  it("embeds user images as data URIs that open the lightbox", () => {
     const html = renderChat([
       { images: [{ data: "AAAA", mimeType: "image/png" }], kind: "user", text: "" },
     ]);
     expect(html).toContain("data:image/png;base64,AAAA");
+    expect(html).toContain("cursor-zoom-in");
+    expect(html).toContain("lightbox");
   });
 
   it("renders a compaction entry as an expandable summary with token count", () => {

@@ -5,7 +5,6 @@
  */
 
 const LOG_CAPACITY = 1000;
-const DISPLAY_LIMIT = 200;
 
 export type LogLevel = "all" | "error" | "info" | "warn";
 
@@ -22,11 +21,11 @@ export function parseLevel(value: string | null | undefined): LogLevel {
   return value === "info" || value === "warn" || value === "error" ? value : "all";
 }
 
-/** Records at or above the level threshold, newest first, capped for display. */
+/** Records at or above the level threshold, newest first. */
 export function filterLogs(records: LogRecord[], level: LogLevel): LogRecord[] {
   const min = THRESHOLDS[level];
   const out: LogRecord[] = [];
-  for (let i = records.length - 1; i >= 0 && out.length < DISPLAY_LIMIT; i -= 1) {
+  for (let i = records.length - 1; i >= 0; i -= 1) {
     const record = records[i];
     if (record && typeof record.level === "number" && record.level >= min) out.push(record);
   }

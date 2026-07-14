@@ -13,7 +13,6 @@ import {
   renderContext,
   renderLogs,
   renderPage,
-  renderPills,
   renderState,
   sessionStatus,
 } from "./dashboard";
@@ -74,7 +73,6 @@ export async function main(): Promise<void> {
   let lastStatusBody: string | undefined;
   let lastChatBody: string | undefined;
   let lastLogKey: string | undefined;
-  let lastPillsBody: string | undefined;
   let chatCache: { body: string; mtimeMs: number } | undefined;
   let usage: { data: UsageData | null; fetchedAt: number } | undefined;
 
@@ -219,7 +217,6 @@ export async function main(): Promise<void> {
         lastStatusBody = undefined;
         lastChatBody = undefined;
         lastLogKey = undefined;
-        lastPillsBody = undefined;
         return new Response(renderPage(assetsVersion), { headers: htmlHeaders });
       }
 
@@ -238,17 +235,6 @@ export async function main(): Promise<void> {
         return new Response(renderLogs(filterLogs(logBuffer.records(), level)), {
           headers: htmlHeaders,
         });
-      }
-
-      if (pathname === "/pills") {
-        const body = renderPills(
-          whatsapp.getState().status,
-          authStorage.hasAuth("anthropic"),
-          session.getContextUsage(),
-        );
-        if (body === lastPillsBody) return new Response(null, { status: 204 });
-        lastPillsBody = body;
-        return new Response(body, { headers: htmlHeaders });
       }
 
       if (pathname === "/link" && req.method === "POST") {

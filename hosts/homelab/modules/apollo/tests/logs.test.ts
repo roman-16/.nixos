@@ -67,8 +67,8 @@ describe("filterLogs", () => {
     expect(filterLogs(mixed, "all").map((record) => record.msg)).toEqual(["e"]);
   });
 
-  it("caps the number of displayed records", () => {
+  it("returns every matching record without a display cap", () => {
     const many = Array.from({ length: 250 }, (_, i) => ({ level: 30, msg: String(i), time: i }));
-    expect(filterLogs(many, "all").length).toBe(200);
+    expect(filterLogs(many, "all").length).toBe(250);
   });
 });

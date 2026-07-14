@@ -4,14 +4,11 @@ import QRCode from "qrcode";
 import { escapeHtml, humanTokens, truncate } from "./format";
 import type { LogRecord } from "./logs";
 import { renderUsage, type UsageData } from "./usage";
-import type { WhatsAppState, WhatsAppStatus } from "./whatsapp";
+import type { WhatsAppState } from "./whatsapp";
 
 const CARD = "rounded-2xl border border-white/10 bg-neutral-900/60 shadow-xl";
 const GHOST_BUTTON =
   "rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-neutral-300 transition hover:bg-white/5 disabled:opacity-50";
-const PILL =
-  "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-neutral-300 transition hover:bg-white/10";
-
 function statusRow(dotClass: string, label: string): string {
   return `<div class="flex items-center gap-2">
     <span class="h-2 w-2 rounded-full ${dotClass}"></span>
@@ -26,10 +23,9 @@ function filterChip(value: string, label: string, checked = false): string {
 }
 
 /**
- * Full page shell: a sticky header with at-a-glance status pills, the chat as the hero,
- * and a rail of status cards (WhatsApp, Claude, logs). Two columns on desktop, a
- * chat-first stack on mobile; the page itself scrolls. Each region polls its fragment
- * endpoint and swaps its own contents.
+ * Full page shell: the chat as the hero and a rail of status cards (WhatsApp, Claude,
+ * logs). Two columns on desktop, a chat-first stack on mobile; the page itself scrolls.
+ * Each region polls its fragment endpoint and swaps its own contents.
  */
 export function renderPage(version: string): string {
   return `<!doctype html>
@@ -45,11 +41,9 @@ export function renderPage(version: string): string {
   </head>
   <body class="min-h-dvh bg-neutral-950 text-neutral-100 antialiased">
     <header class="sticky top-0 z-20 border-b border-white/5 bg-neutral-950/80 backdrop-blur">
-      <div class="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-6">
-        <div class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-indigo-500/20 text-sm font-bold text-indigo-300">A</div>
+      <div class="mx-auto flex w-full max-w-7xl items-center gap-3 px-4 py-3 sm:px-6">
+        <img src="/favicon.svg?v=${version}" alt="" class="h-8 w-8 shrink-0" />
         <h1 class="text-base font-semibold tracking-tight">Apollo</h1>
-        <nav id="pills" class="ml-auto flex flex-wrap items-center justify-end gap-1.5 sm:gap-2"
-          hx-get="/pills" hx-trigger="load, every 2s" hx-swap="innerHTML"></nav>
       </div>
     </header>
     <main class="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-6">
@@ -94,55 +88,29 @@ export function renderPage(version: string): string {
               <p class="text-xs text-neutral-500">Loading…</p>
             </div>
           </section>
-          <section id="logs-card" class="${CARD} scroll-mt-20 overflow-hidden">
-            <header class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/5 px-4 py-3 sm:px-5">
-              <h2 class="text-sm font-semibold text-neutral-200">Logs</h2>
-              <form id="logs-filter" class="ml-auto flex gap-0.5 rounded-lg border border-white/10 bg-neutral-950/60 p-0.5 text-[11px]">
-                ${filterChip("all", "All", true)}
-                ${filterChip("info", "Info+")}
-                ${filterChip("warn", "Warn+")}
-                ${filterChip("error", "Error")}
-              </form>
-            </header>
-            <div id="log-list" class="max-h-96 overflow-y-auto overscroll-contain"
-              hx-get="/logs" hx-include="#logs-filter" hx-trigger="load, every 2s, change from:#logs-filter" hx-swap="innerHTML">
-              <p class="px-4 py-6 text-center text-xs text-neutral-600">Loading…</p>
-            </div>
-          </section>
         </div>
+        <section id="logs-card" class="${CARD} min-w-0 scroll-mt-20 overflow-hidden lg:col-span-2">
+          <header class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/5 px-4 py-3 sm:px-5">
+            <h2 class="text-sm font-semibold text-neutral-200">Logs</h2>
+            <form id="logs-filter" class="ml-auto flex gap-0.5 rounded-lg border border-white/10 bg-neutral-950/60 p-0.5 text-[11px]">
+              ${filterChip("all", "All", true)}
+              ${filterChip("info", "Info+")}
+              ${filterChip("warn", "Warn+")}
+              ${filterChip("error", "Error")}
+            </form>
+          </header>
+          <div id="log-list" class="max-h-[32rem] overflow-y-auto overscroll-contain"
+            hx-get="/logs" hx-include="#logs-filter" hx-trigger="load, every 2s, change from:#logs-filter" hx-swap="innerHTML">
+            <p class="px-4 py-6 text-center text-xs text-neutral-600">Loading…</p>
+          </div>
+        </section>
       </div>
     </main>
+    <dialog id="lightbox" class="m-auto bg-transparent p-0 backdrop:bg-black/80" onclick="this.close()">
+      <img src="" alt="" class="max-h-[92dvh] max-w-[92vw] rounded-xl" />
+    </dialog>
   </body>
 </html>`;
-}
-
-function pill(href: string, dot: string, label: string): string {
-  return `<a href="${href}" class="${PILL}"><span class="h-1.5 w-1.5 rounded-full ${dot}"></span>${label}</a>`;
-}
-
-const WHATSAPP_DOT: Record<WhatsAppStatus, string> = {
-  connected: "bg-emerald-400",
-  connecting: "animate-pulse bg-amber-400",
-  loggedOut: "bg-red-400",
-  qr: "bg-amber-400",
-};
-
-/** Render the #pills fragment: at-a-glance status chips that anchor-link to their cards. */
-export function renderPills(
-  whatsapp: WhatsAppStatus,
-  anthropicConnected: boolean,
-  usage: ContextUsage | undefined,
-): string {
-  const pills = [
-    pill("#whatsapp-card", WHATSAPP_DOT[whatsapp], "WhatsApp"),
-    pill("#anthropic-card", anthropicConnected ? "bg-emerald-400" : "bg-neutral-600", "Claude"),
-  ];
-  if (usage && usage.contextWindow > 0 && usage.percent != null) {
-    const pct = Math.min(100, Math.max(0, usage.percent));
-    const dot = pct >= 90 ? "bg-red-400" : pct >= 70 ? "bg-amber-400" : "bg-emerald-400";
-    pills.push(pill("#chat-card", dot, `Ctx ${Math.round(pct)}%`));
-  }
-  return pills.join("");
 }
 
 /** Inline #session-status fragment shown after a dashboard Compact/Reload button is pressed. */
@@ -292,7 +260,7 @@ function logExtras(record: LogRecord): string {
   } catch {
     return "";
   }
-  return `<pre class="mt-0.5 overflow-x-auto whitespace-pre-wrap break-words text-[10px] text-neutral-500">${escapeHtml(
+  return `<pre class="mt-0.5 overflow-x-auto whitespace-pre-wrap break-words text-[11px] text-neutral-500">${escapeHtml(
     truncate(json, 4000),
   )}</pre>`;
 }
@@ -306,10 +274,10 @@ export function renderLogs(records: LogRecord[]): string {
     .map((record) => {
       const { color, text } = logLevel(typeof record.level === "number" ? record.level : 30);
       const msg = typeof record.msg === "string" ? record.msg : "";
-      return `<div class="border-b border-white/5 px-4 py-1.5 font-mono text-[11px] leading-snug last:border-b-0 sm:px-5">
+      return `<div class="border-b border-white/5 px-4 py-1.5 font-mono text-xs leading-snug last:border-b-0 sm:px-5">
       <div class="flex gap-2">
         <span class="shrink-0 text-neutral-600">${logTime(record.time)}</span>
-        <span class="w-11 shrink-0 font-semibold ${color}">${text}</span>
+        <span class="w-12 shrink-0 font-semibold ${color}">${text}</span>
         <span class="min-w-0 break-words text-neutral-300">${escapeHtml(msg)}</span>
       </div>
       ${logExtras(record)}

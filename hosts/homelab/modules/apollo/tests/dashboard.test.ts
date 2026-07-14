@@ -5,7 +5,6 @@ import {
   renderContext,
   renderLogs,
   renderPage,
-  renderPills,
   renderState,
   sessionStatus,
 } from "../src/dashboard";
@@ -21,8 +20,6 @@ const state = (over: Partial<WhatsAppState>): WhatsAppState => ({
 describe("renderPage", () => {
   it("includes every polling region and version-busted assets", () => {
     const html = renderPage("abc123");
-    expect(html).toContain(`id="pills"`);
-    expect(html).toContain(`hx-get="/pills"`);
     expect(html).toContain(`id="whatsapp"`);
     expect(html).toContain(`hx-get="/status"`);
     expect(html).toContain(`id="anthropic"`);
@@ -41,6 +38,7 @@ describe("renderPage", () => {
     expect(html).toContain(`id="log-list"`);
     expect(html).toContain(`hx-get="/logs"`);
     expect(html).toContain(`id="logs-filter"`);
+    expect(html).toContain(`id="lightbox"`);
   });
 
   it("sticks the chat to the bottom only when already near it", () => {
@@ -48,50 +46,6 @@ describe("renderPage", () => {
     expect(html).toContain("hx-on::before-swap");
     expect(html).toContain("hx-on::after-settle");
     expect(html).toContain("dataset.stick");
-  });
-});
-
-describe("renderPills", () => {
-  it("shows all three pills with card anchors when everything is healthy", () => {
-    const html = renderPills("connected", true, {
-      contextWindow: 1000000,
-      percent: 42,
-      tokens: 420000,
-    });
-    expect(html).toContain(`href="#whatsapp-card"`);
-    expect(html).toContain(`href="#anthropic-card"`);
-    expect(html).toContain(`href="#chat-card"`);
-    expect(html).toContain("WhatsApp");
-    expect(html).toContain("Claude");
-    expect(html).toContain("Ctx 42%");
-    expect(html.match(/bg-emerald-400/g)?.length).toBe(3);
-  });
-
-  it("colors degraded states and omits the context pill without usage", () => {
-    const html = renderPills("loggedOut", false, undefined);
-    expect(html).toContain("bg-red-400");
-    expect(html).toContain("bg-neutral-600");
-    expect(html).not.toContain("Ctx");
-  });
-
-  it("pulses while connecting and skips the context pill when percent is unknown", () => {
-    const html = renderPills("connecting", true, {
-      contextWindow: 1000000,
-      percent: null,
-      tokens: null,
-    });
-    expect(html).toContain("animate-pulse");
-    expect(html).not.toContain("Ctx");
-  });
-
-  it("colors high context usage red", () => {
-    const html = renderPills("connected", true, {
-      contextWindow: 1000000,
-      percent: 95,
-      tokens: 950000,
-    });
-    expect(html).toContain("Ctx 95%");
-    expect(html).toContain("bg-red-400");
   });
 });
 
