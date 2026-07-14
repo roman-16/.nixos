@@ -83,15 +83,17 @@ export async function main(): Promise<void> {
     }
   }
 
-  onAssistantText(session, (text) => {
-    if (!wa || !target) return;
-    void wa.send(target, text).catch((error) => logger.error({ error }, "send failed"));
-  });
-
-  // WhatsApp's "typing…" indicator auto-expires after a few seconds, so refresh it
-  // on a loop while the agent works and clear it only once the agent is fully
-  // settled (after all tool calls / queued follow-ups).
+  // Keep WhatsApp's "typing…" indicator up continuously from when a message
+  // arrives until the agent fully settles. WhatsApp drops it whenever we send a
+  // message and auto-expires it after a few seconds, so we re-assert "composing"
+  // right after every outbound message (below) and on a short refresh loop.
+  const typingRefreshMs = 4000;
+  const typingMaxTicks = 120; // ~8 min safety cap (typingRefreshMs * typingMaxTicks)
   let typingTimer: ReturnType<typeof setInterval> | undefined;
+
+  function sendComposing() {
+    if (wa && target) void wa.presence(target, "composing");
+  }
 
   function stopTyping() {
     if (typingTimer) {
@@ -104,16 +106,29 @@ export async function main(): Promise<void> {
   function startTyping() {
     stopTyping();
     if (!wa || !target) return;
-    void wa.presence(target, "composing");
+    sendComposing();
     let ticks = 0;
     typingTimer = setInterval(() => {
-      if (!wa || !target || (ticks += 1) > 60) {
+      if (!wa || !target || (ticks += 1) > typingMaxTicks) {
         stopTyping();
         return;
       }
-      void wa.presence(target, "composing");
-    }, 8000);
+      sendComposing();
+    }, typingRefreshMs);
   }
+
+  onAssistantText(session, (text) => {
+    if (!wa || !target) return;
+    void wa
+      .send(target, text)
+      .then(() => {
+        // Sending clears the indicator on the recipient's side; re-assert it while
+        // the agent is still working. Once it settles, stopTyping has cleared the
+        // timer, so this guard stays quiet and never leaves "typing…" stuck on.
+        if (typingTimer) sendComposing();
+      })
+      .catch((error) => logger.error({ error }, "send failed"));
+  });
 
   session.subscribe((event) => {
     if (event.type === "agent_settled") stopTyping();

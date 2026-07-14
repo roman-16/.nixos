@@ -31,7 +31,7 @@ It stages everything, commits with a timestamp, and pushes (and prints `Nothing 
 
 ## Follow the folder's Brief
 
-Before writing in a folder, look for a `*Brief*.md` in it (e.g. `Recipes/Editorial Brief.md`). If one exists, read it and follow it: a Brief governs *how* to write there (tone, structure, formatting, conventions), never *what* to write. The vault carries its own conventions this way, so there's no separate list to memorise.
+Before writing in a folder, look for a `*Brief*.md` in it (e.g. `Recipes/Editorial Brief.md`). If one exists, read it and follow it: a Brief governs _how_ to write there (tone, structure, formatting, conventions), never _what_ to write. The vault carries its own conventions this way, so there's no separate list to memorise.
 
 ## Obsidian syntax
 
