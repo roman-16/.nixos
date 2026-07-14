@@ -38,11 +38,18 @@ export function renderPage(version: string): string {
       <section class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900 shadow-2xl">
         <header class="flex items-center gap-3 border-b border-neutral-800 px-5 py-3">
           <span class="text-sm font-semibold text-neutral-200">Chat log</span>
-          <span id="reload-status" class="text-xs"></span>
-          <button hx-post="/reload" hx-target="#reload-status" hx-swap="innerHTML" hx-disabled-elt="this"
-            class="ml-auto rounded-lg border border-neutral-700 px-3 py-1 text-xs text-neutral-300 transition hover:bg-neutral-800 disabled:opacity-50">
-            Reload Session
-          </button>
+          <span id="session-status" class="text-xs"></span>
+          <div class="ml-auto flex items-center gap-2">
+            <span class="text-xs text-neutral-500">Session:</span>
+            <button hx-post="/compact" hx-target="#session-status" hx-swap="innerHTML" hx-disabled-elt="this"
+              class="rounded-lg border border-neutral-700 px-3 py-1 text-xs text-neutral-300 transition hover:bg-neutral-800 disabled:opacity-50">
+              Compact
+            </button>
+            <button hx-post="/reload" hx-target="#session-status" hx-swap="innerHTML" hx-disabled-elt="this"
+              class="rounded-lg border border-neutral-700 px-3 py-1 text-xs text-neutral-300 transition hover:bg-neutral-800 disabled:opacity-50">
+              Reload
+            </button>
+          </div>
         </header>
         <div id="chat" class="min-h-0 flex-1 space-y-3 overflow-y-auto p-4"
           hx-get="/chat" hx-trigger="load, every 2s" hx-swap="innerHTML"
@@ -67,14 +74,16 @@ function statusRow(dotClass: string, label: string): string {
   </div>`;
 }
 
-/** Inline #reload-status fragment shown after the dashboard Reload button is pressed. */
-export function reloadStatus(kind: "busy" | "error" | "ok"): string {
+/** Inline #session-status fragment shown after a dashboard Compact/Reload button is pressed. */
+export function sessionStatus(action: "compact" | "reload", kind: "busy" | "error" | "ok"): string {
+  const done = action === "compact" ? "Compacted ✓" : "Reloaded ✓";
+  const failed = action === "compact" ? "Compact failed" : "Reload failed";
   const { color, label } =
     kind === "ok"
-      ? { color: "text-emerald-400", label: "Reloaded ✓" }
+      ? { color: "text-emerald-400", label: done }
       : kind === "busy"
         ? { color: "text-amber-400", label: "Busy, try again" }
-        : { color: "text-red-400", label: "Reload failed" };
+        : { color: "text-red-400", label: failed };
   return `<span class="${color}">${label}</span>`;
 }
 

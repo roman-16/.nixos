@@ -8,7 +8,13 @@ import { pino } from "pino";
 import { createApolloSession, deliver, onAssistantText } from "./agent";
 import { parseTranscript, renderChat } from "./chat";
 import { loadConfig } from "./config";
-import { reloadStatus, renderAnthropic, renderContext, renderPage, renderState } from "./dashboard";
+import {
+  renderAnthropic,
+  renderContext,
+  renderPage,
+  renderState,
+  sessionStatus,
+} from "./dashboard";
 import { isAllowed, voiceText } from "./messages";
 import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
 import { transcribeAudio } from "./transcribe";
@@ -206,7 +212,9 @@ export async function main(): Promise<void> {
       }
 
       if (pathname === "/reload" && req.method === "POST") {
-        if (!session.isIdle) return new Response(reloadStatus("busy"), { headers: htmlHeaders });
+        if (!session.isIdle || session.isCompacting) {
+          return new Response(sessionStatus("reload", "busy"), { headers: htmlHeaders });
+        }
         try {
           await session.reload();
           // reload() rebuilds settings from disk, dropping in-memory overrides; re-assert the
@@ -216,10 +224,24 @@ export async function main(): Promise<void> {
             at: new Date().toISOString(),
           });
           logger.info("reloaded via dashboard");
-          return new Response(reloadStatus("ok"), { headers: htmlHeaders });
+          return new Response(sessionStatus("reload", "ok"), { headers: htmlHeaders });
         } catch (error) {
           logger.error({ error }, "reload failed");
-          return new Response(reloadStatus("error"), { headers: htmlHeaders });
+          return new Response(sessionStatus("reload", "error"), { headers: htmlHeaders });
+        }
+      }
+
+      if (pathname === "/compact" && req.method === "POST") {
+        if (!session.isIdle || session.isCompacting) {
+          return new Response(sessionStatus("compact", "busy"), { headers: htmlHeaders });
+        }
+        try {
+          await session.compact();
+          logger.info("compacted via dashboard");
+          return new Response(sessionStatus("compact", "ok"), { headers: htmlHeaders });
+        } catch (error) {
+          logger.error({ error }, "compact failed");
+          return new Response(sessionStatus("compact", "error"), { headers: htmlHeaders });
         }
       }
 
