@@ -13,7 +13,7 @@
           PROTON_USER = secrets.PROTON_USER;
         };
 
-        systemPackages = [ inputs.proton-cli.packages.${pkgs.system}.default ];
+        systemPackages = [ inputs.proton-cli.packages.${pkgs.stdenv.hostPlatform.system}.default ];
       };
     };
 
