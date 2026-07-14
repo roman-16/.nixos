@@ -105,18 +105,44 @@ def prev_cumulative(date: str, phase: str) -> float | int:
     return pd.get("cumulative", 0) if pd.get("phase") == phase else 0
 
 
-def refresh_ledger(date: str):
-    """Sole writer of a day's cumulative + target, derived from its snapshot
-    and the previous day's cumulative (reset on a phase change)."""
-    path = day_path(date)
-    if not path.exists():
-        return
-    day = load(path, {})
-    prevcum = prev_cumulative(date, day["phase"])
+def _apply_ledger(day: dict) -> dict:
+    """Set a day's cumulative + target from its own entries and the previous
+    day's cumulative (reset on a phase change). Mutates and returns the dict;
+    reads other days but never writes."""
+    prevcum = prev_cumulative(day["date"], day["phase"])
     actual = sum(e["kcal"] for e in day["entries"])
     day["cumulative"] = prevcum + actual - day["dailyGoal"]
     day["target"] = max(day["dailyGoal"] - prevcum, floor_of(day))
-    save(path, day)
+    return day
+
+
+def refresh_ledger(date: str):
+    """Sole writer of a day's cumulative + target."""
+    path = day_path(date)
+    if path.exists():
+        save(path, _apply_ledger(load(path, {})))
+
+
+def compute_day(date: str, extra_entries=()) -> dict | None:
+    """A day's in-memory snapshot with the ledger applied and `extra_entries`
+    appended, persisting nothing. Uses the stored day, or synthesizes one from
+    the goal when nothing is logged yet; returns None when there is neither a
+    day nor a goal (so callers can prompt for goal-set)."""
+    path = day_path(date)
+    if path.exists():
+        day = load(path, {})
+    elif GOAL_FILE.exists():
+        g = load(GOAL_FILE, {})
+        day = {
+            "date": date, "phase": g.get("phase"), "tdee": g.get("tdee"),
+            "dailyGoal": g.get("dailyGoal"), "proteinGoal": g.get("proteinGoal"),
+            "target": g.get("dailyGoal"), "cumulative": 0, "weight": None, "entries": [],
+        }
+    else:
+        return None
+    if extra_entries:
+        day = {**day, "entries": [*day["entries"], *extra_entries]}
+    return _apply_ledger(day)
 
 
 def ensure_day(date: str):
@@ -139,16 +165,76 @@ def ensure_day(date: str):
     refresh_ledger(date)
 
 
-def add_entry(date, time, item, kcal, protein, fat, carbs, note):
+def make_entry(time, item, kcal, protein, fat, carbs, note) -> dict:
+    return {
+        "time": time, "item": item, "kcal": kcal,
+        "protein": protein, "fat": fat, "carbs": carbs, "note": note or None,
+    }
+
+
+def append_entry(date: str, entry: dict):
     ensure_day(date)
     path = day_path(date)
     day = load(path, {})
-    day["entries"].append({
-        "time": time, "item": item, "kcal": kcal,
-        "protein": protein, "fat": fat, "carbs": carbs, "note": note or None,
-    })
+    day["entries"].append(entry)
     save(path, day)
     refresh_ledger(date)
+
+
+# --- portions (target/fit sizing + preview) ------------------------------
+
+def has_target(args) -> bool:
+    """Whether a --fit-*/--target-* amount source was requested."""
+    return bool(
+        args.fit_protein or args.fit_kcal
+        or args.target_protein is not None or args.target_kcal is not None
+    )
+
+
+def portion_for_target(name: str, rate: dict, day: dict, args):
+    """Amount of a scalable food/batch that meets a --fit-*/--target-* request.
+    `rate` is the per-unit macro map (per gram for a food, per whole batch for a
+    prep) and `day` is today's snapshot (for the fit gaps). Returns
+    (amount, why, dimension, requested); dies on an impossible request."""
+    protein_today = sum(e["protein"] for e in day["entries"])
+    kcal_today = sum(e["kcal"] for e in day["entries"])
+    if args.fit_protein:
+        gap = day["proteinGoal"] - protein_today
+        if gap <= 0:
+            die(f"already at your protein goal today ({round(protein_today)}/{day['proteinGoal']}g)")
+        if rate["protein"] <= 0:
+            die(f"{name} has no protein to fit to")
+        return gap / rate["protein"], "to reach your protein goal", "protein", gap
+    if args.fit_kcal:
+        gap = day["target"] - kcal_today
+        if gap <= 0:
+            die(f"already at your kcal target today ({round(kcal_today)}/{day['target']} kcal)")
+        if rate["kcal"] <= 0:
+            die(f"{name} has no calories to fit to")
+        return gap / rate["kcal"], "to reach your kcal target", "kcal", gap
+    if args.target_protein is not None:
+        if rate["protein"] <= 0:
+            die(f"{name} has no protein")
+        return args.target_protein / rate["protein"], f"for {r1(args.target_protein)}g protein", "protein", args.target_protein
+    if rate["kcal"] <= 0:
+        die(f"{name} has no calories")
+    return args.target_kcal / rate["kcal"], f"for {round(args.target_kcal)} kcal", "kcal", args.target_kcal
+
+
+def emit(date: str, entry: dict, *, dry_run: bool, lead: str | None = None, commit=None):
+    """Render the day with `entry` applied: on --dry-run project it without
+    saving; otherwise `commit()` (which persists) then render the stored day.
+    An optional `lead` line (the computed portion) prints first."""
+    if lead:
+        print(lead)
+    if dry_run:
+        day = compute_day(date, [entry])
+        if day is None:
+            die("no goal set - run: macros.py goal-set --tdee N --daily-goal N --protein N --phase cut")
+        render_day_dict(day, preview=True)
+    else:
+        commit()
+        render_day(date)
 
 
 # --- rendering -----------------------------------------------------------
@@ -157,23 +243,10 @@ def dm(date: str) -> str:
     return f"{date[8:10]}.{date[5:7]}"
 
 
-def render_day(date: str):
-    path = day_path(date)
-    if path.exists():
-        day = load(path, {})
-    elif GOAL_FILE.exists():
-        # Nothing logged yet: still show the day's targets, derived from the ledger.
-        g = load(GOAL_FILE, {})
-        prevcum = prev_cumulative(date, g.get("phase"))
-        floor = g["tdee"] - 500 if g["dailyGoal"] <= g["tdee"] else g["tdee"]
-        day = {"date": date, "tdee": g["tdee"], "dailyGoal": g["dailyGoal"],
-               "proteinGoal": g["proteinGoal"], "cumulative": prevcum,
-               "target": max(g["dailyGoal"] - prevcum, floor),
-               "weight": None, "entries": []}
-    else:
-        print(f"nothing logged for {date} yet - set a goal first with goal-set")
-        return
-    label = f"Today ({dm(date)})" if date == today() else dm(date)
+def render_day_dict(day: dict, *, preview: bool = False):
+    date = day["date"]
+    base = f"Today ({dm(date)})" if date == today() else dm(date)
+    label = f"{base} - preview, not logged" if preview else base
     entries = day["entries"]
     protein_goal = day["proteinGoal"]
     if not entries:
@@ -205,6 +278,14 @@ def render_day(date: str):
     print("\n".join(lines))
 
 
+def render_day(date: str):
+    day = compute_day(date)
+    if day is None:
+        print(f"nothing logged for {date} yet - set a goal first with goal-set")
+        return
+    render_day_dict(day)
+
+
 # --- commands ------------------------------------------------------------
 
 def cmd_goal(args):
@@ -233,9 +314,9 @@ def cmd_goal_set(args):
 
 def cmd_log(args):
     date = args.date or today()
-    add_entry(date, args.time or now_time(), args.item,
-              args.kcal, args.protein, args.fat, args.carbs, args.note)
-    render_day(date)
+    entry = make_entry(args.time or now_time(), args.item,
+                       args.kcal, args.protein, args.fat, args.carbs, args.note)
+    emit(date, entry, dry_run=args.dry_run, commit=lambda: append_entry(date, entry))
 
 
 def cmd_show(args):
@@ -318,6 +399,36 @@ def cmd_food_list(args):
         print(f"- {v['name']}  (aliases: {', '.join(v.get('aliases', []))})")
 
 
+def cmd_food_eat(args):
+    _, food = find(load(FOOD_FILE, {}), args.name)
+    if not food:
+        die(f'no saved food matches "{args.name}" - add it with food-add or log an estimate')
+    per100 = food["per100"]
+    rate = {k: per100[k] / 100 for k in ("kcal", "protein", "fat", "carbs")}
+    date = args.date or today()
+    why = None
+    if has_target(args):
+        day = compute_day(date, [])
+        if day is None:
+            die("no goal set - run: macros.py goal-set --tdee N --daily-goal N --protein N --phase cut")
+        grams, why, _, _ = portion_for_target(food["name"], rate, day, args)
+    elif args.grams is not None:
+        grams = args.grams
+    elif args.servings is not None:
+        grams = args.servings * food["serving"]
+    else:
+        grams = food["serving"]
+    if grams <= 0:
+        die("amount must be positive")
+    grams = round(grams)
+    kcal = round(rate["kcal"] * grams)
+    protein = r1(rate["protein"] * grams)
+    entry = make_entry(now_time(), f"{food['name']} ({grams}g)",
+                       kcal, protein, r1(rate["fat"] * grams), r1(rate["carbs"] * grams), None)
+    lead = f"🍽️ {food['name']}: {grams}g {why} - {kcal} kcal, {protein}g P" if why else None
+    emit(date, entry, dry_run=args.dry_run, lead=lead, commit=lambda: append_entry(date, entry))
+
+
 def cmd_prep_add(args):
     prep = load(PREP_FILE, {})
     prep[args.name.lower()] = {
@@ -336,34 +447,54 @@ def cmd_prep_eat(args):
     if not batch:
         die(f'no prep named "{args.name}"')
     remaining = batch["remaining"]
-    # --fraction is always relative to the *whole* batch; --remaining finishes it.
-    if args.remaining:
+    total = batch["total"]
+    date = args.date or today()
+    lead, capped = None, False
+    # --fraction/--remaining are shares of the *whole* batch; --fit-*/--target-*
+    # size the share for you.
+    if has_target(args):
+        day = compute_day(date, [])
+        if day is None:
+            die("no goal set - run: macros.py goal-set --tdee N --daily-goal N --protein N --phase cut")
+        ideal, why, dim, requested = portion_for_target(batch["name"], total, day, args)
+        frac = min(ideal, remaining)
+        capped = ideal > remaining + 1e-6
+    elif args.remaining:
         frac = remaining
     elif args.fraction is not None:
         frac = parse_fraction(args.fraction)
     else:
-        die("give --fraction F (of the whole batch) or --remaining to finish it")
+        die("give an amount: --fraction, --remaining, --fit-protein/--fit-kcal, or --target-protein/--target-kcal")
     if frac <= 0:
         die("fraction must be positive")
-    if frac > remaining + 1e-6:
+    # An explicit --fraction over-ask is a mistake; a fit/target over-ask is capped above.
+    if not has_target(args) and frac > remaining + 1e-6:
         die(f'only {round(remaining * 100)}% of "{batch["name"]}" is left '
-            f"({round(batch['total']['kcal'] * remaining)} kcal); cannot eat "
+            f"({round(total['kcal'] * remaining)} kcal); cannot eat "
             f"{round(frac * 100)}%. Use --remaining to finish it.")
-    t = batch["total"]
-    date = args.date or today()
-    add_entry(
-        date, now_time(), f"{batch['name']} ({round(frac * 100)}% of batch)",
-        round(t["kcal"] * frac), r1(t["protein"] * frac), r1(t["fat"] * frac), r1(t["carbs"] * frac),
-        "prep",
-    )
-    left = remaining - frac
-    if left <= 0.0001:
-        del prep[key]
-    else:
-        batch["remaining"] = left
-        prep[key] = batch
-    save(PREP_FILE, prep)
-    render_day(date)
+    kcal = round(total["kcal"] * frac)
+    protein = r1(total["protein"] * frac)
+    entry = make_entry(now_time(), f"{batch['name']} ({round(frac * 100)}% of batch)",
+                       kcal, protein, r1(total["fat"] * frac), r1(total["carbs"] * frac), "prep")
+    if has_target(args):
+        lead = f"🍽️ {batch['name']}: {round(frac * 100)}% of batch {why} - {kcal} kcal, {protein}g P"
+        if capped:
+            short = requested - frac * total[dim]
+            short_txt = f"{round(short)}g P" if dim == "protein" else f"{round(short)} kcal"
+            lead += (f"\n⚠️ only {round(remaining * 100)}% of the batch is left - "
+                     f"capped to that, {short_txt} short of the target.")
+
+    def commit():
+        append_entry(date, entry)
+        left = remaining - frac
+        if left <= 0.0001:
+            del prep[key]
+        else:
+            batch["remaining"] = left
+            prep[key] = batch
+        save(PREP_FILE, prep)
+
+    emit(date, entry, dry_run=args.dry_run, lead=lead, commit=commit)
 
 
 def cmd_prep_list(args):
@@ -385,6 +516,20 @@ def cmd_recompute(args):
             refresh_ledger(d)
             n += 1
     print(f"recomputed {n} day(s)")
+
+
+def add_amount_flags(sp, *extra):
+    """Attach the mutually exclusive amount sources (command-specific `extra`
+    plus the shared --fit-*/--target-*) and the --dry-run/--date flags."""
+    group = sp.add_mutually_exclusive_group()
+    for name, kwargs in extra:
+        group.add_argument(name, **kwargs)
+    group.add_argument("--fit-protein", action="store_true")
+    group.add_argument("--fit-kcal", action="store_true")
+    group.add_argument("--target-protein", type=numify)
+    group.add_argument("--target-kcal", type=numify)
+    sp.add_argument("--dry-run", action="store_true")
+    sp.add_argument("--date")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -411,6 +556,7 @@ def build_parser() -> argparse.ArgumentParser:
     lo.add_argument("--note")
     lo.add_argument("--time")
     lo.add_argument("--date")
+    lo.add_argument("--dry-run", action="store_true")
 
     sh = sub.add_parser("show")
     sh.set_defaults(func=cmd_show)
@@ -448,6 +594,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("food-list").set_defaults(func=cmd_food_list)
 
+    fe = sub.add_parser("food-eat")
+    fe.set_defaults(func=cmd_food_eat)
+    fe.add_argument("--name", required=True)
+    add_amount_flags(fe, ("--grams", {"type": numify}), ("--servings", {"type": numify}))
+
     pa = sub.add_parser("prep-add")
     pa.set_defaults(func=cmd_prep_add)
     pa.add_argument("--name", required=True)
@@ -459,9 +610,7 @@ def build_parser() -> argparse.ArgumentParser:
     pe = sub.add_parser("prep-eat")
     pe.set_defaults(func=cmd_prep_eat)
     pe.add_argument("--name", required=True)
-    pe.add_argument("--fraction")
-    pe.add_argument("--remaining", action="store_true")
-    pe.add_argument("--date")
+    add_amount_flags(pe, ("--fraction", {}), ("--remaining", {"action": "store_true"}))
 
     sub.add_parser("prep-list").set_defaults(func=cmd_prep_list)
 
