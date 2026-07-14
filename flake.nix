@@ -137,17 +137,13 @@
           touch $out
         '';
 
-        # Unit tests, hermetic (temp dirs, no network). Daemon tests lazy-import
-        # their heavy deps; the backtest + recorder suites need duckdb (test-only
-        # closure - the deployed daemon never gets it), pandas, numpy.
+        # Unit tests, hermetic (temp dirs, no network). Daemon + recorder tests
+        # need only pytest + requests (the neh modules they import pull in requests).
         trader-pytest =
           pkgs.runCommand "trader-pytest"
             {
               nativeBuildInputs = [
                 (pkgs.python3.withPackages (ps: [
-                  ps.duckdb
-                  ps.numpy
-                  ps.pandas
                   ps.pytest
                   ps.requests
                 ]))
