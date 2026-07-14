@@ -431,6 +431,26 @@
         "type": "github"
       }
     },
+    "proton-cli": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1784040518,
+        "narHash": "sha256-VV1Wv8MumHOAH7IvxgrFJJCaR/sIaKHDbzi1e/AVAyc=",
+        "owner": "roman-16",
+        "repo": "proton-cli",
+        "rev": "e7e4ad54aea90a16e2c21f3363f2db4ac65592d0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "roman-16",
+        "repo": "proton-cli",
+        "type": "github"
+      }
+    },
     "pyproject-build-systems": {
       "inputs": {
         "nixpkgs": [
@@ -487,6 +507,7 @@
         "nix-index-database": "nix-index-database",
         "nixos-wsl": "nixos-wsl",
         "nixpkgs": "nixpkgs",
+        "proton-cli": "proton-cli",
         "pyproject-build-systems": "pyproject-build-systems",
         "pyproject-nix": "pyproject-nix",
         "stylix": "stylix",

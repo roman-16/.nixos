@@ -1,6 +1,6 @@
 {
   nixos =
-    { pkgs, ... }:
+    { inputs, pkgs, ... }:
     let
       secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
     in
@@ -13,7 +13,7 @@
           PROTON_USER = secrets.PROTON_USER;
         };
 
-        systemPackages = with pkgs; [ proton-cli ];
+        systemPackages = [ inputs.proton-cli.packages.${pkgs.system}.default ];
       };
     };
 

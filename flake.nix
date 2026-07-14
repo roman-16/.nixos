@@ -28,6 +28,10 @@
       url = "github:nix-community/NixOS-WSL";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    proton-cli = {
+      url = "github:roman-16/proton-cli";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     pyproject-build-systems = {
       url = "github:pyproject-nix/build-system-pkgs";
       inputs.nixpkgs.follows = "nixpkgs";
