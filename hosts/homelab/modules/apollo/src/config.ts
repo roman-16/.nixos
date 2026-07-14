@@ -8,6 +8,7 @@ export type ThinkingLevel = "high" | "low" | "max" | "medium" | "minimal" | "off
 export interface Config {
   agentDir: string;
   allowFrom: string[];
+  compactionPromptFile: string;
   logLevel: string;
   maxMessageChars: number;
   mistralApiKey: string;
@@ -32,6 +33,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   return {
     agentDir,
     allowFrom: (env.APOLLO_ALLOW_FROM ?? "").split(",").map(digits).filter(Boolean),
+    compactionPromptFile: join(agentDir, "COMPACTION_PROMPT.md"),
     logLevel: env.APOLLO_LOG_LEVEL ?? "info",
     maxMessageChars: Number(env.APOLLO_MAX_MESSAGE_CHARS ?? 4000),
     mistralApiKey: env.MISTRAL_API_KEY ?? "",

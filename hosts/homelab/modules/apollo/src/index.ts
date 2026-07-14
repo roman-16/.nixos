@@ -52,7 +52,7 @@ export async function main(): Promise<void> {
     logger.warn("APOLLO_ALLOW_FROM is empty; every inbound message will be ignored");
   }
 
-  const { authStorage, session } = await createApolloSession(config);
+  const { authStorage, session } = await createApolloSession(config, logger);
   logger.info({ model: config.model, workspace: config.workspace }, "pi session ready");
 
   // Anthropic OAuth login state for the dashboard: one verifier held until it's used.

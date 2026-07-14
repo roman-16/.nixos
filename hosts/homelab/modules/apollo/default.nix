@@ -78,6 +78,9 @@ in
           # SYSTEM_PROMPT.md is the agent's system prompt
           ln -sfn ${./agent/SYSTEM_PROMPT.md} "$agentDir/SYSTEM_PROMPT.md"
 
+          # COMPACTION_PROMPT.md overrides how the session is summarized on compaction
+          ln -sfn ${./agent/COMPACTION_PROMPT.md} "$agentDir/COMPACTION_PROMPT.md"
+
           # Skills pi discovers from $agentDir/skills (read-only)
           ln -sfn ${../../../../shared/modules/pi/skills/context7} "$agentDir/skills/context7"
           ln -sfn ${../../../../shared/modules/pi/skills/exa} "$agentDir/skills/exa"

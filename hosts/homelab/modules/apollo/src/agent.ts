@@ -12,11 +12,13 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type { ImageContent } from "@earendil-works/pi-ai";
+import type { Logger } from "pino";
 
+import { createCompactionExtension } from "./compaction";
 import type { Config } from "./config";
 
-/** SYSTEM_PROMPT.md fully replaces pi's default system prompt (skills and date/cwd are still appended). */
-function systemPrompt(file: string): string | undefined {
+/** Read a prompt-override file if it exists (used for the system prompt and the compaction prompt). */
+function readTextIfExists(file: string): string | undefined {
   return existsSync(file) ? readFileSync(file, "utf8") : undefined;
 }
 
@@ -27,7 +29,7 @@ export interface ApolloSession {
 }
 
 /** Build the single, persistent, auto-compacting pi session Apollo talks to. */
-export async function createApolloSession(config: Config): Promise<ApolloSession> {
+export async function createApolloSession(config: Config, logger: Logger): Promise<ApolloSession> {
   const authStorage = AuthStorage.create(join(config.agentDir, "auth.json"));
   const modelRegistry = ModelRegistry.create(authStorage, join(config.agentDir, "models.json"));
 
@@ -42,11 +44,25 @@ export async function createApolloSession(config: Config): Promise<ApolloSession
   const settingsManager = SettingsManager.create(config.workspace, config.agentDir);
   settingsManager.applyOverrides({ compaction: { enabled: true } });
 
+  const compactionInstructions = readTextIfExists(config.compactionPromptFile);
   const resourceLoader = new DefaultResourceLoader({
     agentDir: config.agentDir,
     cwd: config.workspace,
+    extensionFactories:
+      compactionInstructions && resolved.model
+        ? [
+            {
+              factory: createCompactionExtension({
+                instructions: compactionInstructions,
+                logger,
+                model: resolved.model,
+              }),
+              name: "apollo-compaction",
+            },
+          ]
+        : [],
     settingsManager,
-    systemPromptOverride: () => systemPrompt(config.systemPromptFile),
+    systemPromptOverride: () => readTextIfExists(config.systemPromptFile),
   });
   await resourceLoader.reload();
 

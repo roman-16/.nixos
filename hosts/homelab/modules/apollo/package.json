@@ -10,7 +10,8 @@
     "dev": "bun --watch run ./src/index.ts",
     "lint": "oxfmt && oxlint",
     "start": "bun run ./src/index.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^0.80.6",
@@ -26,6 +27,7 @@
     "htmx.org": "^2.0.10",
     "oxfmt": "^0.58.0",
     "oxlint": "^1.73.0",
-    "tailwindcss": "4.3.2"
+    "tailwindcss": "4.3.2",
+    "typescript": "^7.0.2"
   }
 }

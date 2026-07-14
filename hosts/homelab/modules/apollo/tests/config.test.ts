@@ -17,6 +17,7 @@ describe("loadConfig", () => {
     expect(config.workspace).toBe("/tmp/apollo/workspace");
     expect(config.whatsappDir).toBe("/tmp/apollo/whatsapp");
     expect(config.systemPromptFile.endsWith("SYSTEM_PROMPT.md")).toBe(true);
+    expect(config.compactionPromptFile.endsWith("COMPACTION_PROMPT.md")).toBe(true);
     expect(config.sessionDir.endsWith("sessions")).toBe(true);
   });
 
