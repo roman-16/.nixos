@@ -6,6 +6,7 @@ import { Text } from "@earendil-works/pi-tui";
 
 interface LoadContextDetails {
   excluded: string[];
+  excludedPaths: string[];
   fileCount: number;
   files: string[];
   paths: string[];
@@ -110,6 +111,14 @@ function tokenize(input: string): string[] {
   return tokens.filter((t) => t.length > 0);
 }
 
+function estimateTextTokens(text: string): number {
+  return estimateTokens({
+    role: "user",
+    content: [{ type: "text", text }],
+    timestamp: Date.now(),
+  } as Parameters<typeof estimateTokens>[0]);
+}
+
 function expandPath(raw: string, cwd: string): string {
   let p = raw.replace(/^@/, "");
   if (p === "~" || p.startsWith("~/")) p = join(homedir(), p.slice(1));
@@ -158,7 +167,8 @@ export default function (pi: ExtensionAPI) {
       theme.fg("toolTitle", theme.bold("load-context ")) +
       theme.fg("muted", `${details.fileCount} file(s) · ~${details.tokens.toLocaleString()} tokens`) +
       (details.excluded?.length ? theme.fg("muted", ` · ${details.excluded.length} skipped`) : "") +
-      theme.fg("dim", ` from ${details.paths.join(", ")}`);
+      theme.fg("dim", ` from ${details.paths.join(", ")}`) +
+      (details.excludedPaths?.length ? theme.fg("dim", ` excluding ${details.excludedPaths.join(", ")}`) : "");
 
     if (expanded && details.files.length > 0) {
       text += "\n" + details.files.map((f) => theme.fg("dim", `  ${f}`)).join("\n");
@@ -172,7 +182,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerCommand("load-context", {
     description:
-      "Recursively load a path's files into context (gitignore-aware, skips lockfiles/minified/generated, with confirmation)",
+      "Recursively load a path's files into context (gitignore-aware, skips lockfiles/minified/generated, !path to exclude, with confirmation)",
     handler: async (args, ctx) => {
       if (!ctx.hasUI) {
         ctx.ui.notify("load-context requires interactive mode", "error");
@@ -181,9 +191,12 @@ export default function (pi: ExtensionAPI) {
 
       const argTokens = tokenize(args);
       const includeAll = argTokens.some((t) => t === "--all" || t === "--no-exclude");
-      const rawPaths = argTokens.filter((t) => t !== "--all" && t !== "--no-exclude");
+      const showTop = argTokens.some((t) => t === "--top");
+      const rawTokens = argTokens.filter((t) => !["--all", "--no-exclude", "--top"].includes(t));
+      const rawExcludes = rawTokens.filter((t) => t.startsWith("!")).map((t) => t.slice(1));
+      const rawPaths = rawTokens.filter((t) => !t.startsWith("!"));
       if (rawPaths.length === 0) {
-        ctx.ui.notify("Usage: /load-context [--all] <path> [path...]", "warning");
+        ctx.ui.notify("Usage: /load-context [--all] [--top] <path> [path...] [!path...]", "warning");
         return;
       }
 
@@ -195,15 +208,28 @@ export default function (pi: ExtensionAPI) {
       }
       if (resolvedPaths.length === 0) return;
 
+      const excludePaths: string[] = [];
+      for (const rp of rawExcludes) {
+        const abs = expandPath(rp, ctx.cwd);
+        if (!existsSync(abs)) ctx.ui.notify(`Exclude path not found: ${rp}`, "warning");
+        excludePaths.push(abs);
+      }
+      const isUserExcluded = (f: string) => excludePaths.some((p) => f === p || f.startsWith(`${p}/`));
+
       const seen = new Set<string>();
       const files: string[] = [];
       const excluded: string[] = [];
+      let userExcludedCount = 0;
       for (const p of resolvedPaths) {
         const isDir = statSync(p).isDirectory();
         const candidates = isDir ? await listFiles(pi, p) : [p];
         for (const f of candidates) {
           if (seen.has(f)) continue;
           seen.add(f);
+          if (isUserExcluded(f)) {
+            userExcludedCount++;
+            continue;
+          }
           if (isDir && !includeAll && isExcluded(basename(f))) {
             excluded.push(relative(ctx.cwd, f) || f);
             continue;
@@ -235,14 +261,12 @@ export default function (pi: ExtensionAPI) {
       }
 
       const displayPaths = resolvedPaths.map((p) => relative(ctx.cwd, p) || p);
+      const displayExcludes = excludePaths.map((p) => relative(ctx.cwd, p) || p);
+      const excludeSuffix = displayExcludes.length > 0 ? ` (excluding ${displayExcludes.join(", ")})` : "";
       const body = entries.map((e) => `===== ${e.rel} =====\n${e.content}`).join("\n\n");
-      const content = `Loaded ${entries.length} file(s) into context from ${displayPaths.join(", ")} at the user's request:\n\n${body}`;
+      const content = `Loaded ${entries.length} file(s) into context from ${displayPaths.join(", ")}${excludeSuffix} at the user's request:\n\n${body}`;
 
-      const estimated = estimateTokens({
-        role: "user",
-        content: [{ type: "text", text: content }],
-        timestamp: Date.now(),
-      } as Parameters<typeof estimateTokens>[0]);
+      const estimated = estimateTextTokens(content);
 
       const contextWindow = ctx.getContextUsage()?.contextWindow ?? ctx.model?.contextWindow;
       const pctStr = contextWindow ? ` (~${Math.round((estimated / contextWindow) * 100)}% of context)` : "";
@@ -251,9 +275,26 @@ export default function (pi: ExtensionAPI) {
           ? `\n\nskipped ${excluded.length} lockfile/minified/generated/secret file(s) (use --all to include):\n${excluded.map((f) => `  ${f}`).join("\n")}`
           : "";
 
+      let topNote = "";
+      if (showTop) {
+        const largest = entries
+          .map((e) => ({ rel: e.rel, tokens: estimateTextTokens(e.content) }))
+          .sort((a, b) => b.tokens - a.tokens)
+          .slice(0, 10);
+        const width = Math.max(...largest.map((e) => e.tokens.toLocaleString().length)) + 1;
+        topNote = `\n\nlargest ${largest.length} file(s) by tokens:\n${largest
+          .map((e) => `  ${`~${e.tokens.toLocaleString()}`.padStart(width)} ${e.rel}`)
+          .join("\n")}`;
+      }
+
+      const excludeNote =
+        excludePaths.length > 0
+          ? `\n\nexcluded ${userExcludedCount} file(s) via ${displayExcludes.map((p) => `!${p}`).join(", ")}`
+          : "";
+
       const ok = await ctx.ui.confirm(
         "Load into context?",
-        `${entries.length} file(s) · ~${estimated.toLocaleString()} tokens${pctStr}\n${displayPaths.join("\n")}${skippedNote}`,
+        `${entries.length} file(s) · ~${estimated.toLocaleString()} tokens${pctStr}\n${displayPaths.join("\n")}${excludeNote}${topNote}${skippedNote}`,
       );
       if (!ok) {
         ctx.ui.notify("Cancelled", "info");
@@ -267,6 +308,7 @@ export default function (pi: ExtensionAPI) {
           display: true,
           details: {
             excluded,
+            excludedPaths: displayExcludes,
             fileCount: entries.length,
             files: entries.map((e) => e.rel),
             paths: displayPaths,

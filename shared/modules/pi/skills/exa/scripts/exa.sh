@@ -13,6 +13,14 @@ acquire_lock() {
   local lock_file="$LOCK_DIR/lock"
   local wait_time=0
   while ! (set -C; echo $$ > "$lock_file") 2>/dev/null; do
+    # Check for stale lock: if the holding PID is dead, remove it
+    local holder_pid
+    holder_pid=$(cat "$lock_file" 2>/dev/null || echo "")
+    if [ -n "$holder_pid" ] && ! kill -0 "$holder_pid" 2>/dev/null; then
+      echo "Removing stale lock from dead PID $holder_pid" >&2
+      rm -f "$lock_file"
+      continue
+    fi
     sleep 0.5
     wait_time=$((wait_time + 1))
     if [ $wait_time -ge 120 ]; then
