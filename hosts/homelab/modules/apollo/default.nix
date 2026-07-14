@@ -84,8 +84,9 @@ in
           # Skills pi discovers from $agentDir/skills (read-only)
           ln -sfn ${../../../../shared/modules/pi/skills/context7} "$agentDir/skills/context7"
           ln -sfn ${../../../../shared/modules/pi/skills/exa} "$agentDir/skills/exa"
-          ln -sfn ${./agent/skills/macros} "$agentDir/skills/macros"
           ln -sfn ${./agent/skills/backup} "$agentDir/skills/backup"
+          ln -sfn ${./agent/skills/macros} "$agentDir/skills/macros"
+          ln -sfn ${./agent/skills/obsidian} "$agentDir/skills/obsidian"
           ln -sfn ${./agent/skills/reminders} "$agentDir/skills/reminders"
         '';
 
@@ -94,25 +95,32 @@ in
           github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
         '';
 
-        # Provision the workspace repo + backup deploy key. Shared by the app and
-        # the backup timer (both run as the "apollo" dynamic user, so they see the
-        # same $HOME and workspace). The private key lands in the world-readable
-        # /nix/store, an accepted trade-off on this single-purpose VM (as with
-        # trader's wallet key); its blast radius is one private repo.
+        # Provision the workspace repo + install the per-repo deploy keys (workspace
+        # backup + obsidian vault). Shared by the app and the backup timer (both run
+        # as the "apollo" dynamic user, so they see the same $HOME and workspace). The
+        # private keys land in the world-readable /nix/store, an accepted trade-off on
+        # this single-purpose VM (as with trader's wallet key); each is a read-write
+        # deploy key scoped to its one private repo.
         gitBootstrap = pkgs.writeShellScript "apollo-git-bootstrap" ''
           set -euo pipefail
           export PATH=${lib.makeBinPath gitPkgs}:$PATH
 
           install -d -m 700 "$HOME/.ssh"
-          install -m 600 ${pkgs.writeText "apollo-ssh-key" secrets.workspaceSshKey} "$HOME/.ssh/id_apollo"
+          install -m 600 ${pkgs.writeText "apollo-ssh-key" secrets.git.workspace.sshKey} "$HOME/.ssh/id_apollo"
+          install -m 600 ${pkgs.writeText "apollo-obsidian-key" secrets.git.obsidian.sshKey} "$HOME/.ssh/id_obsidian"
           install -m 644 ${knownHosts} "$HOME/.ssh/known_hosts"
 
           mkdir -p "$APOLLO_WORKSPACE"
           if [ ! -e "$APOLLO_WORKSPACE/.git" ]; then
             git -C "$APOLLO_WORKSPACE" init -b main
           fi
-          git -C "$APOLLO_WORKSPACE" remote add origin "${secrets.workspaceGitRemote}" 2>/dev/null \
-            || git -C "$APOLLO_WORKSPACE" remote set-url origin "${secrets.workspaceGitRemote}"
+          git -C "$APOLLO_WORKSPACE" remote add origin "${secrets.git.workspace.remote}" 2>/dev/null \
+            || git -C "$APOLLO_WORKSPACE" remote set-url origin "${secrets.git.workspace.remote}"
+
+          # The obsidian vault is a nested git repo; keep it out of the workspace backup.
+          touch "$APOLLO_WORKSPACE/.git/info/exclude"
+          grep -qxF "obsidian/" "$APOLLO_WORKSPACE/.git/info/exclude" \
+            || echo "obsidian/" >> "$APOLLO_WORKSPACE/.git/info/exclude"
         '';
 
       in
@@ -216,6 +224,7 @@ in
                 APOLLO_WORKSPACE = "%S/apollo/workspace";
                 HOME = "%S/apollo";
                 MISTRAL_API_KEY = secrets.mistralApiKey;
+                OBSIDIAN_REMOTE = secrets.git.obsidian.remote;
                 PORT = toString port;
                 SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
               };
