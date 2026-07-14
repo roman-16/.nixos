@@ -1,0 +1,1 @@
+add sqlite for saving of logging, it should be a general sqlite db for the apollo bot which could be used for other things later on. backups should be done like in ../trader
