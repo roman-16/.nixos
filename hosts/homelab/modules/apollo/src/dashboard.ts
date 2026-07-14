@@ -50,7 +50,7 @@ export function renderPage(version: string): string {
     <link rel="stylesheet" href="/app.css?v=${version}" />
     <script src="/htmx.min.js?v=${version}"></script>
   </head>
-  <body class="mx-auto min-h-dvh w-full max-w-5xl bg-neutral-950 px-4 pb-16 text-neutral-100 antialiased sm:px-6">
+  <body class="mx-auto min-h-dvh w-full max-w-[1440px] bg-neutral-950 px-4 pb-16 text-neutral-100 antialiased sm:px-6">
     <header class="sticky top-0 z-20 -mx-4 flex items-center gap-2.5 border-b border-white/5 bg-neutral-950/80 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
       <img src="/favicon.svg?v=${version}" alt="" class="h-6 w-6 shrink-0" />
       <span class="text-[1.05rem] font-semibold tracking-tight">Apollo</span>
