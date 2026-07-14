@@ -73,7 +73,7 @@ in
           export PATH=${lib.makeBinPath [ pkgs.coreutils ]}:$PATH
 
           agentDir="$HOME/.pi/agent"
-          mkdir -p "$agentDir/sessions" "$agentDir/skills" "$HOME/whatsapp"
+          mkdir -p "$agentDir/sessions" "$agentDir/skills" "$agentDir/extensions" "$HOME/whatsapp"
 
           # SYSTEM_PROMPT.md is the agent's system prompt
           ln -sfn ${./agent/SYSTEM_PROMPT.md} "$agentDir/SYSTEM_PROMPT.md"
@@ -86,8 +86,11 @@ in
           ln -sfn ${../../../../shared/modules/pi/skills/exa} "$agentDir/skills/exa"
           ln -sfn ${./agent/skills/backup} "$agentDir/skills/backup"
           ln -sfn ${./agent/skills/macros} "$agentDir/skills/macros"
-          ln -sfn ${./agent/skills/obsidian} "$agentDir/skills/obsidian"
           ln -sfn ${./agent/skills/reminders} "$agentDir/skills/reminders"
+
+          # Extensions pi discovers from $agentDir/extensions. directory-agents-md
+          # injects each vault folder's AGENTS.md on read/write/edit.
+          ln -sfn ${../../../../shared/modules/pi/extensions/directory-agents-md.ts} "$agentDir/extensions/directory-agents-md.ts"
         '';
 
         # GitHub's ed25519 host key, pinned so the backup push never needs a TOFU prompt.
@@ -121,6 +124,21 @@ in
           touch "$APOLLO_WORKSPACE/.git/info/exclude"
           grep -qxF "obsidian/" "$APOLLO_WORKSPACE/.git/info/exclude" \
             || echo "obsidian/" >> "$APOLLO_WORKSPACE/.git/info/exclude"
+
+          # Obsidian vault: a separate repo, cloned here so it always exists and kept
+          # out of the workspace backup (above). Configured with the deploy key and
+          # Roman's identity so the agent syncs it with plain `git -C .../obsidian ...`
+          # commands (documented in the vault's own AGENTS.md). Best-effort: a clone
+          # failure (e.g. no network at boot) must not block startup.
+          obsidianSsh="ssh -i $HOME/.ssh/id_obsidian -o IdentitiesOnly=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes"
+          if [ ! -e "$APOLLO_WORKSPACE/obsidian/.git" ]; then
+            GIT_SSH_COMMAND="$obsidianSsh" git clone "${secrets.git.obsidian.remote}" "$APOLLO_WORKSPACE/obsidian" || true
+          fi
+          if [ -e "$APOLLO_WORKSPACE/obsidian/.git" ]; then
+            git -C "$APOLLO_WORKSPACE/obsidian" config core.sshCommand "$obsidianSsh"
+            git -C "$APOLLO_WORKSPACE/obsidian" config user.name Roman
+            git -C "$APOLLO_WORKSPACE/obsidian" config user.email roman@lerchster.dev
+          fi
         '';
 
       in
@@ -224,7 +242,6 @@ in
                 APOLLO_WORKSPACE = "%S/apollo/workspace";
                 HOME = "%S/apollo";
                 MISTRAL_API_KEY = secrets.mistralApiKey;
-                OBSIDIAN_REMOTE = secrets.git.obsidian.remote;
                 PORT = toString port;
                 SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
               };

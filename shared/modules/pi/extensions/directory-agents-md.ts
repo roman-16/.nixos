@@ -13,6 +13,14 @@ export default function (pi: ExtensionAPI) {
     loaded.clear();
   });
 
+  // A long-lived, auto-compacting session (e.g. Apollo) can summarize away the
+  // injected AGENTS.md, so drop the dedupe after each compaction to re-inject on
+  // the next read/write/edit. Never fires where compaction is disabled.
+  pi.on("session_compact", async () => {
+    checkedDirs.clear();
+    loaded.clear();
+  });
+
   pi.on("tool_result", async (event, ctx) => {
     if (
       event.toolName !== "read" &&
