@@ -41,23 +41,22 @@ export function createCompactionExtension(options: CompactionExtensionOptions): 
       const messages = [...preparation.messagesToSummarize, ...preparation.turnPrefixMessages];
       if (messages.length === 0) return undefined;
 
-      const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-      if (!auth.ok) {
-        logger.warn({ error: auth.error }, "compaction auth failed; using default compaction");
-        return undefined;
-      }
-      if (!auth.apiKey) {
-        logger.warn("compaction auth has no api key; using default compaction");
-        return undefined;
-      }
-
-      const prompt = buildCompactionPrompt({
-        conversation: serializeConversation(convertToLlm(messages)),
-        instructions,
-        previousSummary: preparation.previousSummary,
-      });
-
       try {
+        const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+        if (!auth.ok) {
+          logger.warn({ reason: auth.error }, "compaction auth failed; using default compaction");
+          return undefined;
+        }
+        if (!auth.apiKey) {
+          logger.warn("compaction auth has no api key; using default compaction");
+          return undefined;
+        }
+
+        const prompt = buildCompactionPrompt({
+          conversation: serializeConversation(convertToLlm(messages)),
+          instructions,
+          previousSummary: preparation.previousSummary,
+        });
         const response = await complete(
           model,
           { messages: [{ content: prompt, role: "user", timestamp: Date.now() }] },
@@ -83,8 +82,9 @@ export function createCompactionExtension(options: CompactionExtensionOptions): 
           },
         };
       } catch (error) {
-        if (!signal.aborted)
-          logger.error({ error }, "custom compaction failed; using default compaction");
+        if (!signal.aborted) {
+          logger.error({ err: error }, "custom compaction failed; using default compaction");
+        }
         return undefined;
       }
     });

@@ -252,7 +252,7 @@ export async function main(): Promise<void> {
           logger.info("compacted via dashboard");
           return new Response(sessionStatus("compact", "ok"), { headers: htmlHeaders });
         } catch (error) {
-          logger.error({ error }, "compact failed");
+          logger.error({ err: error }, "compact failed");
           return new Response(sessionStatus("compact", "error"), { headers: htmlHeaders });
         }
       }
