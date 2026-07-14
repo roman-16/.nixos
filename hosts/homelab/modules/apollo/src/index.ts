@@ -19,6 +19,7 @@ import {
 import { createLogBuffer, filterLogs, parseLevel } from "./logs";
 import { compactionNotice, isAllowed, jidForNumber, voiceText } from "./messages";
 import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
+import { createReminderWatcher, formatReminder } from "./reminders";
 import { transcribeAudio } from "./transcribe";
 import { fetchUsage, type UsageData } from "./usage";
 import { startWhatsApp, type WhatsApp } from "./whatsapp";
@@ -189,6 +190,19 @@ export async function main(): Promise<void> {
   });
 
   const whatsapp = wa;
+
+  // Fire reminders exactly at their time via fs.watch + per-reminder timers (no polling).
+  createReminderWatcher({
+    dir: config.remindersDir,
+    logger,
+    onFire: async (reminder) => {
+      const to = target ?? fallbackTarget;
+      if (!wa || !to || wa.getState().status !== "connected") {
+        throw new Error("whatsapp not connected");
+      }
+      await wa.send(to, formatReminder(reminder.text));
+    },
+  }).start();
 
   Bun.serve({
     fetch: async (req) => {

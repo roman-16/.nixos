@@ -86,6 +86,7 @@ in
           ln -sfn ${../../../../shared/modules/pi/skills/exa} "$agentDir/skills/exa"
           ln -sfn ${./agent/skills/macros} "$agentDir/skills/macros"
           ln -sfn ${./agent/skills/backup} "$agentDir/skills/backup"
+          ln -sfn ${./agent/skills/reminders} "$agentDir/skills/reminders"
         '';
 
         # GitHub's ed25519 host key, pinned so the backup push never needs a TOFU prompt.

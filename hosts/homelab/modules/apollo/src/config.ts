@@ -14,6 +14,7 @@ export interface Config {
   mistralApiKey: string;
   model: string;
   port: number;
+  remindersDir: string;
   sessionDir: string;
   systemPromptFile: string;
   thinkingLevel: ThinkingLevel;
@@ -29,6 +30,7 @@ function digits(value: string): string {
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
   const home = env.HOME ?? homedir();
   const agentDir = getAgentDir();
+  const workspace = env.APOLLO_WORKSPACE ?? join(home, "workspace");
 
   return {
     agentDir,
@@ -39,11 +41,12 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     mistralApiKey: env.MISTRAL_API_KEY ?? "",
     model: env.APOLLO_MODEL ?? "anthropic/claude-sonnet-5",
     port: Number(env.PORT ?? 8080),
+    remindersDir: env.APOLLO_REMINDERS_DIR ?? join(workspace, "reminders"),
     sessionDir: join(agentDir, "sessions"),
     systemPromptFile: join(agentDir, "SYSTEM_PROMPT.md"),
     thinkingLevel: (env.APOLLO_THINKING ?? "medium") as ThinkingLevel,
     transcribeModel: env.APOLLO_TRANSCRIBE_MODEL ?? "voxtral-mini-latest",
     whatsappDir: env.APOLLO_WHATSAPP_DIR ?? join(home, "whatsapp"),
-    workspace: env.APOLLO_WORKSPACE ?? join(home, "workspace"),
+    workspace,
   };
 }
