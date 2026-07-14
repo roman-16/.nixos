@@ -194,7 +194,7 @@ in
           "Services" = [
             {
               "Apollo" = {
-                description = "Personal pi-SDK agent";
+                description = "Personal agent";
                 href = "https://apollo.halerc.xyz";
                 icon = "mdi-robot";
                 siteMonitor = "http://${apolloIp}:8080/health";
