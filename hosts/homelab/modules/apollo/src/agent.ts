@@ -16,6 +16,7 @@ import type { Logger } from "pino";
 
 import { createCompactionExtension } from "./compaction";
 import type { Config } from "./config";
+import { createToolTimeoutExtension } from "./tool-timeout";
 
 /** Read a prompt-override file if it exists (used for the system prompt and the compaction prompt). */
 function readTextIfExists(file: string): string | undefined {
@@ -45,22 +46,25 @@ export async function createApolloSession(config: Config, logger: Logger): Promi
   settingsManager.applyOverrides({ compaction: { enabled: true } });
 
   const compactionInstructions = readTextIfExists(config.compactionPromptFile);
+  const extensionFactories = [
+    { factory: createToolTimeoutExtension(), name: "apollo-tool-timeout" },
+    ...(compactionInstructions && resolved.model
+      ? [
+          {
+            factory: createCompactionExtension({
+              instructions: compactionInstructions,
+              logger,
+              model: resolved.model,
+            }),
+            name: "apollo-compaction",
+          },
+        ]
+      : []),
+  ];
   const resourceLoader = new DefaultResourceLoader({
     agentDir: config.agentDir,
     cwd: config.workspace,
-    extensionFactories:
-      compactionInstructions && resolved.model
-        ? [
-            {
-              factory: createCompactionExtension({
-                instructions: compactionInstructions,
-                logger,
-                model: resolved.model,
-              }),
-              name: "apollo-compaction",
-            },
-          ]
-        : [],
+    extensionFactories,
     settingsManager,
     systemPromptOverride: () => readTextIfExists(config.systemPromptFile),
   });
