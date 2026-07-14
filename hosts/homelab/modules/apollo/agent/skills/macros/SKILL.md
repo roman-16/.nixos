@@ -65,12 +65,16 @@ A `--dry-run` preview (see [Previewing](#previewing)) is relayed the same way, v
 
 `--fit-kcal` and `--target-kcal` size by calories the same way. `food-eat` prints the day summary - relay it verbatim.
 
-`food-get` just looks a food up; `food-add` saves one (only when the user explicitly asks). Look one up before estimating.
+`food-get` looks a food up; `food-add` saves one (only when the user explicitly asks); `food-edit` corrects a saved food's numbers or name; `food-rm` deletes one. Look one up before estimating.
 
 ```bash
 {baseDir}/scripts/macros.py food-get skyr
 {baseDir}/scripts/macros.py food-add --name "Skyr, plain" --kcal100 64 --protein100 11 --fat100 0.1 --carbs100 4 --serving 500 --aliases "skyr,my skyr"
+{baseDir}/scripts/macros.py food-edit --name skyr --kcal100 63 --serving 450   # only what you pass changes; also --rename, --aliases
+{baseDir}/scripts/macros.py food-rm --name skyr
 ```
+
+Name matching is forgiving: an exact alias wins, else a unique substring, else the closest spelling. On the logging path a lone close match is logged and announced (`read "skyer" as Skyr, plain`); when several foods match it asks you to pick, and `food-edit`/`food-rm` never act on a guess (re-run with the exact name). On a miss, check `food-list`.
 
 ## Weight
 
@@ -97,6 +101,7 @@ Cooking changes weight, so a batch is tracked by its whole-batch macros and the 
 {baseDir}/scripts/macros.py prep-eat --name bolognese --fit-protein     # enough to reach today's protein goal
 {baseDir}/scripts/macros.py prep-eat --name bolognese --target-kcal 500 # a portion worth 500 kcal
 {baseDir}/scripts/macros.py prep-list                                   # each batch with its remaining kcal/protein
+{baseDir}/scripts/macros.py prep-rm --name bolognese                     # discard a batch WITHOUT logging it (spoiled/scrapped)
 ```
 
 `--fraction` is a share of the original batch (not of what remains) and errors if it exceeds what is left; use `--remaining` to eat the rest. `--fit-*`/`--target-*` size the portion for you, and if the goal needs more than is left they cap to what remains and say how far short it lands.
@@ -122,6 +127,7 @@ After a manual JSON edit or a phase change, re-fold the balance forward:
 
 - Dates and times come from the system clock; only pass `--date`/`--time` to correct a past entry.
 - Estimate freely for vague inputs or photos and pass `--note estimated` - the totals stay exact regardless.
+- Every macro must be non-negative and every amount positive; the script rejects impossible values, so a slip like `--kcal -5` errors out instead of silently corrupting a total.
 - For "how much to hit X" or "how would my day look", use `--fit-*`/`--target-*` and `--dry-run` - never work out the amount or the projected totals yourself.
 - Relay the script's output verbatim (see [Replying](#replying)) - never paraphrase its numbers, shorten its summary, or reformat the list.
 

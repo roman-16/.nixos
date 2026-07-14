@@ -100,10 +100,26 @@
 
     checks.x86_64-linux =
       let
+        apolloMacros = ./hosts/homelab/modules/apollo/agent/skills/macros;
         pkgs = inputs.nixpkgs.legacyPackages.x86_64-linux;
         traderBot = ./hosts/homelab/modules/trader/bot;
       in
       {
+        # Unit tests for the Apollo macros skill (pytest). macros.py is
+        # stdlib-only, so the test closure is just python3 + pytest.
+        apollo-pytest =
+          pkgs.runCommand "apollo-pytest"
+            {
+              nativeBuildInputs = [ (pkgs.python3.withPackages (ps: [ ps.pytest ])) ];
+            }
+            ''
+              cp -r ${apolloMacros} macros
+              chmod -R u+w macros
+              cd macros
+              python -m pytest
+              touch $out
+            '';
+
         # Formatting gate for all Nix files (nixfmt).
         nixfmt-check = pkgs.runCommand "nixfmt-check" { nativeBuildInputs = [ pkgs.nixfmt ]; } ''
           find ${./.} -name '*.nix' -print0 | xargs -0 nixfmt --check
