@@ -3,7 +3,6 @@ let
   apolloIp = "192.168.70.73";
   hassIp = "192.168.70.71";
   homelabIp = "192.168.70.70";
-  openclawIp = "192.168.70.72";
   traderIp = "192.168.70.74";
 
   rebootServer = pkgs.writeScript "reboot-server" ''
@@ -36,7 +35,7 @@ let
       <div class="card">
         <div class="icon">&#9889;</div>
         <h1>Reboot Homelab?</h1>
-        <p>This will restart the N100 server and all VMs (HAOS, OpenClaw, Trader).</p>
+        <p>This will restart the N100 server and all VMs (HAOS, Apollo, Trader).</p>
         <form method="POST" class="actions">
           <button type="submit">Confirm Reboot</button>
           <a href="/" class="cancel">Cancel</a>
@@ -135,7 +134,7 @@ in
           {
             name = "Cloudflared Tunnel";
             group = "Infrastructure";
-            url = "https://claw.halerc.xyz";
+            url = "https://halerc.xyz";
             interval = "5m";
             conditions = [
               "[STATUS] < 500"
@@ -146,16 +145,6 @@ in
             name = "Home Assistant";
             group = "Infrastructure";
             url = "http://${hassIp}:8123";
-            interval = "5m";
-            conditions = [
-              "[STATUS] < 500"
-              "[RESPONSE_TIME] < 5000"
-            ];
-          }
-          {
-            name = "OpenClaw Gateway";
-            group = "Infrastructure";
-            url = "http://${openclawIp}:7072";
             interval = "5m";
             conditions = [
               "[STATUS] < 500"
@@ -176,13 +165,6 @@ in
             name = "Homelab SSH";
             group = "Network";
             url = "tcp://${homelabIp}:22";
-            interval = "5m";
-            conditions = [ "[CONNECTED] == true" ];
-          }
-          {
-            name = "OpenClaw VM SSH";
-            group = "Network";
-            url = "tcp://${openclawIp}:22";
             interval = "5m";
             conditions = [ "[CONNECTED] == true" ];
           }
@@ -225,15 +207,6 @@ in
                 href = "https://hass.halerc.xyz";
                 icon = "home-assistant";
                 siteMonitor = "http://${hassIp}:8123";
-                statusStyle = "dot";
-              };
-            }
-            {
-              "OpenClaw" = {
-                description = "AI agent platform";
-                href = "https://claw.halerc.xyz";
-                icon = "mdi-robot";
-                siteMonitor = "http://${openclawIp}:7072";
                 statusStyle = "dot";
               };
             }

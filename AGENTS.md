@@ -19,7 +19,6 @@ Multi-host NixOS flake with home-manager. Formatter: nixfmt.
 VMs on homelab (IPs `.71`-`.74` via router DHCP reservations; public access via a token-based cloudflared tunnel to `*.halerc.xyz`, Caddy fronts the dashboard; monitoring via Homepage/Gatus/Beszel):
 
 - **HAOS** (`.71:8123`) - Home Assistant OS, Zigbee + BT USB passthrough. `ssh hassio@192.168.70.71`.
-- **openclaw** (`.72`) - OpenClaw gateway (Docker, `:7072`) + `openclaw-claude-shim` service (Claude subscription-billing wrapper).
 - **apollo** (`.73`) - WhatsApp assistant: bun/TypeScript app (pi SDK + Baileys) driving Claude via Anthropic OAuth. `apollo.halerc.xyz`.
 - **trader** (`.74`) - "neh" (Nothing Ever Happens) Polymarket autonomous trading bot: Python daemon (uv2nix-built) + signal-cli alerts + hourly market-data recorder, dashboard `:8080`.
 
