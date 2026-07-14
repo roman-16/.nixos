@@ -15,7 +15,7 @@ import {
   renderState,
   sessionStatus,
 } from "./dashboard";
-import { compactionNotice, isAllowed, voiceText } from "./messages";
+import { compactionNotice, isAllowed, jidForNumber, voiceText } from "./messages";
 import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
 import { transcribeAudio } from "./transcribe";
 import { fetchUsage, type UsageData } from "./usage";
@@ -62,6 +62,10 @@ export async function main(): Promise<void> {
   let wa: WhatsApp | undefined;
   let target: string | undefined;
   let linking = false;
+  // Proactive notices (e.g. compaction) can fire before any inbound sets `target` -
+  // a dashboard compaction right after a restart, say - so fall back to the primary
+  // allowlisted number.
+  const fallbackTarget = config.allowFrom[0] ? jidForNumber(config.allowFrom[0]) : undefined;
   let lastStatusBody: string | undefined;
   let lastChatBody: string | undefined;
   let chatCache: { body: string; mtimeMs: number } | undefined;
@@ -115,10 +119,13 @@ export async function main(): Promise<void> {
 
   session.subscribe((event) => {
     if (event.type === "agent_settled") stopTyping();
-    if (event.type === "compaction_end" && event.result && !event.aborted && wa && target) {
-      void wa
-        .send(target, compactionNotice(event.result.tokensBefore))
-        .catch((error) => logger.error({ error }, "compaction notice failed"));
+    if (event.type === "compaction_end" && event.result && !event.aborted) {
+      const to = target ?? fallbackTarget;
+      if (wa && to) {
+        void wa
+          .send(to, compactionNotice(event.result.tokensBefore))
+          .catch((error) => logger.error({ error }, "compaction notice failed"));
+      }
     }
   });
 

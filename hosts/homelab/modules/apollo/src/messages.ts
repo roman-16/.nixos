@@ -14,6 +14,11 @@ export function numberFromJid(jid: string): string {
   return (user.split(":")[0] ?? "").replace(/\D/g, "");
 }
 
+/** Build the individual-chat JID for a bare phone number (inverse of numberFromJid). */
+export function jidForNumber(number: string): string {
+  return `${number.replace(/\D/g, "")}@s.whatsapp.net`;
+}
+
 /** Mark a transcribed voice note so it reads as spoken in the chat log and to the agent. */
 export function voiceText(transcript: string): string {
   const trimmed = transcript.trim();

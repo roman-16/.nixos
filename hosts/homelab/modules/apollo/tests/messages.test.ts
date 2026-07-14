@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test";
 import {
   compactionNotice,
   isAllowed,
+  jidForNumber,
   numberFromJid,
   splitMessage,
   voiceText,
@@ -12,6 +13,13 @@ describe("numberFromJid", () => {
   it("strips domain and device suffix", () => {
     expect(numberFromJid("4369912345678@s.whatsapp.net")).toBe("4369912345678");
     expect(numberFromJid("4369912345678:12@s.whatsapp.net")).toBe("4369912345678");
+  });
+});
+
+describe("jidForNumber", () => {
+  it("builds an individual-chat JID and round-trips with numberFromJid", () => {
+    expect(jidForNumber("4369912345678")).toBe("4369912345678@s.whatsapp.net");
+    expect(numberFromJid(jidForNumber("+43 699 1234 5678"))).toBe("4369912345678");
   });
 });
 
