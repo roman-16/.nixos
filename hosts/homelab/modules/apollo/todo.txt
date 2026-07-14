@@ -1,1 +1,0 @@
-add load agents.md extension and fill obsidian with agents.md files which largely replace the obsidian skill, if not all of it
