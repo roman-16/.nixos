@@ -71,6 +71,12 @@
           show-warning = false;
         };
 
+        # IBus grabs Super+period/Super+semicolon for emoji-by-name typing by
+        # default, which shadows the Super+period -> smile keybinding below.
+        "desktop/ibus/panel/emoji" = {
+          hotkey = [ ];
+        };
+
         "it/mijorus/smile" = {
           load-hidden-on-startup = true;
         };
