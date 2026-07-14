@@ -3,29 +3,33 @@ import QRCode from "qrcode";
 
 import { escapeHtml, humanTokens, truncate } from "./format";
 import type { LogRecord } from "./logs";
-import { renderUsage, type UsageData } from "./usage";
+import { extraUsageValue, resetLabel, type UsageData } from "./usage";
 import type { WhatsAppState } from "./whatsapp";
 
-const CARD = "rounded-2xl border border-white/10 bg-neutral-900/60 shadow-xl";
+const SURFACE = "rounded-2xl border border-white/10 bg-neutral-900/60 shadow-xl";
+const HEADING = "text-[0.72rem] font-semibold uppercase tracking-[0.09em] text-neutral-400";
 const GHOST_BUTTON =
   "rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-neutral-300 transition hover:bg-white/5 disabled:opacity-50";
-function statusRow(dotClass: string, label: string): string {
-  return `<div class="flex items-center gap-2">
-    <span class="h-2 w-2 rounded-full ${dotClass}"></span>
-    <span class="text-sm font-medium text-neutral-200">${label}</span>
+const PRIMARY_BUTTON =
+  "inline-block rounded-xl bg-indigo-500 px-5 py-2 text-sm font-medium text-white transition hover:bg-indigo-400";
+
+function headingRow(title: string, right = ""): string {
+  return `<div class="mt-8 mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+    <h3 class="${HEADING}">${title}</h3>${right}
   </div>`;
 }
 
 function filterChip(value: string, label: string, checked = false): string {
-  return `<label class="cursor-pointer rounded-md px-2 py-1 text-neutral-500 transition hover:text-neutral-300 has-[:checked]:bg-indigo-500/20 has-[:checked]:text-indigo-200">
+  return `<label class="cursor-pointer rounded-full px-3 py-1 text-neutral-500 transition hover:text-neutral-300 has-[:checked]:bg-indigo-500/20 has-[:checked]:text-indigo-200">
     <input type="radio" name="level" value="${value}"${checked ? " checked" : ""} class="sr-only" />${label}
   </label>`;
 }
 
 /**
- * Full page shell: the chat as the hero and a rail of status cards (WhatsApp, Claude,
- * logs). Two columns on desktop, a chat-first stack on mobile; the page itself scrolls.
- * Each region polls its fragment endpoint and swaps its own contents.
+ * Full page shell: sticky glass header, the stat bar (#summary, which also carries the
+ * WhatsApp/Claude setup flows while they need attention), the conversation, and the
+ * logs - one flowing column that scrolls as a page. Each region polls its fragment
+ * endpoint and swaps its own contents.
  */
 export function renderPage(version: string): string {
   return `<!doctype html>
@@ -39,71 +43,43 @@ export function renderPage(version: string): string {
     <link rel="stylesheet" href="/app.css?v=${version}" />
     <script src="/htmx.min.js?v=${version}"></script>
   </head>
-  <body class="min-h-dvh bg-neutral-950 text-neutral-100 antialiased">
-    <header class="sticky top-0 z-20 border-b border-white/5 bg-neutral-950/80 backdrop-blur">
-      <div class="mx-auto flex w-full max-w-7xl items-center gap-3 px-4 py-3 sm:px-6">
-        <img src="/favicon.svg?v=${version}" alt="" class="h-8 w-8 shrink-0" />
-        <h1 class="text-base font-semibold tracking-tight">Apollo</h1>
-      </div>
+  <body class="mx-auto min-h-dvh w-full max-w-5xl bg-neutral-950 px-4 pb-16 text-neutral-100 antialiased sm:px-6">
+    <header class="sticky top-0 z-20 -mx-4 flex items-center gap-2.5 border-b border-white/5 bg-neutral-950/80 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+      <img src="/favicon.svg?v=${version}" alt="" class="h-6 w-6 shrink-0" />
+      <span class="text-[1.05rem] font-semibold tracking-tight">Apollo</span>
     </header>
-    <main class="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-6">
-      <div class="grid items-start gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
-        <section id="chat-card" class="${CARD} flex min-w-0 scroll-mt-20 flex-col overflow-hidden">
-          <header class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/5 px-4 py-3 sm:px-5">
-            <h2 class="text-sm font-semibold text-neutral-200">Conversation</h2>
-            <span id="session-status" class="text-xs"></span>
-            <div class="ml-auto flex items-center gap-2">
-              <button hx-post="/compact" hx-target="#session-status" hx-swap="innerHTML" hx-disabled-elt="this"
-                class="${GHOST_BUTTON}">
-                Compact
-              </button>
-              <button hx-post="/reload" hx-target="#session-status" hx-swap="innerHTML" hx-disabled-elt="this"
-                class="${GHOST_BUTTON}">
-                Reload
-              </button>
-            </div>
-          </header>
-          <div id="chat" class="h-[70dvh] space-y-3 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:h-[75dvh]"
-            hx-get="/chat" hx-trigger="load, every 2s" hx-swap="innerHTML"
-            hx-on::before-swap="this.dataset.stick = this.scrollHeight - this.scrollTop - this.clientHeight < 160 ? '1' : ''"
-            hx-on::after-settle="if (this.dataset.stick) this.scrollTop = this.scrollHeight">
-            <p class="text-xs text-neutral-500">Loading…</p>
-          </div>
-          <footer class="border-t border-white/5 px-4 py-3 sm:px-5">
-            <div id="context" hx-get="/context" hx-trigger="load, every 5s" hx-swap="innerHTML">
-              <p class="text-xs text-neutral-500">Loading…</p>
-            </div>
-          </footer>
-        </section>
-        <div class="grid min-w-0 gap-4 sm:gap-6">
-          <section id="whatsapp-card" class="${CARD} scroll-mt-20 p-5">
-            <h2 class="mb-4 text-sm font-semibold text-neutral-200">WhatsApp</h2>
-            <div id="whatsapp" hx-get="/status" hx-trigger="load, every 2s" hx-swap="innerHTML">
-              ${statusRow("bg-neutral-600", "Loading…")}
-            </div>
-          </section>
-          <section id="anthropic-card" class="${CARD} scroll-mt-20 p-5">
-            <h2 class="mb-4 text-sm font-semibold text-neutral-200">Claude</h2>
-            <div id="anthropic" hx-get="/anthropic" hx-trigger="load, every 300s" hx-swap="innerHTML">
-              <p class="text-xs text-neutral-500">Loading…</p>
-            </div>
-          </section>
-        </div>
-        <section id="logs-card" class="${CARD} min-w-0 scroll-mt-20 overflow-hidden lg:col-span-2">
-          <header class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/5 px-4 py-3 sm:px-5">
-            <h2 class="text-sm font-semibold text-neutral-200">Logs</h2>
-            <form id="logs-filter" class="ml-auto flex gap-0.5 rounded-lg border border-white/10 bg-neutral-950/60 p-0.5 text-[11px]">
-              ${filterChip("all", "All", true)}
-              ${filterChip("info", "Info+")}
-              ${filterChip("warn", "Warn+")}
-              ${filterChip("error", "Error")}
-            </form>
-          </header>
-          <div id="log-list" class="max-h-[32rem] overflow-y-auto overscroll-contain"
-            hx-get="/logs" hx-include="#logs-filter" hx-trigger="load, every 2s, change from:#logs-filter" hx-swap="innerHTML">
-            <p class="px-4 py-6 text-center text-xs text-neutral-600">Loading…</p>
-          </div>
-        </section>
+    <main>
+      <div id="summary" class="mt-5" hx-get="/summary" hx-trigger="load, every 2s" hx-swap="innerHTML">
+        <div class="${SURFACE} px-5 py-4 text-sm text-neutral-500">Loading…</div>
+      </div>
+      ${headingRow(
+        "conversation",
+        `<span id="session-status" class="text-xs"></span>
+        <div class="ml-auto flex items-center gap-2">
+          <button hx-post="/compact" hx-target="#session-status" hx-swap="innerHTML" hx-disabled-elt="this"
+            class="${GHOST_BUTTON}">Compact</button>
+          <button hx-post="/reload" hx-target="#session-status" hx-swap="innerHTML" hx-disabled-elt="this"
+            class="${GHOST_BUTTON}">Reload</button>
+        </div>`,
+      )}
+      <div id="chat" class="${SURFACE} h-[70dvh] space-y-3 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:h-[75dvh]"
+        hx-get="/chat" hx-trigger="load, every 2s" hx-swap="innerHTML"
+        hx-on::before-swap="this.dataset.stick = this.scrollHeight - this.scrollTop - this.clientHeight < 160 ? '1' : ''"
+        hx-on::after-settle="if (this.dataset.stick) this.scrollTop = this.scrollHeight">
+        <p class="text-sm text-neutral-500">Loading…</p>
+      </div>
+      ${headingRow(
+        "logs",
+        `<form id="logs-filter" class="ml-auto flex gap-0.5 rounded-full border border-white/10 bg-neutral-950/60 p-[3px] text-xs">
+          ${filterChip("all", "All", true)}
+          ${filterChip("info", "Info+")}
+          ${filterChip("warn", "Warn+")}
+          ${filterChip("error", "Error")}
+        </form>`,
+      )}
+      <div id="log-list" class="${SURFACE} max-h-[32rem] overflow-y-auto overscroll-contain"
+        hx-get="/logs" hx-include="#logs-filter" hx-trigger="load, every 2s, change from:#logs-filter" hx-swap="innerHTML">
+        <p class="px-4 py-6 text-center text-sm text-neutral-600">Loading…</p>
       </div>
     </main>
     <dialog id="lightbox" class="m-auto bg-transparent p-0 backdrop:bg-black/80" onclick="this.close()">
@@ -111,6 +87,155 @@ export function renderPage(version: string): string {
     </dialog>
   </body>
 </html>`;
+}
+
+export interface SummaryArgs {
+  anthropicConnected: boolean;
+  authUrl: string;
+  connectError?: string;
+  contextUsage: ContextUsage | undefined;
+  linking: boolean;
+  usage: UsageData | null;
+  whatsapp: WhatsAppState;
+}
+
+function cell(key: string, value: string, tooltip: string): string {
+  return `<div class="cursor-help" title="${escapeHtml(tooltip)}">
+    <div class="text-[0.7rem] font-medium uppercase tracking-[0.05em] text-neutral-500 underline decoration-dotted decoration-neutral-700 underline-offset-[3px]">${key}</div>
+    <div class="mt-0.5 truncate text-lg font-semibold tracking-tight tabular-nums">${value}</div>
+  </div>`;
+}
+
+function pctValue(utilization: number, decimals = 0): string {
+  const pct = Math.min(100, Math.max(0, utilization));
+  const color = pct >= 90 ? "text-red-400" : pct >= 70 ? "text-amber-400" : "";
+  return `<span class="${color}">${pct.toFixed(decimals)}%</span>`;
+}
+
+function suffix(label: string): string {
+  return label ? ` · ${label}` : "";
+}
+
+function whatsappValue(state: WhatsAppState, linking: boolean): string {
+  if (state.status === "connected") return `<span class="text-emerald-400">linked</span>`;
+  if (linking) return `<span class="text-amber-400">scan QR</span>`;
+  if (state.status === "connecting") return `<span class="text-neutral-400">connecting…</span>`;
+  if (state.status === "loggedOut") return `<span class="text-red-400">logged out</span>`;
+  return `<span class="text-amber-400">not linked</span>`;
+}
+
+function bar(args: SummaryArgs): string {
+  const cells = [
+    cell("whatsapp", whatsappValue(args.whatsapp, args.linking), "WhatsApp link state"),
+  ];
+  if (args.whatsapp.status === "connected" && args.whatsapp.user) {
+    cells.push(cell("number", `+${args.whatsapp.user}`, "The linked WhatsApp account"));
+  }
+  cells.push(
+    cell(
+      "claude",
+      args.anthropicConnected
+        ? `<span class="text-emerald-400">connected</span>`
+        : `<span class="text-amber-400">not connected</span>`,
+      "Anthropic account credential",
+    ),
+  );
+  const usage = args.usage;
+  if (args.anthropicConnected && usage) {
+    if (usage.five_hour) {
+      cells.push(
+        cell(
+          "session (5h)",
+          pctValue(usage.five_hour.utilization),
+          `5-hour session limit${suffix(resetLabel(usage.five_hour.resets_at))}`,
+        ),
+      );
+    }
+    if (usage.seven_day) {
+      cells.push(
+        cell(
+          "weekly",
+          pctValue(usage.seven_day.utilization),
+          `Weekly limit, all models${suffix(resetLabel(usage.seven_day.resets_at))}`,
+        ),
+      );
+    }
+    if (usage.seven_day_sonnet) {
+      cells.push(
+        cell(
+          "sonnet",
+          pctValue(usage.seven_day_sonnet.utilization),
+          `Weekly limit, Sonnet${suffix(resetLabel(usage.seven_day_sonnet.resets_at))}`,
+        ),
+      );
+    }
+    if (usage.extra_usage) {
+      cells.push(
+        cell("extra", extraUsageValue(usage.extra_usage), "Extra usage beyond the plan limits"),
+      );
+    }
+  }
+  const ctx = args.contextUsage;
+  if (ctx && ctx.contextWindow > 0) {
+    const value = ctx.percent == null ? "…" : pctValue(ctx.percent, 1);
+    const tokens =
+      ctx.tokens == null
+        ? `context window ${humanTokens(ctx.contextWindow)} tokens`
+        : `${humanTokens(ctx.tokens)} of ${humanTokens(ctx.contextWindow)} tokens`;
+    cells.push(cell("context", value, `Session context: ${tokens}`));
+  }
+  return `<div class="${SURFACE} grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-x-6 gap-y-3 px-5 py-4">${cells.join("")}</div>`;
+}
+
+function linkIdle(): string {
+  return `<p class="text-sm text-neutral-400">Link your WhatsApp account to start chatting with Apollo.</p>
+    <button hx-post="/link" hx-target="#summary" hx-swap="innerHTML" class="${PRIMARY_BUTTON}">Link device</button>`;
+}
+
+async function linkScanning(state: WhatsAppState): Promise<string> {
+  const code = state.qr
+    ? `<div class="w-fit rounded-xl bg-white p-3">${await QRCode.toString(state.qr, {
+        margin: 1,
+        type: "svg",
+        width: 208,
+      })}</div>`
+    : `<div class="grid h-56 w-56 place-items-center rounded-xl border border-dashed border-neutral-700 text-sm text-neutral-500">Generating QR…</div>`;
+  return `<p class="text-sm text-neutral-400">WhatsApp → Linked devices → Link a device, then scan:</p>
+    ${code}
+    <button hx-post="/link" hx-target="#summary" hx-swap="innerHTML" class="${GHOST_BUTTON}">Refresh QR</button>`;
+}
+
+async function whatsappSetup(state: WhatsAppState, linking: boolean): Promise<string> {
+  return `${headingRow("whatsapp")}
+  <div class="${SURFACE} space-y-4 p-5">${linking ? await linkScanning(state) : linkIdle()}</div>`;
+}
+
+function claudeSetup(authUrl: string, error?: string): string {
+  return `${headingRow("claude")}
+  <div class="${SURFACE} space-y-4 p-5">
+    <p class="text-sm text-neutral-400">Authorize with your Claude account. You'll be redirected to a localhost page that won't load - that's expected: copy that URL (or the code in it) and paste it below.</p>
+    <a href="${authUrl}" target="_blank" rel="noreferrer" class="${PRIMARY_BUTTON}">Authorize with Anthropic</a>
+    <form hx-post="/connect" hx-target="#summary" hx-swap="innerHTML" class="flex max-w-xl gap-2">
+      <input name="code" placeholder="Paste code or redirect URL" autocomplete="off" spellcheck="false"
+        class="min-w-0 flex-1 rounded-xl border border-white/10 bg-neutral-950/60 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus:border-indigo-400 focus:outline-none" />
+      <button class="${GHOST_BUTTON}">Connect</button>
+    </form>
+    ${error ? `<p class="text-xs text-red-400">${error}</p>` : ""}
+  </div>`;
+}
+
+/**
+ * Render the #summary fragment: the stat bar (link state, Claude usage, session
+ * context), followed by the WhatsApp link flow and/or the Claude connect flow as
+ * their own sections whenever they still need attention.
+ */
+export async function renderSummary(args: SummaryArgs): Promise<string> {
+  const parts = [bar(args)];
+  if (args.whatsapp.status !== "connected") {
+    parts.push(await whatsappSetup(args.whatsapp, args.linking));
+  }
+  if (!args.anthropicConnected) parts.push(claudeSetup(args.authUrl, args.connectError));
+  return parts.join("");
 }
 
 /** Inline #session-status fragment shown after a dashboard Compact/Reload button is pressed. */
@@ -124,112 +249,6 @@ export function sessionStatus(action: "compact" | "reload", kind: "busy" | "erro
         ? { color: "text-amber-400", label: "Busy, try again" }
         : { color: "text-red-400", label: failed };
   return `<span class="${color}">${label}</span>`;
-}
-
-const LINK_BUTTON = `<button hx-post="/link" hx-target="#whatsapp" hx-swap="innerHTML"
-  class="w-full rounded-xl bg-indigo-500 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-400">
-  Link device
-</button>`;
-
-function linked(user: string | undefined): string {
-  return `<div class="space-y-4">
-    ${statusRow("bg-emerald-400", "Linked")}
-    <div class="rounded-xl border border-white/10 bg-neutral-950/60 px-4 py-3">
-      <p class="text-[11px] uppercase tracking-wide text-neutral-500">Connected as</p>
-      <p class="mt-1 text-sm font-medium text-neutral-100">${user ? `+${user}` : "WhatsApp"}</p>
-    </div>
-    <p class="text-xs leading-relaxed text-neutral-400">Apollo is online and listening on WhatsApp.</p>
-  </div>`;
-}
-
-function idle(status: WhatsAppState["status"]): string {
-  const label =
-    status === "connecting" ? "Connecting…" : status === "loggedOut" ? "Logged out" : "Not linked";
-  const dot = status === "connecting" ? "animate-pulse bg-amber-400" : "bg-neutral-600";
-  return `<div class="space-y-4">
-    ${statusRow(dot, label)}
-    <p class="text-xs leading-relaxed text-neutral-400">Link your WhatsApp account to start chatting with Apollo.</p>
-    ${LINK_BUTTON}
-  </div>`;
-}
-
-async function scanning(state: WhatsAppState): Promise<string> {
-  const code = state.qr
-    ? `<div class="mx-auto w-fit rounded-xl bg-white p-3">${await QRCode.toString(state.qr, {
-        margin: 1,
-        type: "svg",
-        width: 220,
-      })}</div>`
-    : `<div class="rounded-xl border border-dashed border-neutral-700 p-10 text-center text-sm text-neutral-500">Generating QR…</div>`;
-
-  return `<div class="space-y-4">
-    ${statusRow("animate-pulse bg-amber-400", "Waiting for scan…")}
-    ${code}
-    <p class="text-center text-xs text-neutral-400">WhatsApp → Linked devices → Link a device</p>
-    <button hx-post="/link" hx-target="#whatsapp" hx-swap="innerHTML"
-      class="w-full rounded-xl border border-white/10 py-2 text-xs font-medium text-neutral-300 transition hover:bg-white/5">
-      Refresh QR
-    </button>
-  </div>`;
-}
-
-/** Render the #whatsapp fragment for the current link state. */
-export async function renderState(state: WhatsAppState, linking: boolean): Promise<string> {
-  if (state.status === "connected") return linked(state.user);
-  if (linking) return scanning(state);
-  return idle(state.status);
-}
-
-/** Render the #anthropic fragment: connection status (a credential exists) plus best-effort usage bars, else a login form. */
-export function renderAnthropic(
-  connected: boolean,
-  data: UsageData | null,
-  authUrl: string,
-  error?: string,
-): string {
-  if (connected) {
-    return `<div class="space-y-4">
-      ${statusRow("bg-emerald-400", "Connected to Anthropic")}
-      ${data ? renderUsage(data) : `<p class="text-xs text-neutral-500">Usage data unavailable right now.</p>`}
-    </div>`;
-  }
-  return `<div class="space-y-4">
-    ${statusRow("bg-neutral-600", "Not connected to Anthropic")}
-    <p class="text-xs leading-relaxed text-neutral-400">Authorize with your Claude account. You'll be redirected to a localhost page that won't load - that's expected: copy that URL (or the code in it) and paste it below.</p>
-    <a href="${authUrl}" target="_blank" rel="noreferrer"
-      class="block w-full rounded-xl bg-indigo-500 py-2.5 text-center text-sm font-medium text-white transition hover:bg-indigo-400">
-      Authorize with Anthropic
-    </a>
-    <form hx-post="/connect" hx-target="#anthropic" hx-swap="innerHTML" class="flex gap-2">
-      <input name="code" placeholder="Paste code or redirect URL" autocomplete="off" spellcheck="false"
-        class="min-w-0 flex-1 rounded-xl border border-white/10 bg-neutral-950/60 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus:border-indigo-400 focus:outline-none" />
-      <button class="rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-neutral-200 transition hover:bg-white/5">Connect</button>
-    </form>
-    ${error ? `<p class="text-xs text-red-400">${error}</p>` : ""}
-  </div>`;
-}
-
-/** Render the #context fragment: how much of the model's context window the session is using. */
-export function renderContext(usage: ContextUsage | undefined): string {
-  if (!usage || usage.contextWindow <= 0) {
-    return `<p class="text-xs text-neutral-500">Context usage unavailable.</p>`;
-  }
-  const window = humanTokens(usage.contextWindow);
-  if (usage.tokens == null || usage.percent == null) {
-    return `<div class="flex justify-between text-xs text-neutral-400">
-      <span>Context</span><span>… / ${window}</span>
-    </div>`;
-  }
-  const pct = Math.min(100, Math.max(0, usage.percent));
-  const color = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
-  return `<div>
-    <div class="mb-1.5 flex justify-between text-xs">
-      <span class="text-neutral-400">Context</span><span class="text-neutral-500">${pct.toFixed(1)}% / ${window}</span>
-    </div>
-    <div class="h-1.5 overflow-hidden rounded-full bg-white/5">
-      <div class="h-full rounded-full ${color}" style="width:${pct}%"></div>
-    </div>
-  </div>`;
 }
 
 const LOG_META_KEYS = new Set(["hostname", "level", "msg", "pid", "time", "v"]);
@@ -268,16 +287,16 @@ function logExtras(record: LogRecord): string {
 /** Render the #log-list fragment: one row per record, already filtered and newest first. */
 export function renderLogs(records: LogRecord[]): string {
   if (records.length === 0) {
-    return `<p class="px-4 py-6 text-center text-xs text-neutral-600">No logs.</p>`;
+    return `<p class="px-4 py-6 text-center text-sm text-neutral-600">No logs.</p>`;
   }
   return records
     .map((record) => {
       const { color, text } = logLevel(typeof record.level === "number" ? record.level : 30);
       const msg = typeof record.msg === "string" ? record.msg : "";
-      return `<div class="border-b border-white/5 px-4 py-1.5 font-mono text-xs leading-snug last:border-b-0 sm:px-5">
+      return `<div class="border-b border-white/5 px-4 py-1.5 font-mono text-xs leading-relaxed transition last:border-b-0 hover:bg-white/5 sm:px-5">
       <div class="flex gap-2">
         <span class="shrink-0 text-neutral-600">${logTime(record.time)}</span>
-        <span class="w-12 shrink-0 font-semibold ${color}">${text}</span>
+        <span class="w-12 shrink-0 font-bold ${color}">${text}</span>
         <span class="min-w-0 break-words text-neutral-300">${escapeHtml(msg)}</span>
       </div>
       ${logExtras(record)}

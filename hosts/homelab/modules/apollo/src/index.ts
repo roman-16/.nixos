@@ -8,14 +8,7 @@ import { pino } from "pino";
 import { createApolloSession, deliver, onAssistantText } from "./agent";
 import { parseTranscript, renderChat } from "./chat";
 import { loadConfig } from "./config";
-import {
-  renderAnthropic,
-  renderContext,
-  renderLogs,
-  renderPage,
-  renderState,
-  sessionStatus,
-} from "./dashboard";
+import { renderLogs, renderPage, renderSummary, sessionStatus } from "./dashboard";
 import { createLogBuffer, filterLogs, parseLevel } from "./logs";
 import { compactionNotice, isAllowed, jidForNumber, voiceText } from "./messages";
 import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
@@ -70,7 +63,7 @@ export async function main(): Promise<void> {
   // a dashboard compaction right after a restart, say - so fall back to the primary
   // allowlisted number.
   const fallbackTarget = config.allowFrom[0] ? jidForNumber(config.allowFrom[0]) : undefined;
-  let lastStatusBody: string | undefined;
+  let lastSummaryBody: string | undefined;
   let lastChatBody: string | undefined;
   let lastLogKey: string | undefined;
   let chatCache: { body: string; mtimeMs: number } | undefined;
@@ -191,6 +184,35 @@ export async function main(): Promise<void> {
 
   const whatsapp = wa;
 
+  /**
+   * Build the #summary fragment from live state. Anthropic connection status is whether
+   * a credential exists (no refresh, no network), so a usage-endpoint blip or brief
+   * token-refresh window never shows "not connected". The usage endpoint rate-limits
+   * aggressively: fetch at most once per TTL (stamp the time before awaiting so
+   * concurrent polls dedupe), and keep the last good value across failures so the
+   * numbers never blank out on a transient 429.
+   */
+  async function summaryBody(connectError?: string): Promise<string> {
+    const state = whatsapp.getState();
+    if (state.status === "connected") linking = false;
+    const connected = authStorage.hasAuth("anthropic");
+    if (connected && (!usage || Date.now() - usage.fetchedAt >= usageTtlMs)) {
+      usage = { data: usage?.data ?? null, fetchedAt: Date.now() };
+      const token = await authStorage.getApiKey("anthropic");
+      const fresh = token ? await fetchUsage(token) : null;
+      if (fresh) usage = { data: fresh, fetchedAt: usage.fetchedAt };
+    }
+    return renderSummary({
+      anthropicConnected: connected,
+      authUrl: connected ? "" : loginUrl(),
+      connectError,
+      contextUsage: session.getContextUsage(),
+      linking,
+      usage: usage?.data ?? null,
+      whatsapp: state,
+    });
+  }
+
   // Fire reminders exactly at their time via fs.watch + per-reminder timers (no polling).
   createReminderWatcher({
     dir: config.remindersDir,
@@ -214,7 +236,7 @@ export async function main(): Promise<void> {
       if (pathname === "/htmx.min.js") return asset("htmx.min.js", "text/javascript");
       if (pathname === "/favicon.svg") return asset("favicon.svg", "image/svg+xml");
       if (pathname === "/") {
-        lastStatusBody = undefined;
+        lastSummaryBody = undefined;
         lastChatBody = undefined;
         lastLogKey = undefined;
         return new Response(renderPage(assetsVersion), { headers: htmlHeaders });
@@ -240,16 +262,14 @@ export async function main(): Promise<void> {
       if (pathname === "/link" && req.method === "POST") {
         linking = true;
         whatsapp.relink();
-        lastStatusBody = await renderState(whatsapp.getState(), linking);
-        return new Response(lastStatusBody, { headers: htmlHeaders });
+        lastSummaryBody = await summaryBody();
+        return new Response(lastSummaryBody, { headers: htmlHeaders });
       }
 
-      if (pathname === "/status") {
-        const state = whatsapp.getState();
-        if (state.status === "connected") linking = false;
-        const body = await renderState(state, linking);
-        if (body === lastStatusBody) return new Response(null, { status: 204 });
-        lastStatusBody = body;
+      if (pathname === "/summary") {
+        const body = await summaryBody();
+        if (body === lastSummaryBody) return new Response(null, { status: 204 });
+        lastSummaryBody = body;
         return new Response(body, { headers: htmlHeaders });
       }
 
@@ -287,50 +307,21 @@ export async function main(): Promise<void> {
         }
       }
 
-      if (pathname === "/context") {
-        return new Response(renderContext(session.getContextUsage()), { headers: htmlHeaders });
-      }
-
-      if (pathname === "/anthropic") {
-        // Connection status is whether a credential exists (no refresh, no network),
-        // so a usage-endpoint blip or brief token-refresh window never shows "not connected".
-        const connected = authStorage.hasAuth("anthropic");
-        // Usage endpoint rate-limits aggressively: fetch at most once per TTL (stamp the
-        // time before awaiting so concurrent polls dedupe), and keep the last good value
-        // across failures so the bars never blank out on a transient 429.
-        if (connected && (!usage || Date.now() - usage.fetchedAt >= usageTtlMs)) {
-          usage = { data: usage?.data ?? null, fetchedAt: Date.now() };
-          const token = await authStorage.getApiKey("anthropic");
-          const fresh = token ? await fetchUsage(token) : null;
-          if (fresh) usage = { data: fresh, fetchedAt: usage.fetchedAt };
-        }
-        return new Response(
-          renderAnthropic(connected, usage?.data ?? null, connected ? "" : loginUrl()),
-          { headers: htmlHeaders },
-        );
-      }
-
       if (pathname === "/connect" && req.method === "POST") {
         const code = parseCode(new URLSearchParams(await req.text()).get("code") ?? "");
         const cred =
           code && pendingVerifier ? await exchangeCode(code, pendingVerifier) : undefined;
+        let error: string | undefined;
         if (cred) {
           authStorage.set("anthropic", { type: "oauth", ...cred });
           pendingVerifier = undefined;
           logger.info("anthropic connected via dashboard");
-          const fresh = await fetchUsage(cred.access);
-          usage = { data: fresh, fetchedAt: Date.now() };
-          return new Response(renderAnthropic(true, fresh, ""), { headers: htmlHeaders });
+          usage = { data: await fetchUsage(cred.access), fetchedAt: Date.now() };
+        } else {
+          error = "That code didn't work. Authorize again and paste the new code.";
         }
-        return new Response(
-          renderAnthropic(
-            false,
-            null,
-            loginUrl(),
-            "That code didn't work. Authorize again and paste the new code.",
-          ),
-          { headers: htmlHeaders },
-        );
+        lastSummaryBody = await summaryBody(error);
+        return new Response(lastSummaryBody, { headers: htmlHeaders });
       }
 
       return new Response("Not found", { status: 404 });
