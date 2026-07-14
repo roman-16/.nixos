@@ -10,18 +10,23 @@ through this script.
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import os
 import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from typing import NamedTuple
 
 MACROS_DIR = Path(os.environ.get("MACROS_DIR", "macros"))
 DAYS_DIR = MACROS_DIR / "days"
 GOAL_FILE = MACROS_DIR / "goal.json"
 FOOD_FILE = MACROS_DIR / "food.json"
 PREP_FILE = MACROS_DIR / "prep.json"
+
+# Score below which difflib stops proposing a fuzzy name match (0..1).
+FUZZY_CUTOFF = 0.6
 
 
 def die(msg: str):
@@ -41,6 +46,22 @@ def numify(value) -> float | int:
     """Parse a number, tolerating thousands separators; int when whole."""
     x = float(str(value).replace(",", ""))
     return int(x) if x == int(x) else x
+
+
+def nonneg(value) -> float | int:
+    """argparse type: a number that must be >= 0 (0 is allowed, e.g. black coffee)."""
+    x = numify(value)
+    if x < 0:
+        raise argparse.ArgumentTypeError("must be >= 0")
+    return x
+
+
+def positive(value) -> float | int:
+    """argparse type: a number that must be > 0."""
+    x = numify(value)
+    if x <= 0:
+        raise argparse.ArgumentTypeError("must be > 0")
+    return x
 
 
 def r1(x) -> float | int:
@@ -71,13 +92,74 @@ def parse_fraction(s: str) -> float:
     return float(s)
 
 
-def find(mapping: dict, query: str):
-    q = query.lower()
+class Match(NamedTuple):
+    """Outcome of resolving a food/prep reference.
+
+    kind is one of: "exact"/"substring" (confident: key + value set); "fuzzy"
+    (key + value hold the top close match and candidates lists every close name -
+    the logging path may accept a lone candidate, destructive ops must not);
+    "ambiguous" (several substring hits: key + value None, candidates set); or
+    "none" (no match).
+    """
+
+    key: str | None
+    value: dict | None
+    kind: str
+    candidates: list
+
+
+def labels_of(key: str, value: dict) -> set:
+    return {key.lower(), value.get("name", "").lower(), *(a.lower() for a in value.get("aliases", []))}
+
+
+def find(mapping: dict, query: str) -> Match:
+    """Resolve a reference by a confidence ladder - exact, then unique substring,
+    then (only when both miss) a stdlib fuzzy match - and never silently pick a
+    winner when several candidates tie."""
+    q = query.lower().strip()
+    if not q:
+        return Match(None, None, "none", [])
     for key, value in mapping.items():
-        aliases = [a.lower() for a in value.get("aliases", [])]
-        if q == key.lower() or q == value.get("name", "").lower() or q in aliases:
-            return key, value
-    return None, None
+        if q in labels_of(key, value):
+            return Match(key, value, "exact", [])
+    subs = [(key, value) for key, value in mapping.items() if any(q in label for label in labels_of(key, value))]
+    if len(subs) == 1:
+        return Match(subs[0][0], subs[0][1], "substring", [])
+    if subs:
+        return Match(None, None, "ambiguous", [value["name"] for _, value in subs])
+    pool: dict = {}
+    for key, value in mapping.items():
+        for label in labels_of(key, value):
+            pool.setdefault(label, (key, value))
+    close: dict = {}
+    for label in difflib.get_close_matches(q, list(pool), n=5, cutoff=FUZZY_CUTOFF):
+        key, value = pool[label]
+        close.setdefault(key, value)
+    if not close:
+        return Match(None, None, "none", [])
+    items = list(close.items())
+    return Match(items[0][0], items[0][1], "fuzzy", [value["name"] for _, value in items])
+
+
+def resolve(mapping: dict, query: str, *, noun: str, listing: str, strict: bool) -> tuple:
+    """find() plus the shared action-path policy. Returns (key, value, assumed),
+    where assumed is the display name to announce when a lone fuzzy match was
+    accepted (log paths only) and None otherwise. Dies on ambiguity, on a fuzzy
+    hit under strict (destructive ops re-run with the exact name), and on a miss.
+    """
+    match = find(mapping, query)
+    if match.kind in ("exact", "substring"):
+        return match.key, match.value, None
+    if match.kind == "fuzzy" and not strict and len(match.candidates) == 1:
+        return match.key, match.value, match.value["name"]
+    if match.kind == "fuzzy":
+        joined = ", ".join(match.candidates)
+        if strict:
+            die(f'no exact match for "{query}" - closest: {joined}. Re-run with the exact name (see {listing}).')
+        die(f'no exact match for "{query}" - did you mean: {joined}? Or check {listing}.')
+    if match.kind == "ambiguous":
+        die(f'"{query}" matches several: {", ".join(match.candidates)}. Be more specific.')
+    die(f'no {noun} matches "{query}" - check {listing}, add it, or log an estimate.')
 
 
 # --- ledger --------------------------------------------------------------
@@ -366,14 +448,25 @@ def cmd_entries(args):
               f"{e['kcal']} kcal, {round(e['protein'])}g P{note}")
 
 
-def cmd_food_get(args):
-    _, food = find(load(FOOD_FILE, {}), args.query)
-    if not food:
-        print(f'no saved food matches "{args.query}" - estimate it')
-        return
+def food_line(food: dict) -> str:
     p = food["per100"]
-    print(f"{food['name']}: per 100g {p['kcal']} kcal, {p['protein']}g P, {p['fat']}g F, "
-          f"{p['carbs']}g C; default serving {food['serving']}g")
+    return (f"{food['name']}: per 100g {p['kcal']} kcal, {p['protein']}g P, {p['fat']}g F, "
+            f"{p['carbs']}g C; default serving {food['serving']}g")
+
+
+def cmd_food_get(args):
+    match = find(load(FOOD_FILE, {}), args.query)
+    if match.kind == "ambiguous":
+        print(f'"{args.query}" matches several: {", ".join(match.candidates)}. Which one?')
+        return
+    if match.kind == "fuzzy" and len(match.candidates) > 1:
+        print(f'no exact match for "{args.query}" - did you mean: {", ".join(match.candidates)}?')
+        return
+    if match.kind == "none":
+        print(f'no saved food matches "{args.query}" - check food-list or estimate it')
+        return
+    prefix = f'closest to "{args.query}" -> ' if match.kind == "fuzzy" else ""
+    print(f"{prefix}{food_line(match.value)}")
 
 
 def cmd_food_add(args):
@@ -400,9 +493,8 @@ def cmd_food_list(args):
 
 
 def cmd_food_eat(args):
-    _, food = find(load(FOOD_FILE, {}), args.name)
-    if not food:
-        die(f'no saved food matches "{args.name}" - add it with food-add or log an estimate')
+    _, food, assumed = resolve(load(FOOD_FILE, {}), args.name,
+                               noun="saved food", listing="food-list", strict=False)
     per100 = food["per100"]
     rate = {k: per100[k] / 100 for k in ("kcal", "protein", "fat", "carbs")}
     date = args.date or today()
@@ -425,8 +517,45 @@ def cmd_food_eat(args):
     protein = r1(rate["protein"] * grams)
     entry = make_entry(now_time(), f"{food['name']} ({grams}g)",
                        kcal, protein, r1(rate["fat"] * grams), r1(rate["carbs"] * grams), None)
-    lead = f"🍽️ {food['name']}: {grams}g {why} - {kcal} kcal, {protein}g P" if why else None
-    emit(date, entry, dry_run=args.dry_run, lead=lead, commit=lambda: append_entry(date, entry))
+    leads = []
+    if assumed:
+        leads.append(f'📝 read "{args.name}" as {assumed}')
+    if why:
+        leads.append(f"🍽️ {food['name']}: {grams}g {why} - {kcal} kcal, {protein}g P")
+    emit(date, entry, dry_run=args.dry_run, lead="\n".join(leads) or None,
+         commit=lambda: append_entry(date, entry))
+
+
+def cmd_food_edit(args):
+    food = load(FOOD_FILE, {})
+    key, entry, _ = resolve(food, args.name, noun="saved food", listing="food-list", strict=True)
+    for flag, sub in (("kcal100", "kcal"), ("protein100", "protein"), ("fat100", "fat"), ("carbs100", "carbs")):
+        value = getattr(args, flag)
+        if value is not None:
+            entry["per100"][sub] = value
+    if args.serving is not None:
+        entry["serving"] = args.serving
+    if args.aliases is not None:
+        entry["aliases"] = [a.strip().lower() for a in args.aliases.split(",") if a.strip()]
+    if args.rename:
+        entry["name"] = args.rename
+    newkey = entry["name"].lower()
+    if newkey != key and newkey in food:
+        die(f'a different food is already saved as "{entry["name"]}"')
+    entry["aliases"] = sorted(set(entry.get("aliases", [])) | {newkey})
+    del food[key]
+    food[newkey] = entry
+    save(FOOD_FILE, food)
+    print(f"updated food: {entry['name']}")
+    print(food_line(entry))
+
+
+def cmd_food_rm(args):
+    food = load(FOOD_FILE, {})
+    key, entry, _ = resolve(food, args.name, noun="saved food", listing="food-list", strict=True)
+    del food[key]
+    save(FOOD_FILE, food)
+    print(f"removed food: {entry['name']}")
 
 
 def cmd_prep_add(args):
@@ -443,13 +572,12 @@ def cmd_prep_add(args):
 
 def cmd_prep_eat(args):
     prep = load(PREP_FILE, {})
-    key, batch = find(prep, args.name)
-    if not batch:
-        die(f'no prep named "{args.name}"')
+    key, batch, assumed = resolve(prep, args.name, noun="prep", listing="prep-list", strict=False)
     remaining = batch["remaining"]
     total = batch["total"]
     date = args.date or today()
-    lead, capped = None, False
+    leads = [f'📝 read "{args.name}" as {assumed}'] if assumed else []
+    capped = False
     # --fraction/--remaining are shares of the *whole* batch; --fit-*/--target-*
     # size the share for you.
     if has_target(args):
@@ -477,12 +605,12 @@ def cmd_prep_eat(args):
     entry = make_entry(now_time(), f"{batch['name']} ({round(frac * 100)}% of batch)",
                        kcal, protein, r1(total["fat"] * frac), r1(total["carbs"] * frac), "prep")
     if has_target(args):
-        lead = f"🍽️ {batch['name']}: {round(frac * 100)}% of batch {why} - {kcal} kcal, {protein}g P"
+        leads.append(f"🍽️ {batch['name']}: {round(frac * 100)}% of batch {why} - {kcal} kcal, {protein}g P")
         if capped:
             short = requested - frac * total[dim]
             short_txt = f"{round(short)}g P" if dim == "protein" else f"{round(short)} kcal"
-            lead += (f"\n⚠️ only {round(remaining * 100)}% of the batch is left - "
-                     f"capped to that, {short_txt} short of the target.")
+            leads.append(f"⚠️ only {round(remaining * 100)}% of the batch is left - "
+                         f"capped to that, {short_txt} short of the target.")
 
     def commit():
         append_entry(date, entry)
@@ -494,7 +622,7 @@ def cmd_prep_eat(args):
             prep[key] = batch
         save(PREP_FILE, prep)
 
-    emit(date, entry, dry_run=args.dry_run, lead=lead, commit=commit)
+    emit(date, entry, dry_run=args.dry_run, lead="\n".join(leads) or None, commit=commit)
 
 
 def cmd_prep_list(args):
@@ -506,6 +634,14 @@ def cmd_prep_list(args):
         r, t = v["remaining"], v["total"]
         print(f"- {v['name']}: {round(r * 100)}% left "
               f"({round(t['kcal'] * r)} kcal, {r1(t['protein'] * r)}g P)")
+
+
+def cmd_prep_rm(args):
+    prep = load(PREP_FILE, {})
+    key, batch, _ = resolve(prep, args.name, noun="prep", listing="prep-list", strict=True)
+    del prep[key]
+    save(PREP_FILE, prep)
+    print(f"removed prep: {batch['name']} (was {round(batch['remaining'] * 100)}% left)")
 
 
 def cmd_recompute(args):
@@ -526,8 +662,8 @@ def add_amount_flags(sp, *extra):
         group.add_argument(name, **kwargs)
     group.add_argument("--fit-protein", action="store_true")
     group.add_argument("--fit-kcal", action="store_true")
-    group.add_argument("--target-protein", type=numify)
-    group.add_argument("--target-kcal", type=numify)
+    group.add_argument("--target-protein", type=positive)
+    group.add_argument("--target-kcal", type=positive)
     sp.add_argument("--dry-run", action="store_true")
     sp.add_argument("--date")
 
@@ -541,18 +677,18 @@ def build_parser() -> argparse.ArgumentParser:
     g = sub.add_parser("goal-set")
     g.set_defaults(func=cmd_goal_set)
     g.add_argument("--phase", choices=["cut", "maintenance", "bulk"])
-    g.add_argument("--tdee", type=numify)
-    g.add_argument("--daily-goal", type=numify)
-    g.add_argument("--protein", type=numify)
-    g.add_argument("--weight-goal", type=numify)
+    g.add_argument("--tdee", type=positive)
+    g.add_argument("--daily-goal", type=positive)
+    g.add_argument("--protein", type=positive)
+    g.add_argument("--weight-goal", type=positive)
 
     lo = sub.add_parser("log")
     lo.set_defaults(func=cmd_log)
     lo.add_argument("--item", required=True)
-    lo.add_argument("--kcal", type=numify, required=True)
-    lo.add_argument("--protein", type=numify, default=0)
-    lo.add_argument("--fat", type=numify, default=0)
-    lo.add_argument("--carbs", type=numify, default=0)
+    lo.add_argument("--kcal", type=nonneg, required=True)
+    lo.add_argument("--protein", type=nonneg, default=0)
+    lo.add_argument("--fat", type=nonneg, default=0)
+    lo.add_argument("--carbs", type=nonneg, default=0)
     lo.add_argument("--note")
     lo.add_argument("--time")
     lo.add_argument("--date")
@@ -564,7 +700,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     w = sub.add_parser("weight")
     w.set_defaults(func=cmd_weight)
-    w.add_argument("--kg", type=numify, required=True)
+    w.add_argument("--kg", type=positive, required=True)
     w.add_argument("--at")
     w.add_argument("--date")
 
@@ -585,11 +721,11 @@ def build_parser() -> argparse.ArgumentParser:
     fa = sub.add_parser("food-add")
     fa.set_defaults(func=cmd_food_add)
     fa.add_argument("--name", required=True)
-    fa.add_argument("--kcal100", type=numify, required=True)
-    fa.add_argument("--protein100", type=numify, required=True)
-    fa.add_argument("--fat100", type=numify, required=True)
-    fa.add_argument("--carbs100", type=numify, required=True)
-    fa.add_argument("--serving", type=numify, required=True)
+    fa.add_argument("--kcal100", type=nonneg, required=True)
+    fa.add_argument("--protein100", type=nonneg, required=True)
+    fa.add_argument("--fat100", type=nonneg, required=True)
+    fa.add_argument("--carbs100", type=nonneg, required=True)
+    fa.add_argument("--serving", type=positive, required=True)
     fa.add_argument("--aliases")
 
     sub.add_parser("food-list").set_defaults(func=cmd_food_list)
@@ -597,20 +733,39 @@ def build_parser() -> argparse.ArgumentParser:
     fe = sub.add_parser("food-eat")
     fe.set_defaults(func=cmd_food_eat)
     fe.add_argument("--name", required=True)
-    add_amount_flags(fe, ("--grams", {"type": numify}), ("--servings", {"type": numify}))
+    add_amount_flags(fe, ("--grams", {"type": positive}), ("--servings", {"type": positive}))
+
+    fed = sub.add_parser("food-edit")
+    fed.set_defaults(func=cmd_food_edit)
+    fed.add_argument("--name", required=True)
+    fed.add_argument("--kcal100", type=nonneg)
+    fed.add_argument("--protein100", type=nonneg)
+    fed.add_argument("--fat100", type=nonneg)
+    fed.add_argument("--carbs100", type=nonneg)
+    fed.add_argument("--serving", type=positive)
+    fed.add_argument("--rename")
+    fed.add_argument("--aliases")
+
+    frm = sub.add_parser("food-rm")
+    frm.set_defaults(func=cmd_food_rm)
+    frm.add_argument("--name", required=True)
 
     pa = sub.add_parser("prep-add")
     pa.set_defaults(func=cmd_prep_add)
     pa.add_argument("--name", required=True)
-    pa.add_argument("--kcal", type=numify, required=True)
-    pa.add_argument("--protein", type=numify, required=True)
-    pa.add_argument("--fat", type=numify, required=True)
-    pa.add_argument("--carbs", type=numify, required=True)
+    pa.add_argument("--kcal", type=nonneg, required=True)
+    pa.add_argument("--protein", type=nonneg, required=True)
+    pa.add_argument("--fat", type=nonneg, required=True)
+    pa.add_argument("--carbs", type=nonneg, required=True)
 
     pe = sub.add_parser("prep-eat")
     pe.set_defaults(func=cmd_prep_eat)
     pe.add_argument("--name", required=True)
     add_amount_flags(pe, ("--fraction", {}), ("--remaining", {"action": "store_true"}))
+
+    prm = sub.add_parser("prep-rm")
+    prm.set_defaults(func=cmd_prep_rm)
+    prm.add_argument("--name", required=True)
 
     sub.add_parser("prep-list").set_defaults(func=cmd_prep_list)
 
