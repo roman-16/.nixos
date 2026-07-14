@@ -195,10 +195,7 @@ export default function (pi: ExtensionAPI) {
       const rawTokens = argTokens.filter((t) => !["--all", "--no-exclude", "--top"].includes(t));
       const rawExcludes = rawTokens.filter((t) => t.startsWith("!")).map((t) => t.slice(1));
       const rawPaths = rawTokens.filter((t) => !t.startsWith("!"));
-      if (rawPaths.length === 0) {
-        ctx.ui.notify("Usage: /load-context [--all] [--top] <path> [path...] [!path...]", "warning");
-        return;
-      }
+      if (rawPaths.length === 0) rawPaths.push(".");
 
       const resolvedPaths: string[] = [];
       for (const rp of rawPaths) {

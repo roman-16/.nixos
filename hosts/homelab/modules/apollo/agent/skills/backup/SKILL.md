@@ -13,6 +13,6 @@ Run it and relay the output:
 {baseDir}/scripts/backup.sh
 ```
 
-It prints either `Backed up and pushed (commit <sha>).` or `Nothing new to back up.`. Nothing else is needed - it handles the commit message (a timestamp), the push, and the credentials itself.
+It prints `Backed up and pushed (commit <sha>).`. Nothing else is needed - it handles the commit (always made, empty when nothing changed), the timestamp message, the push, and the credentials itself.
 
 `{baseDir}` = this skill's directory. Always resolve to the absolute path before executing.
