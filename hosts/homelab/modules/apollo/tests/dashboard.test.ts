@@ -4,6 +4,7 @@ import {
   renderContext,
   renderLogs,
   renderPage,
+  renderStop,
   renderSummary,
   sessionStatus,
   type SummaryArgs,
@@ -165,6 +166,18 @@ describe("renderLogs", () => {
     expect(html).toContain("&lt;oops&gt;");
     expect(html).not.toContain("<oops>");
     expect(html).toContain("err");
+  });
+});
+
+describe("renderStop", () => {
+  it("is enabled and posts to /stop when a run is active", () => {
+    const html = renderStop(true);
+    expect(html).toContain(`hx-post="/stop"`);
+    expect(html).not.toContain("<button disabled");
+  });
+
+  it("is disabled when idle", () => {
+    expect(renderStop(false)).toContain("<button disabled");
   });
 });
 

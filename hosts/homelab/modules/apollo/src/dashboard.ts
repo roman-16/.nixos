@@ -76,10 +76,11 @@ export function renderPage(version: string): string {
           hx-on::after-settle="if (this.dataset.stick) this.scrollTop = this.scrollHeight">
           <p class="text-sm text-neutral-500">Loading…</p>
         </div>
-        <footer class="border-t border-white/5 px-4 py-3 sm:px-5">
-          <div id="context" hx-get="/context" hx-trigger="load, every 5s" hx-swap="innerHTML">
+        <footer class="flex items-center gap-3 border-t border-white/5 px-4 py-3 sm:px-5">
+          <div id="context" class="min-w-0 flex-1" hx-get="/context" hx-trigger="load, every 5s" hx-swap="innerHTML">
             <p class="text-xs text-neutral-500">Loading…</p>
           </div>
+          <div id="stop" hx-get="/stop-button" hx-trigger="load, every 2s" hx-swap="innerHTML"></div>
         </footer>
       </div>
       ${headingRow(
@@ -218,6 +219,15 @@ export function renderContext(usage: ContextUsage | undefined): string {
       <div class="h-full rounded-full ${color}" style="width:${pct}%"></div>
     </div>
   </div>`;
+}
+
+/** Render the #stop fragment: a square stop button, pressable only while a run is active. */
+export function renderStop(running: boolean): string {
+  const disabledAttr = running ? "" : " disabled";
+  const tone = running
+    ? "border-red-500/40 text-red-400 hover:bg-red-500/10"
+    : "border-white/10 text-neutral-600";
+  return `<button${disabledAttr} hx-post="/stop" hx-target="#stop" hx-swap="innerHTML" hx-disabled-elt="this" title="Stop the current run" aria-label="Stop the current run" class="grid h-8 w-8 shrink-0 place-items-center rounded-lg border transition ${tone} disabled:cursor-not-allowed disabled:opacity-50"><svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="1.5" /></svg></button>`;
 }
 
 /** Inline #session-status fragment shown after a dashboard Compact/Reload button is pressed. */

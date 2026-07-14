@@ -8,7 +8,14 @@ import { pino } from "pino";
 import { createApolloSession, deliver, onAssistantText } from "./agent";
 import { parseTranscript, renderChat } from "./chat";
 import { loadConfig } from "./config";
-import { renderContext, renderLogs, renderPage, renderSummary, sessionStatus } from "./dashboard";
+import {
+  renderContext,
+  renderLogs,
+  renderPage,
+  renderStop,
+  renderSummary,
+  sessionStatus,
+} from "./dashboard";
 import { createLogBuffer, filterLogs, parseLevel } from "./logs";
 import { compactionNotice, isAllowed, jidForNumber, voiceText } from "./messages";
 import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
@@ -66,6 +73,7 @@ export async function main(): Promise<void> {
   let lastSummaryBody: string | undefined;
   let lastChatBody: string | undefined;
   let lastLogKey: string | undefined;
+  let lastStopBody: string | undefined;
   let chatCache: { body: string; live: boolean; mtimeMs: number } | undefined;
   let usage: { data: UsageData | null; fetchedAt: number } | undefined;
 
@@ -258,6 +266,7 @@ export async function main(): Promise<void> {
         lastSummaryBody = undefined;
         lastChatBody = undefined;
         lastLogKey = undefined;
+        lastStopBody = undefined;
         return new Response(renderPage(assetsVersion), { headers: htmlHeaders });
       }
 
@@ -328,6 +337,22 @@ export async function main(): Promise<void> {
 
       if (pathname === "/context") {
         return new Response(renderContext(session.getContextUsage()), { headers: htmlHeaders });
+      }
+
+      if (pathname === "/stop-button") {
+        const body = renderStop(session.isStreaming);
+        if (body === lastStopBody) return new Response(null, { status: 204 });
+        lastStopBody = body;
+        return new Response(body, { headers: htmlHeaders });
+      }
+
+      if (pathname === "/stop" && req.method === "POST") {
+        if (session.isStreaming) {
+          await session.abort();
+          logger.info("aborted via dashboard");
+        }
+        lastStopBody = renderStop(false);
+        return new Response(lastStopBody, { headers: htmlHeaders });
       }
 
       if (pathname === "/connect" && req.method === "POST") {
