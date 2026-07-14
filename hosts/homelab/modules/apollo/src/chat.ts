@@ -239,11 +239,18 @@ function images(list: ChatImage[]): string {
   return `<div class="mt-1 flex flex-wrap gap-2">${tags}</div>`;
 }
 
-function toolBadge(item: Extract<LogItem, { kind: "tool" }>): string {
-  if (!item.hasResult) return `<span class="text-amber-400">running…</span>`;
-  return item.isError
-    ? `<span class="text-red-400">error</span>`
-    : `<span class="text-emerald-400">ok</span>`;
+function toolBadge(item: Extract<LogItem, { kind: "tool" }>, running: boolean): string {
+  if (item.hasResult) {
+    return item.isError
+      ? `<span class="text-red-400">error</span>`
+      : `<span class="text-emerald-400">ok</span>`;
+  }
+  // A resultless call is genuinely running only when it's the live, most-recent one.
+  // Otherwise the run it belonged to ended (e.g. the server restarted mid-execution)
+  // and its result will never arrive, so it's shown as interrupted rather than stuck.
+  return running
+    ? `<span class="text-amber-400">running…</span>`
+    : `<span class="text-neutral-500">interrupted</span>`;
 }
 
 function disclosure(summary: string, detail: string): string {
@@ -262,7 +269,7 @@ function pre(text: string): string {
   )}</pre>`;
 }
 
-function renderItem(item: LogItem): string {
+function renderItem(item: LogItem, running = false): string {
   switch (item.kind) {
     case "assistant":
       return bubble(
@@ -305,7 +312,7 @@ function renderItem(item: LogItem): string {
       const preview = escapeHtml(truncate(argPreview(item.args), PREVIEW_CHARS));
       const summary = `<span class="shrink-0 font-mono text-indigo-300">${escapeHtml(item.name)}</span>
         <span class="min-w-0 truncate text-neutral-500">${preview}</span>
-        <span class="ml-auto shrink-0">${toolBadge(item)}</span>`;
+        <span class="ml-auto shrink-0">${toolBadge(item, running)}</span>`;
       const output = item.output ? pre(item.output) : "";
       const note =
         item.images > 0 ? `<p class="text-neutral-500">[${item.images} image(s)]</p>` : "";
@@ -325,13 +332,17 @@ function renderItem(item: LogItem): string {
 }
 
 /** Render the chat-log fragment (the inner rows for the polling #chat container), inserting a day divider whenever the calendar day of timed items changes. */
-export function renderChat(items: LogItem[], now: Date = new Date()): string {
+export function renderChat(items: LogItem[], now: Date = new Date(), live = false): string {
   if (items.length === 0) {
     return `<p class="grid h-full place-items-center text-sm text-neutral-600">No messages yet.</p>`;
   }
+  // Only the most recent tool call can still be running, and only while a run is
+  // active; every earlier resultless call was orphaned when its run ended.
+  const last = items[items.length - 1];
+  const runningIndex = live && last?.kind === "tool" && !last.hasResult ? items.length - 1 : -1;
   const parts: string[] = [];
   let lastDay: string | undefined;
-  for (const item of items) {
+  for (const [index, item] of items.entries()) {
     if (item.time) {
       const date = new Date(item.time);
       const day = date.toDateString();
@@ -340,7 +351,7 @@ export function renderChat(items: LogItem[], now: Date = new Date()): string {
         lastDay = day;
       }
     }
-    parts.push(renderItem(item));
+    parts.push(renderItem(item, index === runningIndex));
   }
   return parts.join("");
 }

@@ -66,7 +66,7 @@ export async function main(): Promise<void> {
   let lastSummaryBody: string | undefined;
   let lastChatBody: string | undefined;
   let lastLogKey: string | undefined;
-  let chatCache: { body: string; mtimeMs: number } | undefined;
+  let chatCache: { body: string; live: boolean; mtimeMs: number } | undefined;
   let usage: { data: UsageData | null; fetchedAt: number } | undefined;
 
   async function renderChatBody(): Promise<string> {
@@ -74,8 +74,13 @@ export async function main(): Promise<void> {
     if (!file) return renderChat([]);
     try {
       const { mtimeMs } = await stat(file);
-      if (!chatCache || chatCache.mtimeMs !== mtimeMs) {
-        chatCache = { body: renderChat(parseTranscript(await readFile(file, "utf8"))), mtimeMs };
+      const live = session.isStreaming;
+      if (!chatCache || chatCache.mtimeMs !== mtimeMs || chatCache.live !== live) {
+        chatCache = {
+          body: renderChat(parseTranscript(await readFile(file, "utf8")), new Date(), live),
+          live,
+          mtimeMs,
+        };
       }
       return chatCache.body;
     } catch {

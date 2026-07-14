@@ -205,6 +205,37 @@ describe("renderChat", () => {
     expect(html).toContain(">ok<");
   });
 
+  it("marks an orphaned resultless tool call (one the conversation moved past) as interrupted", () => {
+    const html = renderChat([
+      {
+        args: {},
+        hasResult: false,
+        images: 0,
+        isError: false,
+        kind: "tool",
+        name: "bash",
+        output: "",
+      },
+      { kind: "assistant", text: "moved on" },
+    ]);
+    expect(html).toContain("interrupted");
+    expect(html).not.toContain("running");
+  });
+
+  it("shows a trailing resultless tool as running only while a run is live", () => {
+    const tool = {
+      args: {},
+      hasResult: false,
+      images: 0,
+      isError: false,
+      kind: "tool" as const,
+      name: "bash",
+      output: "",
+    };
+    expect(renderChat([tool], new Date(), true)).toContain("running");
+    expect(renderChat([tool], new Date(), false)).toContain("interrupted");
+  });
+
   it("truncates very long tool output", () => {
     const html = renderChat([
       {
