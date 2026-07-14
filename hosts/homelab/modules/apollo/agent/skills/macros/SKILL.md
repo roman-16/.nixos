@@ -20,7 +20,7 @@ Tracks daily nutrition as JSON under `macros/` in the working directory. Every r
 
 ## Replying
 
-Whenever a command prints a day summary or list (`log`, `food-eat`, `show`, `entries`, `prep-eat`, `prep-list`, `prep-get`, `food-list`, `goal`), your reply **is** that output, sent back verbatim: the exact lines the script printed, in full and unchanged. Do not summarize it, rephrase it, reformat it, turn it into prose, trim it, or wrap it in your own commentary - the user wants to read the list itself.
+Whenever a command prints a day summary or list (`log`, `food-eat`, `show`, `entries`, `edit`, `prep-eat`, `prep-list`, `prep-get`, `food-list`, `goal`), your reply **is** that output, sent back verbatim: the exact lines the script printed, in full and unchanged. Do not summarize it, rephrase it, reformat it, turn it into prose, trim it, or wrap it in your own commentary - the user wants to read the list itself.
 
 A `--dry-run` preview (see [Previewing](#previewing)) is relayed the same way, verbatim - but because it answers a "what if", you may add one short line after it, e.g. "Want me to log it?".
 
@@ -86,47 +86,65 @@ Name matching is forgiving: an exact alias wins, else a unique substring, else t
 
 ```bash
 {baseDir}/scripts/macros.py entries        # the day's entries with their index numbers
+{baseDir}/scripts/macros.py edit --last --kcal 538 --item "Ice cream (215g)"   # fix values in place; only what you pass changes
+{baseDir}/scripts/macros.py edit --index 2 --protein 30                        # correct the 2nd entry
 {baseDir}/scripts/macros.py rm --last
 {baseDir}/scripts/macros.py rm --index 2   # remove the 2nd entry (use `entries` to find the number)
 ```
 
+`edit` changes only the fields you pass and keeps the rest (time, note, untouched macros) - safer than delete-and-retype. Select with `--last` or `--index N` (from `entries`), like `rm`. It can't re-scale a saved food to a new gram amount (the entry isn't linked back to the food); for that, `rm` then `food-eat` again.
+
 ## Meal prep (batch cooking)
 
-A batch is built up ingredient by ingredient and tracked by its total macros and how much you've eaten. Create it, then add ingredients one message at a time (look each up or estimate it, exactly like logging food):
+A batch is built up ingredient by ingredient. It tracks its ingredient list plus how much has left it, split into what **you** ate (logged to your day) and what left **unlogged** (someone else ate it, a spill, a giveaway), so `remaining = total - your share - the unlogged share`. Create it, then add ingredients one message at a time (look each up or estimate it, exactly like logging food):
 
 ```bash
 {baseDir}/scripts/macros.py prep-add --name "Bolognese"                        # create an empty batch
-{baseDir}/scripts/macros.py prep-ingredient --name bolognese --label "Beef mince (500g)" --kcal 1075 --protein 100 --fat 75 --carbs 0
-{baseDir}/scripts/macros.py prep-ingredient --name bolognese --label "Passata (700g)" --kcal 245 --protein 12 --fat 1 --carbs 45
-{baseDir}/scripts/macros.py prep-get --name bolognese                          # the ingredient breakdown, total, and % left
+{baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label "Beef mince (500g)" --kcal 1075 --protein 100 --fat 75 --carbs 0
+{baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label "Passata (700g)" --kcal 245 --protein 12 --fat 1 --carbs 45
+{baseDir}/scripts/macros.py prep-get --name bolognese                          # ingredient breakdown, total, % left (with your/others split)
 ```
 
-`prep-add` makes an empty batch and refuses a name that already exists (so you never wipe a half-eaten one); a batch whose total you already know is just `prep-add` plus one `prep-ingredient`. Eat, list, and discard as before:
+`prep-add` makes an empty batch and refuses a name that already exists (so you never wipe a half-eaten one); a batch whose total you already know is just `prep-add` plus one `prep-ingredient-add`.
+
+**Eating vs unlogged removal** - the key pair. `prep-eat` is a portion **you** eat (logged to your day); `prep-rm` is a portion that leaves the batch **unlogged**:
 
 ```bash
-{baseDir}/scripts/macros.py prep-eat --name bolognese --fraction 1/5    # 1/5 of the WHOLE batch (also 20% or 0.2)
-{baseDir}/scripts/macros.py prep-eat --name bolognese --remaining       # finish whatever is left
+{baseDir}/scripts/macros.py prep-eat --name bolognese --fraction 1/5    # you ate 1/5 of the WHOLE batch (also 20% or 0.2)
+{baseDir}/scripts/macros.py prep-eat --name bolognese --remaining       # you finish whatever is left
 {baseDir}/scripts/macros.py prep-eat --name bolognese --fit-protein     # enough to reach today's protein goal
 {baseDir}/scripts/macros.py prep-eat --name bolognese --target-kcal 500 # a portion worth 500 kcal
+{baseDir}/scripts/macros.py prep-rm --name bolognese --fraction 1/3     # someone else ate / spilled / gave away 1/3 - NOT your intake
+{baseDir}/scripts/macros.py prep-rm --name bolognese                     # discard the WHOLE batch (spoiled/scrapped)
 {baseDir}/scripts/macros.py prep-list                                   # each batch with its remaining kcal/protein
-{baseDir}/scripts/macros.py prep-rm --name bolognese                     # discard a batch WITHOUT logging it (spoiled/scrapped)
 ```
 
-`--fraction` is a share of the original batch (not of what remains) and errors if it exceeds what is left; use `--remaining` to eat the rest. `--fit-*`/`--target-*` size the portion for you, and if the goal needs more than is left they cap to what remains and say how far short it lands.
+`--fraction` (on both) is a share of the whole batch, not of what remains, and errors if it exceeds what's left; use `prep-eat --remaining` to eat the rest, or `prep-rm` with no `--fraction` to bin the batch. `prep-eat`'s `--fit-*`/`--target-*` size the portion for you and cap to what remains.
 
 ### Adding an ingredient after eating some
 
-Adding to a batch you've already eaten from has two cases, and the flag depends on what actually happened:
+Adding to a batch that's already been eaten from has two cases; the flag depends on what actually happened:
 
-- **Forgot to mention it** (it was in the pot all along) - the default. The share you'd already eaten is counted and logged (so your past intake stays right), and the rest joins what's left.
-- **Added it to the leftovers** just now (`--later`) - none of it was in what you ate, so all of it joins what's left and nothing is logged.
+- **Forgot to mention it** (it was in the pot all along) - the default. The share already eaten is split back correctly (your part is logged so your intake stays right, anyone else's isn't), and the rest joins what's left.
+- **Added it to the leftovers** just now (`--later`) - none of it was in what was eaten, so all of it joins what's left and nothing is logged.
 
 ```bash
-{baseDir}/scripts/macros.py prep-ingredient --name bolognese --label "Olive oil (30ml)" --kcal 265 --fat 30                        # forgot it - was in the whole batch
-{baseDir}/scripts/macros.py prep-ingredient --name bolognese --label "Grated cheese (50g)" --kcal 200 --protein 12 --fat 16 --later # stirred into the leftovers
+{baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label "Olive oil (30ml)" --kcal 265 --fat 30                        # forgot it - was in the whole batch
+{baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label "Grated cheese (50g)" --kcal 200 --protein 12 --fat 16 --later # stirred into the leftovers
 ```
 
 Pick from the wording: "I forgot it also had X" / "X was in it" is the default; "I added / stirred in / topped it up with X" is `--later`. Before anything has been eaten the two are identical, so while you're still building a batch just add ingredients normally. If it's genuinely unclear which applies for a batch that's been eaten from, ask.
+
+### Fixing an ingredient
+
+Use `prep-get` to see each ingredient's index, then correct or drop one by `--index N` (or `--last` for the one you just added) - no rebuild needed:
+
+```bash
+{baseDir}/scripts/macros.py prep-ingredient-edit --name bolognese --last --kcal 1000   # fix a wrong number; only what you pass changes, also --label
+{baseDir}/scripts/macros.py prep-ingredient-rm --name bolognese --index 3              # drop a mis-added ingredient
+```
+
+Before anything's been eaten this just adjusts the batch. If some has been eaten, the correction is applied exactly like a forgotten add in reverse: your already-eaten share of the change is corrected on today's log (a fix can show as a small negative entry), and the rest just adjusts the batch. Pass `--no-log-eaten` to skip touching the day.
 
 ## Previewing
 
