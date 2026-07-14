@@ -3,7 +3,7 @@ import QRCode from "qrcode";
 
 import { escapeHtml, humanTokens, truncate } from "./format";
 import type { LogRecord } from "./logs";
-import { extraUsageValue, resetLabel, type UsageData } from "./usage";
+import { renderUsage, type UsageData } from "./usage";
 import type { WhatsAppState } from "./whatsapp";
 
 const SURFACE = "rounded-2xl border border-white/10 bg-neutral-900/60 shadow-xl";
@@ -19,6 +19,13 @@ function headingRow(title: string, right = ""): string {
   </div>`;
 }
 
+function statusRow(dotClass: string, label: string): string {
+  return `<div class="flex items-center gap-2">
+    <span class="h-2 w-2 rounded-full ${dotClass}"></span>
+    <span class="text-sm font-medium text-neutral-200">${label}</span>
+  </div>`;
+}
+
 function filterChip(value: string, label: string, checked = false): string {
   return `<label class="cursor-pointer rounded-full px-3 py-1 text-neutral-500 transition hover:text-neutral-300 has-[:checked]:bg-indigo-500/20 has-[:checked]:text-indigo-200">
     <input type="radio" name="level" value="${value}"${checked ? " checked" : ""} class="sr-only" />${label}
@@ -26,9 +33,9 @@ function filterChip(value: string, label: string, checked = false): string {
 }
 
 /**
- * Full page shell: sticky glass header, the stat bar (#summary, which also carries the
- * WhatsApp/Claude setup flows while they need attention), the conversation, and the
- * logs - one flowing column that scrolls as a page. Each region polls its fragment
+ * Full page shell: sticky glass header, the WhatsApp and Claude status sections
+ * (#summary, side by side on desktop), the conversation with its context footer, and
+ * the logs - one flowing column that scrolls as a page. Each region polls its fragment
  * endpoint and swaps its own contents.
  */
 export function renderPage(version: string): string {
@@ -49,8 +56,8 @@ export function renderPage(version: string): string {
       <span class="text-[1.05rem] font-semibold tracking-tight">Apollo</span>
     </header>
     <main>
-      <div id="summary" class="mt-5" hx-get="/summary" hx-trigger="load, every 2s" hx-swap="innerHTML">
-        <div class="${SURFACE} px-5 py-4 text-sm text-neutral-500">Loading…</div>
+      <div id="summary" hx-get="/summary" hx-trigger="load, every 2s" hx-swap="innerHTML">
+        <div class="${SURFACE} mt-8 px-5 py-4 text-sm text-neutral-500">Loading…</div>
       </div>
       ${headingRow(
         "conversation",
@@ -62,11 +69,18 @@ export function renderPage(version: string): string {
             class="${GHOST_BUTTON}">Reload</button>
         </div>`,
       )}
-      <div id="chat" class="${SURFACE} h-[70dvh] space-y-3 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:h-[75dvh]"
-        hx-get="/chat" hx-trigger="load, every 2s" hx-swap="innerHTML"
-        hx-on::before-swap="this.dataset.stick = this.scrollHeight - this.scrollTop - this.clientHeight < 160 ? '1' : ''"
-        hx-on::after-settle="if (this.dataset.stick) this.scrollTop = this.scrollHeight">
-        <p class="text-sm text-neutral-500">Loading…</p>
+      <div class="${SURFACE} flex flex-col overflow-hidden">
+        <div id="chat" class="h-[70dvh] space-y-3 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:h-[75dvh]"
+          hx-get="/chat" hx-trigger="load, every 2s" hx-swap="innerHTML"
+          hx-on::before-swap="this.dataset.stick = this.scrollHeight - this.scrollTop - this.clientHeight < 160 ? '1' : ''"
+          hx-on::after-settle="if (this.dataset.stick) this.scrollTop = this.scrollHeight">
+          <p class="text-sm text-neutral-500">Loading…</p>
+        </div>
+        <footer class="border-t border-white/5 px-4 py-3 sm:px-5">
+          <div id="context" hx-get="/context" hx-trigger="load, every 5s" hx-swap="innerHTML">
+            <p class="text-xs text-neutral-500">Loading…</p>
+          </div>
+        </footer>
       </div>
       ${headingRow(
         "logs",
@@ -93,149 +107,117 @@ export interface SummaryArgs {
   anthropicConnected: boolean;
   authUrl: string;
   connectError?: string;
-  contextUsage: ContextUsage | undefined;
   linking: boolean;
   usage: UsageData | null;
   whatsapp: WhatsAppState;
 }
 
-function cell(key: string, value: string, tooltip: string): string {
-  return `<div class="cursor-help" title="${escapeHtml(tooltip)}">
-    <div class="text-[0.7rem] font-medium uppercase tracking-[0.05em] text-neutral-500 underline decoration-dotted decoration-neutral-700 underline-offset-[3px]">${key}</div>
-    <div class="mt-0.5 truncate text-lg font-semibold tracking-tight tabular-nums">${value}</div>
+function linked(user: string | undefined): string {
+  return `<div class="space-y-4">
+    ${statusRow("bg-emerald-400", "Linked")}
+    <div class="rounded-xl border border-white/10 bg-neutral-950/60 px-4 py-3">
+      <p class="text-[11px] uppercase tracking-wide text-neutral-500">Connected as</p>
+      <p class="mt-1 text-sm font-medium text-neutral-100">${user ? `+${user}` : "WhatsApp"}</p>
+    </div>
+    <p class="text-xs leading-relaxed text-neutral-400">Apollo is online and listening on WhatsApp.</p>
   </div>`;
 }
 
-function pctValue(utilization: number, decimals = 0): string {
-  const pct = Math.min(100, Math.max(0, utilization));
-  const color = pct >= 90 ? "text-red-400" : pct >= 70 ? "text-amber-400" : "";
-  return `<span class="${color}">${pct.toFixed(decimals)}%</span>`;
-}
-
-function suffix(label: string): string {
-  return label ? ` · ${label}` : "";
-}
-
-function whatsappValue(state: WhatsAppState, linking: boolean): string {
-  if (state.status === "connected") return `<span class="text-emerald-400">linked</span>`;
-  if (linking) return `<span class="text-amber-400">scan QR</span>`;
-  if (state.status === "connecting") return `<span class="text-neutral-400">connecting…</span>`;
-  if (state.status === "loggedOut") return `<span class="text-red-400">logged out</span>`;
-  return `<span class="text-amber-400">not linked</span>`;
-}
-
-function bar(args: SummaryArgs): string {
-  const cells = [
-    cell("whatsapp", whatsappValue(args.whatsapp, args.linking), "WhatsApp link state"),
-  ];
-  if (args.whatsapp.status === "connected" && args.whatsapp.user) {
-    cells.push(cell("number", `+${args.whatsapp.user}`, "The linked WhatsApp account"));
-  }
-  cells.push(
-    cell(
-      "claude",
-      args.anthropicConnected
-        ? `<span class="text-emerald-400">connected</span>`
-        : `<span class="text-amber-400">not connected</span>`,
-      "Anthropic account credential",
-    ),
-  );
-  const usage = args.usage;
-  if (args.anthropicConnected && usage) {
-    if (usage.five_hour) {
-      cells.push(
-        cell(
-          "session (5h)",
-          pctValue(usage.five_hour.utilization),
-          `5-hour session limit${suffix(resetLabel(usage.five_hour.resets_at))}`,
-        ),
-      );
-    }
-    if (usage.seven_day) {
-      cells.push(
-        cell(
-          "weekly",
-          pctValue(usage.seven_day.utilization),
-          `Weekly limit, all models${suffix(resetLabel(usage.seven_day.resets_at))}`,
-        ),
-      );
-    }
-    if (usage.seven_day_sonnet) {
-      cells.push(
-        cell(
-          "sonnet",
-          pctValue(usage.seven_day_sonnet.utilization),
-          `Weekly limit, Sonnet${suffix(resetLabel(usage.seven_day_sonnet.resets_at))}`,
-        ),
-      );
-    }
-    if (usage.extra_usage) {
-      cells.push(
-        cell("extra", extraUsageValue(usage.extra_usage), "Extra usage beyond the plan limits"),
-      );
-    }
-  }
-  const ctx = args.contextUsage;
-  if (ctx && ctx.contextWindow > 0) {
-    const value = ctx.percent == null ? "…" : pctValue(ctx.percent, 1);
-    const tokens =
-      ctx.tokens == null
-        ? `context window ${humanTokens(ctx.contextWindow)} tokens`
-        : `${humanTokens(ctx.tokens)} of ${humanTokens(ctx.contextWindow)} tokens`;
-    cells.push(cell("context", value, `Session context: ${tokens}`));
-  }
-  return `<div class="${SURFACE} grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-x-6 gap-y-3 px-5 py-4">${cells.join("")}</div>`;
-}
-
-function linkIdle(): string {
-  return `<p class="text-sm text-neutral-400">Link your WhatsApp account to start chatting with Apollo.</p>
-    <button hx-post="/link" hx-target="#summary" hx-swap="innerHTML" class="${PRIMARY_BUTTON}">Link device</button>`;
+function linkIdle(status: WhatsAppState["status"]): string {
+  const label =
+    status === "connecting" ? "Connecting…" : status === "loggedOut" ? "Logged out" : "Not linked";
+  const dot = status === "connecting" ? "animate-pulse bg-amber-400" : "bg-neutral-600";
+  return `<div class="space-y-4">
+    ${statusRow(dot, label)}
+    <p class="text-xs leading-relaxed text-neutral-400">Link your WhatsApp account to start chatting with Apollo.</p>
+    <button hx-post="/link" hx-target="#summary" hx-swap="innerHTML" class="${PRIMARY_BUTTON}">Link device</button>
+  </div>`;
 }
 
 async function linkScanning(state: WhatsAppState): Promise<string> {
   const code = state.qr
-    ? `<div class="w-fit rounded-xl bg-white p-3">${await QRCode.toString(state.qr, {
+    ? `<div class="mx-auto w-fit rounded-xl bg-white p-3">${await QRCode.toString(state.qr, {
         margin: 1,
         type: "svg",
         width: 208,
       })}</div>`
-    : `<div class="grid h-56 w-56 place-items-center rounded-xl border border-dashed border-neutral-700 text-sm text-neutral-500">Generating QR…</div>`;
-  return `<p class="text-sm text-neutral-400">WhatsApp → Linked devices → Link a device, then scan:</p>
+    : `<div class="mx-auto grid h-52 w-52 place-items-center rounded-xl border border-dashed border-neutral-700 text-sm text-neutral-500">Generating QR…</div>`;
+  return `<div class="space-y-4">
+    ${statusRow("animate-pulse bg-amber-400", "Waiting for scan…")}
     ${code}
-    <button hx-post="/link" hx-target="#summary" hx-swap="innerHTML" class="${GHOST_BUTTON}">Refresh QR</button>`;
+    <p class="text-center text-xs text-neutral-400">WhatsApp → Linked devices → Link a device</p>
+    <button hx-post="/link" hx-target="#summary" hx-swap="innerHTML"
+      class="w-full rounded-xl border border-white/10 py-2 text-xs font-medium text-neutral-300 transition hover:bg-white/5">
+      Refresh QR
+    </button>
+  </div>`;
 }
 
-async function whatsappSetup(state: WhatsAppState, linking: boolean): Promise<string> {
-  return `${headingRow("whatsapp")}
-  <div class="${SURFACE} space-y-4 p-5">${linking ? await linkScanning(state) : linkIdle()}</div>`;
-}
-
-function claudeSetup(authUrl: string, error?: string): string {
-  return `${headingRow("claude")}
-  <div class="${SURFACE} space-y-4 p-5">
-    <p class="text-sm text-neutral-400">Authorize with your Claude account. You'll be redirected to a localhost page that won't load - that's expected: copy that URL (or the code in it) and paste it below.</p>
-    <a href="${authUrl}" target="_blank" rel="noreferrer" class="${PRIMARY_BUTTON}">Authorize with Anthropic</a>
-    <form hx-post="/connect" hx-target="#summary" hx-swap="innerHTML" class="flex max-w-xl gap-2">
+function claudeBody(args: SummaryArgs): string {
+  if (args.anthropicConnected) {
+    return `<div class="space-y-4">
+      ${statusRow("bg-emerald-400", "Connected to Anthropic")}
+      ${args.usage ? renderUsage(args.usage) : `<p class="text-xs text-neutral-500">Usage data unavailable right now.</p>`}
+    </div>`;
+  }
+  return `<div class="space-y-4">
+    ${statusRow("bg-neutral-600", "Not connected to Anthropic")}
+    <p class="text-xs leading-relaxed text-neutral-400">Authorize with your Claude account. You'll be redirected to a localhost page that won't load - that's expected: copy that URL (or the code in it) and paste it below.</p>
+    <a href="${args.authUrl}" target="_blank" rel="noreferrer" class="${PRIMARY_BUTTON}">Authorize with Anthropic</a>
+    <form hx-post="/connect" hx-target="#summary" hx-swap="innerHTML" class="flex gap-2">
       <input name="code" placeholder="Paste code or redirect URL" autocomplete="off" spellcheck="false"
         class="min-w-0 flex-1 rounded-xl border border-white/10 bg-neutral-950/60 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus:border-indigo-400 focus:outline-none" />
       <button class="${GHOST_BUTTON}">Connect</button>
     </form>
-    ${error ? `<p class="text-xs text-red-400">${error}</p>` : ""}
+    ${args.connectError ? `<p class="text-xs text-red-400">${args.connectError}</p>` : ""}
   </div>`;
 }
 
 /**
- * Render the #summary fragment: the stat bar (link state, Claude usage, session
- * context), followed by the WhatsApp link flow and/or the Claude connect flow as
- * their own sections whenever they still need attention.
+ * Render the #summary fragment: the WhatsApp section (link state, or the link/QR flow)
+ * and the Claude section (usage bars, or the authorize + paste-code flow), side by side
+ * on desktop and stacked on mobile.
  */
 export async function renderSummary(args: SummaryArgs): Promise<string> {
-  const parts = [bar(args)];
-  if (args.whatsapp.status !== "connected") {
-    parts.push(await whatsappSetup(args.whatsapp, args.linking));
+  const whatsappBody =
+    args.whatsapp.status === "connected"
+      ? linked(args.whatsapp.user)
+      : args.linking
+        ? await linkScanning(args.whatsapp)
+        : linkIdle(args.whatsapp.status);
+  return `<div class="grid items-start gap-x-6 md:grid-cols-2">
+    <section>
+      ${headingRow("whatsapp")}
+      <div class="${SURFACE} p-5">${whatsappBody}</div>
+    </section>
+    <section>
+      ${headingRow("claude")}
+      <div class="${SURFACE} p-5">${claudeBody(args)}</div>
+    </section>
+  </div>`;
+}
+
+/** Render the #context fragment: how much of the model's context window the session is using. */
+export function renderContext(usage: ContextUsage | undefined): string {
+  if (!usage || usage.contextWindow <= 0) {
+    return `<p class="text-xs text-neutral-500">Context usage unavailable.</p>`;
   }
-  if (!args.anthropicConnected) parts.push(claudeSetup(args.authUrl, args.connectError));
-  return parts.join("");
+  const window = humanTokens(usage.contextWindow);
+  if (usage.tokens == null || usage.percent == null) {
+    return `<div class="flex justify-between text-xs text-neutral-400">
+      <span>Context</span><span>… / ${window}</span>
+    </div>`;
+  }
+  const pct = Math.min(100, Math.max(0, usage.percent));
+  const color = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
+  return `<div>
+    <div class="mb-1.5 flex justify-between text-xs">
+      <span class="text-neutral-400">Context</span><span class="text-neutral-500">${pct.toFixed(1)}% / ${window}</span>
+    </div>
+    <div class="h-1.5 overflow-hidden rounded-full bg-white/5">
+      <div class="h-full rounded-full ${color}" style="width:${pct}%"></div>
+    </div>
+  </div>`;
 }
 
 /** Inline #session-status fragment shown after a dashboard Compact/Reload button is pressed. */

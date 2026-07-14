@@ -55,3 +55,42 @@ export function extraUsageValue(extra: ExtraUsage): string {
     ? `${spent} · no limit`
     : `${spent} / $${(extra.monthly_limit / 100).toFixed(2)}`;
 }
+
+function barColor(pct: number): string {
+  return pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
+}
+
+/** A labelled progress bar for a resettable limit (session / weekly). */
+function bar(title: string, limit: UsageLimit | undefined): string {
+  if (!limit) return "";
+  const pct = Math.min(100, Math.max(0, Math.round(limit.utilization)));
+  const reset = resetLabel(limit.resets_at);
+  return `<div>
+    <div class="mb-1.5 flex items-baseline justify-between gap-2 text-xs">
+      <span class="text-neutral-400">${title}</span><span class="text-neutral-500">${pct}%${reset ? ` · ${reset}` : ""}</span>
+    </div>
+    <div class="h-1.5 overflow-hidden rounded-full bg-white/5">
+      <div class="h-full rounded-full ${barColor(pct)}" style="width:${pct}%"></div>
+    </div>
+  </div>`;
+}
+
+function extraRow(extra: ExtraUsage | undefined): string {
+  if (!extra) return "";
+  return `<div class="flex justify-between text-xs text-neutral-400"><span>Extra usage</span><span>${extraUsageValue(extra)}</span></div>`;
+}
+
+/** Render the usage fragment for the dashboard: limit bars plus the extra-usage value. */
+export function renderUsage(data: UsageData | null): string {
+  if (!data) return `<p class="text-xs text-neutral-500">Usage data unavailable.</p>`;
+
+  const rows = [
+    bar("Session (5h)", data.five_hour),
+    bar("Weekly (all models)", data.seven_day),
+    bar("Weekly (Sonnet)", data.seven_day_sonnet),
+    extraRow(data.extra_usage),
+  ].filter(Boolean);
+
+  if (rows.length === 0) return `<p class="text-xs text-neutral-500">No usage limits reported.</p>`;
+  return `<div class="space-y-3">${rows.join("")}</div>`;
+}

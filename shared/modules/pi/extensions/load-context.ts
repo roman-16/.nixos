@@ -32,6 +32,7 @@ const DEFAULT_EXCLUDES = [
   "*.min.js",
   "*.min.mjs",
   "*.p12",
+  "*.pb.go",
   "*.pem",
   "*.pfx",
   "*.ppk",

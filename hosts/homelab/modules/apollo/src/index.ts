@@ -8,7 +8,7 @@ import { pino } from "pino";
 import { createApolloSession, deliver, onAssistantText } from "./agent";
 import { parseTranscript, renderChat } from "./chat";
 import { loadConfig } from "./config";
-import { renderLogs, renderPage, renderSummary, sessionStatus } from "./dashboard";
+import { renderContext, renderLogs, renderPage, renderSummary, sessionStatus } from "./dashboard";
 import { createLogBuffer, filterLogs, parseLevel } from "./logs";
 import { compactionNotice, isAllowed, jidForNumber, voiceText } from "./messages";
 import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
@@ -206,7 +206,6 @@ export async function main(): Promise<void> {
       anthropicConnected: connected,
       authUrl: connected ? "" : loginUrl(),
       connectError,
-      contextUsage: session.getContextUsage(),
       linking,
       usage: usage?.data ?? null,
       whatsapp: state,
@@ -305,6 +304,10 @@ export async function main(): Promise<void> {
           logger.error({ err: error }, "compact failed");
           return new Response(sessionStatus("compact", "error"), { headers: htmlHeaders });
         }
+      }
+
+      if (pathname === "/context") {
+        return new Response(renderContext(session.getContextUsage()), { headers: htmlHeaders });
       }
 
       if (pathname === "/connect" && req.method === "POST") {
