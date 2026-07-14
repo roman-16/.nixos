@@ -20,7 +20,7 @@ Tracks daily nutrition as JSON under `macros/` in the working directory. Every r
 
 ## Replying
 
-Whenever a command prints a day summary or list (`log`, `food-eat`, `show`, `entries`, `prep-eat`, `prep-list`, `food-list`, `goal`), your reply **is** that output, sent back verbatim: the exact lines the script printed, in full and unchanged. Do not summarize it, rephrase it, reformat it, turn it into prose, trim it, or wrap it in your own commentary - the user wants to read the list itself.
+Whenever a command prints a day summary or list (`log`, `food-eat`, `show`, `entries`, `prep-eat`, `prep-list`, `prep-get`, `food-list`, `goal`), your reply **is** that output, sent back verbatim: the exact lines the script printed, in full and unchanged. Do not summarize it, rephrase it, reformat it, turn it into prose, trim it, or wrap it in your own commentary - the user wants to read the list itself.
 
 A `--dry-run` preview (see [Previewing](#previewing)) is relayed the same way, verbatim - but because it answers a "what if", you may add one short line after it, e.g. "Want me to log it?".
 
@@ -92,10 +92,18 @@ Name matching is forgiving: an exact alias wins, else a unique substring, else t
 
 ## Meal prep (batch cooking)
 
-Cooking changes weight, so a batch is tracked by its whole-batch macros and the fraction left, not per 100g.
+A batch is built up ingredient by ingredient and tracked by its total macros and how much you've eaten. Create it, then add ingredients one message at a time (look each up or estimate it, exactly like logging food):
 
 ```bash
-{baseDir}/scripts/macros.py prep-add --name "Bolognese" --kcal 1800 --protein 120 --fat 90 --carbs 110
+{baseDir}/scripts/macros.py prep-add --name "Bolognese"                        # create an empty batch
+{baseDir}/scripts/macros.py prep-ingredient --name bolognese --label "Beef mince (500g)" --kcal 1075 --protein 100 --fat 75 --carbs 0
+{baseDir}/scripts/macros.py prep-ingredient --name bolognese --label "Passata (700g)" --kcal 245 --protein 12 --fat 1 --carbs 45
+{baseDir}/scripts/macros.py prep-get --name bolognese                          # the ingredient breakdown, total, and % left
+```
+
+`prep-add` makes an empty batch and refuses a name that already exists (so you never wipe a half-eaten one); a batch whose total you already know is just `prep-add` plus one `prep-ingredient`. Eat, list, and discard as before:
+
+```bash
 {baseDir}/scripts/macros.py prep-eat --name bolognese --fraction 1/5    # 1/5 of the WHOLE batch (also 20% or 0.2)
 {baseDir}/scripts/macros.py prep-eat --name bolognese --remaining       # finish whatever is left
 {baseDir}/scripts/macros.py prep-eat --name bolognese --fit-protein     # enough to reach today's protein goal
@@ -105,6 +113,20 @@ Cooking changes weight, so a batch is tracked by its whole-batch macros and the 
 ```
 
 `--fraction` is a share of the original batch (not of what remains) and errors if it exceeds what is left; use `--remaining` to eat the rest. `--fit-*`/`--target-*` size the portion for you, and if the goal needs more than is left they cap to what remains and say how far short it lands.
+
+### Adding an ingredient after eating some
+
+Adding to a batch you've already eaten from has two cases, and the flag depends on what actually happened:
+
+- **Forgot to mention it** (it was in the pot all along) - the default. The share you'd already eaten is counted and logged (so your past intake stays right), and the rest joins what's left.
+- **Added it to the leftovers** just now (`--later`) - none of it was in what you ate, so all of it joins what's left and nothing is logged.
+
+```bash
+{baseDir}/scripts/macros.py prep-ingredient --name bolognese --label "Olive oil (30ml)" --kcal 265 --fat 30                        # forgot it - was in the whole batch
+{baseDir}/scripts/macros.py prep-ingredient --name bolognese --label "Grated cheese (50g)" --kcal 200 --protein 12 --fat 16 --later # stirred into the leftovers
+```
+
+Pick from the wording: "I forgot it also had X" / "X was in it" is the default; "I added / stirred in / topped it up with X" is `--later`. Before anything has been eaten the two are identical, so while you're still building a batch just add ingredients normally. If it's genuinely unclear which applies for a batch that's been eaten from, ask.
 
 ## Previewing
 
