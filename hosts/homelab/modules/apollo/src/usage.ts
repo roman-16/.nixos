@@ -56,10 +56,10 @@ function bar(title: string, limit: UsageLimit | undefined): string {
   const pct = Math.min(100, Math.max(0, Math.round(limit.utilization)));
   const reset = resetLabel(limit.resets_at);
   return `<div>
-    <div class="mb-1 flex justify-between text-xs text-neutral-400">
-      <span>${title}</span><span>${pct}%${reset ? ` \u00b7 ${reset}` : ""}</span>
+    <div class="mb-1.5 flex items-baseline justify-between gap-2 text-xs">
+      <span class="text-neutral-400">${title}</span><span class="text-neutral-500">${pct}%${reset ? ` \u00b7 ${reset}` : ""}</span>
     </div>
-    <div class="h-2 overflow-hidden rounded-full bg-neutral-800">
+    <div class="h-1.5 overflow-hidden rounded-full bg-white/5">
       <div class="h-full rounded-full ${barColor(pct)}" style="width:${pct}%"></div>
     </div>
   </div>`;

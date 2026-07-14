@@ -1,1 +1,17 @@
 @import "tailwindcss";
+
+html {
+  color-scheme: dark;
+}
+
+* {
+  scrollbar-color: #404040 transparent;
+  scrollbar-width: thin;
+}
+
+body {
+  background-attachment: fixed;
+  background-image:
+    radial-gradient(50rem 30rem at 85% -5%, rgb(99 102 241 / 0.08), transparent 65%),
+    radial-gradient(40rem 26rem at -10% 40%, rgb(99 102 241 / 0.05), transparent 65%);
+}

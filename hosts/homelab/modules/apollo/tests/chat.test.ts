@@ -153,6 +153,27 @@ describe("parseTranscript", () => {
   it("drops empty user messages", () => {
     expect(parseTranscript(message("a", { content: "", role: "user" }))).toEqual([]);
   });
+
+  it("attaches the entry timestamp when it is a valid date", () => {
+    const jsonl = JSON.stringify({
+      id: "a",
+      message: { content: "hi", role: "user" },
+      parentId: null,
+      timestamp: "2026-07-14T10:00:00.000Z",
+      type: "message",
+    });
+    expect(parseTranscript(jsonl)[0]).toMatchObject({
+      kind: "user",
+      time: "2026-07-14T10:00:00.000Z",
+    });
+  });
+
+  it("leaves time unset when the timestamp is not a date", () => {
+    const item = parseTranscript(message("a", { content: "hi", role: "user" }))[0] as {
+      time?: string;
+    };
+    expect(item.time).toBeUndefined();
+  });
 });
 
 describe("renderChat", () => {
@@ -222,5 +243,42 @@ describe("renderChat", () => {
     ]);
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("<script>");
+  });
+
+  it("stamps timed bubbles with a clock", () => {
+    const html = renderChat(
+      [{ images: [], kind: "user", text: "hi", time: "2026-07-14T10:00:00.000Z" }],
+      new Date("2026-07-14T12:00:00.000Z"),
+    );
+    expect(html).toMatch(/>\d{2}:\d{2}</);
+  });
+
+  it("inserts one day divider per day", () => {
+    const html = renderChat(
+      [
+        { images: [], kind: "user", text: "a", time: "2026-07-14T09:00:00.000Z" },
+        { kind: "assistant", text: "b", time: "2026-07-14T10:00:00.000Z" },
+      ],
+      new Date("2026-07-14T12:00:00.000Z"),
+    );
+    expect(html.match(/Today/g)?.length).toBe(1);
+  });
+
+  it("labels day dividers as Today, Yesterday, or DD.MM.YYYY", () => {
+    const html = renderChat(
+      [
+        { images: [], kind: "user", text: "a", time: "2026-07-10T12:00:00.000Z" },
+        { kind: "assistant", text: "b", time: "2026-07-13T12:00:00.000Z" },
+        { kind: "assistant", text: "c", time: "2026-07-14T12:00:00.000Z" },
+      ],
+      new Date("2026-07-14T12:00:00.000Z"),
+    );
+    expect(html).toContain("10.07.2026");
+    expect(html).toContain("Yesterday");
+    expect(html).toContain("Today");
+  });
+
+  it("adds no day divider for untimed items", () => {
+    expect(renderChat([{ kind: "assistant", text: "x" }])).not.toContain("Today");
   });
 });

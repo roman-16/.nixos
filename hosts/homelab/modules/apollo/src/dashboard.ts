@@ -4,97 +4,145 @@ import QRCode from "qrcode";
 import { escapeHtml, humanTokens, truncate } from "./format";
 import type { LogRecord } from "./logs";
 import { renderUsage, type UsageData } from "./usage";
-import type { WhatsAppState } from "./whatsapp";
+import type { WhatsAppState, WhatsAppStatus } from "./whatsapp";
 
-/** Full page shell. The #app region polls /status and swaps its own contents. */
+const CARD = "rounded-2xl border border-white/10 bg-neutral-900/60 shadow-xl";
+const GHOST_BUTTON =
+  "rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-neutral-300 transition hover:bg-white/5 disabled:opacity-50";
+const PILL =
+  "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-neutral-300 transition hover:bg-white/10";
+
+function statusRow(dotClass: string, label: string): string {
+  return `<div class="flex items-center gap-2">
+    <span class="h-2 w-2 rounded-full ${dotClass}"></span>
+    <span class="text-sm font-medium text-neutral-200">${label}</span>
+  </div>`;
+}
+
+function filterChip(value: string, label: string, checked = false): string {
+  return `<label class="cursor-pointer rounded-md px-2 py-1 text-neutral-500 transition hover:text-neutral-300 has-[:checked]:bg-indigo-500/20 has-[:checked]:text-indigo-200">
+    <input type="radio" name="level" value="${value}"${checked ? " checked" : ""} class="sr-only" />${label}
+  </label>`;
+}
+
+/**
+ * Full page shell: a sticky header with at-a-glance status pills, the chat as the hero,
+ * and a rail of status cards (WhatsApp, Claude, logs). Two columns on desktop, a
+ * chat-first stack on mobile; the page itself scrolls. Each region polls its fragment
+ * endpoint and swaps its own contents.
+ */
 export function renderPage(version: string): string {
   return `<!doctype html>
-<html lang="en" class="h-full">
+<html lang="en" class="scroll-smooth">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0a0a" />
     <title>Apollo</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=${version}" />
     <link rel="stylesheet" href="/app.css?v=${version}" />
     <script src="/htmx.min.js?v=${version}"></script>
   </head>
-  <body class="h-full bg-neutral-950 text-neutral-100 antialiased">
-    <main class="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-6 lg:flex-row">
-      <aside class="w-full shrink-0 rounded-2xl border border-neutral-800 bg-neutral-900 p-8 shadow-2xl lg:w-96">
-        <div class="mb-6 flex items-center gap-3">
-          <div class="grid h-9 w-9 place-items-center rounded-xl bg-indigo-500/20 font-bold text-indigo-300">A</div>
-          <div>
-            <h1 class="text-lg font-semibold leading-none">Apollo</h1>
-            <p class="mt-1 text-xs text-neutral-400">WhatsApp assistant</p>
-          </div>
-        </div>
-        <div id="app" hx-get="/status" hx-trigger="load, every 2s" hx-swap="innerHTML">
-          ${statusRow("bg-neutral-500", "Loading…")}
-        </div>
-        <div class="mt-6 border-t border-neutral-800 pt-5">
-          <div id="anthropic" hx-get="/anthropic" hx-trigger="load, every 300s" hx-swap="innerHTML">
+  <body class="min-h-dvh bg-neutral-950 text-neutral-100 antialiased">
+    <header class="sticky top-0 z-20 border-b border-white/5 bg-neutral-950/80 backdrop-blur">
+      <div class="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-6">
+        <div class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-indigo-500/20 text-sm font-bold text-indigo-300">A</div>
+        <h1 class="text-base font-semibold tracking-tight">Apollo</h1>
+        <nav id="pills" class="ml-auto flex flex-wrap items-center justify-end gap-1.5 sm:gap-2"
+          hx-get="/pills" hx-trigger="load, every 2s" hx-swap="innerHTML"></nav>
+      </div>
+    </header>
+    <main class="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-6">
+      <div class="grid items-start gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
+        <section id="chat-card" class="${CARD} flex min-w-0 scroll-mt-20 flex-col overflow-hidden">
+          <header class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/5 px-4 py-3 sm:px-5">
+            <h2 class="text-sm font-semibold text-neutral-200">Conversation</h2>
+            <span id="session-status" class="text-xs"></span>
+            <div class="ml-auto flex items-center gap-2">
+              <button hx-post="/compact" hx-target="#session-status" hx-swap="innerHTML" hx-disabled-elt="this"
+                class="${GHOST_BUTTON}">
+                Compact
+              </button>
+              <button hx-post="/reload" hx-target="#session-status" hx-swap="innerHTML" hx-disabled-elt="this"
+                class="${GHOST_BUTTON}">
+                Reload
+              </button>
+            </div>
+          </header>
+          <div id="chat" class="h-[70dvh] space-y-3 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:h-[75dvh]"
+            hx-get="/chat" hx-trigger="load, every 2s" hx-swap="innerHTML"
+            hx-on::before-swap="this.dataset.stick = this.scrollHeight - this.scrollTop - this.clientHeight < 160 ? '1' : ''"
+            hx-on::after-settle="if (this.dataset.stick) this.scrollTop = this.scrollHeight">
             <p class="text-xs text-neutral-500">Loading…</p>
           </div>
+          <footer class="border-t border-white/5 px-4 py-3 sm:px-5">
+            <div id="context" hx-get="/context" hx-trigger="load, every 5s" hx-swap="innerHTML">
+              <p class="text-xs text-neutral-500">Loading…</p>
+            </div>
+          </footer>
+        </section>
+        <div class="grid min-w-0 gap-4 sm:gap-6">
+          <section id="whatsapp-card" class="${CARD} scroll-mt-20 p-5">
+            <h2 class="mb-4 text-sm font-semibold text-neutral-200">WhatsApp</h2>
+            <div id="whatsapp" hx-get="/status" hx-trigger="load, every 2s" hx-swap="innerHTML">
+              ${statusRow("bg-neutral-600", "Loading…")}
+            </div>
+          </section>
+          <section id="anthropic-card" class="${CARD} scroll-mt-20 p-5">
+            <h2 class="mb-4 text-sm font-semibold text-neutral-200">Claude</h2>
+            <div id="anthropic" hx-get="/anthropic" hx-trigger="load, every 300s" hx-swap="innerHTML">
+              <p class="text-xs text-neutral-500">Loading…</p>
+            </div>
+          </section>
+          <section id="logs-card" class="${CARD} scroll-mt-20 overflow-hidden">
+            <header class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/5 px-4 py-3 sm:px-5">
+              <h2 class="text-sm font-semibold text-neutral-200">Logs</h2>
+              <form id="logs-filter" class="ml-auto flex gap-0.5 rounded-lg border border-white/10 bg-neutral-950/60 p-0.5 text-[11px]">
+                ${filterChip("all", "All", true)}
+                ${filterChip("info", "Info+")}
+                ${filterChip("warn", "Warn+")}
+                ${filterChip("error", "Error")}
+              </form>
+            </header>
+            <div id="log-list" class="max-h-96 overflow-y-auto overscroll-contain"
+              hx-get="/logs" hx-include="#logs-filter" hx-trigger="load, every 2s, change from:#logs-filter" hx-swap="innerHTML">
+              <p class="px-4 py-6 text-center text-xs text-neutral-600">Loading…</p>
+            </div>
+          </section>
         </div>
-        <details class="mt-6 border-t border-neutral-800 pt-5">
-          <summary class="cursor-pointer text-xs font-semibold text-neutral-300">Logs</summary>
-          <form id="logs-filter" class="mt-3 flex gap-1 text-[11px]">
-            <label class="cursor-pointer rounded-md px-1.5 py-0.5 text-neutral-500 has-[:checked]:bg-neutral-700 has-[:checked]:text-neutral-100">
-              <input type="radio" name="level" value="all" checked class="sr-only" />All
-            </label>
-            <label class="cursor-pointer rounded-md px-1.5 py-0.5 text-neutral-500 has-[:checked]:bg-neutral-700 has-[:checked]:text-neutral-100">
-              <input type="radio" name="level" value="info" class="sr-only" />Info+
-            </label>
-            <label class="cursor-pointer rounded-md px-1.5 py-0.5 text-neutral-500 has-[:checked]:bg-neutral-700 has-[:checked]:text-neutral-100">
-              <input type="radio" name="level" value="warn" class="sr-only" />Warn+
-            </label>
-            <label class="cursor-pointer rounded-md px-1.5 py-0.5 text-neutral-500 has-[:checked]:bg-neutral-700 has-[:checked]:text-neutral-100">
-              <input type="radio" name="level" value="error" class="sr-only" />Error
-            </label>
-          </form>
-          <div id="log-list" class="mt-2 max-h-96 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-950"
-            hx-get="/logs" hx-include="#logs-filter" hx-trigger="load, every 2s, change from:#logs-filter" hx-swap="innerHTML">
-            <p class="px-2 py-3 text-center text-xs text-neutral-600">Loading…</p>
-          </div>
-        </details>
-      </aside>
-      <section class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900 shadow-2xl">
-        <header class="flex items-center gap-3 border-b border-neutral-800 px-5 py-3">
-          <span class="text-sm font-semibold text-neutral-200">Chat log</span>
-          <span id="session-status" class="text-xs"></span>
-          <div class="ml-auto flex items-center gap-2">
-            <span class="text-xs text-neutral-500">Session:</span>
-            <button hx-post="/compact" hx-target="#session-status" hx-swap="innerHTML" hx-disabled-elt="this"
-              class="rounded-lg border border-neutral-700 px-3 py-1 text-xs text-neutral-300 transition hover:bg-neutral-800 disabled:opacity-50">
-              Compact
-            </button>
-            <button hx-post="/reload" hx-target="#session-status" hx-swap="innerHTML" hx-disabled-elt="this"
-              class="rounded-lg border border-neutral-700 px-3 py-1 text-xs text-neutral-300 transition hover:bg-neutral-800 disabled:opacity-50">
-              Reload
-            </button>
-          </div>
-        </header>
-        <div id="chat" class="min-h-0 flex-1 space-y-3 overflow-y-auto p-4"
-          hx-get="/chat" hx-trigger="load, every 2s" hx-swap="innerHTML"
-          hx-on::after-settle="this.scrollTop = this.scrollHeight">
-          <p class="text-xs text-neutral-500">Loading…</p>
-        </div>
-        <footer class="border-t border-neutral-800 px-4 py-2.5">
-          <div id="context" hx-get="/context" hx-trigger="load, every 5s" hx-swap="innerHTML">
-            <p class="text-xs text-neutral-500">Loading…</p>
-          </div>
-        </footer>
-      </section>
+      </div>
     </main>
   </body>
 </html>`;
 }
 
-function statusRow(dotClass: string, label: string): string {
-  return `<div class="flex items-center gap-2">
-    <span class="h-2.5 w-2.5 rounded-full ${dotClass}"></span>
-    <span class="text-sm text-neutral-300">${label}</span>
-  </div>`;
+function pill(href: string, dot: string, label: string): string {
+  return `<a href="${href}" class="${PILL}"><span class="h-1.5 w-1.5 rounded-full ${dot}"></span>${label}</a>`;
+}
+
+const WHATSAPP_DOT: Record<WhatsAppStatus, string> = {
+  connected: "bg-emerald-400",
+  connecting: "animate-pulse bg-amber-400",
+  loggedOut: "bg-red-400",
+  qr: "bg-amber-400",
+};
+
+/** Render the #pills fragment: at-a-glance status chips that anchor-link to their cards. */
+export function renderPills(
+  whatsapp: WhatsAppStatus,
+  anthropicConnected: boolean,
+  usage: ContextUsage | undefined,
+): string {
+  const pills = [
+    pill("#whatsapp-card", WHATSAPP_DOT[whatsapp], "WhatsApp"),
+    pill("#anthropic-card", anthropicConnected ? "bg-emerald-400" : "bg-neutral-600", "Claude"),
+  ];
+  if (usage && usage.contextWindow > 0 && usage.percent != null) {
+    const pct = Math.min(100, Math.max(0, usage.percent));
+    const dot = pct >= 90 ? "bg-red-400" : pct >= 70 ? "bg-amber-400" : "bg-emerald-400";
+    pills.push(pill("#chat-card", dot, `Ctx ${Math.round(pct)}%`));
+  }
+  return pills.join("");
 }
 
 /** Inline #session-status fragment shown after a dashboard Compact/Reload button is pressed. */
@@ -110,57 +158,54 @@ export function sessionStatus(action: "compact" | "reload", kind: "busy" | "erro
   return `<span class="${color}">${label}</span>`;
 }
 
-const LINK_BUTTON = `<button hx-post="/link" hx-target="#app" hx-swap="innerHTML"
+const LINK_BUTTON = `<button hx-post="/link" hx-target="#whatsapp" hx-swap="innerHTML"
   class="w-full rounded-xl bg-indigo-500 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-400">
   Link device
 </button>`;
 
 function linked(user: string | undefined): string {
-  return `<div class="space-y-5">
+  return `<div class="space-y-4">
     ${statusRow("bg-emerald-400", "Linked")}
-    <div class="rounded-xl border border-neutral-800 bg-neutral-950 p-4">
-      <p class="text-xs text-neutral-500">Connected as</p>
-      <p class="mt-0.5 text-sm font-medium text-neutral-100">${user ? `+${user}` : "WhatsApp"}</p>
+    <div class="rounded-xl border border-white/10 bg-neutral-950/60 px-4 py-3">
+      <p class="text-[11px] uppercase tracking-wide text-neutral-500">Connected as</p>
+      <p class="mt-1 text-sm font-medium text-neutral-100">${user ? `+${user}` : "WhatsApp"}</p>
     </div>
-    <p class="text-sm text-neutral-400">Apollo is online and listening on WhatsApp.</p>
+    <p class="text-xs leading-relaxed text-neutral-400">Apollo is online and listening on WhatsApp.</p>
   </div>`;
 }
 
 function idle(status: WhatsAppState["status"]): string {
   const label =
     status === "connecting" ? "Connecting…" : status === "loggedOut" ? "Logged out" : "Not linked";
-  const dot = status === "connecting" ? "bg-amber-400 animate-pulse" : "bg-neutral-500";
-  return `<div class="space-y-5">
+  const dot = status === "connecting" ? "animate-pulse bg-amber-400" : "bg-neutral-600";
+  return `<div class="space-y-4">
     ${statusRow(dot, label)}
-    <p class="text-sm text-neutral-400">Link your WhatsApp account to start chatting with Apollo.</p>
+    <p class="text-xs leading-relaxed text-neutral-400">Link your WhatsApp account to start chatting with Apollo.</p>
     ${LINK_BUTTON}
   </div>`;
 }
 
 async function scanning(state: WhatsAppState): Promise<string> {
   const code = state.qr
-    ? `<div class="grid place-items-center rounded-xl bg-white p-4">${await QRCode.toString(
-        state.qr,
-        {
-          margin: 1,
-          type: "svg",
-          width: 240,
-        },
-      )}</div>`
+    ? `<div class="mx-auto w-fit rounded-xl bg-white p-3">${await QRCode.toString(state.qr, {
+        margin: 1,
+        type: "svg",
+        width: 220,
+      })}</div>`
     : `<div class="rounded-xl border border-dashed border-neutral-700 p-10 text-center text-sm text-neutral-500">Generating QR…</div>`;
 
-  return `<div class="space-y-5">
-    ${statusRow("bg-amber-400 animate-pulse", "Waiting for scan…")}
+  return `<div class="space-y-4">
+    ${statusRow("animate-pulse bg-amber-400", "Waiting for scan…")}
     ${code}
     <p class="text-center text-xs text-neutral-400">WhatsApp → Linked devices → Link a device</p>
-    <button hx-post="/link" hx-target="#app" hx-swap="innerHTML"
-      class="w-full rounded-xl border border-neutral-700 py-2 text-xs text-neutral-300 transition hover:bg-neutral-800">
+    <button hx-post="/link" hx-target="#whatsapp" hx-swap="innerHTML"
+      class="w-full rounded-xl border border-white/10 py-2 text-xs font-medium text-neutral-300 transition hover:bg-white/5">
       Refresh QR
     </button>
   </div>`;
 }
 
-/** Render the #app fragment for the current link state. */
+/** Render the #whatsapp fragment for the current link state. */
 export async function renderState(state: WhatsAppState, linking: boolean): Promise<string> {
   if (state.status === "connected") return linked(state.user);
   if (linking) return scanning(state);
@@ -175,22 +220,22 @@ export function renderAnthropic(
   error?: string,
 ): string {
   if (connected) {
-    return `<div class="space-y-3">
+    return `<div class="space-y-4">
       ${statusRow("bg-emerald-400", "Connected to Anthropic")}
       ${data ? renderUsage(data) : `<p class="text-xs text-neutral-500">Usage data unavailable right now.</p>`}
     </div>`;
   }
   return `<div class="space-y-4">
-    ${statusRow("bg-neutral-500", "Not connected to Anthropic")}
-    <p class="text-sm text-neutral-400">Authorize with your Claude account. You'll be redirected to a localhost page that won't load - that's expected: copy that URL (or the code in it) and paste it below.</p>
+    ${statusRow("bg-neutral-600", "Not connected to Anthropic")}
+    <p class="text-xs leading-relaxed text-neutral-400">Authorize with your Claude account. You'll be redirected to a localhost page that won't load - that's expected: copy that URL (or the code in it) and paste it below.</p>
     <a href="${authUrl}" target="_blank" rel="noreferrer"
       class="block w-full rounded-xl bg-indigo-500 py-2.5 text-center text-sm font-medium text-white transition hover:bg-indigo-400">
       Authorize with Anthropic
     </a>
     <form hx-post="/connect" hx-target="#anthropic" hx-swap="innerHTML" class="flex gap-2">
       <input name="code" placeholder="Paste code or redirect URL" autocomplete="off" spellcheck="false"
-        class="min-w-0 flex-1 rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600" />
-      <button class="rounded-xl border border-neutral-700 px-4 py-2 text-sm text-neutral-200 transition hover:bg-neutral-800">Connect</button>
+        class="min-w-0 flex-1 rounded-xl border border-white/10 bg-neutral-950/60 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus:border-indigo-400 focus:outline-none" />
+      <button class="rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-neutral-200 transition hover:bg-white/5">Connect</button>
     </form>
     ${error ? `<p class="text-xs text-red-400">${error}</p>` : ""}
   </div>`;
@@ -210,10 +255,10 @@ export function renderContext(usage: ContextUsage | undefined): string {
   const pct = Math.min(100, Math.max(0, usage.percent));
   const color = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
   return `<div>
-    <div class="mb-1 flex justify-between text-xs text-neutral-400">
-      <span>Context</span><span>${pct.toFixed(1)}% / ${window}</span>
+    <div class="mb-1.5 flex justify-between text-xs">
+      <span class="text-neutral-400">Context</span><span class="text-neutral-500">${pct.toFixed(1)}% / ${window}</span>
     </div>
-    <div class="h-2 overflow-hidden rounded-full bg-neutral-800">
+    <div class="h-1.5 overflow-hidden rounded-full bg-white/5">
       <div class="h-full rounded-full ${color}" style="width:${pct}%"></div>
     </div>
   </div>`;
@@ -255,17 +300,17 @@ function logExtras(record: LogRecord): string {
 /** Render the #log-list fragment: one row per record, already filtered and newest first. */
 export function renderLogs(records: LogRecord[]): string {
   if (records.length === 0) {
-    return `<p class="px-2 py-3 text-center text-xs text-neutral-600">No logs.</p>`;
+    return `<p class="px-4 py-6 text-center text-xs text-neutral-600">No logs.</p>`;
   }
   return records
     .map((record) => {
       const { color, text } = logLevel(typeof record.level === "number" ? record.level : 30);
       const msg = typeof record.msg === "string" ? record.msg : "";
-      return `<div class="border-b border-neutral-800/60 px-2 py-1 font-mono text-[11px] leading-snug">
+      return `<div class="border-b border-white/5 px-4 py-1.5 font-mono text-[11px] leading-snug last:border-b-0 sm:px-5">
       <div class="flex gap-2">
         <span class="shrink-0 text-neutral-600">${logTime(record.time)}</span>
-        <span class="shrink-0 font-semibold ${color}">${text}</span>
-        <span class="min-w-0 break-words text-neutral-200">${escapeHtml(msg)}</span>
+        <span class="w-11 shrink-0 font-semibold ${color}">${text}</span>
+        <span class="min-w-0 break-words text-neutral-300">${escapeHtml(msg)}</span>
       </div>
       ${logExtras(record)}
     </div>`;

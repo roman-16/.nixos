@@ -19,21 +19,28 @@ export interface ChatImage {
 }
 
 export type LogItem =
-  | { kind: "assistant"; text: string }
-  | { kind: "bash"; command: string; exitCode: number | undefined; output: string }
-  | { kind: "compaction"; summary: string; tokensBefore: number | undefined }
-  | { kind: "divider"; label: string }
-  | { kind: "thinking"; text: string }
+  | { kind: "assistant"; text: string; time?: string }
   | {
-      kind: "tool";
+      command: string;
+      exitCode: number | undefined;
+      kind: "bash";
+      output: string;
+      time?: string;
+    }
+  | { kind: "compaction"; summary: string; time?: string; tokensBefore: number | undefined }
+  | { kind: "divider"; label: string; time?: string }
+  | { kind: "thinking"; text: string; time?: string }
+  | {
       args: Record<string, unknown>;
       hasResult: boolean;
       images: number;
       isError: boolean;
+      kind: "tool";
       name: string;
       output: string;
+      time?: string;
     }
-  | { kind: "user"; images: ChatImage[]; text: string };
+  | { images: ChatImage[]; kind: "user"; text: string; time?: string };
 
 interface ToolResult {
   images: number;
@@ -62,14 +69,23 @@ function toolResult(message: Record<string, any>): ToolResult {
   return { images: images.length, isError: Boolean(message.isError), output: text };
 }
 
-function assistantItems(message: Record<string, any>, results: Map<string, ToolResult>): LogItem[] {
+/** An entry's timestamp, kept only when it parses as a real date. */
+function isoTime(value: unknown): string | undefined {
+  return typeof value === "string" && !Number.isNaN(Date.parse(value)) ? value : undefined;
+}
+
+function assistantItems(
+  message: Record<string, any>,
+  results: Map<string, ToolResult>,
+  time: string | undefined,
+): LogItem[] {
   const items: LogItem[] = [];
   const content = Array.isArray(message.content) ? message.content : [];
   for (const block of content) {
     if (block?.type === "text" && block.text?.trim()) {
-      items.push({ kind: "assistant", text: block.text });
+      items.push({ kind: "assistant", text: block.text, time });
     } else if (block?.type === "thinking" && block.thinking?.trim()) {
-      items.push({ kind: "thinking", text: block.thinking });
+      items.push({ kind: "thinking", text: block.thinking, time });
     } else if (block?.type === "toolCall") {
       const result = results.get(block.id);
       items.push({
@@ -80,6 +96,7 @@ function assistantItems(message: Record<string, any>, results: Map<string, ToolR
         kind: "tool",
         name: block.name ?? "tool",
         output: result?.output ?? "",
+        time,
       });
     }
   }
@@ -110,10 +127,12 @@ export function parseTranscript(jsonl: string): LogItem[] {
 
   const items: LogItem[] = [];
   for (const entry of entries) {
+    const time = isoTime(entry.timestamp);
     if (entry.type === "compaction") {
       items.push({
         kind: "compaction",
         summary: typeof entry.summary === "string" ? entry.summary : "",
+        time,
         tokensBefore: typeof entry.tokensBefore === "number" ? entry.tokensBefore : undefined,
       });
       continue;
@@ -132,7 +151,7 @@ export function parseTranscript(jsonl: string): LogItem[] {
     if (!message || typeof message !== "object") continue;
     switch (message.role) {
       case "assistant":
-        items.push(...assistantItems(message, results));
+        items.push(...assistantItems(message, results, time));
         break;
       case "bashExecution":
         items.push({
@@ -140,11 +159,12 @@ export function parseTranscript(jsonl: string): LogItem[] {
           exitCode: message.exitCode,
           kind: "bash",
           output: message.output ?? "",
+          time,
         });
         break;
       case "user": {
         const { images, text } = splitContent(message.content);
-        if (text || images.length > 0) items.push({ images, kind: "user", text });
+        if (text || images.length > 0) items.push({ images, kind: "user", text, time });
         break;
       }
       default:
@@ -166,10 +186,39 @@ function argPreview(args: Record<string, unknown>): string {
   }
 }
 
-function bubble(side: "left" | "right", tone: string, body: string): string {
+function two(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function clock(iso: string): string {
+  const date = new Date(iso);
+  return `${two(date.getHours())}:${two(date.getMinutes())}`;
+}
+
+function stamp(time: string | undefined): string {
+  return time
+    ? `<span class="mt-1 block text-right text-[10px] leading-none opacity-50">${clock(time)}</span>`
+    : "";
+}
+
+function dayLabel(date: Date, now: Date): string {
+  if (date.toDateString() === now.toDateString()) return "Today";
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return `${two(date.getDate())}.${two(date.getMonth() + 1)}.${date.getFullYear()}`;
+}
+
+function dayDivider(label: string): string {
+  return `<div class="flex justify-center py-1">
+    <span class="rounded-full border border-white/10 bg-neutral-900/90 px-3 py-1 text-[11px] font-medium text-neutral-400">${escapeHtml(label)}</span>
+  </div>`;
+}
+
+function bubble(side: "left" | "right", tone: string, body: string, time?: string): string {
   const align = side === "right" ? "items-end" : "items-start";
   return `<div class="flex flex-col ${align}">
-    <div class="max-w-[85%] rounded-2xl px-3 py-2 text-sm ${tone}">${body}</div>
+    <div class="max-w-[85%] px-3.5 py-2 text-sm shadow-sm sm:max-w-[75%] ${tone}">${body}${stamp(time)}</div>
   </div>`;
 }
 
@@ -183,7 +232,7 @@ function images(list: ChatImage[]): string {
     .map(
       (image) =>
         `<img src="data:${escapeHtml(image.mimeType)};base64,${image.data}" alt="image"
-          class="max-h-40 rounded-lg" />`,
+          class="max-h-40 rounded-xl" />`,
     )
     .join("");
   return `<div class="mt-1 flex flex-wrap gap-2">${tags}</div>`;
@@ -197,11 +246,12 @@ function toolBadge(item: Extract<LogItem, { kind: "tool" }>): string {
 }
 
 function disclosure(summary: string, detail: string): string {
-  return `<details class="group rounded-xl border border-neutral-800 bg-neutral-950/60">
-    <summary class="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs text-neutral-300">
+  return `<details class="group overflow-hidden rounded-xl border border-white/5 bg-neutral-950/50">
+    <summary class="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs text-neutral-400 transition hover:bg-white/5">
+      <span class="shrink-0 text-[9px] text-neutral-600 transition group-open:rotate-90">▶</span>
       ${summary}
     </summary>
-    <div class="border-t border-neutral-800 px-3 py-2 text-xs">${detail}</div>
+    <div class="border-t border-white/5 px-3 py-2 text-xs">${detail}</div>
   </details>`;
 }
 
@@ -214,33 +264,36 @@ function pre(text: string): string {
 function renderItem(item: LogItem): string {
   switch (item.kind) {
     case "assistant":
-      return bubble("left", "bg-neutral-800 text-neutral-100", textBlock(item.text));
+      return bubble(
+        "left",
+        "rounded-2xl rounded-bl-sm border border-white/5 bg-neutral-800/80 text-neutral-100",
+        textBlock(item.text),
+        item.time,
+      );
     case "bash": {
-      const summary = `<span class="font-mono text-neutral-100">$ ${escapeHtml(
+      const summary = `<span class="min-w-0 truncate font-mono text-neutral-200">$ ${escapeHtml(
         truncate(item.command, PREVIEW_CHARS),
-      )}</span><span class="ml-auto text-neutral-500">exit ${item.exitCode ?? "?"}</span>`;
+      )}</span><span class="ml-auto shrink-0 text-neutral-600">exit ${item.exitCode ?? "?"}</span>`;
       return disclosure(summary, pre(item.output));
     }
     case "compaction": {
       const meta =
         item.tokensBefore == undefined ? "" : ` · ~${humanTokens(item.tokensBefore)} tokens`;
       const detail = item.summary
-        ? `<div class="mt-2 rounded-xl border border-neutral-800 bg-neutral-950/60 px-3 py-2 text-xs">${pre(
+        ? `<div class="mx-auto mt-2 max-w-lg rounded-xl border border-white/5 bg-neutral-950/60 px-3 py-2 text-left text-xs">${pre(
             item.summary,
           )}</div>`
         : "";
-      return `<details class="group py-1">
-        <summary class="flex cursor-pointer list-none items-center gap-3 text-[11px] uppercase tracking-wide text-neutral-600 transition hover:text-neutral-400">
-          <span class="h-px flex-1 bg-neutral-800"></span>
-          <span class="flex items-center gap-1">Context compacted${meta}<span class="transition group-open:rotate-180">▾</span></span>
-          <span class="h-px flex-1 bg-neutral-800"></span>
+      return `<details class="group py-1 text-center">
+        <summary class="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full border border-white/10 bg-neutral-900/90 px-3 py-1 text-[11px] font-medium text-neutral-500 transition hover:text-neutral-300">
+          Context compacted${meta}<span class="transition group-open:rotate-180">▾</span>
         </summary>
         ${detail}
       </details>`;
     }
     case "divider":
       return `<div class="flex items-center gap-3 py-1 text-[11px] uppercase tracking-wide text-neutral-600">
-        <span class="h-px flex-1 bg-neutral-800"></span>${escapeHtml(item.label)}<span class="h-px flex-1 bg-neutral-800"></span>
+        <span class="h-px flex-1 bg-white/5"></span>${escapeHtml(item.label)}<span class="h-px flex-1 bg-white/5"></span>
       </div>`;
     case "thinking":
       return disclosure(
@@ -251,8 +304,8 @@ function renderItem(item: LogItem): string {
       );
     case "tool": {
       const preview = escapeHtml(truncate(argPreview(item.args), PREVIEW_CHARS));
-      const summary = `<span class="font-mono text-indigo-300">${escapeHtml(item.name)}</span>
-        <span class="truncate text-neutral-500">${preview}</span>
+      const summary = `<span class="shrink-0 font-mono text-indigo-300">${escapeHtml(item.name)}</span>
+        <span class="min-w-0 truncate text-neutral-500">${preview}</span>
         <span class="ml-auto shrink-0">${toolBadge(item)}</span>`;
       const output = item.output ? pre(item.output) : "";
       const note =
@@ -265,16 +318,30 @@ function renderItem(item: LogItem): string {
     case "user":
       return bubble(
         "right",
-        "bg-indigo-500/90 text-white",
+        "rounded-2xl rounded-br-sm bg-indigo-500 text-white",
         `${item.text ? textBlock(item.text) : ""}${images(item.images)}`,
+        item.time,
       );
   }
 }
 
-/** Render the chat-log fragment (the inner rows for the polling #chat container). */
-export function renderChat(items: LogItem[]): string {
+/** Render the chat-log fragment (the inner rows for the polling #chat container), inserting a day divider whenever the calendar day of timed items changes. */
+export function renderChat(items: LogItem[], now: Date = new Date()): string {
   if (items.length === 0) {
     return `<p class="grid h-full place-items-center text-sm text-neutral-600">No messages yet.</p>`;
   }
-  return items.map(renderItem).join("");
+  const parts: string[] = [];
+  let lastDay: string | undefined;
+  for (const item of items) {
+    if (item.time) {
+      const date = new Date(item.time);
+      const day = date.toDateString();
+      if (day !== lastDay) {
+        parts.push(dayDivider(dayLabel(date, now)));
+        lastDay = day;
+      }
+    }
+    parts.push(renderItem(item));
+  }
+  return parts.join("");
 }
