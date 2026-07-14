@@ -5,6 +5,8 @@
  * tool use. Apollo never branches, so the tree is treated as a linear sequence.
  */
 
+import { humanTokens } from "./format";
+
 const MAX_OUTPUT_CHARS = 10000;
 const PREVIEW_CHARS = 100;
 
@@ -19,6 +21,7 @@ export interface ChatImage {
 export type LogItem =
   | { kind: "assistant"; text: string }
   | { kind: "bash"; command: string; exitCode: number | undefined; output: string }
+  | { kind: "compaction"; summary: string; tokensBefore: number | undefined }
   | { kind: "divider"; label: string }
   | { kind: "thinking"; text: string }
   | {
@@ -108,7 +111,11 @@ export function parseTranscript(jsonl: string): LogItem[] {
   const items: LogItem[] = [];
   for (const entry of entries) {
     if (entry.type === "compaction") {
-      items.push({ kind: "divider", label: "Context compacted" });
+      items.push({
+        kind: "compaction",
+        summary: typeof entry.summary === "string" ? entry.summary : "",
+        tokensBefore: typeof entry.tokensBefore === "number" ? entry.tokensBefore : undefined,
+      });
       continue;
     }
     if (entry.type === "branch_summary") {
@@ -228,6 +235,23 @@ function renderItem(item: LogItem): string {
         truncate(item.command, PREVIEW_CHARS),
       )}</span><span class="ml-auto text-neutral-500">exit ${item.exitCode ?? "?"}</span>`;
       return disclosure(summary, pre(item.output));
+    }
+    case "compaction": {
+      const meta =
+        item.tokensBefore == undefined ? "" : ` · ~${humanTokens(item.tokensBefore)} tokens`;
+      const detail = item.summary
+        ? `<div class="mt-2 rounded-xl border border-neutral-800 bg-neutral-950/60 px-3 py-2 text-xs">${pre(
+            item.summary,
+          )}</div>`
+        : "";
+      return `<details class="group py-1">
+        <summary class="flex cursor-pointer list-none items-center gap-3 text-[11px] uppercase tracking-wide text-neutral-600 transition hover:text-neutral-400">
+          <span class="h-px flex-1 bg-neutral-800"></span>
+          <span class="flex items-center gap-1">Context compacted${meta}<span class="transition group-open:rotate-180">▾</span></span>
+          <span class="h-px flex-1 bg-neutral-800"></span>
+        </summary>
+        ${detail}
+      </details>`;
     }
     case "divider":
       return `<div class="flex items-center gap-3 py-1 text-[11px] uppercase tracking-wide text-neutral-600">

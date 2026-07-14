@@ -1,4 +1,12 @@
+import { humanTokens } from "./format";
+
 const DEFAULT_MAX_CHARS = 4000;
+
+/** Build the brief WhatsApp notice sent when the session context is compacted. */
+export function compactionNotice(tokensBefore?: number): string {
+  const count = tokensBefore && tokensBefore > 0 ? ` (~${humanTokens(tokensBefore)} tokens)` : "";
+  return `🗜️ Context compacted${count}. Full summary on the dashboard.`;
+}
 
 /** Strip a WhatsApp JID to its bare number (drops the device suffix and domain). */
 export function numberFromJid(jid: string): string {

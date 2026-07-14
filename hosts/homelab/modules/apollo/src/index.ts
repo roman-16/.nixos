@@ -15,7 +15,7 @@ import {
   renderState,
   sessionStatus,
 } from "./dashboard";
-import { isAllowed, voiceText } from "./messages";
+import { compactionNotice, isAllowed, voiceText } from "./messages";
 import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
 import { transcribeAudio } from "./transcribe";
 import { fetchUsage, type UsageData } from "./usage";
@@ -115,6 +115,11 @@ export async function main(): Promise<void> {
 
   session.subscribe((event) => {
     if (event.type === "agent_settled") stopTyping();
+    if (event.type === "compaction_end" && event.result && !event.aborted && wa && target) {
+      void wa
+        .send(target, compactionNotice(event.result.tokensBefore))
+        .catch((error) => logger.error({ error }, "compaction notice failed"));
+    }
   });
 
   wa = await startWhatsApp({

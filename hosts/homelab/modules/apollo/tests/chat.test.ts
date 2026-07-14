@@ -92,15 +92,15 @@ describe("parseTranscript", () => {
     });
   });
 
-  it("emits thinking blocks and dividers for compaction and branch summaries", () => {
+  it("emits a compaction item, thinking blocks, and a branch-summary divider", () => {
     const jsonl = [
-      JSON.stringify({ id: "c", summary: "x", type: "compaction" }),
+      JSON.stringify({ id: "c", summary: "recap", tokensBefore: 123456, type: "compaction" }),
       message("a", { content: [{ thinking: "hmm", type: "thinking" }], role: "assistant" }),
       JSON.stringify({ fromId: "a", id: "d", summary: "y", type: "branch_summary" }),
     ].join("\n");
 
     expect(parseTranscript(jsonl)).toEqual([
-      { kind: "divider", label: "Context compacted" },
+      { kind: "compaction", summary: "recap", tokensBefore: 123456 },
       { kind: "thinking", text: "hmm" },
       { kind: "divider", label: "Branch summary" },
     ]);
@@ -204,5 +204,23 @@ describe("renderChat", () => {
       { images: [{ data: "AAAA", mimeType: "image/png" }], kind: "user", text: "" },
     ]);
     expect(html).toContain("data:image/png;base64,AAAA");
+  });
+
+  it("renders a compaction entry as an expandable summary with token count", () => {
+    const html = renderChat([
+      { kind: "compaction", summary: "what happened", tokensBefore: 123456 },
+    ]);
+    expect(html).toContain("<details");
+    expect(html).toContain("Context compacted");
+    expect(html).toContain("123K");
+    expect(html).toContain("what happened");
+  });
+
+  it("escapes the compaction summary", () => {
+    const html = renderChat([
+      { kind: "compaction", summary: "<script>alert(1)</script>", tokensBefore: undefined },
+    ]);
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).not.toContain("<script>");
   });
 });

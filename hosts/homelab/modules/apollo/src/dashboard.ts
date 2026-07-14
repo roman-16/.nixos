@@ -1,6 +1,7 @@
 import type { ContextUsage } from "@earendil-works/pi-coding-agent";
 import QRCode from "qrcode";
 
+import { humanTokens } from "./format";
 import { renderUsage, type UsageData } from "./usage";
 import type { WhatsAppState } from "./whatsapp";
 
@@ -171,12 +172,6 @@ export function renderAnthropic(
     </form>
     ${error ? `<p class="text-xs text-red-400">${error}</p>` : ""}
   </div>`;
-}
-
-function humanTokens(n: number): string {
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
-  if (n >= 1e3) return `${Math.round(n / 1e3)}K`;
-  return String(n);
 }
 
 /** Render the #context fragment: how much of the model's context window the session is using. */

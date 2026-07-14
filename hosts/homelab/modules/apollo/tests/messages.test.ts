@@ -1,6 +1,12 @@
 import { describe, expect, it } from "bun:test";
 
-import { isAllowed, numberFromJid, splitMessage, voiceText } from "../src/messages";
+import {
+  compactionNotice,
+  isAllowed,
+  numberFromJid,
+  splitMessage,
+  voiceText,
+} from "../src/messages";
 
 describe("numberFromJid", () => {
   it("strips domain and device suffix", () => {
@@ -60,5 +66,19 @@ describe("voiceText", () => {
 
   it("marks an empty transcript", () => {
     expect(voiceText("   ")).toBe("🎤 (empty voice message)");
+  });
+});
+
+describe("compactionNotice", () => {
+  it("includes a humanized token count when known", () => {
+    expect(compactionNotice(123456)).toBe(
+      "🗜️ Context compacted (~123K tokens). Full summary on the dashboard.",
+    );
+  });
+
+  it("omits the token clause when unknown or zero", () => {
+    const expected = "🗜️ Context compacted. Full summary on the dashboard.";
+    expect(compactionNotice()).toBe(expected);
+    expect(compactionNotice(0)).toBe(expected);
   });
 });
