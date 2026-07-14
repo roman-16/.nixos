@@ -1,7 +1,8 @@
 import type { ContextUsage } from "@earendil-works/pi-coding-agent";
 import QRCode from "qrcode";
 
-import { humanTokens } from "./format";
+import { escapeHtml, humanTokens, truncate } from "./format";
+import type { LogRecord } from "./logs";
 import { renderUsage, type UsageData } from "./usage";
 import type { WhatsAppState } from "./whatsapp";
 
@@ -35,6 +36,27 @@ export function renderPage(version: string): string {
             <p class="text-xs text-neutral-500">Loading…</p>
           </div>
         </div>
+        <details class="mt-6 border-t border-neutral-800 pt-5">
+          <summary class="cursor-pointer text-xs font-semibold text-neutral-300">Logs</summary>
+          <form id="logs-filter" class="mt-3 flex gap-1 text-[11px]">
+            <label class="cursor-pointer rounded-md px-1.5 py-0.5 text-neutral-500 has-[:checked]:bg-neutral-700 has-[:checked]:text-neutral-100">
+              <input type="radio" name="level" value="all" checked class="sr-only" />All
+            </label>
+            <label class="cursor-pointer rounded-md px-1.5 py-0.5 text-neutral-500 has-[:checked]:bg-neutral-700 has-[:checked]:text-neutral-100">
+              <input type="radio" name="level" value="info" class="sr-only" />Info+
+            </label>
+            <label class="cursor-pointer rounded-md px-1.5 py-0.5 text-neutral-500 has-[:checked]:bg-neutral-700 has-[:checked]:text-neutral-100">
+              <input type="radio" name="level" value="warn" class="sr-only" />Warn+
+            </label>
+            <label class="cursor-pointer rounded-md px-1.5 py-0.5 text-neutral-500 has-[:checked]:bg-neutral-700 has-[:checked]:text-neutral-100">
+              <input type="radio" name="level" value="error" class="sr-only" />Error
+            </label>
+          </form>
+          <div id="log-list" class="mt-2 max-h-96 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-950"
+            hx-get="/logs" hx-include="#logs-filter" hx-trigger="load, every 2s, change from:#logs-filter" hx-swap="innerHTML">
+            <p class="px-2 py-3 text-center text-xs text-neutral-600">Loading…</p>
+          </div>
+        </details>
       </aside>
       <section class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900 shadow-2xl">
         <header class="flex items-center gap-3 border-b border-neutral-800 px-5 py-3">
@@ -195,4 +217,58 @@ export function renderContext(usage: ContextUsage | undefined): string {
       <div class="h-full rounded-full ${color}" style="width:${pct}%"></div>
     </div>
   </div>`;
+}
+
+const LOG_META_KEYS = new Set(["hostname", "level", "msg", "pid", "time", "v"]);
+
+function logLevel(level: number): { color: string; text: string } {
+  if (level >= 60) return { color: "text-red-500", text: "FATAL" };
+  if (level >= 50) return { color: "text-red-400", text: "ERROR" };
+  if (level >= 40) return { color: "text-amber-400", text: "WARN" };
+  if (level >= 30) return { color: "text-emerald-400", text: "INFO" };
+  if (level >= 20) return { color: "text-neutral-400", text: "DEBUG" };
+  return { color: "text-neutral-500", text: "TRACE" };
+}
+
+function logTime(time: unknown): string {
+  const ms = typeof time === "number" ? time : Number(time);
+  return Number.isFinite(ms) ? new Date(ms).toLocaleTimeString("en-GB", { hour12: false }) : "";
+}
+
+function logExtras(record: LogRecord): string {
+  const extras: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (!LOG_META_KEYS.has(key)) extras[key] = value;
+  }
+  if (Object.keys(extras).length === 0) return "";
+  let json: string;
+  try {
+    json = JSON.stringify(extras, null, 2);
+  } catch {
+    return "";
+  }
+  return `<pre class="mt-0.5 overflow-x-auto whitespace-pre-wrap break-words text-[10px] text-neutral-500">${escapeHtml(
+    truncate(json, 4000),
+  )}</pre>`;
+}
+
+/** Render the #log-list fragment: one row per record, already filtered and newest first. */
+export function renderLogs(records: LogRecord[]): string {
+  if (records.length === 0) {
+    return `<p class="px-2 py-3 text-center text-xs text-neutral-600">No logs.</p>`;
+  }
+  return records
+    .map((record) => {
+      const { color, text } = logLevel(typeof record.level === "number" ? record.level : 30);
+      const msg = typeof record.msg === "string" ? record.msg : "";
+      return `<div class="border-b border-neutral-800/60 px-2 py-1 font-mono text-[11px] leading-snug">
+      <div class="flex gap-2">
+        <span class="shrink-0 text-neutral-600">${logTime(record.time)}</span>
+        <span class="shrink-0 font-semibold ${color}">${text}</span>
+        <span class="min-w-0 break-words text-neutral-200">${escapeHtml(msg)}</span>
+      </div>
+      ${logExtras(record)}
+    </div>`;
+    })
+    .join("");
 }

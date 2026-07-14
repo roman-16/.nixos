@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test";
 import {
   renderAnthropic,
   renderContext,
+  renderLogs,
   renderPage,
   renderState,
   sessionStatus,
@@ -31,6 +32,25 @@ describe("renderPage", () => {
     expect(html).toContain("Session:");
     expect(html).toContain("Compact");
     expect(html).toContain("Reload");
+    expect(html).toContain(`id="log-list"`);
+    expect(html).toContain(`hx-get="/logs"`);
+    expect(html).toContain(`id="logs-filter"`);
+  });
+});
+
+describe("renderLogs", () => {
+  it("shows a placeholder when empty", () => {
+    expect(renderLogs([])).toContain("No logs");
+  });
+
+  it("renders the level label and message, escaping content and showing extras", () => {
+    const html = renderLogs([
+      { err: { message: "boom" }, level: 50, msg: "<oops>", time: 1_700_000_000_000 },
+    ]);
+    expect(html).toContain("ERROR");
+    expect(html).toContain("&lt;oops&gt;");
+    expect(html).not.toContain("<oops>");
+    expect(html).toContain("err");
   });
 });
 

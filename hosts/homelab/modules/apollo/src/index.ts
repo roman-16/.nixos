@@ -11,10 +11,12 @@ import { loadConfig } from "./config";
 import {
   renderAnthropic,
   renderContext,
+  renderLogs,
   renderPage,
   renderState,
   sessionStatus,
 } from "./dashboard";
+import { createLogBuffer, filterLogs, parseLevel } from "./logs";
 import { compactionNotice, isAllowed, jidForNumber, voiceText } from "./messages";
 import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
 import { transcribeAudio } from "./transcribe";
@@ -46,7 +48,8 @@ function asset(name: string, type: string): Response {
 
 export async function main(): Promise<void> {
   const config = loadConfig();
-  const logger = pino({ level: config.logLevel });
+  const logBuffer = createLogBuffer();
+  const logger = pino({ level: config.logLevel }, logBuffer.stream);
 
   if (config.allowFrom.length === 0) {
     logger.warn("APOLLO_ALLOW_FROM is empty; every inbound message will be ignored");
@@ -68,6 +71,7 @@ export async function main(): Promise<void> {
   const fallbackTarget = config.allowFrom[0] ? jidForNumber(config.allowFrom[0]) : undefined;
   let lastStatusBody: string | undefined;
   let lastChatBody: string | undefined;
+  let lastLogKey: string | undefined;
   let chatCache: { body: string; mtimeMs: number } | undefined;
   let usage: { data: UsageData | null; fetchedAt: number } | undefined;
 
@@ -188,7 +192,8 @@ export async function main(): Promise<void> {
 
   Bun.serve({
     fetch: async (req) => {
-      const { pathname } = new URL(req.url);
+      const url = new URL(req.url);
+      const { pathname } = url;
 
       if (pathname === "/health") return new Response("ok");
       if (pathname === "/app.css") return asset("app.css", "text/css");
@@ -197,6 +202,7 @@ export async function main(): Promise<void> {
       if (pathname === "/") {
         lastStatusBody = undefined;
         lastChatBody = undefined;
+        lastLogKey = undefined;
         return new Response(renderPage(assetsVersion), { headers: htmlHeaders });
       }
 
@@ -205,6 +211,16 @@ export async function main(): Promise<void> {
         if (body === lastChatBody) return new Response(null, { status: 204 });
         lastChatBody = body;
         return new Response(body, { headers: htmlHeaders });
+      }
+
+      if (pathname === "/logs") {
+        const level = parseLevel(url.searchParams.get("level"));
+        const key = `${level}:${logBuffer.seq}`;
+        if (key === lastLogKey) return new Response(null, { status: 204 });
+        lastLogKey = key;
+        return new Response(renderLogs(filterLogs(logBuffer.records(), level)), {
+          headers: htmlHeaders,
+        });
       }
 
       if (pathname === "/link" && req.method === "POST") {

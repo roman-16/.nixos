@@ -5,7 +5,7 @@
  * tool use. Apollo never branches, so the tree is treated as a linear sequence.
  */
 
-import { humanTokens } from "./format";
+import { escapeHtml, humanTokens, truncate } from "./format";
 
 const MAX_OUTPUT_CHARS = 10000;
 const PREVIEW_CHARS = 100;
@@ -152,21 +152,6 @@ export function parseTranscript(jsonl: string): LogItem[] {
     }
   }
   return items;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function truncate(value: string, max: number): string {
-  return value.length > max
-    ? `${value.slice(0, max)}\n… (${value.length - max} more chars)`
-    : value;
 }
 
 function argPreview(args: Record<string, unknown>): string {
