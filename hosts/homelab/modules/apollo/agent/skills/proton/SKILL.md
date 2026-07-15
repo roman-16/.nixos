@@ -26,7 +26,14 @@ Reading is free; every change must be confirmed first.
 
 When unsure, a command's `--help` makes clear whether it changes anything; if it does, treat it as a mutation. Before running any mutation: **send the user the exact, full command** you intend to run, **wait for the user's explicit confirmation of that command**, then run it. Never run an unconfirmed mutation. `proton-cli` has a global `--dry-run` that previews a mutation without applying it - run it and show the preview next to the command you are proposing.
 
-## Tips
+## Good to know
 
-- `--output json` / `--output yaml` for machine-readable output; `--full-ids` when a shortened ID is ambiguous.
+- **IDs or search terms:** most commands that take an ID also accept a search term (subject, name, title, URL); an ambiguous term lists the candidates and exits `4`, so narrow it.
+- **Short IDs:** listings shorten each ID to an 8-char prefix, and you can paste that prefix straight into any command that takes an ID (e.g. `list` shows `NWM5AYGx`, then `mail messages read NWM5AYGx`) - proton-cli caches the IDs it has shown you. A prefix it hasn't listed (fresh session, or copied from elsewhere) isn't cached, so run the matching `list` first or use the full ID; a prefix that matches two cached IDs exits `4` with both. `--output json`/`yaml` and pipes always emit full IDs, and `--full-ids` disables shortening.
+- **Create prints the new ID** to stdout (and `✓` to stderr), so you can capture it: `id=$(proton-cli ... create ...)`.
+- **Streaming:** `-` means stdin or stdout, e.g. `mail messages send --body -`, `drive items upload - /path`, `drive items download /path --output -`.
+- **Exit codes:** `0` ok, `1` user error, `2` auth, `3` not-found, `4` ambiguous/conflict, `5` network/server.
+- **Batch mutations:** many mutating commands accept filters (`--older-than`, `--unread`, `--pattern`, `--all`, `--recursive`), so a single command can change many items at once - all the more reason to preview with `--dry-run` and confirm.
+- **Eventual consistency:** search/list read a server-side index that lags a few seconds, so a just-changed item may still show (or not yet); confirm a change by reading the specific item by ID rather than re-searching.
+- **Headless login:** if Proton demands a CAPTCHA at login it cannot be solved here (no display) and the command fails - report that instead of retrying.
 - `proton-cli api GET <path>` reaches endpoints the subcommands don't cover.
