@@ -13,6 +13,6 @@ Run it and relay the output:
 {baseDir}/scripts/backup.sh
 ```
 
-It prints `Backed up and pushed (commit <sha>).`. Nothing else is needed - it handles the commit (always made, empty when nothing changed), the timestamp message, the push, and the credentials itself.
+When the workspace changed it prints `Backed up and pushed (commit <sha>).`; when there is nothing to back up it prints `Nothing to back up.` and stops. Either way nothing else is needed - it handles staging, the commit (only when something changed) with a timestamp message, the push, and the credentials itself.
 
 `{baseDir}` = this skill's directory. Always resolve to the absolute path before executing.
