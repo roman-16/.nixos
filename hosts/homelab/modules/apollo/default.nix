@@ -141,6 +141,87 @@ in
           fi
         '';
 
+        # Proton Drive credentials for the SQLite backup job only, consumed as the
+        # unit EnvironmentFile so the app service never sees them (same world-readable
+        # /nix/store trade-off as the git deploy keys above). Empty until secrets.json
+        # gains a `proton` block.
+        protonEnv = pkgs.writeText "apollo-backup-proton-env" ''
+          PROTON_USER=${secrets.proton.user or ""}
+          PROTON_PASSWORD=${secrets.proton.password or ""}
+        '';
+
+        # Nightly off-box backup of Apollo's SQLite DB to Proton Drive (mirrors the
+        # trader VM): online-snapshot the live DB, zstd-compress, upload, keep the
+        # newest N. Runs as root to read the apollo-owned DB; Proton creds come from
+        # the unit EnvironmentFile. Restore: download a *.sqlite.zst, `zstd -d` it,
+        # stop apollo.service, drop it in as /var/lib/apollo/apollo.sqlite (chown
+        # apollo:apollo, delete any -wal/-shm), start.
+        dbBackupScript = pkgs.writeShellApplication {
+          name = "apollo-db-backup";
+          runtimeInputs = [
+            inputs.proton-cli.packages.${pkgs.stdenv.hostPlatform.system}.default
+          ]
+          ++ (with pkgs; [
+            coreutils
+            jq
+            sqlite
+            zstd
+          ]);
+          text = ''
+            src=/var/lib/apollo/apollo.sqlite
+            remote_parent="/backups"
+            remote="/backups/apollo"
+            keep=14
+
+            ts="$(date --utc +%Y-%m-%dT%H-%M-%SZ)"
+            work="$(mktemp --directory "$HOME/backup.XXXXXX")"
+            trap 'rm --recursive --force "$work"' EXIT
+
+            ensure_folder() {
+              local path="$1"
+              proton-cli drive items info "$path" >/dev/null 2>&1 && return 0
+              proton-cli drive folders create "$path" >/dev/null
+            }
+
+            snap="$work/apollo.sqlite"
+            comp="$work/apollo-$ts.sqlite.zst"
+            # The app holds the DB open (live -shm), so the online-backup API takes a
+            # consistent, up-to-the-last-commit snapshot without blocking it.
+            echo "snapshotting $src"
+            sqlite3 -bail -readonly "$src" ".timeout 5000" ".backup $snap"
+            [ -s "$snap" ] || { echo "snapshot is empty: $src" >&2; exit 1; }
+            zstd --quiet --threads=0 --force -o "$comp" "$snap"
+
+            ensure_folder "$remote_parent"
+            ensure_folder "$remote"
+            echo "uploading $(basename "$comp") ($(stat --format=%s "$comp") bytes)"
+            proton-cli drive items upload "$comp" "$remote"
+
+            # Newest-first by name (UTC timestamps sort lexicographically); keep the
+            # newest $keep, delete the rest. Runs only after the upload succeeds.
+            proton-cli drive items list "$remote" --output json \
+              | jq --raw-output '[.[] | select(.name | startswith("apollo-")) | .name] | sort | reverse | .[]' \
+              | tail --lines=+$((keep + 1)) \
+              | while IFS= read -r name; do
+                  echo "pruning $name"
+                  proton-cli drive items delete "$remote/$name"
+                done
+            echo "backup complete"
+          '';
+        };
+
+        # signal-cli has no place here, so a failed backup pings Roman over the same
+        # WhatsApp channel the app already owns: curl the app's localhost-only alert
+        # hook (src/index.ts), wired as the backup unit's OnFailure below.
+        dbBackupAlertScript = pkgs.writeShellApplication {
+          name = "apollo-db-backup-alert";
+          runtimeInputs = [ pkgs.curl ];
+          text = ''
+            curl --silent --show-error --fail --max-time 30 \
+              --request POST "http://127.0.0.1:${toString port}/internal/backup-alert"
+          '';
+        };
+
       in
       {
         microvm = {
@@ -237,6 +318,7 @@ in
 
               environment = {
                 APOLLO_ALLOW_FROM = secrets.mainNumber;
+                APOLLO_DB_PATH = "%S/apollo/apollo.sqlite";
                 APOLLO_MODEL = "anthropic/claude-sonnet-5";
                 APOLLO_THINKING = "high";
                 APOLLO_WORKSPACE = "%S/apollo/workspace";
@@ -292,6 +374,55 @@ in
                 WorkingDirectory = "%S/apollo";
               };
             };
+
+            # Runs as root (no DynamicUser) so it can read the apollo-owned DB; its
+            # own StateDirectory doubles as proton-cli's HOME for the session cache.
+            apollo-db-backup = {
+              description = "Back up the Apollo SQLite database to Proton Drive";
+
+              after = [ "network-online.target" ];
+              onFailure = [ "apollo-db-backup-alert.service" ];
+              wants = [ "network-online.target" ];
+
+              environment.HOME = "%S/apollo-db-backup";
+
+              serviceConfig = {
+                EnvironmentFile = protonEnv;
+                ExecStart = lib.getExe dbBackupScript;
+                StateDirectory = "apollo-db-backup";
+                StateDirectoryMode = "0700";
+                TimeoutStartSec = "1800s";
+                Type = "oneshot";
+
+                NoNewPrivileges = true;
+                PrivateTmp = true;
+                ProtectHome = true;
+                ProtectSystem = "strict";
+                RestrictAddressFamilies = [
+                  "AF_INET"
+                  "AF_INET6"
+                  "AF_UNIX"
+                ];
+              };
+            };
+
+            apollo-db-backup-alert = {
+              description = "Notify on WhatsApp when the Apollo SQLite backup fails";
+
+              serviceConfig = {
+                ExecStart = lib.getExe dbBackupAlertScript;
+                Type = "oneshot";
+
+                NoNewPrivileges = true;
+                ProtectHome = true;
+                ProtectSystem = "strict";
+                RestrictAddressFamilies = [
+                  "AF_INET"
+                  "AF_INET6"
+                  "AF_UNIX"
+                ];
+              };
+            };
           };
 
           timers.apollo-backup = {
@@ -299,6 +430,17 @@ in
 
             timerConfig = {
               OnCalendar = "*-*-* 00/06:00:00";
+              Persistent = true;
+            };
+
+            wantedBy = [ "timers.target" ];
+          };
+
+          timers.apollo-db-backup = {
+            description = "Back up the Apollo SQLite database daily at 03:30";
+
+            timerConfig = {
+              OnCalendar = "*-*-* 03:30:00";
               Persistent = true;
             };
 

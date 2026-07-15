@@ -1,10 +1,13 @@
 /**
- * In-memory ring buffer of the app's own pino log records, for the dashboard log
- * viewer. The buffer's `stream` is handed to pino as its destination: every record
- * is forwarded to stdout (so journald still captures it) and parsed into the buffer.
+ * The app's own pino log records, persisted to the shared SQLite database so they
+ * survive restarts and show up in the dashboard log viewer afterwards. The store's
+ * `stream` is handed to pino as its destination: every record is forwarded to
+ * stdout (so journald still captures it) and inserted into the `logs` table.
  */
 
-const LOG_CAPACITY = 1000;
+import type { Database } from "bun:sqlite";
+
+const DEFAULT_QUERY_LIMIT = 1000;
 
 export type LogLevel = "all" | "error" | "info" | "warn";
 
@@ -16,43 +19,71 @@ export type LogRecord = Record<string, unknown> & {
 
 const THRESHOLDS: Record<LogLevel, number> = { all: 0, error: 50, info: 30, warn: 40 };
 
+/** The record fields promoted to their own columns; everything else is serialized into `data`. */
+const COLUMN_KEYS = new Set(["level", "msg", "time"]);
+
 /** Coerce a query value to a known filter level, defaulting to "all". */
 export function parseLevel(value: string | null | undefined): LogLevel {
   return value === "info" || value === "warn" || value === "error" ? value : "all";
 }
 
-/** Records at or above the level threshold, newest first. */
-export function filterLogs(records: LogRecord[], level: LogLevel): LogRecord[] {
-  const min = THRESHOLDS[level];
-  const out: LogRecord[] = [];
-  for (let i = records.length - 1; i >= 0; i -= 1) {
-    const record = records[i];
-    if (record && typeof record.level === "number" && record.level >= min) out.push(record);
-  }
-  return out;
+interface LogRow {
+  data: string;
+  level: number;
+  msg: string;
+  time: number;
 }
 
-export interface LogBuffer {
-  push(record: LogRecord): void;
-  records(): LogRecord[];
+export interface LogStore {
+  prune(beforeMs: number): void;
+  query(level: LogLevel, limit?: number): LogRecord[];
   readonly seq: number;
   stream: { write(line: string): void };
 }
 
-/** Create a capped log buffer plus the pino destination stream that feeds it. */
-export function createLogBuffer(capacity = LOG_CAPACITY): LogBuffer {
-  const items: LogRecord[] = [];
+/** Create a SQLite-backed log store plus the pino destination stream that feeds it. */
+export function createLogStore(db: Database): LogStore {
+  const insert = db.query("INSERT INTO logs (time, level, msg, data) VALUES (?, ?, ?, ?)");
+  const selectByLevel = db.query(
+    "SELECT time, level, msg, data FROM logs WHERE level >= ? ORDER BY id DESC LIMIT ?",
+  );
+  const deleteOld = db.query("DELETE FROM logs WHERE time < ?");
   let seq = 0;
 
-  function push(record: LogRecord): void {
-    items.push(record);
-    if (items.length > capacity) items.shift();
+  function record(line: string): void {
+    let parsed: LogRecord;
+    try {
+      parsed = JSON.parse(line) as LogRecord;
+    } catch {
+      return; // non-JSON line (shouldn't happen with pino); already forwarded to stdout
+    }
+    const time = typeof parsed.time === "number" ? parsed.time : Date.now();
+    const level = typeof parsed.level === "number" ? parsed.level : 30;
+    const msg = typeof parsed.msg === "string" ? parsed.msg : "";
+    const data: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (!COLUMN_KEYS.has(key)) data[key] = value;
+    }
+    insert.run(time, level, msg, JSON.stringify(data));
     seq += 1;
   }
 
   return {
-    push,
-    records: () => items,
+    prune(beforeMs) {
+      deleteOld.run(beforeMs);
+    },
+    query(level, limit = DEFAULT_QUERY_LIMIT) {
+      const rows = selectByLevel.all(THRESHOLDS[level], limit) as LogRow[];
+      return rows.map((row) => {
+        let extras: Record<string, unknown> = {};
+        try {
+          extras = JSON.parse(row.data) as Record<string, unknown>;
+        } catch {
+          // corrupt data column; fall back to the promoted columns alone
+        }
+        return { ...extras, level: row.level, msg: row.msg, time: row.time };
+      });
+    },
     get seq() {
       return seq;
     },
@@ -61,12 +92,7 @@ export function createLogBuffer(capacity = LOG_CAPACITY): LogBuffer {
         process.stdout.write(line);
         for (const part of line.split("\n")) {
           const trimmed = part.trim();
-          if (!trimmed) continue;
-          try {
-            push(JSON.parse(trimmed) as LogRecord);
-          } catch {
-            // Non-JSON line (shouldn't happen with pino); already forwarded to stdout.
-          }
+          if (trimmed) record(trimmed);
         }
       },
     },

@@ -16,7 +16,8 @@ import {
   renderSummary,
   sessionStatus,
 } from "./dashboard";
-import { createLogBuffer, filterLogs, parseLevel } from "./logs";
+import { openDatabase } from "./db";
+import { createLogStore, parseLevel } from "./logs";
 import { compactionNotice, isAllowed, jidForNumber, voiceText } from "./messages";
 import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
 import { createReminderWatcher, formatReminder } from "./reminders";
@@ -49,8 +50,12 @@ function asset(name: string, type: string): Response {
 
 export async function main(): Promise<void> {
   const config = loadConfig();
-  const logBuffer = createLogBuffer();
-  const logger = pino({ level: config.logLevel }, logBuffer.stream);
+  const db = openDatabase(config.dbPath);
+  const logStore = createLogStore(db);
+  const logger = pino({ level: config.logLevel }, logStore.stream);
+  const logRetentionMs = config.logRetentionDays * 24 * 60 * 60 * 1000;
+  logStore.prune(Date.now() - logRetentionMs);
+  setInterval(() => logStore.prune(Date.now() - logRetentionMs), 60 * 60 * 1000);
 
   if (config.allowFrom.length === 0) {
     logger.warn("APOLLO_ALLOW_FROM is empty; every inbound message will be ignored");
@@ -279,12 +284,10 @@ export async function main(): Promise<void> {
 
       if (pathname === "/logs") {
         const level = parseLevel(url.searchParams.get("level"));
-        const key = `${level}:${logBuffer.seq}`;
+        const key = `${level}:${logStore.seq}`;
         if (key === lastLogKey) return new Response(null, { status: 204 });
         lastLogKey = key;
-        return new Response(renderLogs(filterLogs(logBuffer.records(), level)), {
-          headers: htmlHeaders,
-        });
+        return new Response(renderLogs(logStore.query(level)), { headers: htmlHeaders });
       }
 
       if (pathname === "/link" && req.method === "POST") {
@@ -370,6 +373,21 @@ export async function main(): Promise<void> {
         }
         lastSummaryBody = await summaryBody(error);
         return new Response(lastSummaryBody, { headers: htmlHeaders });
+      }
+
+      // Localhost-only hook the apollo-db-backup unit curls when the nightly SQLite
+      // backup fails; the fixed notice goes to the primary allowlisted number.
+      if (pathname === "/internal/backup-alert" && req.method === "POST") {
+        const to = target ?? fallbackTarget;
+        if (to && whatsapp.getState().status === "connected") {
+          void whatsapp
+            .send(
+              to,
+              "⚠️ Apollo: nightly SQLite backup FAILED - check `journalctl -u apollo-db-backup` on the VM.",
+            )
+            .catch((error) => logger.error({ error }, "backup alert failed"));
+        }
+        return new Response(null, { status: 204 });
       }
 
       return new Response("Not found", { status: 404 });

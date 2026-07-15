@@ -9,7 +9,9 @@ export interface Config {
   agentDir: string;
   allowFrom: string[];
   compactionPromptFile: string;
+  dbPath: string;
   logLevel: string;
+  logRetentionDays: number;
   maxMessageChars: number;
   mistralApiKey: string;
   model: string;
@@ -36,7 +38,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     agentDir,
     allowFrom: (env.APOLLO_ALLOW_FROM ?? "").split(",").map(digits).filter(Boolean),
     compactionPromptFile: join(agentDir, "COMPACTION_PROMPT.md"),
+    dbPath: env.APOLLO_DB_PATH ?? join(home, "apollo.sqlite"),
     logLevel: env.APOLLO_LOG_LEVEL ?? "info",
+    logRetentionDays: Number(env.APOLLO_LOG_RETENTION_DAYS ?? 30),
     maxMessageChars: Number(env.APOLLO_MAX_MESSAGE_CHARS ?? 4000),
     mistralApiKey: env.MISTRAL_API_KEY ?? "",
     model: env.APOLLO_MODEL ?? "anthropic/claude-sonnet-5",
