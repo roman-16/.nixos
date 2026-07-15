@@ -25,7 +25,7 @@
 
       upstreamExtensionAttrs = {
         ".pi/agent/extensions/questionnaire.ts".source =
-          "${pi}/lib/node_modules/@earendil-works/pi-coding-agent/examples/extensions/questionnaire.ts";
+          "${pi}/libexec/pi/examples/extensions/questionnaire.ts";
       };
 
       # Skills: symlink individual files so directories are real (writable for npm install)

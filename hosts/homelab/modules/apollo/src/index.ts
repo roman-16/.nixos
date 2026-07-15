@@ -21,6 +21,7 @@ import { createLogStore, parseLevel } from "./logs";
 import { compactionNotice, isAllowed, jidForNumber, voiceText } from "./messages";
 import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
 import { createReminderWatcher, formatReminder } from "./reminders";
+import { createTokenStore, parseRange, renderTokens } from "./tokens";
 import { transcribeAudio } from "./transcribe";
 import { fetchUsage, type UsageData } from "./usage";
 import { startWhatsApp, type WhatsApp } from "./whatsapp";
@@ -52,6 +53,7 @@ export async function main(): Promise<void> {
   const config = loadConfig();
   const db = openDatabase(config.dbPath);
   const logStore = createLogStore(db);
+  const tokenStore = createTokenStore(db);
   const logger = pino({ level: config.logLevel }, logStore.stream);
   const logRetentionMs = config.logRetentionDays * 24 * 60 * 60 * 1000;
   logStore.prune(Date.now() - logRetentionMs);
@@ -150,6 +152,13 @@ export async function main(): Promise<void> {
 
   session.subscribe((event) => {
     if (event.type === "agent_settled") stopTyping();
+    if (event.type === "turn_end" && event.message.role === "assistant") {
+      try {
+        tokenStore.record(event.message.usage, event.message.model, event.message.timestamp);
+      } catch (error) {
+        logger.error({ error }, "token usage record failed");
+      }
+    }
     if (event.type === "compaction_end" && event.result && !event.aborted) {
       const to = target ?? fallbackTarget;
       if (wa && to) {
@@ -288,6 +297,13 @@ export async function main(): Promise<void> {
         if (key === lastLogKey) return new Response(null, { status: 204 });
         lastLogKey = key;
         return new Response(renderLogs(logStore.query(level)), { headers: htmlHeaders });
+      }
+
+      // Sliding windows (e.g. 7d) change as rows age out even without a new insert,
+      // so this indexed SUM is recomputed each poll rather than 204-cached.
+      if (pathname === "/tokens") {
+        const totals = tokenStore.totals(parseRange(url.searchParams.get("range")));
+        return new Response(renderTokens(totals), { headers: htmlHeaders });
       }
 
       if (pathname === "/link" && req.method === "POST") {

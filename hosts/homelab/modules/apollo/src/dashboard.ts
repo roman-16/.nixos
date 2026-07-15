@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 
 import { escapeHtml, humanTokens, truncate } from "./format";
 import type { LogRecord } from "./logs";
+import { RANGE_LABELS } from "./tokens";
 import { renderUsage, type UsageData } from "./usage";
 import type { WhatsAppState } from "./whatsapp";
 
@@ -26,9 +27,9 @@ function statusRow(dotClass: string, label: string): string {
   </div>`;
 }
 
-function filterChip(value: string, label: string, checked = false): string {
+function filterChip(name: string, value: string, label: string, checked = false): string {
   return `<label class="cursor-pointer rounded-full px-3 py-1 text-neutral-500 transition hover:text-neutral-300 has-[:checked]:bg-indigo-500/20 has-[:checked]:text-indigo-200">
-    <input type="radio" name="level" value="${value}"${checked ? " checked" : ""} class="sr-only" />${label}
+    <input type="radio" name="${name}" value="${value}"${checked ? " checked" : ""} class="sr-only" />${label}
   </label>`;
 }
 
@@ -60,6 +61,16 @@ export function renderPage(version: string): string {
         <div class="${SURFACE} mt-8 px-5 py-4 text-sm text-neutral-500">Loading…</div>
       </div>
       ${headingRow(
+        "tokens",
+        `<form id="tokens-range" class="ml-auto flex gap-0.5 rounded-full border border-white/10 bg-neutral-950/60 p-[3px] text-xs">
+          ${RANGE_LABELS.map(([value, label]) => filterChip("range", value, label, value === "all")).join("\n          ")}
+        </form>`,
+      )}
+      <div id="tokens" class="${SURFACE} p-5"
+        hx-get="/tokens" hx-include="#tokens-range" hx-trigger="load, change from:#tokens-range, every 15s" hx-swap="innerHTML">
+        <p class="text-sm text-neutral-500">Loading…</p>
+      </div>
+      ${headingRow(
         "conversation",
         `<span id="session-status" class="text-xs"></span>
         <div class="ml-auto flex items-center gap-2">
@@ -86,10 +97,10 @@ export function renderPage(version: string): string {
       ${headingRow(
         "logs",
         `<form id="logs-filter" class="ml-auto flex gap-0.5 rounded-full border border-white/10 bg-neutral-950/60 p-[3px] text-xs">
-          ${filterChip("all", "All", true)}
-          ${filterChip("info", "Info+")}
-          ${filterChip("warn", "Warn+")}
-          ${filterChip("error", "Error")}
+          ${filterChip("level", "all", "All", true)}
+          ${filterChip("level", "info", "Info+")}
+          ${filterChip("level", "warn", "Warn+")}
+          ${filterChip("level", "error", "Error")}
         </form>`,
       )}
       <div id="log-list" class="${SURFACE} max-h-[32rem] overflow-y-auto overscroll-contain"

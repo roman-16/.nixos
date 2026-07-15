@@ -20,6 +20,18 @@ const MIGRATIONS: string[][] = [
      )`,
     `CREATE INDEX logs_level_id ON logs (level, id)`,
   ],
+  [
+    `CREATE TABLE tokens (
+       id          INTEGER PRIMARY KEY AUTOINCREMENT,
+       time        INTEGER NOT NULL,
+       model       TEXT    NOT NULL DEFAULT '',
+       input       INTEGER NOT NULL DEFAULT 0,
+       output      INTEGER NOT NULL DEFAULT 0,
+       cache_read  INTEGER NOT NULL DEFAULT 0,
+       cache_write INTEGER NOT NULL DEFAULT 0
+     )`,
+    `CREATE INDEX tokens_time ON tokens (time)`,
+  ],
 ];
 
 /** Apply every migration newer than the DB's user_version, each in its own transaction. */
