@@ -22,8 +22,10 @@ let
       gnused
       jq
       openssh
+      poppler-utils
       python3
       ripgrep
+      tesseract
     ])
     ++ [ inputs.proton-cli.packages.${system}.default ];
   gitPkgs = with pkgs; [
