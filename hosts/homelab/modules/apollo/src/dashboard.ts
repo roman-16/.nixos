@@ -61,16 +61,6 @@ export function renderPage(version: string): string {
         <div class="${SURFACE} mt-8 px-5 py-4 text-sm text-neutral-500">Loading…</div>
       </div>
       ${headingRow(
-        "tokens",
-        `<form id="tokens-range" class="ml-auto flex gap-0.5 rounded-full border border-white/10 bg-neutral-950/60 p-[3px] text-xs">
-          ${RANGE_LABELS.map(([value, label]) => filterChip("range", value, label, value === "all")).join("\n          ")}
-        </form>`,
-      )}
-      <div id="tokens" class="${SURFACE} p-5"
-        hx-get="/tokens" hx-include="#tokens-range" hx-trigger="load, change from:#tokens-range, every 15s" hx-swap="innerHTML">
-        <p class="text-sm text-neutral-500">Loading…</p>
-      </div>
-      ${headingRow(
         "conversation",
         `<span id="session-status" class="text-xs"></span>
         <div class="ml-auto flex items-center gap-2">
@@ -93,6 +83,16 @@ export function renderPage(version: string): string {
           </div>
           <div id="stop" hx-get="/stop-button" hx-trigger="load, every 2s" hx-swap="innerHTML"></div>
         </footer>
+      </div>
+      ${headingRow(
+        "tokens",
+        `<form id="tokens-range" class="ml-auto flex gap-0.5 rounded-full border border-white/10 bg-neutral-950/60 p-[3px] text-xs">
+          ${RANGE_LABELS.map(([value, label]) => filterChip("range", value, label, value === "all")).join("\n          ")}
+        </form>`,
+      )}
+      <div id="tokens" class="${SURFACE} p-5"
+        hx-get="/tokens" hx-include="#tokens-range" hx-trigger="load, change from:#tokens-range, every 15s" hx-swap="innerHTML">
+        <p class="text-sm text-neutral-500">Loading…</p>
       </div>
       ${headingRow(
         "logs",
