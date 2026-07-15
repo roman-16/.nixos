@@ -20,7 +20,7 @@ Tracks daily nutrition as JSON under `macros/` in the working directory. Every r
 
 ## Replying
 
-Whenever a command prints a day summary or list (`log`, `food-eat`, `show`, `entries`, `edit`, `prep-eat`, `prep-list`, `prep-get`, `food-list`, `goal`), your reply **is** that output, sent back verbatim: the exact lines the script printed, in full and unchanged. Do not summarize it, rephrase it, reformat it, turn it into prose, trim it, or wrap it in your own commentary - the user wants to read the list itself.
+Whenever a command prints a day summary or list (`log`, `food-eat`, `show`, `summary`, `entries`, `edit`, `prep-eat`, `prep-list`, `prep-get`, `food-list`, `goal`), your reply **is** that output, sent back verbatim: the exact lines the script printed, in full and unchanged. Do not summarize it, rephrase it, reformat it, turn it into prose, trim it, or wrap it in your own commentary - the user wants to read the list itself.
 
 A `--dry-run` preview (see [Previewing](#previewing)) is relayed the same way, verbatim - but because it answers a "what if", you may add one short line after it, e.g. "Want me to log it?".
 
@@ -50,6 +50,18 @@ A `--dry-run` preview (see [Previewing](#previewing)) is relayed the same way, v
 {baseDir}/scripts/macros.py show                     # today
 {baseDir}/scripts/macros.py show --date 2026-07-12
 ```
+
+## Averages over a range
+
+For any "average", "last N days", or "this week/month" question, use this - **one call**, never loop `show` and never sum or average days yourself. It averages over the completed logged days in the range; today, still in progress, is shown on its own line and never drags the average down. Unlogged days are skipped, not counted as zero.
+
+```bash
+{baseDir}/scripts/macros.py summary                                  # last 7 days
+{baseDir}/scripts/macros.py summary --days 30                        # last 30 days
+{baseDir}/scripts/macros.py summary --from 2026-06-01 --to 2026-06-30
+```
+
+`--days N` counts back from today (`--days 7` is today plus the 6 days before it); `--from`/`--to` give an explicit range (`--to` defaults to today, and the two selectors are mutually exclusive). The output is a ready-to-send summary - relay it verbatim (see [Replying](#replying)).
 
 ## Saved foods (per 100g + default serving)
 

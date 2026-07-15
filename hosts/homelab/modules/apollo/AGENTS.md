@@ -16,5 +16,6 @@ The dashboard must stay responsive - everything has to work on both mobile and d
 ## Tests
 
 - Tests live under `tests/`, mirroring the `src/` tree: `src/foo/bar.ts` is tested by `tests/foo/bar.test.ts`.
+- Skill scripts (Python) are tested under `tests/skills/<skill>/` (e.g. `agent/skills/macros/scripts/macros.py` -> `tests/skills/macros/test_macros.py`), run with `pytest tests/skills/`; each skill dir keeps its own `conftest.py` that puts its script on the path.
 - A test file only tests things defined in its corresponding source file. It does not import or assert behaviour from other modules.
 - Not every file needs tests. Cover pure, self-contained logic; skip files that are only side effects or thin I/O wrappers (e.g. `index.ts`, `whatsapp.ts`).

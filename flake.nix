@@ -100,23 +100,25 @@
 
     checks.x86_64-linux =
       let
-        apolloMacros = ./hosts/homelab/modules/apollo/agent/skills/macros;
+        apollo = ./hosts/homelab/modules/apollo;
         pkgs = inputs.nixpkgs.legacyPackages.x86_64-linux;
         traderBot = ./hosts/homelab/modules/trader/bot;
       in
       {
-        # Unit tests for the Apollo macros skill (pytest). macros.py is
-        # stdlib-only, so the test closure is just python3 + pytest.
+        # Unit tests for the Apollo skills (pytest). The skill scripts are
+        # stdlib-only, so the test closure is just python3 + pytest; the tests
+        # live under tests/skills and import each skill's script via its conftest,
+        # so the whole module is copied to preserve that relative layout.
         apollo-pytest =
           pkgs.runCommand "apollo-pytest"
             {
               nativeBuildInputs = [ (pkgs.python3.withPackages (ps: [ ps.pytest ])) ];
             }
             ''
-              cp -r ${apolloMacros} macros
-              chmod -R u+w macros
-              cd macros
-              python -m pytest
+              cp -r ${apollo} app
+              chmod -R u+w app
+              cd app
+              python -m pytest tests/skills
               touch $out
             '';
 

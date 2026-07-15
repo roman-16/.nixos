@@ -1,4 +1,5 @@
 import argparse
+from datetime import datetime, timedelta
 
 import macros
 import pytest
@@ -49,6 +50,10 @@ def add_bolognese():
 def day_entries():
     path = macros.day_path(macros.today())
     return macros.load(path, {}).get("entries", []) if path.exists() else []
+
+
+def days_ago(n: int) -> str:
+    return (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")
 
 
 class TestNumify:
@@ -420,3 +425,52 @@ class TestValidation:
         capsys.readouterr()
         run("log", "--item", "Black coffee", "--kcal", "0")
         assert "0 kcal" in capsys.readouterr().out
+
+
+class TestSummary:
+    def test_averages_completed_days_and_shows_today_apart(self, store, capsys):
+        set_goal()
+        run("log", "--item", "A", "--kcal", "2000", "--protein", "150", "--date", days_ago(2))
+        run("log", "--item", "B", "--kcal", "3000", "--protein", "100", "--date", days_ago(1))
+        run("log", "--item", "C", "--kcal", "479", "--protein", "30")
+        capsys.readouterr()
+        run("summary", "--days", "3")
+        out = capsys.readouterr().out
+        assert "Avg/day over 2 days: 2500 kcal | 125g protein" in out
+        assert "Today so far" in out
+        assert "479 kcal" in out
+
+    def test_spread_and_protein_goal_hits(self, store, capsys):
+        set_goal()
+        run("log", "--item", "A", "--kcal", "2000", "--protein", "150", "--date", days_ago(2))
+        run("log", "--item", "B", "--kcal", "3000", "--protein", "100", "--date", days_ago(1))
+        capsys.readouterr()
+        run("summary", "--days", "3")
+        out = capsys.readouterr().out
+        assert "Range 2000-3000 kcal/day" in out
+        assert "protein goal hit 1/2 days" in out
+
+    def test_nothing_logged(self, store, capsys):
+        set_goal()
+        capsys.readouterr()
+        run("summary", "--days", "7")
+        assert "nothing logged" in capsys.readouterr().out
+
+    def test_only_today_logged_has_no_average(self, store, capsys):
+        set_goal()
+        run("log", "--item", "A", "--kcal", "479", "--protein", "30")
+        capsys.readouterr()
+        run("summary", "--days", "1")
+        out = capsys.readouterr().out
+        assert "No complete days logged" in out
+        assert "Today so far" in out
+
+    def test_explicit_from_to_range(self, store, capsys):
+        set_goal()
+        run("log", "--item", "A", "--kcal", "2000", "--protein", "150", "--date", "2026-06-10")
+        run("log", "--item", "B", "--kcal", "2400", "--protein", "150", "--date", "2026-06-11")
+        capsys.readouterr()
+        run("summary", "--from", "2026-06-01", "--to", "2026-06-30")
+        out = capsys.readouterr().out
+        assert "01.06-30.06" in out
+        assert "Avg/day over 2 days: 2200 kcal" in out

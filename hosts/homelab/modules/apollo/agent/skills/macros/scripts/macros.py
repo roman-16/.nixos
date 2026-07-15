@@ -15,7 +15,7 @@ import json
 import os
 import sys
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import NamedTuple
 
@@ -40,6 +40,13 @@ def today() -> str:
 
 def now_time() -> str:
     return datetime.now().strftime("%H:%M")
+
+
+def parse_date(value: str):
+    try:
+        return datetime.strptime(value.strip(), "%Y-%m-%d").date()
+    except ValueError:
+        die(f'invalid date "{value}" (use YYYY-MM-DD)')
 
 
 def numify(value) -> float | int:
@@ -227,6 +234,19 @@ def compute_day(date: str, extra_entries=()) -> dict | None:
     return _apply_ledger(day)
 
 
+def day_macros(date: str) -> dict | None:
+    """A logged day's summed macros plus its protein goal, or None when the day
+    has no entries (so unlogged days never count toward an average)."""
+    path = day_path(date)
+    if not path.exists():
+        return None
+    day = load(path, {})
+    entries = day.get("entries", [])
+    if not entries:
+        return None
+    return {"macros": {k: sum(e[k] for e in entries) for k in MACROS}, "proteinGoal": day.get("proteinGoal")}
+
+
 def ensure_day(date: str):
     if day_path(date).exists():
         return
@@ -403,6 +423,72 @@ def cmd_log(args):
 
 def cmd_show(args):
     render_day(args.date or today())
+
+
+def cmd_summary(args):
+    end = parse_date(args.to) if args.to else datetime.now().date()
+    if args.from_:
+        start = parse_date(args.from_)
+        label_days = None
+    elif args.days is not None:
+        if args.days < 1:
+            die("--days must be >= 1")
+        start = end - timedelta(days=args.days - 1)
+        label_days = args.days
+    else:
+        start = end - timedelta(days=6)
+        label_days = 7
+    if start > end:
+        die("range start is after end")
+
+    today_str = today()
+    completed = []
+    partial = None
+    day = start
+    while day <= end:
+        ds = day.strftime("%Y-%m-%d")
+        rec = day_macros(ds)
+        if rec is not None:
+            if ds == today_str:
+                partial = rec["macros"]
+            else:
+                completed.append(rec)
+        day += timedelta(days=1)
+
+    span = f"{dm(start.strftime('%Y-%m-%d'))}-{dm(end.strftime('%Y-%m-%d'))}"
+    header = f"Last {label_days} day{'s' if label_days != 1 else ''} ({span})" if label_days is not None else span
+
+    if not completed and partial is None:
+        print(f"{header}: nothing logged.")
+        return
+
+    lines = [header]
+    if completed:
+        n = len(completed)
+        avg = {k: sum(r["macros"][k] for r in completed) / n for k in MACROS}
+        lines.append(
+            f"Avg/day over {n} day{'s' if n != 1 else ''}: {round(avg['kcal'])} kcal | "
+            f"{round(avg['protein'])}g protein, {round(avg['fat'])}g fat, {round(avg['carbs'])}g carbs"
+        )
+        extras = []
+        if n >= 2:
+            kcals = [r["macros"]["kcal"] for r in completed]
+            extras.append(f"range {round(min(kcals))}-{round(max(kcals))} kcal/day")
+        goaled = [r for r in completed if r["proteinGoal"]]
+        if goaled:
+            hits = sum(1 for r in goaled if r["macros"]["protein"] >= r["proteinGoal"])
+            extras.append(f"protein goal hit {hits}/{len(goaled)} days")
+        if extras:
+            joined = "; ".join(extras)
+            lines.append(joined[0].upper() + joined[1:])
+    else:
+        lines.append("No complete days logged in this range yet.")
+    if partial is not None:
+        lines.append(
+            f"Today so far ({dm(today_str)}): {round(partial['kcal'])} kcal | "
+            f"{round(partial['protein'])}g protein, {round(partial['fat'])}g fat, {round(partial['carbs'])}g carbs"
+        )
+    print("\n".join(lines))
 
 
 def cmd_weight(args):
@@ -945,6 +1031,13 @@ def build_parser() -> argparse.ArgumentParser:
     sh = sub.add_parser("show")
     sh.set_defaults(func=cmd_show)
     sh.add_argument("--date")
+
+    sm = sub.add_parser("summary")
+    sm.set_defaults(func=cmd_summary)
+    grp = sm.add_mutually_exclusive_group()
+    grp.add_argument("--days", type=int)
+    grp.add_argument("--from", dest="from_")
+    sm.add_argument("--to")
 
     w = sub.add_parser("weight")
     w.set_defaults(func=cmd_weight)
