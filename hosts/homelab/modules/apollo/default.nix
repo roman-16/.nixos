@@ -171,7 +171,7 @@ in
             src=/var/lib/apollo/apollo.sqlite
             remote_parent="/backups"
             remote="/backups/apollo"
-            keep=14
+            keep=8
 
             ts="$(date --utc +%Y-%m-%dT%H-%M-%SZ)"
             work="$(mktemp --directory "$HOME/backup.XXXXXX")"
