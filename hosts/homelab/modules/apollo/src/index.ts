@@ -169,7 +169,7 @@ export async function main(): Promise<void> {
         return;
       }
       target = message.from;
-      void wa?.read(message.key); // blue checkmarks so Roman knows it arrived
+      void wa?.read(message.key); // blue checkmarks so the user knows it arrived
       startTyping();
 
       let text = message.text;

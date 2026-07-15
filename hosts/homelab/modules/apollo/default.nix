@@ -11,19 +11,21 @@ let
   # agentPkgs: everything the agent shells out to. gitPkgs: what the git backup
   # and bootstrap scripts need. (Guest units reference these host-eval lists,
   # as they already do for apolloApp.)
-  agentPkgs = with pkgs; [
-    bash
-    coreutils
-    curl
-    ffmpeg-headless
-    git
-    gnugrep
-    gnused
-    jq
-    openssh
-    python3
-    ripgrep
-  ];
+  agentPkgs =
+    (with pkgs; [
+      bash
+      coreutils
+      curl
+      ffmpeg-headless
+      git
+      gnugrep
+      gnused
+      jq
+      openssh
+      python3
+      ripgrep
+    ])
+    ++ [ inputs.proton-cli.packages.${system}.default ];
   gitPkgs = with pkgs; [
     bash
     coreutils
@@ -86,6 +88,7 @@ in
           ln -sfn ${../../../../shared/modules/pi/skills/exa} "$agentDir/skills/exa"
           ln -sfn ${./agent/skills/backup} "$agentDir/skills/backup"
           ln -sfn ${./agent/skills/macros} "$agentDir/skills/macros"
+          ln -sfn ${./agent/skills/proton} "$agentDir/skills/proton"
           ln -sfn ${./agent/skills/reminders} "$agentDir/skills/reminders"
 
           # Extensions pi discovers from $agentDir/extensions. directory-agents-md
@@ -127,7 +130,7 @@ in
 
           # Obsidian vault: a separate repo, cloned here so it always exists and kept
           # out of the workspace backup (above). Configured with the deploy key and
-          # Roman's identity so the agent syncs it with plain `git -C .../obsidian ...`
+          # the user's identity so the agent syncs it with plain `git -C .../obsidian ...`
           # commands (documented in the vault's own AGENTS.md). Best-effort: a clone
           # failure (e.g. no network at boot) must not block startup.
           obsidianSsh="ssh -i $HOME/.ssh/id_obsidian -o IdentitiesOnly=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes"
@@ -141,11 +144,10 @@ in
           fi
         '';
 
-        # Proton Drive credentials for the SQLite backup job only, consumed as the
-        # unit EnvironmentFile so the app service never sees them (same world-readable
-        # /nix/store trade-off as the git deploy keys above). Empty until secrets.json
-        # gains a `proton` block.
-        protonEnv = pkgs.writeText "apollo-backup-proton-env" ''
+        # Proton credentials, consumed as the unit EnvironmentFile by both the app
+        # (so the agent's proton-cli is authenticated) and the SQLite backup job (same
+        # world-readable /nix/store trade-off as the git deploy keys above).
+        protonEnv = pkgs.writeText "apollo-proton-env" ''
           PROTON_USER=${secrets.proton.user or ""}
           PROTON_PASSWORD=${secrets.proton.password or ""}
         '';
@@ -210,7 +212,7 @@ in
           '';
         };
 
-        # signal-cli has no place here, so a failed backup pings Roman over the same
+        # signal-cli has no place here, so a failed backup pings the user over the same
         # WhatsApp channel the app already owns: curl the app's localhost-only alert
         # hook (src/index.ts), wired as the backup unit's OnFailure below.
         dbBackupAlertScript = pkgs.writeShellApplication {
@@ -335,6 +337,7 @@ in
 
               serviceConfig = {
                 DynamicUser = true;
+                EnvironmentFile = protonEnv;
                 ExecStart = "${apolloApp}/bin/apollo";
                 ExecStartPre = [
                   setup
