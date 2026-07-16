@@ -33,6 +33,10 @@ Pass an explicit `--session <name>` (or set `BROWSE_SESSION`) for every real tas
 
 `browse` keeps a background session/daemon (and browser) alive between commands. When the task is finished - or if it fails or you abandon it - stop it with the CLI's own shutdown command so nothing keeps running. Discover the exact command and flags via `skills show` or `--help` (currently `{baseDir}/scripts/browse.sh stop`), and stop every session you started. Treat it as mandatory: never end a turn with a session left open.
 
+## Write artifacts to /tmp/
+
+Direct every artifact the CLI produces - screenshots, downloads, DOM/markdown dumps, network logs, and any other output file - to a path under `/tmp/`. Never write artifacts into the working directory or the repository.
+
 ## Troubleshooting
 
 Diagnose browser and session setup with `{baseDir}/scripts/browse.sh doctor` (add `--json` for structured output).
