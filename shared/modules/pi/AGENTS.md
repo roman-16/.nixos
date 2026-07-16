@@ -1,4 +1,4 @@
-# User Guidelines
+# Guidelines
 
 ## Context
 

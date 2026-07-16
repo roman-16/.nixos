@@ -5,7 +5,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 /** Hard ceiling, in seconds, on how long a single tool call may run. */
-export const TOOL_TIMEOUT_SECONDS = 60;
+export const TOOL_TIMEOUT_SECONDS = 180;
 
 /** Clamp a bash timeout to the hard cap, defaulting an unset one to the cap. */
 export function cappedTimeout(requested: number | undefined): number {
