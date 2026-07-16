@@ -25,6 +25,10 @@ This skill deliberately does not document individual commands or flags - the CLI
 
 Run `skills show` before real work, and consult `--help` for exact flags rather than assuming them.
 
+## Always name your sessions
+
+Pass an explicit `--session <name>` (or set `BROWSE_SESSION`) for every real task; never rely on the implicit `default` session. Commands without a session all share `default` and clobber each other's active page. `status`, `doctor` and `stop` also default to `default`, so a bare `browse status` can report "uninitialized" while your named sessions are alive. One name per independent task keeps tabs, cookies, refs and daemon state isolated, and lets you stop each task cleanly.
+
 ## Always shut down when done
 
 `browse` keeps a background session/daemon (and browser) alive between commands. When the task is finished - or if it fails or you abandon it - stop it with the CLI's own shutdown command so nothing keeps running. Discover the exact command and flags via `skills show` or `--help` (currently `{baseDir}/scripts/browse.sh stop`), and stop every session you started. Treat it as mandatory: never end a turn with a session left open.
