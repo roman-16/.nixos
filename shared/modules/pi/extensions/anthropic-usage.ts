@@ -109,11 +109,8 @@ export default function usage(pi: ExtensionAPI) {
 	let cachedData: UsageData | null = null;
 
 	async function refreshStatus(ctx: { modelRegistry: any; ui: any }) {
-		const credential = ctx.modelRegistry.authStorage.get("anthropic");
-		if (!credential || credential.type !== "oauth") return;
-
 		const token = await ctx.modelRegistry.getApiKeyForProvider("anthropic");
-		if (!token) return;
+		if (!token || !token.includes("sk-ant-oat")) return;
 
 		cachedData = await fetchUsage(token);
 		if (cachedData) {
@@ -143,15 +140,9 @@ export default function usage(pi: ExtensionAPI) {
 				return;
 			}
 
-			const credential = ctx.modelRegistry.authStorage.get("anthropic");
-			if (!credential || credential.type !== "oauth") {
-				ctx.ui.notify("Requires OAuth login (subscription plan)", "warning");
-				return;
-			}
-
 			const token = await ctx.modelRegistry.getApiKeyForProvider("anthropic");
-			if (!token) {
-				ctx.ui.notify("Failed to get OAuth token", "error");
+			if (!token || !token.includes("sk-ant-oat")) {
+				ctx.ui.notify("Requires OAuth login (subscription plan)", "warning");
 				return;
 			}
 
