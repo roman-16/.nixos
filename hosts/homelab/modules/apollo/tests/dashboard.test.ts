@@ -41,11 +41,12 @@ describe("renderPage", () => {
     expect(html).toContain(`id="lightbox"`);
   });
 
-  it("sticks the chat to the bottom only when already near it", () => {
+  it("anchors the chat to the bottom with a column-reverse container and no scroll JS", () => {
     const html = renderPage("v");
-    expect(html).toContain("hx-on::before-swap");
-    expect(html).toContain("hx-on::after-settle");
-    expect(html).toContain("dataset.stick");
+    expect(html).toContain("flex-col-reverse");
+    expect(html).not.toContain("hx-on::before-swap");
+    expect(html).not.toContain("hx-on::after-settle");
+    expect(html).not.toContain("dataset.stick");
   });
 });
 

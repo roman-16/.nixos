@@ -314,4 +314,15 @@ describe("renderChat", () => {
   it("adds no day divider for untimed items", () => {
     expect(renderChat([{ kind: "assistant", text: "x" }])).not.toContain("Today");
   });
+
+  it("emits newest-first so the column-reverse container shows the latest at the bottom", () => {
+    const html = renderChat(
+      [
+        { images: [], kind: "user", text: "older", time: "2026-07-14T09:00:00.000Z" },
+        { kind: "assistant", text: "newer", time: "2026-07-14T10:00:00.000Z" },
+      ],
+      new Date("2026-07-14T12:00:00.000Z"),
+    );
+    expect(html.indexOf("newer")).toBeLessThan(html.indexOf("older"));
+  });
 });

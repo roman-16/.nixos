@@ -71,10 +71,8 @@ export function renderPage(version: string): string {
         </div>`,
       )}
       <div class="${SURFACE} flex flex-col overflow-hidden">
-        <div id="chat" class="h-[70dvh] space-y-3 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:h-[75dvh]"
-          hx-get="/chat" hx-trigger="load, every 2s" hx-swap="innerHTML"
-          hx-on::before-swap="this.dataset.stick = this.scrollHeight - this.scrollTop - this.clientHeight < 160 ? '1' : ''"
-          hx-on::after-settle="if (this.dataset.stick) this.scrollTop = this.scrollHeight">
+        <div id="chat" class="flex h-[70dvh] flex-col-reverse gap-3 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:h-[75dvh]"
+          hx-get="/chat" hx-trigger="load, every 2s" hx-swap="innerHTML">
           <p class="text-sm text-neutral-500">Loading…</p>
         </div>
         <footer class="flex items-center gap-3 border-t border-white/5 px-4 py-3 sm:px-5">

@@ -138,7 +138,7 @@ A batch is built up ingredient by ingredient, and everything that leaves it is a
 
 ### Size (grams / ml / pieces)
 
-A batch optionally carries a total **size** so portions read in real units, not just "% of batch". Set it at creation with `prep-add --size`, or any time after - best measured *after* cooking/draining, when the real weight is finally known:
+A batch optionally carries a total **size** so portions read in real units, not just "% of batch". Set it at creation with `prep-add --size`, or any time after - best measured _after_ cooking/draining, when the real weight is finally known:
 
 ```bash
 {baseDir}/scripts/macros.py prep-size --name "ice cream" --size 950            # 950g total (measured after freezing)

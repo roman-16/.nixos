@@ -334,7 +334,7 @@ function renderItem(item: LogItem, running = false): string {
 /** Render the chat-log fragment (the inner rows for the polling #chat container), inserting a day divider whenever the calendar day of timed items changes. */
 export function renderChat(items: LogItem[], now: Date = new Date(), live = false): string {
   if (items.length === 0) {
-    return `<p class="grid h-full place-items-center text-sm text-neutral-600">No messages yet.</p>`;
+    return `<p class="m-auto text-sm text-neutral-600">No messages yet.</p>`;
   }
   // Only the most recent tool call can still be running, and only while a run is
   // active; every earlier resultless call was orphaned when its run ended.
@@ -353,5 +353,7 @@ export function renderChat(items: LogItem[], now: Date = new Date(), live = fals
     }
     parts.push(renderItem(item, index === runningIndex));
   }
-  return parts.join("");
+  // Emit newest-first; the #chat container is flex-col-reverse, which flips this back to
+  // chronological order visually and keeps the view anchored to the bottom.
+  return parts.reverse().join("");
 }
