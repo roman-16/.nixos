@@ -1,7 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  claudeErrorNotice,
   compactionNotice,
+  formatLogNotice,
   isAllowed,
   jidForNumber,
   numberFromJid,
@@ -88,5 +90,39 @@ describe("compactionNotice", () => {
     const expected = "🗜️ Context compacted. Full summary on the dashboard.";
     expect(compactionNotice()).toBe(expected);
     expect(compactionNotice(0)).toBe(expected);
+  });
+});
+
+describe("claudeErrorNotice", () => {
+  it("includes the detail and the retry hint", () => {
+    const notice = claudeErrorNotice("Overloaded");
+    expect(notice).toContain("Overloaded");
+    expect(notice).toContain("try again");
+  });
+
+  it("omits the detail clause when empty", () => {
+    expect(claudeErrorNotice("   ")).toBe(
+      "⚠️ I couldn't reach Claude just now. Your message didn't go through - try again in a bit.",
+    );
+  });
+
+  it("truncates a very long detail", () => {
+    expect(claudeErrorNotice("x".repeat(500))).toContain("more chars");
+  });
+});
+
+describe("formatLogNotice", () => {
+  it("formats the level label and message", () => {
+    expect(formatLogNotice({ level: 50, msg: "send failed" })).toBe("⚠️ ERROR: send failed");
+    expect(formatLogNotice({ level: 40, msg: "heads up" })).toBe("⚠️ WARN: heads up");
+  });
+
+  it("appends a concise detail from err/error/detail", () => {
+    expect(formatLogNotice({ detail: "the reason", level: 50, msg: "boom" })).toContain(
+      "the reason",
+    );
+    expect(formatLogNotice({ err: { message: "nested" }, level: 50, msg: "boom" })).toContain(
+      "nested",
+    );
   });
 });

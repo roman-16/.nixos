@@ -15,6 +15,7 @@
 - **magick**: ImageMagick CLI available on the system. Use for image conversion, resizing, cropping, format changes, compositing, and other image manipulation.
 - **proton-cli**: Available on the system. Unofficial CLI for Proton services (Mail, Drive, Calendar, Pass, Contacts). Handles SRP auth and E2E encryption. Use for reading/sending mail, browsing Drive, managing Calendar/Contacts, and accessing Pass entries. Supports `--output json/yaml` for scripting.
 - **python3**: Available on the system. Use for scripting, data processing, and quick computations.
+- **nodejs**: Available on the system, along with `npm`. Use for running JavaScript/TypeScript and managing Node packages.
 - **jq**: Available on the system. Use for JSON parsing, filtering, and transformation.
 - **zellij**: Available on the system. Every terminal runs inside a zellij session. Use `zellij` CLI to list, attach, or interact with other terminal sessions/panes.
 - **CLI flags**: ALWAYS use full-length flag names (`--force`, `--recursive`, `--verbose`) instead of short flags (`-f`, `-r`, `-v`) for readability.

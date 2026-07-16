@@ -1,7 +1,13 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
 
-import { createLogStore, parseLevel } from "../src/logs";
+import {
+  createLogStore,
+  createThrottle,
+  type LogRecord,
+  parseLevel,
+  shouldNotify,
+} from "../src/logs";
 
 /** A fresh in-memory DB with just the `logs` table the store expects. */
 function freshDb(): Database {
@@ -94,5 +100,60 @@ describe("createLogStore", () => {
     store.stream.write(line({ level: 30, msg: "new", time: 200 }));
     store.prune(150);
     expect(store.query("all").map((record) => record.msg)).toEqual(["new"]);
+  });
+
+  it("invokes onRecord for each written record", () => {
+    const store = createLogStore(freshDb());
+    const seen: LogRecord[] = [];
+    store.onRecord = (record) => seen.push(record);
+    store.stream.write(line({ level: 40, msg: "hi", notifyText: "pushed", time: 1 }));
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ level: 40, msg: "hi", notifyText: "pushed" });
+  });
+
+  it("keeps logging when onRecord throws", () => {
+    const store = createLogStore(freshDb());
+    store.onRecord = () => {
+      throw new Error("boom");
+    };
+    expect(() => store.stream.write(line({ level: 40, msg: "hi", time: 1 }))).not.toThrow();
+    expect(store.query("all")).toHaveLength(1);
+  });
+});
+
+describe("shouldNotify", () => {
+  it("forwards warn and above at the warn threshold", () => {
+    expect(shouldNotify({ level: 40 }, "warn")).toBe(true);
+    expect(shouldNotify({ level: 50 }, "warn")).toBe(true);
+    expect(shouldNotify({ level: 30 }, "warn")).toBe(false);
+  });
+
+  it("respects a higher threshold", () => {
+    expect(shouldNotify({ level: 40 }, "error")).toBe(false);
+    expect(shouldNotify({ level: 50 }, "error")).toBe(true);
+  });
+
+  it("ignores records without a numeric level", () => {
+    expect(shouldNotify({}, "warn")).toBe(false);
+  });
+});
+
+describe("createThrottle", () => {
+  it("allows the first, blocks a repeat within the window, allows after it", () => {
+    let clock = 0;
+    const throttle = createThrottle(1000, () => clock);
+    expect(throttle("a")).toBe(true);
+    expect(throttle("a")).toBe(false);
+    clock = 999;
+    expect(throttle("a")).toBe(false);
+    clock = 1000;
+    expect(throttle("a")).toBe(true);
+  });
+
+  it("tracks keys independently", () => {
+    const throttle = createThrottle(1000, () => 0);
+    expect(throttle("a")).toBe(true);
+    expect(throttle("b")).toBe(true);
+    expect(throttle("a")).toBe(false);
   });
 });

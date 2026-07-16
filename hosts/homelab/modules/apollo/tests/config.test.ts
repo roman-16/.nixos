@@ -19,6 +19,8 @@ describe("loadConfig", () => {
     expect(config.remindersDir).toBe("/tmp/apollo/workspace/reminders");
     expect(config.dbPath).toBe("/tmp/apollo/apollo.sqlite");
     expect(config.logRetentionDays).toBe(30);
+    expect(config.notifyLevel).toBe("warn");
+    expect(config.notifyThrottleMs).toBe(60000);
     expect(config.systemPromptFile.endsWith("SYSTEM_PROMPT.md")).toBe(true);
     expect(config.compactionPromptFile.endsWith("COMPACTION_PROMPT.md")).toBe(true);
     expect(config.sessionDir.endsWith("sessions")).toBe(true);

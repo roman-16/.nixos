@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { pino } from "pino";
 
-import { createApolloSession, deliver, onAssistantText } from "./agent";
+import { createApolloSession, deliver, onAssistantText, onRunError } from "./agent";
 import { parseTranscript, renderChat } from "./chat";
 import { loadConfig } from "./config";
 import {
@@ -17,8 +17,15 @@ import {
   sessionStatus,
 } from "./dashboard";
 import { openDatabase } from "./db";
-import { createLogStore, parseLevel } from "./logs";
-import { compactionNotice, isAllowed, jidForNumber, voiceText } from "./messages";
+import { createLogStore, createThrottle, parseLevel, shouldNotify } from "./logs";
+import {
+  claudeErrorNotice,
+  compactionNotice,
+  formatLogNotice,
+  isAllowed,
+  jidForNumber,
+  voiceText,
+} from "./messages";
 import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
 import { createReminderWatcher, formatReminder } from "./reminders";
 import { createTokenStore, parseRange, renderTokens } from "./tokens";
@@ -77,6 +84,29 @@ export async function main(): Promise<void> {
   // a dashboard compaction right after a restart, say - so fall back to the primary
   // allowlisted number.
   const fallbackTarget = config.allowFrom[0] ? jidForNumber(config.allowFrom[0]) : undefined;
+
+  // Fan every warn+ log line out to WhatsApp - the log level is the single source of
+  // truth for "worth interrupting the user". Only when connected, deduped so a burst
+  // can't spam, and guarded against re-entrancy so a send that itself logs (or Baileys
+  // chatter emitted mid-send) can't loop back in.
+  const notifyThrottle = createThrottle(config.notifyThrottleMs);
+  let notifying = false;
+  logStore.onRecord = (record) => {
+    if (notifying || !shouldNotify(record, config.notifyLevel)) return;
+    const to = target ?? fallbackTarget;
+    if (!wa || !to || wa.getState().status !== "connected") return;
+    const text =
+      typeof record.notifyText === "string" ? record.notifyText : formatLogNotice(record);
+    if (!notifyThrottle(text)) return;
+    notifying = true;
+    void wa
+      .send(to, text)
+      .catch((error) => logger.debug({ error }, "notify send failed"))
+      .finally(() => {
+        notifying = false;
+      });
+  };
+
   let lastSummaryBody: string | undefined;
   let lastChatBody: string | undefined;
   let lastLogKey: string | undefined;
@@ -167,6 +197,12 @@ export async function main(): Promise<void> {
           .catch((error) => logger.error({ error }, "compaction notice failed"));
       }
     }
+  });
+
+  // A run that ends in a terminal LLM error (after pi's built-in retries) produces no
+  // text block, so log it at error - the forwarder above delivers the friendly notice.
+  onRunError(session, (detail) => {
+    logger.error({ detail, notifyText: claudeErrorNotice(detail) }, "claude run error");
   });
 
   wa = await startWhatsApp({

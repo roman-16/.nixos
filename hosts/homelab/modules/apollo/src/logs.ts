@@ -27,6 +27,26 @@ export function parseLevel(value: string | null | undefined): LogLevel {
   return value === "info" || value === "warn" || value === "error" ? value : "all";
 }
 
+/** Whether a log record clears the notify threshold (its level is the alert-worthiness). */
+export function shouldNotify(record: LogRecord, minLevel: LogLevel): boolean {
+  return typeof record.level === "number" && record.level >= THRESHOLDS[minLevel];
+}
+
+/** A per-key rate limiter: returns true at most once per `windowMs` for a given key. */
+export function createThrottle(
+  windowMs: number,
+  now: () => number = () => Date.now(),
+): (key: string) => boolean {
+  const last = new Map<string, number>();
+  return (key) => {
+    const at = now();
+    const previous = last.get(key);
+    if (previous !== undefined && at - previous < windowMs) return false;
+    last.set(key, at);
+    return true;
+  };
+}
+
 interface LogRow {
   data: string;
   level: number;
@@ -35,6 +55,7 @@ interface LogRow {
 }
 
 export interface LogStore {
+  onRecord?: (record: LogRecord) => void;
   prune(beforeMs: number): void;
   query(level: LogLevel, limit?: number): LogRecord[];
   readonly seq: number;
@@ -48,6 +69,7 @@ export function createLogStore(db: Database): LogStore {
     "SELECT time, level, msg, data FROM logs WHERE level >= ? ORDER BY id DESC LIMIT ?",
   );
   const deleteOld = db.query("DELETE FROM logs WHERE time < ?");
+  let onRecord: ((record: LogRecord) => void) | undefined;
   let seq = 0;
 
   function record(line: string): void {
@@ -66,9 +88,22 @@ export function createLogStore(db: Database): LogStore {
     }
     insert.run(time, level, msg, JSON.stringify(data));
     seq += 1;
+    if (onRecord) {
+      try {
+        onRecord({ ...parsed, level, msg, time });
+      } catch {
+        // a forwarder fault must never break logging
+      }
+    }
   }
 
   return {
+    get onRecord() {
+      return onRecord;
+    },
+    set onRecord(fn) {
+      onRecord = fn;
+    },
     prune(beforeMs) {
       deleteOld.run(beforeMs);
     },

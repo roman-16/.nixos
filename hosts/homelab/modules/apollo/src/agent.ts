@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import {
   type AgentSession,
+  type AgentSessionEvent,
   AuthStorage,
   createAgentSession,
   DefaultResourceLoader,
@@ -91,6 +92,32 @@ export function onAssistantText(session: AgentSession, onText: (text: string) =>
       const content = event.assistantMessageEvent.content.trim();
       if (content) onText(content);
     }
+  });
+}
+
+/**
+ * The errorMessage of a run that ended in a terminal LLM error, else undefined. Every pi
+ * provider funnels a failed stream to a final assistant message with stopReason "error"
+ * (never a thrown rejection), so this is how any Claude/transport error surfaces. Filters
+ * to the terminal `agent_end` (willRetry false, after pi's built-in retries) and skips
+ * "aborted" (an intentional stop), so it fires once per genuinely failed turn.
+ */
+export function terminalErrorMessage(event: AgentSessionEvent): string | undefined {
+  if (event.type !== "agent_end" || event.willRetry) return undefined;
+  for (let i = event.messages.length - 1; i >= 0; i -= 1) {
+    const message = event.messages[i];
+    if (message?.role === "assistant") {
+      return message.stopReason === "error" ? (message.errorMessage ?? "unknown error") : undefined;
+    }
+  }
+  return undefined;
+}
+
+/** Fire `onError` when a run ends in a terminal LLM error (after pi's retries are exhausted). */
+export function onRunError(session: AgentSession, onError: (detail: string) => void): () => void {
+  return session.subscribe((event) => {
+    const detail = terminalErrorMessage(event);
+    if (detail) onError(detail);
   });
 }
 

@@ -1,4 +1,6 @@
-import { humanTokens } from "./format";
+import { humanTokens, truncate } from "./format";
+
+import type { LogRecord } from "./logs";
 
 const DEFAULT_MAX_CHARS = 4000;
 
@@ -6,6 +8,40 @@ const DEFAULT_MAX_CHARS = 4000;
 export function compactionNotice(tokensBefore?: number): string {
   const count = tokensBefore && tokensBefore > 0 ? ` (~${humanTokens(tokensBefore)} tokens)` : "";
   return `🗜️ Context compacted${count}. Full summary on the dashboard.`;
+}
+
+/** Friendly WhatsApp notice when a Claude/agent run fails terminally (any provider error). */
+export function claudeErrorNotice(detail: string): string {
+  const trimmed = detail.trim();
+  return `⚠️ I couldn't reach Claude just now${
+    trimmed ? `: ${truncate(trimmed, 300)}` : ""
+  }. Your message didn't go through - try again in a bit.`;
+}
+
+function logLevelLabel(level: number): string {
+  if (level >= 60) return "FATAL";
+  if (level >= 50) return "ERROR";
+  if (level >= 40) return "WARN";
+  return "INFO";
+}
+
+/** A concise reason pulled from a log record's common error fields, if any. */
+function logDetail(record: LogRecord): string {
+  const source = record.err ?? record.error ?? record.detail;
+  if (typeof source === "string") return source;
+  if (source && typeof source === "object" && "message" in source) {
+    const { message } = source as { message?: unknown };
+    if (typeof message === "string") return message;
+  }
+  return "";
+}
+
+/** Generic WhatsApp text for a forwarded warn+ log record that carries no bespoke notifyText. */
+export function formatLogNotice(record: LogRecord): string {
+  const level = typeof record.level === "number" ? record.level : 30;
+  const msg = typeof record.msg === "string" ? record.msg : "";
+  const detail = logDetail(record);
+  return `⚠️ ${logLevelLabel(level)}: ${msg}${detail ? ` - ${truncate(detail, 300)}` : ""}`;
 }
 
 /** Strip a WhatsApp JID to its bare number (drops the device suffix and domain). */
