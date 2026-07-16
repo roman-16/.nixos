@@ -12,6 +12,7 @@ import {
   renderContext,
   renderLogs,
   renderPage,
+  renderSkills,
   renderStop,
   renderSummary,
   sessionStatus,
@@ -110,6 +111,7 @@ export async function main(): Promise<void> {
   let lastSummaryBody: string | undefined;
   let lastChatBody: string | undefined;
   let lastLogKey: string | undefined;
+  let lastSkillsBody: string | undefined;
   let lastStopBody: string | undefined;
   let chatCache: { body: string; live: boolean; mtimeMs: number } | undefined;
   let usage: { data: UsageData | null; fetchedAt: number } | undefined;
@@ -316,6 +318,7 @@ export async function main(): Promise<void> {
         lastSummaryBody = undefined;
         lastChatBody = undefined;
         lastLogKey = undefined;
+        lastSkillsBody = undefined;
         lastStopBody = undefined;
         return new Response(renderPage(assetsVersion), { headers: htmlHeaders });
       }
@@ -340,6 +343,24 @@ export async function main(): Promise<void> {
       if (pathname === "/tokens") {
         const totals = tokenStore.totals(parseRange(url.searchParams.get("range")));
         return new Response(renderTokens(totals), { headers: htmlHeaders });
+      }
+
+      // Loaded skills change only on restart or a dashboard Reload (which reloads the
+      // resource loader), so a slow poll with 204 dedupe keeps this near-free.
+      if (pathname === "/skills") {
+        const { skills } = session.resourceLoader.getSkills();
+        const body = renderSkills(
+          skills
+            .map((skill) => ({
+              description: skill.description,
+              disabled: skill.disableModelInvocation,
+              name: skill.name,
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        );
+        if (body === lastSkillsBody) return new Response(null, { status: 204 });
+        lastSkillsBody = body;
+        return new Response(body, { headers: htmlHeaders });
       }
 
       if (pathname === "/link" && req.method === "POST") {

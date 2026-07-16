@@ -4,9 +4,11 @@ import {
   renderContext,
   renderLogs,
   renderPage,
+  renderSkills,
   renderStop,
   renderSummary,
   sessionStatus,
+  type SkillInfo,
   type SummaryArgs,
 } from "../src/dashboard";
 
@@ -35,6 +37,8 @@ describe("renderPage", () => {
     expect(html).toContain(`id="session-status"`);
     expect(html).toContain("Compact");
     expect(html).toContain("Reload");
+    expect(html).toContain(`id="skills"`);
+    expect(html).toContain(`hx-get="/skills"`);
     expect(html).toContain(`id="log-list"`);
     expect(html).toContain(`hx-get="/logs"`);
     expect(html).toContain(`id="logs-filter"`);
@@ -181,6 +185,39 @@ describe("renderStop", () => {
 
   it("is disabled when idle", () => {
     expect(renderStop(false)).toContain("<button disabled");
+  });
+});
+
+describe("renderSkills", () => {
+  const skill = (over: Partial<SkillInfo> = {}): SkillInfo => ({
+    description: "does a thing",
+    disabled: false,
+    name: "macros",
+    ...over,
+  });
+
+  it("shows a placeholder when no skills are loaded", () => {
+    expect(renderSkills([])).toContain("No skills loaded");
+  });
+
+  it("renders a card with the skill name and description", () => {
+    const html = renderSkills([skill({ description: "track nutrition", name: "macros" })]);
+    expect(html).toContain("macros");
+    expect(html).toContain("track nutrition");
+  });
+
+  it("escapes the name and description", () => {
+    const html = renderSkills([
+      skill({ description: "<b>desc</b>", name: "<script>alert(1)</script>" }),
+    ]);
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).toContain("&lt;b&gt;desc&lt;/b&gt;");
+    expect(html).not.toContain("<script>");
+  });
+
+  it("tags a skill hidden from the model as manual", () => {
+    expect(renderSkills([skill({ disabled: true })])).toContain("manual");
+    expect(renderSkills([skill({ disabled: false })])).not.toContain("manual");
   });
 });
 

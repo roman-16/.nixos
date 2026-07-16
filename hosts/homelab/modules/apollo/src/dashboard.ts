@@ -92,6 +92,11 @@ export function renderPage(version: string): string {
         hx-get="/tokens" hx-include="#tokens-range" hx-trigger="load, change from:#tokens-range, every 15s" hx-swap="innerHTML">
         <p class="text-sm text-neutral-500">Loading…</p>
       </div>
+      ${headingRow("skills")}
+      <div id="skills" class="${SURFACE} p-5"
+        hx-get="/skills" hx-trigger="load, every 30s" hx-swap="innerHTML">
+        <p class="text-sm text-neutral-500">Loading…</p>
+      </div>
       ${headingRow(
         "logs",
         `<form id="logs-filter" class="ml-auto flex gap-0.5 rounded-full border border-white/10 bg-neutral-950/60 p-[3px] text-xs">
@@ -237,6 +242,33 @@ export function renderStop(running: boolean): string {
     ? "border-red-500/40 text-red-400 hover:bg-red-500/10"
     : "border-white/10 text-neutral-600";
   return `<button${disabledAttr} hx-post="/stop" hx-target="#stop" hx-swap="innerHTML" hx-disabled-elt="this" title="Stop the current run" aria-label="Stop the current run" class="grid h-8 w-8 shrink-0 place-items-center rounded-lg border transition ${tone} disabled:cursor-not-allowed disabled:opacity-50"><svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="1.5" /></svg></button>`;
+}
+
+export interface SkillInfo {
+  description: string;
+  disabled: boolean;
+  name: string;
+}
+
+/** Render the #skills fragment: one card per loaded skill (name + description); the caller sorts them. */
+export function renderSkills(skills: SkillInfo[]): string {
+  if (skills.length === 0) {
+    return `<p class="text-sm text-neutral-500">No skills loaded.</p>`;
+  }
+  const cards = skills
+    .map((skill) => {
+      const manual = skill.disabled
+        ? `<span class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-400">manual</span>`
+        : "";
+      return `<div class="rounded-xl border border-white/10 bg-neutral-950/40 px-4 py-3">
+      <div class="flex items-center gap-2">
+        <span class="font-mono text-sm font-medium text-neutral-100">${escapeHtml(skill.name)}</span>${manual}
+      </div>
+      <p class="mt-1 text-xs leading-relaxed text-neutral-400">${escapeHtml(skill.description)}</p>
+    </div>`;
+    })
+    .join("");
+  return `<div class="grid gap-3 sm:grid-cols-2">${cards}</div>`;
 }
 
 /** Inline #session-status fragment shown after a dashboard Compact/Reload button is pressed. */
