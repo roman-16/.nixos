@@ -20,6 +20,10 @@
 - **zellij**: Available on the system. Every terminal runs inside a zellij session. Use `zellij` CLI to list, attach, or interact with other terminal sessions/panes.
 - **CLI flags**: ALWAYS use full-length flag names (`--force`, `--recursive`, `--verbose`) instead of short flags (`-f`, `-r`, `-v`) for readability.
 
+## Workspace
+
+- **Artifacts**: Write scratch and throwaway artifacts (temporary scripts, intermediate outputs, downloads, generated test files) to `/tmp/`, never the working directory or repo.
+
 ## Code
 
 - **Ahistorical**: Write code as if it had no history, as if you were writing it for the first time. Never reference, explain, or hint at prior states or the fact that something changed. This applies to code, comments, and everything surrounding it: express what *is*, never what *changed* or *used to be*.
