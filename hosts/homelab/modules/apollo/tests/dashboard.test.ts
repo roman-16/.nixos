@@ -44,6 +44,8 @@ describe("renderPage", () => {
   it("anchors the chat to the bottom with a column-reverse container and no scroll JS", () => {
     const html = renderPage("v");
     expect(html).toContain("flex-col-reverse");
+    // Rows must not flex-shrink, or overflow-hidden disclosures collapse to their border.
+    expect(html).toContain("[&>*]:shrink-0");
     expect(html).not.toContain("hx-on::before-swap");
     expect(html).not.toContain("hx-on::after-settle");
     expect(html).not.toContain("dataset.stick");

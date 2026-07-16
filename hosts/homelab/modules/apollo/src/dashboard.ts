@@ -71,7 +71,7 @@ export function renderPage(version: string): string {
         </div>`,
       )}
       <div class="${SURFACE} flex flex-col overflow-hidden">
-        <div id="chat" class="flex h-[70dvh] flex-col-reverse gap-3 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:h-[75dvh]"
+        <div id="chat" class="flex h-[70dvh] flex-col-reverse gap-3 [&>*]:shrink-0 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:h-[75dvh]"
           hx-get="/chat" hx-trigger="load, every 2s" hx-swap="innerHTML">
           <p class="text-sm text-neutral-500">Loading…</p>
         </div>
