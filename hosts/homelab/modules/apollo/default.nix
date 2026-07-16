@@ -338,10 +338,14 @@ in
                 CHROME_PATH = "${chromeWrapper}";
                 HOME = "%S/apollo";
                 MISTRAL_API_KEY = secrets.mistralApiKey;
-                # browse's deps (esbuild, bufferutil) have install scripts that fail on this VM,
-                # but their binaries work without them (esbuild's is a static executable, bufferutil
-                # an optional ws speedup ws falls back from). Skip dependency install scripts so
-                # `npx browse@latest` installs cleanly.
+                # The browser skill runs via npx, which installs and *exec*s its package from the
+                # npm cache. HOME (the DynamicUser StateDirectory) is a noexec mount, so put the
+                # cache on the service's exec /tmp - otherwise the browse binary (and the deps'
+                # install-script binaries) hit "Permission denied" (exit 126). It's ephemeral, so
+                # the first browse after a restart re-installs (~50s, within the tool timeout).
+                # Skipping install scripts keeps that install clean (esbuild's binary is static,
+                # bufferutil an optional ws speedup ws falls back from).
+                NPM_CONFIG_CACHE = "/tmp/npm";
                 NPM_CONFIG_IGNORE_SCRIPTS = "true";
                 PORT = toString port;
                 SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
