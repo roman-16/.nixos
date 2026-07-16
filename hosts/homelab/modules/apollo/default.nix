@@ -21,6 +21,7 @@ let
       gnugrep
       gnused
       jq
+      nodejs
       openssh
       poppler-utils
       python3
@@ -72,6 +73,13 @@ in
 
         secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
 
+        # Chromium for the browser skill's managed-local sessions. chrome-launcher (inside
+        # `browse`) picks it up via CHROME_PATH; the flags are the standard headless-in-a-VM
+        # pair - no user-namespace sandbox, and no reliance on a large /dev/shm.
+        chromeWrapper = pkgs.writeShellScript "apollo-chrome" ''
+          exec ${pkgs.chromium}/bin/chromium --no-sandbox --disable-dev-shm-usage "$@"
+        '';
+
         setup = pkgs.writeShellScript "apollo-setup" ''
           set -euo pipefail
           export PATH=${lib.makeBinPath [ pkgs.coreutils ]}:$PATH
@@ -86,6 +94,7 @@ in
           ln -sfn ${./agent/COMPACTION_PROMPT.md} "$agentDir/COMPACTION_PROMPT.md"
 
           # Skills pi discovers from $agentDir/skills (read-only)
+          ln -sfn ${../../../../shared/modules/pi/skills/browser} "$agentDir/skills/browser"
           ln -sfn ${../../../../shared/modules/pi/skills/context7} "$agentDir/skills/context7"
           ln -sfn ${../../../../shared/modules/pi/skills/exa} "$agentDir/skills/exa"
           ln -sfn ${./agent/skills/backup} "$agentDir/skills/backup"
@@ -326,6 +335,7 @@ in
                 APOLLO_MODEL = "anthropic/claude-sonnet-5";
                 APOLLO_THINKING = "high";
                 APOLLO_WORKSPACE = "%S/apollo/workspace";
+                CHROME_PATH = "${chromeWrapper}";
                 HOME = "%S/apollo";
                 MISTRAL_API_KEY = secrets.mistralApiKey;
                 PORT = toString port;
