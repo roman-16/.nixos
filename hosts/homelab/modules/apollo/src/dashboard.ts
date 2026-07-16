@@ -57,9 +57,6 @@ export function renderPage(version: string): string {
       <span class="text-[1.05rem] font-semibold tracking-tight">Apollo</span>
     </header>
     <main>
-      <div id="summary" hx-get="/summary" hx-trigger="load, every 2s" hx-swap="innerHTML">
-        <div class="${SURFACE} mt-8 px-5 py-4 text-sm text-neutral-500">Loading…</div>
-      </div>
       ${headingRow(
         "conversation",
         `<span id="session-status" class="text-xs"></span>
@@ -96,6 +93,9 @@ export function renderPage(version: string): string {
       <div id="skills" class="${SURFACE} p-5"
         hx-get="/skills" hx-trigger="load, every 30s" hx-swap="innerHTML">
         <p class="text-sm text-neutral-500">Loading…</p>
+      </div>
+      <div id="summary" hx-get="/summary" hx-trigger="load, every 2s" hx-swap="innerHTML">
+        <div class="${SURFACE} mt-8 px-5 py-4 text-sm text-neutral-500">Loading…</div>
       </div>
       ${headingRow(
         "logs",

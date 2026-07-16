@@ -54,6 +54,15 @@ describe("renderPage", () => {
     expect(html).not.toContain("hx-on::after-settle");
     expect(html).not.toContain("dataset.stick");
   });
+
+  it("orders sections conversation, tokens, skills, WhatsApp/Claude, then logs", () => {
+    const html = renderPage("v");
+    const order = ['id="chat"', 'id="tokens"', 'id="skills"', 'id="summary"', 'id="log-list"'].map(
+      (marker) => html.indexOf(marker),
+    );
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
 });
 
 describe("renderSummary", () => {
