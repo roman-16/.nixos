@@ -254,13 +254,18 @@ function toolBadge(item: Extract<LogItem, { kind: "tool" }>, running: boolean): 
 }
 
 function disclosure(summary: string, detail: string): string {
-  return `<details class="group overflow-hidden rounded-xl border border-white/5 bg-neutral-950/50">
-    <summary class="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs text-neutral-400 transition hover:bg-white/5">
-      <span class="shrink-0 text-[9px] text-neutral-600 transition group-open:rotate-90">▶</span>
+  return `<details class="group overflow-hidden rounded-xl border border-white/10 bg-neutral-950/40 transition hover:border-white/20">
+    <summary class="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs text-neutral-300 transition hover:bg-white/5">
+      <span class="shrink-0 text-[10px] text-neutral-400 transition group-open:rotate-90">▶</span>
       ${summary}
     </summary>
-    <div class="border-t border-white/5 px-3 py-2 text-xs">${detail}</div>
+    <div class="border-t border-white/10 px-3 py-2 text-xs">${detail}</div>
   </details>`;
+}
+
+/** A small uppercase chip that labels a disclosure row by kind (thinking, bash, a tool name). */
+function tag(label: string): string {
+  return `<span class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wide text-neutral-200">${label}</span>`;
 }
 
 function pre(text: string): string {
@@ -279,9 +284,9 @@ function renderItem(item: LogItem, running = false): string {
         item.time,
       );
     case "bash": {
-      const summary = `<span class="min-w-0 truncate font-mono text-neutral-200">$ ${escapeHtml(
+      const summary = `${tag("bash")}<span class="min-w-0 truncate font-mono text-neutral-200">$ ${escapeHtml(
         truncate(item.command, PREVIEW_CHARS),
-      )}</span><span class="ml-auto shrink-0 text-neutral-600">exit ${item.exitCode ?? "?"}</span>`;
+      )}</span><span class="ml-auto shrink-0 text-neutral-500">exit ${item.exitCode ?? "?"}</span>`;
       return disclosure(summary, pre(item.output));
     }
     case "compaction": {
@@ -301,18 +306,19 @@ function renderItem(item: LogItem, running = false): string {
     }
     case "divider":
       return chipDivider(item.label);
-    case "thinking":
+    case "thinking": {
+      const preview = escapeHtml(truncate(item.text.replace(/\s+/g, " ").trim(), PREVIEW_CHARS));
+      const summary = `${tag("thinking")}<span class="min-w-0 truncate italic text-neutral-400">${preview}</span>`;
       return disclosure(
-        `<span class="italic text-neutral-500">thinking</span>`,
+        summary,
         `<p class="whitespace-pre-wrap break-words italic text-neutral-500">${escapeHtml(
           truncate(item.text, MAX_OUTPUT_CHARS),
         )}</p>`,
       );
+    }
     case "tool": {
       const preview = escapeHtml(truncate(argPreview(item.args), PREVIEW_CHARS));
-      const summary = `<span class="shrink-0 font-mono text-indigo-300">${escapeHtml(item.name)}</span>
-        <span class="min-w-0 truncate text-neutral-500">${preview}</span>
-        <span class="ml-auto shrink-0">${toolBadge(item, running)}</span>`;
+      const summary = `${tag(escapeHtml(item.name))}<span class="min-w-0 truncate text-neutral-400">${preview}</span><span class="ml-auto shrink-0">${toolBadge(item, running)}</span>`;
       const output = item.output ? pre(item.output) : "";
       const note =
         item.images > 0 ? `<p class="text-neutral-500">[${item.images} image(s)]</p>` : "";
