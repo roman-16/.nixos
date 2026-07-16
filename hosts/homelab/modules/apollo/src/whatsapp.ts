@@ -151,7 +151,8 @@ export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp>
     const socket = makeWASocket({
       auth: auth.state,
       browser: Browsers.ubuntu("Apollo"),
-      logger: options.logger,
+      // Tagged so its chatter is stored/shown but never forwarded to WhatsApp (see shouldNotify).
+      logger: options.logger.child({ src: "baileys" }),
     });
 
     socket.ev.on("creds.update", auth.saveCreds);

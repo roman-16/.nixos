@@ -282,6 +282,10 @@ in
           useNetworkd = true;
         };
 
+        # Lets prebuilt ELF binaries run on this VM (the browser skill's npm deps -
+        # esbuild, bufferutil - ship such binaries and fail to install without it).
+        programs.nix-ld.enable = true;
+
         security.sudo.wheelNeedsPassword = false;
 
         services = {
@@ -338,6 +342,11 @@ in
                 CHROME_PATH = "${chromeWrapper}";
                 HOME = "%S/apollo";
                 MISTRAL_API_KEY = secrets.mistralApiKey;
+                # Services don't inherit the login-shell nix-ld env, so point it at the system
+                # nix-ld (enabled above) here - lets the browser skill's esbuild/bufferutil
+                # prebuilt binaries run so `npx browse@latest` installs cleanly.
+                NIX_LD = "/run/current-system/sw/share/nix-ld/lib/ld.so";
+                NIX_LD_LIBRARY_PATH = "/run/current-system/sw/share/nix-ld/lib";
                 PORT = toString port;
                 SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
               };

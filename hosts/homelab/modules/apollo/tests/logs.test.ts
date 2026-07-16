@@ -136,6 +136,10 @@ describe("shouldNotify", () => {
   it("ignores records without a numeric level", () => {
     expect(shouldNotify({}, "warn")).toBe(false);
   });
+
+  it("never forwards Baileys-tagged records", () => {
+    expect(shouldNotify({ level: 50, src: "baileys" }, "warn")).toBe(false);
+  });
 });
 
 describe("createThrottle", () => {
