@@ -196,7 +196,7 @@ After a manual JSON edit or a phase change, re-fold the balance forward:
 
 ## Notes
 
-- Dates and times come from the system clock; only pass `--date`/`--time` to correct a past entry.
+- Dates and times come from the system clock; only pass `--date`/`--time` to correct a past entry. Adjusting a day that has already passed (`log`, `edit`, `rm`, `food-eat`, or `prep-eat` with `--date`) reprints today's summary after the changed day, since a past change cascades through the rolling balance and moves today's target - relay both blocks verbatim.
 - Estimate freely for vague inputs or photos and pass `--note estimated` - the totals stay exact regardless.
 - Every macro must be non-negative and every amount positive; the script rejects impossible values, so a slip like `--kcal -5` errors out instead of silently corrupting a total.
 - For "how much to hit X" or "how would my day look", use `--fit-*`/`--target-*` and `--dry-run` - never work out the amount or the projected totals yourself.

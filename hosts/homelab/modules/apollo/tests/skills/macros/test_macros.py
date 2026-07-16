@@ -646,3 +646,49 @@ class TestSummary:
         out = capsys.readouterr().out
         assert "01.06-30.06" in out
         assert "Avg/day over 2 days: 2200 kcal" in out
+
+
+class TestPastDayCascade:
+    def log_chain(self):
+        # three completed days at goal, then a light today
+        run("log", "--item", "A", "--kcal", "2100", "--protein", "150", "--date", days_ago(3))
+        run("log", "--item", "B", "--kcal", "2100", "--protein", "150", "--date", days_ago(2))
+        run("log", "--item", "C", "--kcal", "2100", "--protein", "150", "--date", days_ago(1))
+        run("log", "--item", "D", "--kcal", "500", "--protein", "40")
+
+    def test_editing_an_earlier_day_cascades_to_todays_stored_target(self, store):
+        set_goal()
+        self.log_chain()
+        # a 3000 kcal surplus three days back must reach today with no explicit recompute
+        run("log", "--item", "BIG", "--kcal", "3000", "--date", days_ago(3))
+        assert macros.load(macros.day_path(macros.today()), {})["target"] == 1900
+
+    def test_past_day_log_also_prints_today(self, store, capsys):
+        set_goal()
+        self.log_chain()
+        capsys.readouterr()
+        run("log", "--item", "BIG", "--kcal", "3000", "--date", days_ago(3))
+        out = capsys.readouterr().out
+        assert macros.dm(days_ago(3)) in out
+        assert "Today (" in out
+
+    def test_past_day_rm_also_prints_today(self, store, capsys):
+        set_goal()
+        self.log_chain()
+        capsys.readouterr()
+        run("rm", "--last", "--date", days_ago(3))
+        assert "Today (" in capsys.readouterr().out
+
+    def test_past_day_edit_also_prints_today(self, store, capsys):
+        set_goal()
+        self.log_chain()
+        capsys.readouterr()
+        run("edit", "--last", "--kcal", "1000", "--date", days_ago(3))
+        assert "Today (" in capsys.readouterr().out
+
+    def test_today_change_prints_a_single_block(self, store, capsys):
+        set_goal()
+        self.log_chain()
+        capsys.readouterr()
+        run("log", "--item", "E", "--kcal", "300", "--protein", "20")
+        assert capsys.readouterr().out.count("Today (") == 1

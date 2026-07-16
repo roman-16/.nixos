@@ -294,7 +294,7 @@ def append_entry(date: str, entry: dict):
     day = load(path, {})
     day["entries"].append(entry)
     save(path, day)
-    refresh_ledger(date)
+    recompute_from(date)
 
 
 # --- portions (target/fit sizing + preview) ------------------------------
@@ -350,7 +350,7 @@ def emit(date: str, entry: dict, *, dry_run: bool, lead: str | None = None, comm
         render_day_dict(day, preview=True)
     else:
         commit()
-        render_day(date)
+        render_after_change(date)
 
 
 # --- rendering -----------------------------------------------------------
@@ -400,6 +400,15 @@ def render_day(date: str):
         print(f"nothing logged for {date} yet - set a goal first with goal-set")
         return
     render_day_dict(day)
+
+
+def render_after_change(date: str):
+    """Render the changed day; for a past day also render today, since the change
+    cascades through the rolling balance and moves today's target."""
+    render_day(date)
+    if date != today():
+        print()
+        render_day(today())
 
 
 # --- commands ------------------------------------------------------------
@@ -543,8 +552,8 @@ def cmd_rm(args):
         die("that entry comes from a prep batch - reverse it with prep-uneat, not rm.")
     entries.pop(idx)
     save(path, day)
-    refresh_ledger(date)
-    render_day(date)
+    recompute_from(date)
+    render_after_change(date)
 
 
 def cmd_entries(args):
@@ -580,8 +589,8 @@ def cmd_edit(args):
     if not changed:
         die("give at least one field to change (--item/--kcal/--protein/--fat/--carbs/--note)")
     save(path, day)
-    refresh_ledger(date)
-    render_day(date)
+    recompute_from(date)
+    render_after_change(date)
 
 
 def food_line(food: dict) -> str:
