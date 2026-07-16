@@ -13,6 +13,7 @@ import argparse
 import difflib
 import json
 import os
+import secrets
 import sys
 import tempfile
 from datetime import datetime, timedelta
@@ -212,6 +213,15 @@ def refresh_ledger(date: str):
         save(path, _apply_ledger(load(path, {})))
 
 
+def recompute_from(date: str):
+    """Re-fold the ledger for `date` and every later day in order (a change to an
+    earlier day cascades forward through the rolling balance)."""
+    days = sorted(p.stem for p in DAYS_DIR.glob("*.json")) if DAYS_DIR.exists() else []
+    for d in days:
+        if len(d) == 10 and d >= date:
+            refresh_ledger(d)
+
+
 def compute_day(date: str, extra_entries=()) -> dict | None:
     """A day's in-memory snapshot with the ledger applied and `extra_entries`
     appended, persisting nothing. Uses the stored day, or synthesizes one from
@@ -267,11 +277,15 @@ def ensure_day(date: str):
     refresh_ledger(date)
 
 
-def make_entry(time, item, kcal, protein, fat, carbs, note) -> dict:
-    return {
+def make_entry(time, item, kcal, protein, fat, carbs, note, *, prep_key=None, event_id=None) -> dict:
+    entry = {
         "time": time, "item": item, "kcal": kcal,
         "protein": protein, "fat": fat, "carbs": carbs, "note": note or None,
     }
+    if prep_key is not None:
+        entry["prepKey"] = prep_key
+        entry["eventId"] = event_id
+    return entry
 
 
 def append_entry(date: str, entry: dict):
@@ -500,22 +514,34 @@ def cmd_weight(args):
     render_day(date)
 
 
+def entry_locked(entry: dict) -> bool:
+    """True for a day entry that projects a still-live prep consumption event: it is
+    corrected through prep-uneat, not from the day. Once its batch is gone (discarded)
+    the entry is plain history and freely editable again."""
+    key = entry.get("prepKey")
+    return bool(key) and key in load(PREP_FILE, {})
+
+
 def cmd_rm(args):
     date = args.date or today()
     path = day_path(date)
     if not path.exists():
         die(f"nothing logged for {date}")
     day = load(path, {})
+    entries = day["entries"]
     if args.last:
-        if day["entries"]:
-            day["entries"].pop()
+        if not entries:
+            die(f"nothing logged for {date}")
+        idx = len(entries) - 1
     elif args.index is not None:
-        i = args.index - 1
-        if not 0 <= i < len(day["entries"]):
+        idx = args.index - 1
+        if not 0 <= idx < len(entries):
             die(f"no entry #{args.index}")
-        day["entries"].pop(i)
     else:
         die("usage: rm --last | --index N")
+    if entry_locked(entries[idx]):
+        die("that entry comes from a prep batch - reverse it with prep-uneat, not rm.")
+    entries.pop(idx)
     save(path, day)
     refresh_ledger(date)
     render_day(date)
@@ -542,6 +568,9 @@ def cmd_edit(args):
     day = load(path, {})
     idx = pick_index(day["entries"], args, "entry")
     entry = day["entries"][idx]
+    if entry_locked(entry):
+        die("that entry comes from a prep batch - correct it with prep-ingredient-edit "
+            "or reverse it with prep-uneat, not edit.")
     changed = False
     for flag in ("item", "kcal", "protein", "fat", "carbs", "note"):
         value = getattr(args, flag)
@@ -552,9 +581,6 @@ def cmd_edit(args):
         die("give at least one field to change (--item/--kcal/--protein/--fat/--carbs/--note)")
     save(path, day)
     refresh_ledger(date)
-    if entry.get("note") in ("prep", "prep-fix"):
-        print(f"⚠️ entry #{idx + 1} is from a prep batch - editing it here won't adjust the batch; "
-              f"use prep-eat / prep-ingredient-edit for that.")
     render_day(date)
 
 
@@ -688,70 +714,102 @@ def macro_scale(a: dict, f: float) -> dict:
 
 
 def prep_total(batch: dict) -> dict:
-    """Whole-batch macros: the sum of every ingredient ever added."""
+    """Whole-batch macros: the sum of its ingredients."""
     out = zero()
     for ingredient in batch["ingredients"]:
         out = macro_add(out, ingredient)
     return out
 
 
+def consumed(batch: dict, kind: str | None = None) -> dict:
+    """Macros that have left the batch, all kinds together or just one
+    ("eaten"/"removed"), summed over the consumption event log."""
+    out = zero()
+    for event in batch["consumption"]:
+        if kind is None or event["kind"] == kind:
+            out = macro_add(out, event["macros"])
+    return out
+
+
 def prep_remaining(batch: dict) -> dict:
-    total = prep_total(batch)
-    return {k: total[k] - batch["eaten"][k] - batch["removed"][k] for k in MACROS}
+    return macro_sub(prep_total(batch), consumed(batch))
+
+
+def _frac(part_kcal: float, total_kcal: float) -> float:
+    return part_kcal / total_kcal if total_kcal else 0.0
 
 
 def frac_eaten(batch: dict) -> float:
-    total = prep_total(batch)
-    return batch["eaten"]["kcal"] / total["kcal"] if total["kcal"] else 0.0
+    return _frac(consumed(batch, "eaten")["kcal"], prep_total(batch)["kcal"])
 
 
 def frac_removed(batch: dict) -> float:
-    total = prep_total(batch)
-    return batch["removed"]["kcal"] / total["kcal"] if total["kcal"] else 0.0
+    return _frac(consumed(batch, "removed")["kcal"], prep_total(batch)["kcal"])
 
 
 def frac_left(batch: dict) -> float:
-    total = prep_total(batch)
-    return (total["kcal"] - batch["eaten"]["kcal"] - batch["removed"]["kcal"]) / total["kcal"] if total["kcal"] else 0.0
+    total = prep_total(batch)["kcal"]
+    return _frac(total - consumed(batch)["kcal"], total)
+
+
+# Units written tight against the number (350g); anything wordier gets a space (4 pieces).
+TIGHT_UNITS = {"cl", "dl", "g", "kg", "l", "mg", "ml"}
+
+
+def fmt_amount(amount: float, unit: str) -> str:
+    value = round(amount) if amount >= 10 else r1(amount)
+    return f"{value}{'' if unit in TIGHT_UNITS else ' '}{unit}"
+
+
+def portion_size(batch: dict, frac: float) -> str | None:
+    """A fraction of the batch as a weight/volume string, or None when no size is set."""
+    size = batch.get("size")
+    return fmt_amount(size["amount"] * frac, size["unit"]) if size else None
 
 
 def prep_line(batch: dict) -> str:
     if not batch["ingredients"]:
         return f"{batch['name']}: empty (no ingredients yet)"
     rem = prep_remaining(batch)
+    size = portion_size(batch, frac_left(batch))
+    size_txt = f"{size}, " if size else ""
     return (f"{batch['name']}: {round(frac_left(batch) * 100)}% left "
-            f"({round(rem['kcal'])} kcal, {r1(rem['protein'])}g P)")
+            f"({size_txt}{round(rem['kcal'])} kcal, {r1(rem['protein'])}g P)")
 
 
-def apply_delta(batch: dict, delta: dict) -> dict:
-    """Fold a macro delta into the batch, split by how much has been consumed: the
-    eaten fraction of it onto `eaten` (your intake), the removed fraction onto
-    `removed` (not yours), the rest is just composition. Call *before* the ingredient
-    list is mutated, so `total` is read pre-change. Returns the signed eaten-share -
-    the amount to correct on your day."""
-    total = prep_total(batch)
-    fe = batch["eaten"]["kcal"] / total["kcal"] if total["kcal"] else 0.0
-    fr = batch["removed"]["kcal"] / total["kcal"] if total["kcal"] else 0.0
-    mine = macro_scale(delta, fe)
-    batch["eaten"] = macro_add(batch["eaten"], mine)
-    batch["removed"] = macro_add(batch["removed"], macro_scale(delta, fr))
-    return mine
+def make_event(kind: str, date: str, macros: dict, label: str) -> dict:
+    """One consumption event: a portion that left the batch, eaten (logged to your day)
+    or removed (unlogged). Macros are snapshotted, so past days never shift under it."""
+    return {
+        "id": secrets.token_hex(4), "kind": kind, "date": date, "time": now_time(),
+        "macros": {k: macros[k] for k in MACROS}, "label": label,
+    }
 
 
-def log_correction(date: str, batch_name: str, label: str, verb: str, mine: dict, leads: list):
-    """Post the already-eaten share of a composition change to the day as a signed
-    prep-fix entry (positive when you'd under-counted, negative when over-) and add a
-    one-line note. No-op when the share rounds to nothing (e.g. a label-only edit)."""
-    kcal = round(mine["kcal"])
-    if kcal == 0:
-        return
-    append_entry(date, make_entry(
-        now_time(), f"{batch_name} - {verb} {label} (already-eaten share)",
-        kcal, r1(mine["protein"]), r1(mine["fat"]), r1(mine["carbs"]), "prep-fix"))
-    if kcal > 0:
-        leads.append(f"logged the {kcal} kcal you'd already eaten from it (today)")
-    else:
-        leads.append(f"un-logged the {-kcal} kcal of it you'd already eaten (today)")
+def apply_delta(batch: dict, key: str, delta: dict, *, date: str, label: str, verb: str,
+                leads: list, log_eaten: bool):
+    """Fold a composition change into the consumption log by how much has already left
+    the batch: the eaten fraction of `delta` becomes an eaten adjustment event (your
+    intake), the removed fraction a removed one, the rest is just composition (it flows
+    to remaining). Call *before* the ingredient list is mutated, so `total` is read
+    pre-change. When `log_eaten`, the eaten share is also posted to `date` as a linked
+    prep-fix entry. Every event stays inspectable and reversible with prep-uneat."""
+    total = prep_total(batch)["kcal"]
+    mine = macro_scale(delta, _frac(consumed(batch, "eaten")["kcal"], total))
+    others = macro_scale(delta, _frac(consumed(batch, "removed")["kcal"], total))
+    if any(abs(mine[k]) > 1e-9 for k in MACROS):
+        event = make_event("eaten", date, mine, f"{label} ({verb} share)")
+        batch["consumption"].append(event)
+        kcal = round(mine["kcal"])
+        if log_eaten and kcal != 0:
+            append_entry(date, make_entry(
+                now_time(), f"{batch['name']} - {verb} {label} (already-eaten share)",
+                kcal, r1(mine["protein"]), r1(mine["fat"]), r1(mine["carbs"]), "prep-fix",
+                prep_key=key, event_id=event["id"]))
+            leads.append(f"logged the {kcal} kcal you'd already eaten from it (today)" if kcal > 0
+                         else f"un-logged the {-kcal} kcal of it you'd already eaten (today)")
+    if any(abs(others[k]) > 1e-9 for k in MACROS):
+        batch["consumption"].append(make_event("removed", date, others, f"{label} ({verb} share)"))
 
 
 def pick_index(items: list, args, noun: str) -> int:
@@ -768,15 +826,38 @@ def pick_index(items: list, args, noun: str) -> int:
     die("give --last or --index N")
 
 
+def prep_size_from_args(args) -> dict | None:
+    return {"amount": args.size, "unit": args.unit or "g"} if getattr(args, "size", None) is not None else None
+
+
 def cmd_prep_add(args):
     prep = load(PREP_FILE, {})
     key = args.name.lower()
     if key in prep:
         die(f'a prep called "{prep[key]["name"]}" already exists ({round(frac_left(prep[key]) * 100)}% left) - '
             f"add to it with prep-ingredient-add, or prep-rm first to start over.")
-    prep[key] = {"name": args.name, "created": today(), "ingredients": [], "eaten": zero(), "removed": zero()}
+    size = prep_size_from_args(args)
+    prep[key] = {"name": args.name, "created": today(), "size": size,
+                 "ingredients": [], "consumption": []}
     save(PREP_FILE, prep)
-    print(f"created prep: {args.name} (empty - add ingredients with prep-ingredient-add)")
+    size_txt = f", {fmt_amount(size['amount'], size['unit'])}" if size else ""
+    print(f"created prep: {args.name}{size_txt} (empty - add ingredients with prep-ingredient-add)")
+
+
+def cmd_prep_size(args):
+    prep = load(PREP_FILE, {})
+    _, batch, assumed = resolve(prep, args.name, noun="prep", listing="prep-list", strict=False)
+    if assumed:
+        print(f'📝 read "{args.name}" as {assumed}')
+    if args.clear:
+        batch["size"] = None
+        save(PREP_FILE, prep)
+        print(f"cleared the size of {batch['name']}")
+        return
+    batch["size"] = {"amount": args.size, "unit": args.unit or "g"}
+    save(PREP_FILE, prep)
+    print(f"set {batch['name']} size to {fmt_amount(args.size, args.unit or 'g')}")
+    print(prep_line(batch))
 
 
 def cmd_prep_ingredient_add(args):
@@ -785,27 +866,24 @@ def cmd_prep_ingredient_add(args):
     ingredient = {"label": args.label, "kcal": args.kcal, "protein": args.protein,
                   "fat": args.fat, "carbs": args.carbs}
     date = args.date or today()
-    # A --later ingredient went into the leftovers, so all of it is still to eat. A
-    # forgotten one (the default) was in the whole batch: apply_delta splits its
-    # already-consumed share back onto eaten (logged) and removed (not), keeping
-    # intake and remaining exact. Before anything is consumed the two coincide and
-    # nothing moves. apply_delta runs before the append so `total` excludes it.
-    mine = None
-    if args.later:
-        mode = " (to the leftovers)"
-    elif frac_eaten(batch) + frac_removed(batch) > 0:
-        mode = " (forgotten - was in the whole batch)"
-        mine = apply_delta(batch, ingredient)
-    else:
-        mode = ""
-    batch["ingredients"].append(ingredient)
-    save(PREP_FILE, prep)
+    # A --later ingredient went into the leftovers only: all of it flows to remaining and
+    # nothing is attributed to what already left. A forgotten one (the default) was in the
+    # whole batch, so apply_delta books its already-consumed share as adjustment events
+    # (the eaten share also lands on your day). Before anything is consumed the two
+    # coincide. apply_delta runs before the append, so `total` excludes the new ingredient.
+    consumed_any = frac_eaten(batch) + frac_removed(batch) > 0
+    forgotten = consumed_any and not args.later
+    mode = " (to the leftovers)" if (args.later and consumed_any) else (
+        " (forgotten - was in the whole batch)" if forgotten else "")
 
     leads = [f'📝 read "{args.name}" as {assumed}'] if assumed else []
     leads.append(f"added to {batch['name']}{mode}: {args.label} - "
                  f"{round(ingredient['kcal'])} kcal, {r1(ingredient['protein'])}g P")
-    if mine is not None and not args.no_log_eaten:
-        log_correction(date, batch["name"], args.label, "forgotten", mine, leads)
+    if forgotten:
+        apply_delta(batch, key, ingredient, date=date, label=args.label, verb="forgotten",
+                    leads=leads, log_eaten=not args.no_log_eaten)
+    batch["ingredients"].append(ingredient)
+    save(PREP_FILE, prep)
     leads.append(prep_line(batch))
     print("\n".join(leads))
 
@@ -821,19 +899,18 @@ def cmd_prep_ingredient_edit(args):
         value = getattr(args, m)
         if value is not None:
             new[m] = value
-    # Correct the macro delta like a forgotten add (see apply_delta); read it before
-    # the ingredient is updated, so `total` still reflects the old values.
-    mine = apply_delta(batch, macro_sub(new, old))
+    label = args.label or ingredient["label"]
+    leads = [f'📝 read "{args.name}" as {assumed}'] if assumed else []
+    leads.append(f"updated {batch['name']} ingredient {idx + 1}: {label} - "
+                 f"{round(new['kcal'])} kcal, {r1(new['protein'])}g P")
+    # Correct the macro delta like a forgotten add; computed before the ingredient is
+    # updated, so `total` still reflects the old values.
+    apply_delta(batch, key, macro_sub(new, old), date=args.date or today(), label=label,
+                verb="corrected", leads=leads, log_eaten=not args.no_log_eaten)
     ingredient.update(new)
     if args.label is not None:
         ingredient["label"] = args.label
     save(PREP_FILE, prep)
-
-    leads = [f'📝 read "{args.name}" as {assumed}'] if assumed else []
-    leads.append(f"updated {batch['name']} ingredient {idx + 1}: {ingredient['label']} - "
-                 f"{round(ingredient['kcal'])} kcal, {r1(ingredient['protein'])}g P")
-    if not args.no_log_eaten:
-        log_correction(args.date or today(), batch["name"], ingredient["label"], "corrected", mine, leads)
     leads.append(prep_line(batch))
     print("\n".join(leads))
 
@@ -844,16 +921,15 @@ def cmd_prep_ingredient_rm(args):
     idx = pick_index(batch["ingredients"], args, "ingredient")
     ingredient = batch["ingredients"][idx]
     label, kcal = ingredient["label"], round(ingredient["kcal"])
-    # Removing is a negative delta, corrected in reverse; read it before dropping the
-    # ingredient so `total` still includes it.
-    mine = apply_delta(batch, macro_scale({k: ingredient[k] for k in MACROS}, -1))
-    batch["ingredients"].pop(idx)
-    save(PREP_FILE, prep)
-
     leads = [f'📝 read "{args.name}" as {assumed}'] if assumed else []
     leads.append(f"removed from {batch['name']}: {label} ({kcal} kcal)")
-    if not args.no_log_eaten:
-        log_correction(args.date or today(), batch["name"], label, "removed", mine, leads)
+    # A removal is a negative delta, corrected in reverse; computed before dropping the
+    # ingredient so `total` still includes it.
+    apply_delta(batch, key, macro_scale({k: ingredient[k] for k in MACROS}, -1),
+                date=args.date or today(), label=label, verb="removed",
+                leads=leads, log_eaten=not args.no_log_eaten)
+    batch["ingredients"].pop(idx)
+    save(PREP_FILE, prep)
     leads.append(prep_line(batch))
     print("\n".join(leads))
 
@@ -863,7 +939,9 @@ def cmd_prep_get(args):
                                 noun="prep", listing="prep-list", strict=False)
     if assumed:
         print(f'📝 read "{args.name}" as {assumed}')
-    print(f"{batch['name']} ({dm(batch['created'])}):")
+    size = batch.get("size")
+    size_txt = f", {fmt_amount(size['amount'], size['unit'])}" if size else ""
+    print(f"{batch['name']} ({dm(batch['created'])}){size_txt}:")
     if not batch["ingredients"]:
         print("  empty - no ingredients yet")
     for i, ingredient in enumerate(batch["ingredients"], 1):
@@ -872,11 +950,24 @@ def cmd_prep_get(args):
     total = prep_total(batch)
     print(f"Total: {round(total['kcal'])} kcal, {r1(total['protein'])}g P, "
           f"{r1(total['fat'])}g F, {r1(total['carbs'])}g C")
-    if batch["ingredients"]:
-        rem = prep_remaining(batch)
-        fr = frac_removed(batch)
-        split = f" - you {round(frac_eaten(batch) * 100)}%, others {round(fr * 100)}%" if fr > 0.0001 else ""
-        print(f"Left: {round(frac_left(batch) * 100)}% ({round(rem['kcal'])} kcal, {r1(rem['protein'])}g P){split}")
+    if not batch["ingredients"]:
+        return
+    if batch["consumption"]:
+        print("Consumption:")
+        for i, event in enumerate(batch["consumption"], 1):
+            frac = _frac(event["macros"]["kcal"], total["kcal"])
+            size_part = f", {portion_size(batch, frac)}" if size else ""
+            verb = "ate" if event["kind"] == "eaten" else "removed"
+            tag = "" if event["kind"] == "eaten" else " [unlogged]"
+            print(f"{i}. {dm(event['date'])} {event['time']} - {verb} {round(frac * 100)}%"
+                  f"{size_part} ({round(event['macros']['kcal'])} kcal){tag}")
+    rem = prep_remaining(batch)
+    fr = frac_removed(batch)
+    split = f" - you {round(frac_eaten(batch) * 100)}%, others {round(fr * 100)}%" if fr > 0.0001 else ""
+    left_size = portion_size(batch, frac_left(batch))
+    left_txt = f"{left_size}, " if left_size else ""
+    print(f"Left: {round(frac_left(batch) * 100)}% ({left_txt}{round(rem['kcal'])} kcal, "
+          f"{r1(rem['protein'])}g P){split}")
 
 
 def cmd_prep_eat(args):
@@ -889,7 +980,7 @@ def cmd_prep_eat(args):
     date = args.date or today()
     leads = [f'📝 read "{args.name}" as {assumed}'] if assumed else []
     capped = False
-    # --fraction/--remaining are shares of the *whole* batch; --fit-*/--target-*
+    # --fraction/--remaining/--size are shares of the *whole* batch; --fit-*/--target-*
     # size the share for you.
     if has_target(args):
         day = compute_day(date, [])
@@ -898,84 +989,147 @@ def cmd_prep_eat(args):
         ideal, why, dim, requested = portion_for_target(batch["name"], total, day, args)
         frac = min(ideal, left)
         capped = ideal > left + 1e-6
+    elif args.size is not None:
+        if not batch.get("size"):
+            die(f'"{batch["name"]}" has no size set - set one with prep-size, or use --fraction')
+        frac = args.size / batch["size"]["amount"]
     elif args.remaining:
         frac = left
     elif args.fraction is not None:
         frac = parse_fraction(args.fraction)
     else:
-        die("give an amount: --fraction, --remaining, --fit-protein/--fit-kcal, or --target-protein/--target-kcal")
+        die("give an amount: --fraction, --remaining, --size, --fit-protein/--fit-kcal, or --target-protein/--target-kcal")
     if frac <= 0:
-        die("fraction must be positive")
-    # An explicit --fraction over-ask is a mistake; a fit/target over-ask is capped above.
+        die("amount must be positive")
+    # An explicit over-ask is a mistake; a fit/target over-ask is capped above.
     if not has_target(args) and frac > left + 1e-6:
         die(f'only {round(left * 100)}% of "{batch["name"]}" is left '
             f"({round(total['kcal'] * left)} kcal); cannot eat "
             f"{round(frac * 100)}%. Use --remaining to finish it.")
-    consumed = macro_scale(total, frac)
-    entry = make_entry(now_time(), f"{batch['name']} ({round(frac * 100)}% of batch)",
-                       round(consumed["kcal"]), r1(consumed["protein"]),
-                       r1(consumed["fat"]), r1(consumed["carbs"]), "prep")
+    portion = macro_scale(total, frac)
+    size_part = portion_size(batch, frac)
+    item = f"{batch['name']} ({round(frac * 100)}% of batch{f', {size_part}' if size_part else ''})"
+    entry = make_entry(now_time(), item, round(portion["kcal"]), r1(portion["protein"]),
+                       r1(portion["fat"]), r1(portion["carbs"]), "prep")
     if has_target(args):
-        leads.append(f"🍽️ {batch['name']}: {round(frac * 100)}% of batch {why} - "
-                     f"{round(consumed['kcal'])} kcal, {r1(consumed['protein'])}g P")
+        size_hint = f" (~{size_part})" if size_part else ""
+        leads.append(f"🍽️ {batch['name']}: {round(frac * 100)}% of batch{size_hint} {why} - "
+                     f"{round(portion['kcal'])} kcal, {r1(portion['protein'])}g P")
         if capped:
-            short = requested - consumed[dim]
+            short = requested - portion[dim]
             short_txt = f"{round(short)}g P" if dim == "protein" else f"{round(short)} kcal"
             leads.append(f"⚠️ only {round(left * 100)}% of the batch is left - "
                          f"capped to that, {short_txt} short of the target.")
 
     def commit():
-        append_entry(date, entry)
-        batch["eaten"] = macro_add(batch["eaten"], consumed)
-        if frac_left(batch) <= 0.0001:
-            del prep[key]
-        else:
-            prep[key] = batch
+        event = make_event("eaten", date, portion, f"{round(frac * 100)}% of batch")
+        append_entry(date, make_entry(now_time(), item, round(portion["kcal"]), r1(portion["protein"]),
+                                      r1(portion["fat"]), r1(portion["carbs"]), "prep",
+                                      prep_key=key, event_id=event["id"]))
+        batch["consumption"].append(event)
+        prep[key] = batch
         save(PREP_FILE, prep)
 
     emit(date, entry, dry_run=args.dry_run, lead="\n".join(leads) or None, commit=commit)
 
 
+def cmd_prep_remove(args):
+    prep = load(PREP_FILE, {})
+    key, batch, assumed = resolve(prep, args.name, noun="prep", listing="prep-list", strict=False)
+    total = prep_total(batch)
+    if total["kcal"] <= 0:
+        die(f'"{batch["name"]}" has no ingredients yet')
+    left = frac_left(batch)
+    if args.size is not None:
+        if not batch.get("size"):
+            die(f'"{batch["name"]}" has no size set - set one with prep-size, or use --fraction')
+        frac = args.size / batch["size"]["amount"]
+    elif args.remaining:
+        frac = left
+    elif args.fraction is not None:
+        frac = parse_fraction(args.fraction)
+    else:
+        die("give an amount: --fraction, --remaining, or --size")
+    if frac <= 0:
+        die("amount must be positive")
+    if frac > left + 1e-6:
+        die(f'only {round(left * 100)}% of "{batch["name"]}" is left; cannot remove {round(frac * 100)}%. '
+            f"Use --remaining to clear the rest.")
+    portion = macro_scale(total, frac)
+    batch["consumption"].append(make_event("removed", args.date or today(), portion, "unlogged"))
+    prep[key] = batch
+    save(PREP_FILE, prep)
+    leads = [f'📝 read "{args.name}" as {assumed}'] if assumed else []
+    leads.append(f"removed {round(frac * 100)}% of {batch['name']} (unlogged - not your intake)")
+    leads.append(prep_line(batch))
+    print("\n".join(leads))
+
+
+def remove_linked_entry(event: dict, dates: set):
+    """Drop the day entry that projects `event`, noting its date for a ledger refresh."""
+    path = day_path(event["date"])
+    if not path.exists():
+        return
+    day = load(path, {})
+    kept = [e for e in day["entries"] if e.get("eventId") != event["id"]]
+    if len(kept) != len(day["entries"]):
+        day["entries"] = kept
+        save(path, day)
+        dates.add(event["date"])
+
+
+def cmd_prep_uneat(args):
+    prep = load(PREP_FILE, {})
+    key, batch, _ = resolve(prep, args.name, noun="prep", listing="prep-list", strict=True)
+    events = batch["consumption"]
+    if not events:
+        die(f'nothing has been eaten or removed from "{batch["name"]}" yet')
+    if args.all:
+        targets = list(events)
+        batch["consumption"] = []
+    else:
+        targets = [events.pop(pick_index(events, args, "consumption event"))]
+    dates: set = set()
+    for event in targets:
+        if event["kind"] == "eaten":
+            remove_linked_entry(event, dates)
+    prep[key] = batch
+    save(PREP_FILE, prep)
+    if dates:
+        recompute_from(min(dates))
+
+    if args.all:
+        back = round(sum(e["macros"]["kcal"] for e in targets))
+        head = (f"reversed all consumption of {batch['name']} "
+                f"({len(targets)} event(s), {back} kcal back to remaining)")
+    else:
+        event = targets[0]
+        verb = "eaten" if event["kind"] == "eaten" else "removed"
+        head = f"reversed a {round(event['macros']['kcal'])} kcal {verb} portion of {batch['name']}"
+    lines = [head]
+    if dates:
+        lines.append("un-logged the linked day entr" + ("ies" if len(dates) > 1 else "y")
+                     + " and recomputed the ledger")
+    lines.append(prep_line(batch))
+    print("\n".join(lines))
+
+
 def cmd_prep_list(args):
     prep = load(PREP_FILE, {})
-    if not prep:
-        print("no preps saved")
+    shown = [b for b in prep.values() if args.all or not b["ingredients"] or frac_left(b) > 0.0001]
+    if not shown:
+        print("no active preps" if prep else "no preps saved")
         return
-    for v in prep.values():
-        print(f"- {prep_line(v)}")
+    for b in shown:
+        print(f"- {prep_line(b)}")
 
 
 def cmd_prep_rm(args):
     prep = load(PREP_FILE, {})
     key, batch, _ = resolve(prep, args.name, noun="prep", listing="prep-list", strict=True)
-    if args.fraction is None:
-        del prep[key]
-        save(PREP_FILE, prep)
-        print(f"removed prep: {batch['name']} (was {round(frac_left(batch) * 100)}% left)")
-        return
-    # A fraction is an unlogged portion leaving the batch (someone else ate it, a
-    # spill, a giveaway): it lands in `removed`, never on your day. No fraction still
-    # discards the whole batch above.
-    total = prep_total(batch)
-    if total["kcal"] <= 0:
-        die(f'"{batch["name"]}" has no ingredients yet')
-    left = frac_left(batch)
-    frac = parse_fraction(args.fraction)
-    if frac <= 0:
-        die("fraction must be positive")
-    if frac > left + 1e-6:
-        die(f'only {round(left * 100)}% of "{batch["name"]}" is left; cannot remove {round(frac * 100)}%. '
-            f"Run prep-rm without --fraction to discard the whole batch.")
-    batch["removed"] = macro_add(batch["removed"], macro_scale(total, frac))
-    if frac_left(batch) <= 0.0001:
-        del prep[key]
-        save(PREP_FILE, prep)
-        print(f"removed the last {round(frac * 100)}% of {batch['name']} (unlogged); batch cleared")
-    else:
-        prep[key] = batch
-        save(PREP_FILE, prep)
-        print(f"removed {round(frac * 100)}% of {batch['name']} (unlogged - not your intake)")
-        print(prep_line(batch))
+    del prep[key]
+    save(PREP_FILE, prep)
+    print(f"removed prep: {batch['name']} (was {round(frac_left(batch) * 100)}% left)")
 
 
 def cmd_recompute(args):
@@ -1106,6 +1260,16 @@ def build_parser() -> argparse.ArgumentParser:
     pa = sub.add_parser("prep-add")
     pa.set_defaults(func=cmd_prep_add)
     pa.add_argument("--name", required=True)
+    pa.add_argument("--size", type=positive)
+    pa.add_argument("--unit")
+
+    psz = sub.add_parser("prep-size")
+    psz.set_defaults(func=cmd_prep_size)
+    psz.add_argument("--name", required=True)
+    grp = psz.add_mutually_exclusive_group(required=True)
+    grp.add_argument("--size", type=positive)
+    grp.add_argument("--clear", action="store_true")
+    psz.add_argument("--unit")
 
     ping = sub.add_parser("prep-ingredient-add")
     ping.set_defaults(func=cmd_prep_ingredient_add)
@@ -1147,14 +1311,33 @@ def build_parser() -> argparse.ArgumentParser:
     pe = sub.add_parser("prep-eat")
     pe.set_defaults(func=cmd_prep_eat)
     pe.add_argument("--name", required=True)
-    add_amount_flags(pe, ("--fraction", {}), ("--remaining", {"action": "store_true"}))
+    add_amount_flags(pe, ("--fraction", {}), ("--remaining", {"action": "store_true"}),
+                     ("--size", {"type": positive}))
+
+    prem = sub.add_parser("prep-remove")
+    prem.set_defaults(func=cmd_prep_remove)
+    prem.add_argument("--name", required=True)
+    grp = prem.add_mutually_exclusive_group()
+    grp.add_argument("--fraction")
+    grp.add_argument("--remaining", action="store_true")
+    grp.add_argument("--size", type=positive)
+    prem.add_argument("--date")
+
+    pun = sub.add_parser("prep-uneat")
+    pun.set_defaults(func=cmd_prep_uneat)
+    pun.add_argument("--name", required=True)
+    grp = pun.add_mutually_exclusive_group(required=True)
+    grp.add_argument("--last", action="store_true")
+    grp.add_argument("--index", type=int)
+    grp.add_argument("--all", action="store_true")
 
     prm = sub.add_parser("prep-rm")
     prm.set_defaults(func=cmd_prep_rm)
     prm.add_argument("--name", required=True)
-    prm.add_argument("--fraction")
 
-    sub.add_parser("prep-list").set_defaults(func=cmd_prep_list)
+    pl = sub.add_parser("prep-list")
+    pl.set_defaults(func=cmd_prep_list)
+    pl.add_argument("--all", action="store_true")
 
     rc = sub.add_parser("recompute")
     rc.set_defaults(func=cmd_recompute)

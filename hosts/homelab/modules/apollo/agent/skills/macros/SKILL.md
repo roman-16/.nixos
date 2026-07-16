@@ -20,7 +20,7 @@ Tracks daily nutrition as JSON under `macros/` in the working directory. Every r
 
 ## Replying
 
-Whenever a command prints a day summary or list (`log`, `food-eat`, `show`, `summary`, `entries`, `edit`, `prep-eat`, `prep-list`, `prep-get`, `food-list`, `goal`), your reply **is** that output, sent back verbatim: the exact lines the script printed, in full and unchanged. Do not summarize it, rephrase it, reformat it, turn it into prose, trim it, or wrap it in your own commentary - the user wants to read the list itself.
+Whenever a command prints a day summary or list (`log`, `food-eat`, `show`, `summary`, `entries`, `edit`, `prep-eat`, `prep-remove`, `prep-uneat`, `prep-size`, `prep-list`, `prep-get`, `food-list`, `goal`), your reply **is** that output, sent back verbatim: the exact lines the script printed, in full and unchanged. Do not summarize it, rephrase it, reformat it, turn it into prose, trim it, or wrap it in your own commentary - the user wants to read the list itself.
 
 A `--dry-run` preview (see [Previewing](#previewing)) is relayed the same way, verbatim - but because it answers a "what if", you may add one short line after it, e.g. "Want me to log it?".
 
@@ -108,36 +108,55 @@ Name matching is forgiving: an exact alias wins, else a unique substring, else t
 
 ## Meal prep (batch cooking)
 
-A batch is built up ingredient by ingredient. It tracks its ingredient list plus how much has left it, split into what **you** ate (logged to your day) and what left **unlogged** (someone else ate it, a spill, a giveaway), so `remaining = total - your share - the unlogged share`. Create it, then add ingredients one message at a time (look each up or estimate it, exactly like logging food):
+A batch is built up ingredient by ingredient, and everything that leaves it is a **consumption event** in a log: a portion **you** ate (logged to your day) or one that left **unlogged** (someone else ate it, a spill, a giveaway), so `remaining = total - your share - the unlogged share`. Every event is inspectable with `prep-get` and reversible with `prep-uneat`. Create the batch, then add ingredients one message at a time (look each up or estimate it, exactly like logging food):
 
 ```bash
 {baseDir}/scripts/macros.py prep-add --name "Bolognese"                        # create an empty batch
+{baseDir}/scripts/macros.py prep-add --name "Ice cream" --size 1000            # optional total size (grams; --unit ml/pieces/...)
 {baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label "Beef mince (500g)" --kcal 1075 --protein 100 --fat 75 --carbs 0
 {baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label "Passata (700g)" --kcal 245 --protein 12 --fat 1 --carbs 45
-{baseDir}/scripts/macros.py prep-get --name bolognese                          # ingredient breakdown, total, % left (with your/others split)
+{baseDir}/scripts/macros.py prep-get --name bolognese                          # ingredients, total, consumption log, % (and size) left
 ```
 
 `prep-add` makes an empty batch and refuses a name that already exists (so you never wipe a half-eaten one); a batch whose total you already know is just `prep-add` plus one `prep-ingredient-add`.
 
-**Eating vs unlogged removal** - the key pair. `prep-eat` is a portion **you** eat (logged to your day); `prep-rm` is a portion that leaves the batch **unlogged**:
+**Eating, unlogged removal, undo** - the core verbs. `prep-eat` is a portion **you** eat (logged to your day); `prep-remove` is one that leaves the batch **unlogged**; `prep-uneat` reverses any event; `prep-rm` deletes the whole batch:
 
 ```bash
 {baseDir}/scripts/macros.py prep-eat --name bolognese --fraction 1/5    # you ate 1/5 of the WHOLE batch (also 20% or 0.2)
 {baseDir}/scripts/macros.py prep-eat --name bolognese --remaining       # you finish whatever is left
+{baseDir}/scripts/macros.py prep-eat --name "ice cream" --size 250      # you ate 250g (needs a size set)
 {baseDir}/scripts/macros.py prep-eat --name bolognese --fit-protein     # enough to reach today's protein goal
 {baseDir}/scripts/macros.py prep-eat --name bolognese --target-kcal 500 # a portion worth 500 kcal
-{baseDir}/scripts/macros.py prep-rm --name bolognese --fraction 1/3     # someone else ate / spilled / gave away 1/3 - NOT your intake
-{baseDir}/scripts/macros.py prep-rm --name bolognese                     # discard the WHOLE batch (spoiled/scrapped)
-{baseDir}/scripts/macros.py prep-list                                   # each batch with its remaining kcal/protein
+{baseDir}/scripts/macros.py prep-remove --name bolognese --fraction 1/3 # someone else ate / spilled / gave away 1/3 - NOT your intake
+{baseDir}/scripts/macros.py prep-uneat --name bolognese --last          # undo the last event (or --index N from prep-get, or --all)
+{baseDir}/scripts/macros.py prep-rm --name bolognese                    # delete the batch entirely
+{baseDir}/scripts/macros.py prep-list                                   # active batches (add --all to include finished ones)
 ```
 
-`--fraction` (on both) is a share of the whole batch, not of what remains, and errors if it exceeds what's left; use `prep-eat --remaining` to eat the rest, or `prep-rm` with no `--fraction` to bin the batch. `prep-eat`'s `--fit-*`/`--target-*` size the portion for you and cap to what remains.
+`--fraction` (on eat and remove) is a share of the whole batch, not of what remains, and errors if it exceeds what's left; use `--remaining` to take the rest. `prep-eat`'s `--fit-*`/`--target-*` size the portion for you and cap to what remains. A finished batch (0% left) is **not** deleted - it just drops out of `prep-list` (see it with `--all`), so its log stays inspectable and undoable; `prep-rm` is the explicit "done, throw it away".
+
+### Size (grams / ml / pieces)
+
+A batch optionally carries a total **size** so portions read in real units, not just "% of batch". Set it at creation with `prep-add --size`, or any time after - best measured *after* cooking/draining, when the real weight is finally known:
+
+```bash
+{baseDir}/scripts/macros.py prep-size --name "ice cream" --size 950            # 950g total (measured after freezing)
+{baseDir}/scripts/macros.py prep-size --name soup --size 900 --unit ml
+{baseDir}/scripts/macros.py prep-size --name "ice cream" --clear               # drop the size again
+```
+
+With a size set, every portion also shows its weight and `prep-eat --fit-kcal` answers in grams (`31% of batch (~295g)`). If asked "how much of X can I eat in grams" and the batch has no size, offer to record one. Size scales with the kcal fraction, so it stays a `~` estimate; if you change the composition a lot, re-run `prep-size`.
+
+### Undoing a consumption mistake
+
+`prep-get` numbers each consumption event; `prep-uneat` reverses one by `--index N`, the most recent with `--last`, or clears the whole log with `--all`. Reversing an **eaten** event also removes the day entry it created and re-folds the ledger; reversing a **removed** event just restores it to the batch. This is the fix for "logged it against the wrong batch": `prep-uneat` the wrong one, then apply it to the right one.
 
 ### Adding an ingredient after eating some
 
 Adding to a batch that's already been eaten from has two cases; the flag depends on what actually happened:
 
-- **Forgot to mention it** (it was in the pot all along) - the default. The share already eaten is split back correctly (your part is logged so your intake stays right, anyone else's isn't), and the rest joins what's left.
+- **Forgot to mention it** (it was in the pot all along) - the default. The share already eaten is split back correctly (your part is logged so your intake stays right, anyone else's isn't) as adjustment events in the log, and the rest joins what's left.
 - **Added it to the leftovers** just now (`--later`) - none of it was in what was eaten, so all of it joins what's left and nothing is logged.
 
 ```bash
