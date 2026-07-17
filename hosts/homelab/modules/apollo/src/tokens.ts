@@ -13,10 +13,11 @@ import { escapeHtml, humanTokens } from "./format";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-export type TokenRange = "1m" | "1y" | "3m" | "3y" | "6m" | "7d" | "all";
+export type TokenRange = "1d" | "1m" | "1y" | "3m" | "3y" | "6m" | "7d" | "all";
 
 /** Lookback window in days for each range; `all` (the default) is unbounded. */
 const RANGE_DAYS: Record<TokenRange, number | null> = {
+  "1d": 1,
   "7d": 7,
   "1m": 30,
   "3m": 90,
@@ -28,6 +29,7 @@ const RANGE_DAYS: Record<TokenRange, number | null> = {
 
 /** Range keys with their pill labels, in ascending-window order (drives the dashboard toggle). */
 export const RANGE_LABELS: [TokenRange, string][] = [
+  ["1d", "1d"],
   ["7d", "7d"],
   ["1m", "1m"],
   ["3m", "3m"],

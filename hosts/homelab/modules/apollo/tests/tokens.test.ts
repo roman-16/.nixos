@@ -50,7 +50,7 @@ function totals(tokens: Partial<CategoryMap> = {}, cost: Partial<CategoryMap> = 
 
 describe("parseRange", () => {
   it("accepts every known range", () => {
-    for (const range of ["7d", "1m", "3m", "6m", "1y", "3y", "all"] as const) {
+    for (const range of ["1d", "7d", "1m", "3m", "6m", "1y", "3y", "all"] as const) {
       expect(parseRange(range)).toBe(range);
     }
   });
