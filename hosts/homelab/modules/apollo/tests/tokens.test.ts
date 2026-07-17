@@ -252,9 +252,17 @@ describe("renderTokensDaily", () => {
     expect(html).not.toContain("Cache read:");
   });
 
-  it("spreads bars across the full width instead of packing them left", () => {
-    const html = renderTokensDaily([day({ tokens: map({ input: 5 }) })]);
-    expect(html).toContain("flex-1");
+  it("spreads multiple days across the full width, flush to the edges", () => {
+    const html = renderTokensDaily([
+      day({ day: "2026-07-14", tokens: map({ input: 5 }) }),
+      day({ day: "2026-07-15", tokens: map({ input: 3 }) }),
+    ]);
+    expect(html).toContain("justify-between");
     expect(html).not.toContain("w-max");
+  });
+
+  it("centers a lone bar instead of stranding it at the left edge", () => {
+    const html = renderTokensDaily([day({ tokens: map({ input: 5 }) })]);
+    expect(html).toContain("justify-center");
   });
 });
