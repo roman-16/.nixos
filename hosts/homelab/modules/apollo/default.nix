@@ -14,6 +14,7 @@ let
   agentPkgs =
     (with pkgs; [
       bash
+      bun
       coreutils
       curl
       ffmpeg-headless
@@ -21,7 +22,6 @@ let
       gnugrep
       gnused
       jq
-      nodejs
       openssh
       poppler-utils
       python3
@@ -335,18 +335,19 @@ in
                 APOLLO_MODEL = "anthropic/claude-sonnet-5";
                 APOLLO_THINKING = "high";
                 APOLLO_WORKSPACE = "%S/apollo/workspace";
+                # The browser skill runs `browse` via bunx (`bunx --bun browse@latest`). bunx
+                # caches the download under BUN_INSTALL_CACHE_DIR and stages the runnable tree
+                # under $TMPDIR; HOME (the DynamicUser StateDirectory) is a noexec mount, so the
+                # cache lives on the service's exec /tmp, keeping the whole exec surface on one
+                # exec filesystem so a native prebuild (e.g. bufferutil) never hits "Permission
+                # denied". It's ephemeral, so the first browse after a restart re-downloads (~50s,
+                # within the tool timeout). No ignore-scripts flag is needed: bun does not run
+                # dependencies' lifecycle scripts by default, and browse's natives ship prebuilt
+                # (bufferutil) or as platform packages (esbuild), so nothing compiles.
+                BUN_INSTALL_CACHE_DIR = "/tmp/bun-cache";
                 CHROME_PATH = "${chromeWrapper}";
                 HOME = "%S/apollo";
                 MISTRAL_API_KEY = secrets.mistralApiKey;
-                # The browser skill runs via npx, which installs and *exec*s its package from the
-                # npm cache. HOME (the DynamicUser StateDirectory) is a noexec mount, so put the
-                # cache on the service's exec /tmp - otherwise the browse binary (and the deps'
-                # install-script binaries) hit "Permission denied" (exit 126). It's ephemeral, so
-                # the first browse after a restart re-installs (~50s, within the tool timeout).
-                # Skipping install scripts keeps that install clean (esbuild's binary is static,
-                # bufferutil an optional ws speedup ws falls back from).
-                NPM_CONFIG_CACHE = "/tmp/npm";
-                NPM_CONFIG_IGNORE_SCRIPTS = "true";
                 PORT = toString port;
                 SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
               };
