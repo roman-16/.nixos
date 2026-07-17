@@ -24,7 +24,7 @@
         imagemagick
         wget
         claude-code
-        nodejs
+        bun
       ];
     };
 

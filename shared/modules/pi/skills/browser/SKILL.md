@@ -1,7 +1,6 @@
 ---
 name: browser
 description: Drive a real web browser from the terminal via Browserbase's `browse` CLI - navigate pages; inspect them through accessibility snapshots, screenshots, and DOM/markdown reads; interact by clicking, typing, selecting, uploading, and raw mouse/keyboard; capture network traffic; manage tabs and named sessions; run locally or on Browserbase's cloud; and use cloud fetch/search, Functions, and templates. Use whenever a task needs to view, navigate, scrape, or act on a web page.
-compatibility: Requires Node.js (>=20.19 or >=22.12) with npx on PATH. Runs the latest `browse` via npx; no global install or Nix required. Local browsing needs a Chrome/Chromium-family browser, or use remote mode with BROWSERBASE_API_KEY.
 ---
 
 # Browser
