@@ -51,6 +51,13 @@ export interface TokenTotals {
   tokens: CategoryMap;
 }
 
+/** One calendar day's token counts and USD cost, each broken down by category. */
+export interface DayTokens {
+  cost: CategoryMap;
+  day: string;
+  tokens: CategoryMap;
+}
+
 /** The subset of a pi `Usage` this feature records (structurally compatible with it). */
 export interface TokenUsageInput {
   cacheRead: number;
@@ -61,6 +68,7 @@ export interface TokenUsageInput {
 }
 
 export interface TokenStore {
+  daily(range: TokenRange): DayTokens[];
   record(usage: TokenUsageInput, model: string, time: number): void;
   totals(range: TokenRange): TokenTotals;
 }
@@ -79,6 +87,34 @@ interface TotalsRow {
   cost_output: number;
   input: number;
   output: number;
+}
+
+interface DailyRow extends TotalsRow {
+  day: string;
+}
+
+/** Map a summed SQL row into the token + cost category maps. */
+function rowMaps(row: TotalsRow): TokenTotals {
+  return {
+    cost: {
+      cacheRead: Number(row.cost_cache_read),
+      cacheWrite: Number(row.cost_cache_write),
+      input: Number(row.cost_input),
+      output: Number(row.cost_output),
+    },
+    tokens: {
+      cacheRead: Number(row.cache_read),
+      cacheWrite: Number(row.cache_write),
+      input: Number(row.input),
+      output: Number(row.output),
+    },
+  };
+}
+
+/** Lookback cutoff (epoch ms) for a range; 0 for the unbounded `all`. */
+function sinceFor(range: TokenRange): number {
+  const days = RANGE_DAYS[range];
+  return days == null ? 0 : Date.now() - days * MS_PER_DAY;
 }
 
 /** Create a SQLite-backed store for per-turn token usage and cost. */
@@ -101,7 +137,26 @@ export function createTokenStore(db: Database): TokenStore {
        FROM tokens
       WHERE time >= ?`,
   );
+  const selectDaily = db.query(
+    `SELECT date(time / 1000, 'unixepoch', 'localtime') AS day,
+            COALESCE(SUM(input), 0)            AS input,
+            COALESCE(SUM(output), 0)           AS output,
+            COALESCE(SUM(cache_read), 0)       AS cache_read,
+            COALESCE(SUM(cache_write), 0)      AS cache_write,
+            COALESCE(SUM(cost_input), 0)       AS cost_input,
+            COALESCE(SUM(cost_output), 0)      AS cost_output,
+            COALESCE(SUM(cost_cache_read), 0)  AS cost_cache_read,
+            COALESCE(SUM(cost_cache_write), 0) AS cost_cache_write
+       FROM tokens
+      WHERE time >= ?
+      GROUP BY day
+      ORDER BY day`,
+  );
   return {
+    daily(range) {
+      const rows = selectDaily.all(sinceFor(range)) as DailyRow[];
+      return rows.map((row) => ({ ...rowMaps(row), day: row.day }));
+    },
     record(usage, model, time) {
       insert.run(
         time,
@@ -117,23 +172,7 @@ export function createTokenStore(db: Database): TokenStore {
       );
     },
     totals(range) {
-      const days = RANGE_DAYS[range];
-      const since = days == null ? 0 : Date.now() - days * MS_PER_DAY;
-      const row = select.get(since) as TotalsRow;
-      return {
-        cost: {
-          cacheRead: Number(row.cost_cache_read),
-          cacheWrite: Number(row.cost_cache_write),
-          input: Number(row.cost_input),
-          output: Number(row.cost_output),
-        },
-        tokens: {
-          cacheRead: Number(row.cache_read),
-          cacheWrite: Number(row.cache_write),
-          input: Number(row.input),
-          output: Number(row.output),
-        },
-      };
+      return rowMaps(select.get(sinceFor(range)) as TotalsRow);
     },
   };
 }
@@ -161,6 +200,11 @@ function formatUsd(value: number): string {
   return `$${value.toFixed(2)}`;
 }
 
+/** Native-`title` text for one stacked-bar segment: category, tokens, share, cost. */
+function segmentTitle(label: string, tokens: number, pct: number, cost: number): string {
+  return `${label}: ${tokens.toLocaleString("en-US")} tokens (${pct.toFixed(1)}%) · ${formatUsd(cost)}`;
+}
+
 /** Render the #tokens fragment: a horizontal 100% stacked bar (hover a segment for its exact tokens + cost) plus a legend, with per-category and total USD cost. */
 export function renderTokens(totals: TokenTotals): string {
   const totalTokens = sum(totals.tokens);
@@ -174,7 +218,12 @@ export function renderTokens(totals: TokenTotals): string {
   const segments = CATEGORIES.filter((cat) => totals.tokens[cat.key] > 0)
     .map((cat) => {
       const tokens = totals.tokens[cat.key];
-      const title = `${cat.label}: ${tokens.toLocaleString("en-US")} tokens (${percent(tokens, totalTokens).toFixed(1)}%) · ${formatUsd(totals.cost[cat.key])}`;
+      const title = segmentTitle(
+        cat.label,
+        tokens,
+        percent(tokens, totalTokens),
+        totals.cost[cat.key],
+      );
       return `<div class="h-full min-w-[2px] ${cat.color}" style="flex-grow:${tokens}" title="${escapeHtml(title)}"></div>`;
     })
     .join("");
@@ -193,4 +242,49 @@ export function renderTokens(totals: TokenTotals): string {
     <div class="grid gap-x-6 gap-y-2 text-xs sm:grid-cols-2">${legend}</div>
     <p class="text-right text-[11px] text-neutral-500">Total: ${humanTokens(totalTokens)} tokens · ${escapeHtml(formatUsd(totalCost))}</p>
   </div>`;
+}
+
+/** A short `DD.MM` label from an ISO `YYYY-MM-DD` day key. */
+function dayLabel(iso: string): string {
+  const [, month, day] = iso.split("-");
+  return `${day}.${month}`;
+}
+
+/**
+ * Render the #tokens-daily fragment: one vertical stacked bar per active day in the range
+ * (hover a segment for its tokens + cost, exactly like the summary bar), each labelled with
+ * the day's total tokens (hover for the day's cost). Colors match the legend above, so no
+ * separate legend is needed; the row scrolls horizontally when a range spans many days.
+ */
+export function renderTokensDaily(days: DayTokens[]): string {
+  if (days.length === 0) {
+    return `<p class="text-sm text-neutral-500">No daily token usage for this range yet.</p>`;
+  }
+  const maxTotal = Math.max(...days.map((d) => sum(d.tokens)));
+  const columns = days
+    .map((d) => {
+      const dayTokens = sum(d.tokens);
+      const fillPct = maxTotal > 0 ? (dayTokens / maxTotal) * 100 : 0;
+      const segments = CATEGORIES.filter((cat) => d.tokens[cat.key] > 0)
+        .map((cat) => {
+          const tokens = d.tokens[cat.key];
+          const title = segmentTitle(
+            cat.label,
+            tokens,
+            percent(tokens, dayTokens),
+            d.cost[cat.key],
+          );
+          return `<div class="w-full min-h-[2px] ${cat.color}" style="flex-grow:${tokens}" title="${escapeHtml(title)}"></div>`;
+        })
+        .join("");
+      return `<div class="flex w-9 shrink-0 flex-col items-center gap-1">
+      <div class="flex h-32 w-full items-end">
+        <div class="flex w-full flex-col-reverse overflow-hidden rounded-sm" style="height:${fillPct.toFixed(1)}%">${segments}</div>
+      </div>
+      <span class="tabular-nums text-[10px] text-neutral-300" title="${escapeHtml(formatUsd(sum(d.cost)))}">${humanTokens(dayTokens)}</span>
+      <span class="tabular-nums text-[10px] text-neutral-600">${dayLabel(d.day)}</span>
+    </div>`;
+    })
+    .join("");
+  return `<div class="flex w-max gap-1.5 pb-1">${columns}</div>`;
 }

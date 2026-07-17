@@ -85,9 +85,21 @@ export function renderPage(version: string): string {
           ${RANGE_LABELS.map(([value, label]) => filterChip("range", value, label, value === "all")).join("\n          ")}
         </form>`,
       )}
-      <div id="tokens" class="${SURFACE} p-5"
-        hx-get="/tokens" hx-include="#tokens-range" hx-trigger="load, change from:#tokens-range, every 15s" hx-swap="innerHTML">
-        <p class="text-sm text-neutral-500">Loading…</p>
+      <div class="${SURFACE} space-y-4 p-5">
+        <div id="tokens"
+          hx-get="/tokens" hx-include="#tokens-range" hx-trigger="load, change from:#tokens-range, every 15s" hx-swap="innerHTML">
+          <p class="text-sm text-neutral-500">Loading…</p>
+        </div>
+        <details class="group border-t border-white/10 pt-3">
+          <summary class="flex cursor-pointer list-none items-center gap-2 text-xs font-medium text-neutral-400 transition hover:text-neutral-200">
+            <span class="text-[10px] text-neutral-500 transition group-open:rotate-90">▶</span>
+            Daily breakdown
+          </summary>
+          <div id="tokens-daily" class="mt-3 overflow-x-auto"
+            hx-get="/tokens/daily" hx-include="#tokens-range" hx-trigger="load, change from:#tokens-range, every 15s" hx-swap="innerHTML">
+            <p class="text-sm text-neutral-500">Loading…</p>
+          </div>
+        </details>
       </div>
       ${headingRow("skills")}
       <div id="skills" class="${SURFACE} p-5"

@@ -30,6 +30,9 @@ describe("renderPage", () => {
     expect(html).toContain(`hx-get="/chat"`);
     expect(html).toContain(`id="context"`);
     expect(html).toContain(`hx-get="/context"`);
+    expect(html).toContain(`id="tokens-daily"`);
+    expect(html).toContain(`hx-get="/tokens/daily"`);
+    expect(html).toContain("Daily breakdown");
     expect(html).toContain("/app.css?v=abc123");
     expect(html).toContain("/htmx.min.js?v=abc123");
     expect(html).toContain(`hx-post="/compact"`);

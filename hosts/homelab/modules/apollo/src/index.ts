@@ -29,7 +29,7 @@ import {
 } from "./messages";
 import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
 import { createReminderWatcher, formatReminder } from "./reminders";
-import { createTokenStore, parseRange, renderTokens } from "./tokens";
+import { createTokenStore, parseRange, renderTokens, renderTokensDaily } from "./tokens";
 import { transcribeAudio } from "./transcribe";
 import { fetchUsage, type UsageData } from "./usage";
 import { startWhatsApp, type WhatsApp } from "./whatsapp";
@@ -343,6 +343,13 @@ export async function main(): Promise<void> {
       if (pathname === "/tokens") {
         const totals = tokenStore.totals(parseRange(url.searchParams.get("range")));
         return new Response(renderTokens(totals), { headers: htmlHeaders });
+      }
+
+      // Per-day breakdown for the same range; like /tokens it tracks a sliding window,
+      // so it is recomputed each poll rather than 204-cached.
+      if (pathname === "/tokens/daily") {
+        const daily = tokenStore.daily(parseRange(url.searchParams.get("range")));
+        return new Response(renderTokensDaily(daily), { headers: htmlHeaders });
       }
 
       // Loaded skills change only on restart or a dashboard Reload (which reloads the

@@ -4,8 +4,10 @@ import { describe, expect, it } from "bun:test";
 import {
   type CategoryMap,
   createTokenStore,
+  type DayTokens,
   parseRange,
   renderTokens,
+  renderTokensDaily,
   type TokenTotals,
   type TokenUsageInput,
 } from "../src/tokens";
@@ -106,6 +108,40 @@ describe("createTokenStore", () => {
   });
 });
 
+describe("daily", () => {
+  // Midday timestamps so the bucket date is the same in any runner timezone.
+  const noon = (iso: string) => new Date(`${iso}T12:00:00`).getTime();
+
+  it("returns nothing when no tokens are recorded", () => {
+    expect(createTokenStore(freshDb()).daily("all")).toEqual([]);
+  });
+
+  it("groups rows by calendar day and sums each category", () => {
+    const store = createTokenStore(freshDb());
+    store.record(
+      usage({ input: 10, output: 5 }, { input: 0.1, output: 0.2 }),
+      "m",
+      noon("2026-07-10"),
+    );
+    store.record(usage({ input: 20 }, { input: 0.3 }), "m", noon("2026-07-10"));
+    store.record(usage({ cacheRead: 100 }, { cacheRead: 0.5 }), "m", noon("2026-07-11"));
+    const days = store.daily("all");
+    expect(days.map((d) => d.day)).toEqual(["2026-07-10", "2026-07-11"]);
+    expect(days[0]!.tokens).toEqual({ cacheRead: 0, cacheWrite: 0, input: 30, output: 5 });
+    expect(days[0]!.cost.input).toBeCloseTo(0.4);
+    expect(days[1]!.tokens.cacheRead).toBe(100);
+  });
+
+  it("only includes days inside the range window", () => {
+    const store = createTokenStore(freshDb());
+    const now = Date.now();
+    store.record(usage({ input: 10 }), "m", now);
+    store.record(usage({ input: 99 }), "m", now - 10 * DAY);
+    expect(store.daily("7d").map((d) => d.tokens.input)).toEqual([10]);
+    expect(store.daily("1m")).toHaveLength(2);
+  });
+});
+
 describe("renderTokens", () => {
   it("shows a placeholder when nothing is recorded", () => {
     expect(renderTokens(totals())).toContain("No token usage");
@@ -142,5 +178,48 @@ describe("renderTokens", () => {
     const html = renderTokens(totals({ input: 100 }, { input: 0.004 }));
     expect(html).toContain("&lt;$0.01");
     expect(html).not.toContain("<$0.01");
+  });
+});
+
+describe("renderTokensDaily", () => {
+  const day = (over: Partial<DayTokens> = {}): DayTokens => ({
+    cost: map(),
+    day: "2026-07-14",
+    tokens: map(),
+    ...over,
+  });
+
+  it("shows a placeholder when there are no days", () => {
+    expect(renderTokensDaily([])).toContain("No daily token usage");
+  });
+
+  it("renders a column per day with the date, total tokens, and per-segment tooltip", () => {
+    const html = renderTokensDaily([
+      day({
+        cost: map({ input: 0.2, output: 0.9 }),
+        day: "2026-07-14",
+        tokens: map({ input: 300, output: 100 }),
+      }),
+    ]);
+    expect(html).toContain("14.07");
+    expect(html).toContain(">400<");
+    expect(html).toContain('title="$1.10"');
+    expect(html).toContain("Read: 300 tokens (75.0%) · $0.20");
+    expect(html).toContain("flex-grow:300");
+  });
+
+  it("scales each bar's fill height by the busiest day's total", () => {
+    const html = renderTokensDaily([
+      day({ day: "2026-07-13", tokens: map({ input: 1000 }) }),
+      day({ day: "2026-07-14", tokens: map({ input: 250 }) }),
+    ]);
+    expect(html).toContain("height:100.0%");
+    expect(html).toContain("height:25.0%");
+  });
+
+  it("omits categories with no tokens for the day", () => {
+    const html = renderTokensDaily([day({ tokens: map({ input: 5 }) })]);
+    expect(html).toContain("Read: 5 tokens");
+    expect(html).not.toContain("Cache read:");
   });
 });
