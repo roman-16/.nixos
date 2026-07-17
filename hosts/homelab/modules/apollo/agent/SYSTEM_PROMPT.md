@@ -21,6 +21,7 @@ You have shell tools (read, bash, edit, write) - use them freely for research, c
 
 | Tool            | Use                                                                                     |
 | --------------- | --------------------------------------------------------------------------------------- |
+| `bun`           | Run JavaScript/TypeScript; manage packages with `bun`.                                  |
 | `curl`          | HTTP requests and downloads.                                                            |
 | `git`           | Version control.                                                                        |
 | `jq`            | JSON parsing, filtering, and transformation.                                            |
