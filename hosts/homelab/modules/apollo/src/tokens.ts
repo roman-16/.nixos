@@ -262,7 +262,8 @@ function dayLabel(iso: string): string {
  * Render the #tokens-daily fragment: one vertical stacked bar per active day in the range
  * (hover a segment for its tokens + cost, exactly like the summary bar), each labelled with
  * the day's total tokens (hover for the day's cost). Colors match the legend above, so no
- * separate legend is needed; the row scrolls horizontally when a range spans many days.
+ * separate legend is needed. Bars share the full width evenly (each centered in its slot),
+ * scrolling horizontally only when a range has more days than comfortably fit.
  */
 export function renderTokensDaily(days: DayTokens[]): string {
   if (days.length === 0) {
@@ -285,8 +286,8 @@ export function renderTokensDaily(days: DayTokens[]): string {
           return `<div class="w-full min-h-[2px] ${cat.color}" style="flex-grow:${tokens}" title="${escapeHtml(title)}"></div>`;
         })
         .join("");
-      return `<div class="flex w-9 shrink-0 flex-col items-center gap-1">
-      <div class="flex h-32 w-full items-end">
+      return `<div class="flex min-w-[1.25rem] flex-1 flex-col items-center gap-1">
+      <div class="flex h-32 w-full max-w-16 items-end">
         <div class="flex w-full flex-col-reverse overflow-hidden rounded-sm" style="height:${fillPct.toFixed(1)}%">${segments}</div>
       </div>
       <span class="tabular-nums text-[10px] text-neutral-300" title="${escapeHtml(formatUsd(sum(d.cost)))}">${humanTokens(dayTokens)}</span>
@@ -294,5 +295,5 @@ export function renderTokensDaily(days: DayTokens[]): string {
     </div>`;
     })
     .join("");
-  return `<div class="flex w-max gap-1.5 pb-1">${columns}</div>`;
+  return `<div class="flex w-full gap-2 pb-1">${columns}</div>`;
 }

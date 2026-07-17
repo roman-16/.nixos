@@ -251,4 +251,10 @@ describe("renderTokensDaily", () => {
     expect(html).toContain("Read: 5 tokens");
     expect(html).not.toContain("Cache read:");
   });
+
+  it("spreads bars across the full width instead of packing them left", () => {
+    const html = renderTokensDaily([day({ tokens: map({ input: 5 }) })]);
+    expect(html).toContain("flex-1");
+    expect(html).not.toContain("w-max");
+  });
 });
