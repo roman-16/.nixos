@@ -168,6 +168,7 @@
             "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/"
             "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2/"
             "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom3/"
+            "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom4/"
           ];
           volume-step = 2;
         };
@@ -194,6 +195,12 @@
           binding = "<Super>v";
           command = "code";
           name = "Visual Studio Code";
+        };
+
+        "org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom4" = {
+          binding = "<Shift>Print";
+          command = "gradia --screenshot";
+          name = "Gradia Screenshot";
         };
 
         "org/gnome/settings-daemon/plugins/power" = {
@@ -303,6 +310,10 @@
           position-in-panel = 4;
           show-gpu = true;
           show-voltage = false;
+        };
+
+        "org/gnome/shell/keybindings" = {
+          screenshot = [ ];
         };
 
         "org/gnome/shell/weather" = {
