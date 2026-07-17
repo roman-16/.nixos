@@ -11,11 +11,9 @@ import type { Database } from "bun:sqlite";
 
 import { escapeHtml, humanTokens } from "./format";
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
 export type TokenRange = "1d" | "1m" | "1y" | "3m" | "3y" | "6m" | "7d" | "all";
 
-/** Lookback window in days for each range; `all` (the default) is unbounded. */
+/** Calendar days each range spans, counting today; `all` (the default) is unbounded. */
 const RANGE_DAYS: Record<TokenRange, number | null> = {
   "1d": 1,
   "7d": 7,
@@ -111,10 +109,20 @@ function rowMaps(row: TotalsRow): TokenTotals {
   };
 }
 
-/** Lookback cutoff (epoch ms) for a range; 0 for the unbounded `all`. */
+/**
+ * Local-midnight start of a range's first calendar day (today counts as one); 0 for the
+ * unbounded `all`. `1d` is today since 00:00, `7d` is today plus the 6 prior whole days, and
+ * so on - a calendar window aligned to the local day, not a rolling N*24h span. Local date
+ * setters normalize across DST, so the boundary lands exactly on local midnight even around a
+ * time change, matching the daily buckets' `localtime` grouping.
+ */
 function sinceFor(range: TokenRange): number {
   const days = RANGE_DAYS[range];
-  return days == null ? 0 : Date.now() - days * MS_PER_DAY;
+  if (days == null) return 0;
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - (days - 1));
+  return start.getTime();
 }
 
 /** Create a SQLite-backed store for per-turn token usage and cost. */

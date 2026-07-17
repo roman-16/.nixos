@@ -142,6 +142,35 @@ describe("daily", () => {
   });
 });
 
+describe("calendar-aligned ranges", () => {
+  const midnightToday = () => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  };
+
+  it("1d is the current calendar day, not a rolling 24h window", () => {
+    const store = createTokenStore(freshDb());
+    const midnight = midnightToday();
+    // Just after midnight (today) vs. just before it (yesterday, but < 24h old early in the day).
+    store.record(usage({ input: 5 }), "m", midnight + 60_000);
+    store.record(usage({ input: 50 }), "m", midnight - 60_000);
+    expect(store.totals("1d").tokens.input).toBe(5);
+    expect(store.daily("1d").map((d) => d.tokens.input)).toEqual([5]);
+  });
+
+  it("7d spans today plus the 6 prior whole days", () => {
+    const store = createTokenStore(freshDb());
+    // Midday offsets keep every row clear of the midnight boundary (DST-robust).
+    const noon = midnightToday() + 12 * 60 * 60 * 1000;
+    store.record(usage({ input: 1 }), "m", noon); // today
+    store.record(usage({ input: 2 }), "m", noon - 6 * DAY); // 6 days ago, earliest in window
+    store.record(usage({ input: 4 }), "m", noon - 7 * DAY); // 7 days ago, just outside
+    expect(store.totals("7d").tokens.input).toBe(3);
+    expect(store.daily("7d").map((d) => d.tokens.input)).toEqual([2, 1]);
+  });
+});
+
 describe("renderTokens", () => {
   it("shows a placeholder when nothing is recorded", () => {
     expect(renderTokens(totals())).toContain("No token usage");
