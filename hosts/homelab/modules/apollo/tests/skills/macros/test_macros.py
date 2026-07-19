@@ -189,15 +189,70 @@ class TestFoodEat:
         set_goal()
         add_skyr()
         capsys.readouterr()
-        run("food-eat", "--name", "skyer", "--grams", "100")
+        run("food-eat", "--name", "skyer", "--amount", "100")
         assert 'read "skyer" as Skyr, plain' in capsys.readouterr().out
 
     def test_exact_match_makes_no_assumption(self, store, capsys):
         set_goal()
         add_skyr()
         capsys.readouterr()
-        run("food-eat", "--name", "skyr", "--grams", "100")
+        run("food-eat", "--name", "skyr", "--amount", "100")
         assert "read" not in capsys.readouterr().out
+
+
+class TestFoodUnits:
+    def add_beer(self):
+        run("food-add", "--name", "Gösser", "--unit", "ml", "--kcal100", "42",
+            "--protein100", "0.5", "--fat100", "0", "--carbs100", "3.3", "--serving", "500")
+
+    def test_add_stores_the_unit(self, store):
+        self.add_beer()
+        assert macros.load(macros.FOOD_FILE, {})["gösser"]["unit"] == "ml"
+
+    def test_unit_defaults_to_grams(self, store):
+        add_skyr()
+        assert macros.load(macros.FOOD_FILE, {})["skyr, plain"]["unit"] == "g"
+
+    def test_food_line_shows_the_unit(self, store, capsys):
+        self.add_beer()
+        capsys.readouterr()
+        run("food-get", "gösser")
+        out = capsys.readouterr().out
+        assert "per 100ml" in out
+        assert "default serving 500ml" in out
+
+    def test_eat_logs_in_the_unit(self, store):
+        set_goal()
+        self.add_beer()
+        run("food-eat", "--name", "gösser", "--amount", "500")
+        assert "Gösser (500ml)" in day_entries()[-1]["item"]
+
+    def test_default_serving_uses_the_unit(self, store):
+        set_goal()
+        self.add_beer()
+        run("food-eat", "--name", "gösser")
+        assert "Gösser (500ml)" in day_entries()[-1]["item"]
+
+    def test_edit_changes_the_unit(self, store):
+        add_skyr()
+        run("food-edit", "--name", "skyr", "--unit", "ml")
+        assert macros.load(macros.FOOD_FILE, {})["skyr, plain"]["unit"] == "ml"
+
+    def test_legacy_food_without_unit_eats_as_grams(self, store):
+        set_goal()
+        add_skyr()
+        food = macros.load(macros.FOOD_FILE, {})
+        del food["skyr, plain"]["unit"]
+        macros.save(macros.FOOD_FILE, food)
+        run("food-eat", "--name", "skyr", "--amount", "200")
+        assert "Skyr, plain (200g)" in day_entries()[-1]["item"]
+
+    def test_target_reports_the_unit(self, store, capsys):
+        set_goal()
+        self.add_beer()
+        capsys.readouterr()
+        run("food-eat", "--name", "gösser", "--target-kcal", "210", "--dry-run")
+        assert "500ml" in capsys.readouterr().out
 
 
 class TestMacroHelpers:

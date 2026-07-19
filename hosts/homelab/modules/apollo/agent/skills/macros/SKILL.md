@@ -15,7 +15,7 @@ Tracks daily nutrition as JSON under `macros/` in the working directory. Every r
 
 ## Your job vs the script's job
 
-- **You:** read the message and identify the food and the amount. For a saved food, log it with `food-eat` (the script scales per-100g - never multiply yourself); for a batch, use `prep-eat`; for anything not saved, estimate the macros from knowledge or a photo and `log` them with `--note estimated`.
+- **You:** read the message and identify the food and the amount. For a saved food, log it with `food-eat` (the script scales the per-100 rate - never multiply yourself); for a batch, use `prep-eat`; for anything not saved, estimate the macros from knowledge or a photo and `log` them with `--note estimated`.
 - **The script:** does all scaling and portioning, stores entries, computes every total and the balance ledger, and prints the reply to send. It owns every number.
 
 ## Replying
@@ -63,26 +63,28 @@ For any "average", "last N days", or "this week/month" question, use this - **on
 
 `--days N` counts back from today (`--days 7` is today plus the 6 days before it); `--from`/`--to` give an explicit range (`--to` defaults to today, and the two selectors are mutually exclusive). The output is a ready-to-send summary - relay it verbatim (see [Replying](#replying)).
 
-## Saved foods (per 100g + default serving)
+## Saved foods (per 100 of a unit + default serving)
 
-`food-eat` logs a saved food and does the scaling for you - never multiply per-100g by hand. Give an amount, or omit it for the default serving:
+Each saved food stores its macros per 100 of a **unit** - grams by default, or `ml` for liquids, `pieces` for countables, etc. - plus a default serving in that unit. `food-eat` logs one and does the scaling for you - never multiply the per-100 rate by hand. Give an amount, or omit it for the default serving:
 
 ```bash
 {baseDir}/scripts/macros.py food-eat --name skyr                      # one default serving
-{baseDir}/scripts/macros.py food-eat --name skyr --grams 400
+{baseDir}/scripts/macros.py food-eat --name skyr --amount 400          # 400 of the food's unit (skyr: g)
+{baseDir}/scripts/macros.py food-eat --name beer --amount 500          # 500ml when the food's unit is ml
 {baseDir}/scripts/macros.py food-eat --name skyr --servings 2
 {baseDir}/scripts/macros.py food-eat --name skyr --fit-protein        # enough to reach today's protein goal
 {baseDir}/scripts/macros.py food-eat --name skyr --target-protein 40  # enough to supply 40g protein
 ```
 
-`--fit-kcal` and `--target-kcal` size by calories the same way. `food-eat` prints the day summary - relay it verbatim.
+`--fit-kcal` and `--target-kcal` size by calories the same way. Amounts and the logged label read in the food's unit (`500ml`, `4 pieces`, `500g`). `food-eat` prints the day summary - relay it verbatim.
 
-`food-get` looks a food up; `food-add` saves one (only when the user explicitly asks); `food-edit` corrects a saved food's numbers or name; `food-rm` deletes one. Look one up before estimating.
+`food-get` looks a food up; `food-add` saves one (only when the user explicitly asks); `food-edit` corrects a saved food's numbers, unit, or name; `food-rm` deletes one. Look one up before estimating. `--unit` defaults to `g`; set it for liquids/countables and the per-100 values are then per 100 of that unit.
 
 ```bash
 {baseDir}/scripts/macros.py food-get skyr
 {baseDir}/scripts/macros.py food-add --name "Skyr, plain" --kcal100 64 --protein100 11 --fat100 0.1 --carbs100 4 --serving 500 --aliases "skyr,my skyr"
-{baseDir}/scripts/macros.py food-edit --name skyr --kcal100 63 --serving 450   # only what you pass changes; also --rename, --aliases
+{baseDir}/scripts/macros.py food-add --name "Gösser Märzen" --unit ml --kcal100 42 --protein100 0.5 --fat100 0 --carbs100 3.3 --serving 500 --aliases beer   # a liquid: per 100ml, 500ml default
+{baseDir}/scripts/macros.py food-edit --name skyr --kcal100 63 --serving 450   # only what you pass changes; also --unit, --rename, --aliases
 {baseDir}/scripts/macros.py food-rm --name skyr
 ```
 

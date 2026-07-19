@@ -319,7 +319,7 @@ def has_target(args) -> bool:
 
 def portion_for_target(name: str, rate: dict, day: dict, args):
     """Amount of a scalable food/batch that meets a --fit-*/--target-* request.
-    `rate` is the per-unit macro map (per gram for a food, per whole batch for a
+    `rate` is the per-unit macro map (per unit of a food, per whole batch for a
     prep) and `day` is today's snapshot (for the fit gaps). Returns
     (amount, why, dimension, requested); dies on an impossible request."""
     protein_today = sum(e["protein"] for e in day["entries"])
@@ -605,8 +605,9 @@ def cmd_edit(args):
 
 def food_line(food: dict) -> str:
     p = food["per100"]
-    return (f"{food['name']}: per 100g {p['kcal']} kcal, {p['protein']}g P, {p['fat']}g F, "
-            f"{p['carbs']}g C; default serving {food['serving']}g")
+    unit = food.get("unit", "g")
+    return (f"{food['name']}: per {fmt_amount(100, unit)} {p['kcal']} kcal, {p['protein']}g P, "
+            f"{p['fat']}g F, {p['carbs']}g C; default serving {fmt_amount(food['serving'], unit)}")
 
 
 def cmd_food_get(args):
@@ -632,6 +633,7 @@ def cmd_food_add(args):
         "name": args.name,
         "per100": {"kcal": args.kcal100, "protein": args.protein100, "fat": args.fat100, "carbs": args.carbs100},
         "serving": args.serving,
+        "unit": args.unit or "g",
         "aliases": sorted(set(aliases) | {key}),
     }
     save(FOOD_FILE, food)
@@ -651,6 +653,7 @@ def cmd_food_eat(args):
     _, food, assumed = resolve(load(FOOD_FILE, {}), args.name,
                                noun="saved food", listing="food-list", strict=False)
     per100 = food["per100"]
+    unit = food.get("unit", "g")
     rate = {k: per100[k] / 100 for k in ("kcal", "protein", "fat", "carbs")}
     date = args.date or today()
     why = None
@@ -658,25 +661,25 @@ def cmd_food_eat(args):
         day = compute_day(date, [])
         if day is None:
             die("no goal set - run: macros.py goal-set --tdee N --daily-goal N --protein N --phase cut")
-        grams, why, _, _ = portion_for_target(food["name"], rate, day, args)
-    elif args.grams is not None:
-        grams = args.grams
+        amount, why, _, _ = portion_for_target(food["name"], rate, day, args)
+    elif args.amount is not None:
+        amount = args.amount
     elif args.servings is not None:
-        grams = args.servings * food["serving"]
+        amount = args.servings * food["serving"]
     else:
-        grams = food["serving"]
-    if grams <= 0:
+        amount = food["serving"]
+    if amount <= 0:
         die("amount must be positive")
-    grams = round(grams)
-    kcal = round(rate["kcal"] * grams)
-    protein = r1(rate["protein"] * grams)
-    entry = make_entry(now_time(), f"{food['name']} ({grams}g)",
-                       kcal, protein, r1(rate["fat"] * grams), r1(rate["carbs"] * grams), None)
+    amount = round(amount)
+    kcal = round(rate["kcal"] * amount)
+    protein = r1(rate["protein"] * amount)
+    entry = make_entry(now_time(), f"{food['name']} ({fmt_amount(amount, unit)})",
+                       kcal, protein, r1(rate["fat"] * amount), r1(rate["carbs"] * amount), None)
     leads = []
     if assumed:
         leads.append(f'📝 read "{args.name}" as {assumed}')
     if why:
-        leads.append(f"🍽️ {food['name']}: {grams}g {why} - {kcal} kcal, {protein}g P")
+        leads.append(f"🍽️ {food['name']}: {fmt_amount(amount, unit)} {why} - {kcal} kcal, {protein}g P")
     emit(date, entry, dry_run=args.dry_run, lead="\n".join(leads) or None,
          commit=lambda: append_entry(date, entry))
 
@@ -690,6 +693,8 @@ def cmd_food_edit(args):
             entry["per100"][sub] = value
     if args.serving is not None:
         entry["serving"] = args.serving
+    if args.unit is not None:
+        entry["unit"] = args.unit
     if args.aliases is not None:
         entry["aliases"] = [a.strip().lower() for a in args.aliases.split(",") if a.strip()]
     if args.rename:
@@ -1252,6 +1257,7 @@ def build_parser() -> argparse.ArgumentParser:
     fa.add_argument("--fat100", type=nonneg, required=True)
     fa.add_argument("--carbs100", type=nonneg, required=True)
     fa.add_argument("--serving", type=positive, required=True)
+    fa.add_argument("--unit")
     fa.add_argument("--aliases")
 
     sub.add_parser("food-list").set_defaults(func=cmd_food_list)
@@ -1259,7 +1265,7 @@ def build_parser() -> argparse.ArgumentParser:
     fe = sub.add_parser("food-eat")
     fe.set_defaults(func=cmd_food_eat)
     fe.add_argument("--name", required=True)
-    add_amount_flags(fe, ("--grams", {"type": positive}), ("--servings", {"type": positive}))
+    add_amount_flags(fe, ("--amount", {"type": positive}), ("--servings", {"type": positive}))
 
     fed = sub.add_parser("food-edit")
     fed.set_defaults(func=cmd_food_edit)
@@ -1269,6 +1275,7 @@ def build_parser() -> argparse.ArgumentParser:
     fed.add_argument("--fat100", type=nonneg)
     fed.add_argument("--carbs100", type=nonneg)
     fed.add_argument("--serving", type=positive)
+    fed.add_argument("--unit")
     fed.add_argument("--rename")
     fed.add_argument("--aliases")
 
