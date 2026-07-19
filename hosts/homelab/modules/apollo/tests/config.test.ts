@@ -14,6 +14,7 @@ describe("loadConfig", () => {
     expect(config.model).toBe("anthropic/claude-sonnet-5");
     expect(config.thinkingLevel).toBe("medium");
     expect(config.port).toBe(8080);
+    expect(config.profilePicturePath).toBe("");
     expect(config.workspace).toBe("/tmp/apollo/workspace");
     expect(config.whatsappDir).toBe("/tmp/apollo/whatsapp");
     expect(config.remindersDir).toBe("/tmp/apollo/workspace/reminders");

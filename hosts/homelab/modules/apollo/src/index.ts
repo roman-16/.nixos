@@ -17,8 +17,8 @@ import {
   renderSummary,
   sessionStatus,
 } from "./dashboard";
-import { createDayState } from "./daystate";
 import { openDatabase } from "./db";
+import { createKv } from "./kv";
 import { createLogStore, createThrottle, parseLevel, shouldNotify } from "./logs";
 import {
   claudeErrorNotice,
@@ -64,7 +64,7 @@ export async function main(): Promise<void> {
   const db = openDatabase(config.dbPath);
   const logStore = createLogStore(db);
   const tokenStore = createTokenStore(db);
-  const dayState = createDayState(db);
+  const kv = createKv(db);
   const logger = pino({ level: config.logLevel }, logStore.stream);
   const logRetentionMs = config.logRetentionDays * 24 * 60 * 60 * 1000;
   logStore.prune(Date.now() - logRetentionMs);
@@ -210,9 +210,32 @@ export async function main(): Promise<void> {
     logger.error({ detail, notifyText: claudeErrorNotice(detail) }, "claude run error");
   });
 
+  // On (re)connect, set the bot's WhatsApp avatar from the configured image, uploading only
+  // when the image changes (its hash is tracked in kv) so routine reconnects don't re-upload.
+  async function applyProfilePicture(): Promise<void> {
+    if (!wa || !config.profilePicturePath) return;
+    let image: Buffer;
+    try {
+      image = await readFile(config.profilePicturePath);
+    } catch (error) {
+      logger.warn({ error }, "profile picture unreadable");
+      return;
+    }
+    const hash = createHash("sha256").update(image).digest("hex");
+    if (kv.get("profilePictureHash") === hash) return;
+    try {
+      await wa.setProfilePicture(image);
+      kv.set("profilePictureHash", hash);
+      logger.info("profile picture applied");
+    } catch (error) {
+      logger.warn({ error }, "failed to set profile picture");
+    }
+  }
+
   wa = await startWhatsApp({
     logger,
     maxChars: config.maxMessageChars,
+    onConnect: () => void applyProfilePicture(),
     onMessage: async (message) => {
       if (!isAllowed(message.number, config.allowFrom)) {
         logger.warn({ from: message.number }, "ignored message from non-allowlisted number");
@@ -245,8 +268,13 @@ export async function main(): Promise<void> {
       }
 
       const prompt = text || "(image)";
-      const dayNotes = dayBoundaryNotes(dayState.getLast(), new Date(), config.dayStartHour);
-      dayState.setLast(Date.now());
+      const lastInbound = kv.get("lastInboundAt");
+      const dayNotes = dayBoundaryNotes(
+        lastInbound ? new Date(Number(lastInbound)) : undefined,
+        new Date(),
+        config.dayStartHour,
+      );
+      kv.set("lastInboundAt", String(Date.now()));
       logger.info(
         {
           chars: prompt.length,

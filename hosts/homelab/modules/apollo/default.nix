@@ -80,6 +80,22 @@ in
           exec ${pkgs.chromium}/bin/chromium --no-sandbox --disable-dev-shm-usage "$@"
         '';
 
+        # The bot's WhatsApp avatar: the dashboard favicon rendered to a 640x640 JPEG at
+        # build time (librsvg rasterizes the SVG onto the brand indigo, magick encodes the
+        # JPEG), so the app just uploads the bytes - no runtime image library needed.
+        profilePicture =
+          pkgs.runCommand "apollo-profile-picture.jpg"
+            {
+              nativeBuildInputs = [
+                pkgs.imagemagick
+                pkgs.librsvg
+              ];
+            }
+            ''
+              rsvg-convert --width 640 --height 640 --background-color '#6366f1' ${./src/favicon.svg} --output icon.png
+              magick icon.png -quality 90 jpg:$out
+            '';
+
         setup = pkgs.writeShellScript "apollo-setup" ''
           set -euo pipefail
           export PATH=${lib.makeBinPath [ pkgs.coreutils ]}:$PATH
@@ -333,6 +349,7 @@ in
                 APOLLO_ALLOW_FROM = secrets.mainNumber;
                 APOLLO_DB_PATH = "%S/apollo/apollo.sqlite";
                 APOLLO_MODEL = "anthropic/claude-sonnet-5";
+                APOLLO_PROFILE_PICTURE = "${profilePicture}";
                 APOLLO_THINKING = "high";
                 APOLLO_WORKSPACE = "%S/apollo/workspace";
                 # The browser skill runs `browse` via bunx (`bunx --bun browse@latest`). bunx

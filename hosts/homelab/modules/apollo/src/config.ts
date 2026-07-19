@@ -21,6 +21,7 @@ export interface Config {
   notifyLevel: LogLevel;
   notifyThrottleMs: number;
   port: number;
+  profilePicturePath: string;
   remindersDir: string;
   sessionDir: string;
   systemPromptFile: string;
@@ -53,6 +54,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     notifyLevel: parseLevel(env.APOLLO_NOTIFY_LEVEL ?? "warn"),
     notifyThrottleMs: Number(env.APOLLO_NOTIFY_THROTTLE_MS ?? 60_000),
     port: Number(env.PORT ?? 8080),
+    profilePicturePath: env.APOLLO_PROFILE_PICTURE ?? "",
     remindersDir: env.APOLLO_REMINDERS_DIR ?? join(workspace, "reminders"),
     sessionDir: join(agentDir, "sessions"),
     systemPromptFile: join(agentDir, "SYSTEM_PROMPT.md"),

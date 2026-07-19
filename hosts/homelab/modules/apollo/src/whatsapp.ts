@@ -8,6 +8,7 @@ import makeWASocket, {
   isJidGroup,
   isLidUser,
   jidNormalizedUser,
+  S_WHATSAPP_NET,
   useMultiFileAuthState,
   type WAMessage,
 } from "@whiskeysockets/baileys";
@@ -41,12 +42,14 @@ export interface WhatsApp {
   read: (key: WAMessage["key"]) => Promise<void>;
   relink: () => void;
   send: (to: string, text: string) => Promise<void>;
+  setProfilePicture: (image: Buffer) => Promise<void>;
   stop: () => Promise<void>;
 }
 
 export interface WhatsAppOptions {
   logger: Logger;
   maxChars: number;
+  onConnect?: () => void;
   onMessage: (message: InboundMessage) => Promise<void> | void;
   whatsappDir: string;
 }
@@ -169,6 +172,7 @@ export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp>
         user = socket.user?.id;
         options.logger.info("whatsapp connected");
         void socket.sendPresenceUpdate("available");
+        options.onConnect?.();
       }
       if (connection === "close") {
         const code = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)
@@ -235,6 +239,15 @@ export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp>
       for (const chunk of splitMessage(text, options.maxChars)) {
         await sock?.sendMessage(to, { text: chunk });
       }
+    },
+    setProfilePicture: async (image) => {
+      const jid = sock?.user?.id;
+      if (!sock || !jid) throw new Error("whatsapp not connected");
+      await sock.query({
+        tag: "iq",
+        attrs: { to: S_WHATSAPP_NET, type: "set", xmlns: "w:profile:picture" },
+        content: [{ tag: "picture", attrs: { type: "image" }, content: image }],
+      });
     },
     stop: async () => {
       sock?.end(undefined);
