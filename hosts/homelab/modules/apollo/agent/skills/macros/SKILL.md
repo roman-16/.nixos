@@ -15,12 +15,12 @@ Tracks daily nutrition as JSON under `macros/` in the working directory. Every r
 
 ## Your job vs the script's job
 
-- **You:** read the message and identify the food and the amount. For a saved food, log it with `food-eat` (the script scales the per-100 rate - never multiply yourself); for a batch, use `prep-eat`; for anything not saved, estimate the macros from knowledge or a photo and `log` them with `--note estimated`.
+- **You:** read the message and identify the food and the amount. For a saved food, use `food-eat`; for a batch, `prep-eat`; for a one-off whose per-100 nutrition label you can read (a photo or screenshot), use `eat` with the label's per-100 values plus the amount; only when there is no per-100 rate at all (a pure guess from knowledge) do you supply the final macros yourself with `log --note estimated`. The script always does the scaling - never multiply a rate yourself.
 - **The script:** does all scaling and portioning, stores entries, computes every total and the balance ledger, and prints the reply to send. It owns every number.
 
 ## Replying
 
-Whenever a command prints a day summary or list (`log`, `food-eat`, `show`, `summary`, `entries`, `edit`, `prep-eat`, `prep-remove`, `prep-uneat`, `prep-size`, `prep-list`, `prep-get`, `food-list`, `goal`), your reply **is** that output, sent back verbatim: the exact lines the script printed, in full and unchanged. Do not summarize it, rephrase it, reformat it, turn it into prose, trim it, or wrap it in your own commentary - the user wants to read the list itself.
+Whenever a command prints a day summary or list (`log`, `eat`, `food-eat`, `show`, `summary`, `entries`, `edit`, `prep-eat`, `prep-remove`, `prep-uneat`, `prep-size`, `prep-list`, `prep-get`, `food-list`, `goal`), your reply **is** that output, sent back verbatim: the exact lines the script printed, in full and unchanged. Do not summarize it, rephrase it, reformat it, turn it into prose, trim it, or wrap it in your own commentary - the user wants to read the list itself.
 
 A `--dry-run` preview (see [Previewing](#previewing)) is relayed the same way, verbatim - but because it answers a "what if", you may add one short line after it, e.g. "Want me to log it?".
 
@@ -35,7 +35,7 @@ A `--dry-run` preview (see [Previewing](#previewing)) is relayed the same way, v
 
 ## Logging food (one-off / estimated)
 
-`log` is for entries where you supply the macros yourself - a one-off, or something not saved. Saved foods go through `food-eat` and batches through `prep-eat` (both below); reach for `log` only when neither fits. `--kcal` is required; `--protein/--fat/--carbs` default to 0; time and date default to now.
+`log` is for entries where you already have the **final** macros and just transcribe them - a pure estimate, or a value the user gives you directly. A food with a readable per-100 label goes through `eat` (below), saved foods through `food-eat`, batches through `prep-eat`; reach for `log` only when none of those fit. `--kcal` is required; `--protein/--fat/--carbs` default to 0; time and date default to now.
 
 ```bash
 {baseDir}/scripts/macros.py log --item "Chicken breast (250g)" --kcal 413 --protein 77.5 --fat 9 --carbs 0
@@ -43,6 +43,26 @@ A `--dry-run` preview (see [Previewing](#previewing)) is relayed the same way, v
 ```
 
 `log` prints the day summary - send that exact output back as your reply, verbatim (see [Replying](#replying)).
+
+## Logging from a nutrition label (photo)
+
+When the user sends a photo or screenshot of a nutrition label - macros **per 100g or 100ml** - together with an amount ("log 235g"), read the per-100 values and the amount off the message and hand both to `eat`. The script scales them (it derives the factor from the amount itself, so 235g becomes x2.35) and logs the result **without saving the food**. You never multiply.
+
+```bash
+{baseDir}/scripts/macros.py eat --item "Granola" --kcal100 450 --protein100 10 --fat100 20 --carbs100 55 --amount 235
+{baseDir}/scripts/macros.py eat --item "Oat drink" --unit ml --kcal100 46 --protein100 1 --fat100 1.5 --carbs100 6.7 --amount 500
+{baseDir}/scripts/macros.py eat --item "Chips" --kcal100 536 --protein100 6 --fat100 32 --carbs100 53 --amount 60 --note estimated
+```
+
+`--kcal100` is required; `--protein100/--fat100/--carbs100` default to 0. `--unit` defaults to `g` (set `ml` for liquids, etc.), and the amount and logged label then read in that unit (`235g`, `500ml`). Pass `--note estimated` when the _amount_ is a guess - the label's per-100 numbers stay exact regardless. `eat` prints the day summary; relay it verbatim (see [Replying](#replying)).
+
+In place of `--amount` it accepts the same `--fit-*`/`--target-*` sizing as `food-eat`, so you can answer "how much of this for my remaining protein?" straight from a photo:
+
+```bash
+{baseDir}/scripts/macros.py eat --item "Granola" --kcal100 450 --protein100 10 --fat100 20 --carbs100 55 --fit-protein --dry-run
+```
+
+`eat` never saves; if it's something the user eats often, offer to `food-add` it so next time is a plain `food-eat`.
 
 ## Viewing a day
 
@@ -181,7 +201,7 @@ Before anything's been eaten this just adjusts the batch. If some has been eaten
 
 ## Previewing
 
-`log`, `food-eat`, and `prep-eat` all take `--dry-run`: it prints the day exactly as it would look with the entry added, but saves nothing - no entry stored, no batch consumed. Use it for "how would my day look" and "how much of X can I eat"; pair it with `--fit-protein` to answer "how much do I need to hit my protein" in a single call.
+`log`, `eat`, `food-eat`, and `prep-eat` all take `--dry-run`: it prints the day exactly as it would look with the entry added, but saves nothing - no entry stored, no batch consumed. Use it for "how would my day look" and "how much of X can I eat"; pair it with `--fit-protein` to answer "how much do I need to hit my protein" in a single call.
 
 ```bash
 {baseDir}/scripts/macros.py prep-eat --name "ice cream" --fit-protein --dry-run
@@ -200,7 +220,7 @@ After a manual JSON edit or a phase change, re-fold the balance forward:
 
 - The macro day rolls over at **04:00**, not midnight: an entry made between 00:00 and 04:00 counts toward the previous calendar date. `today`, `summary`, and the whole rolling balance use this 04:00-based day, while `now_time` still records the real wall-clock time on the entry - so at 02:00, "today" is still yesterday. Pass an explicit `--date` only to override.
 - Dates and times come from the system clock; only pass `--date`/`--time` to correct a past entry. Adjusting a day that has already passed (`log`, `edit`, `rm`, `food-eat`, or `prep-eat` with `--date`) reprints today's summary after the changed day, since a past change cascades through the rolling balance and moves today's target - relay both blocks verbatim.
-- Estimate freely for vague inputs or photos and pass `--note estimated` - the totals stay exact regardless.
+- Estimate freely for vague inputs - a described meal, or a photo with no legible label - and pass `--note estimated`; when a photo _does_ show a per-100 label, use `eat` instead so the script scales it exactly. The totals stay exact regardless.
 - Every macro must be non-negative and every amount positive; the script rejects impossible values, so a slip like `--kcal -5` errors out instead of silently corrupting a total.
 - For "how much to hit X" or "how would my day look", use `--fit-*`/`--target-*` and `--dry-run` - never work out the amount or the projected totals yourself.
 - Relay the script's output verbatim (see [Replying](#replying)) - never paraphrase its numbers, shorten its summary, or reformat the list.

@@ -255,6 +255,66 @@ class TestFoodUnits:
         assert "500ml" in capsys.readouterr().out
 
 
+class TestEat:
+    def test_scales_per100_by_amount(self, store):
+        set_goal()
+        run("eat", "--item", "Granola", "--kcal100", "450", "--protein100", "10",
+            "--fat100", "20", "--carbs100", "55", "--amount", "200")
+        entry = day_entries()[-1]
+        assert entry["item"] == "Granola (200g)"
+        assert entry["kcal"] == 900
+        assert entry["protein"] == 20
+        assert entry["fat"] == 40
+        assert entry["carbs"] == 110
+
+    def test_unit_defaults_to_grams(self, store):
+        set_goal()
+        run("eat", "--item", "Rice", "--kcal100", "130", "--amount", "150")
+        assert "Rice (150g)" in day_entries()[-1]["item"]
+
+    def test_ml_unit_labels_the_amount(self, store):
+        set_goal()
+        run("eat", "--item", "Oat drink", "--unit", "ml", "--kcal100", "46",
+            "--protein100", "1", "--amount", "500")
+        assert "Oat drink (500ml)" in day_entries()[-1]["item"]
+
+    def test_other_macros_default_to_zero(self, store):
+        set_goal()
+        run("eat", "--item", "Sugar", "--kcal100", "400", "--amount", "50")
+        entry = day_entries()[-1]
+        assert entry["kcal"] == 200
+        assert entry["protein"] == 0
+        assert entry["fat"] == 0
+        assert entry["carbs"] == 0
+
+    def test_kcal100_is_required(self, store):
+        with pytest.raises(SystemExit):
+            run("eat", "--item", "Mystery", "--amount", "100")
+
+    def test_amount_or_target_required(self, store):
+        with pytest.raises(SystemExit):
+            run("eat", "--item", "Granola", "--kcal100", "450")
+
+    def test_note_passthrough(self, store):
+        set_goal()
+        run("eat", "--item", "Chips", "--kcal100", "536", "--amount", "60", "--note", "estimated")
+        assert day_entries()[-1]["note"] == "estimated"
+
+    def test_dry_run_saves_nothing(self, store, capsys):
+        set_goal()
+        capsys.readouterr()
+        run("eat", "--item", "Granola", "--kcal100", "450", "--amount", "200", "--dry-run")
+        assert "preview" in capsys.readouterr().out
+        assert day_entries() == []
+
+    def test_fit_protein_sizes_and_logs(self, store, capsys):
+        set_goal()
+        capsys.readouterr()
+        run("eat", "--item", "Whey", "--kcal100", "375", "--protein100", "80", "--fit-protein")
+        assert "to reach your protein goal" in capsys.readouterr().out
+        assert day_entries()[-1]["protein"] >= 149
+
+
 class TestMacroHelpers:
     def test_add(self):
         assert macros.macro_add(

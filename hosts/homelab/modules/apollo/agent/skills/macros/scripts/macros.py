@@ -450,6 +450,32 @@ def cmd_log(args):
     emit(date, entry, dry_run=args.dry_run, commit=lambda: append_entry(date, entry))
 
 
+def cmd_eat(args):
+    """Log a one-off food from a per-100 nutrition label (a photo), scaling it by the amount
+    here so that multiplication never happens in-model. Nothing is saved to the catalog."""
+    unit = args.unit or "g"
+    rate = {k: getattr(args, f"{k}100") / 100 for k in MACROS}
+    date = args.date or today()
+    why = None
+    if has_target(args):
+        day = compute_day(date, [])
+        if day is None:
+            die("no goal set - run: macros.py goal-set --tdee N --daily-goal N --protein N --phase cut")
+        amount, why, _, _ = portion_for_target(args.item, rate, day, args)
+    elif args.amount is not None:
+        amount = args.amount
+    else:
+        die("give an amount: --amount, --fit-protein/--fit-kcal, or --target-protein/--target-kcal")
+    amount = round(amount)
+    kcal = round(rate["kcal"] * amount)
+    protein = r1(rate["protein"] * amount)
+    entry = make_entry(now_time(), f"{args.item} ({fmt_amount(amount, unit)})",
+                       kcal, protein, r1(rate["fat"] * amount), r1(rate["carbs"] * amount), args.note)
+    lead = (f"🍽️ {args.item}: {fmt_amount(amount, unit)} {why} - {kcal} kcal, {protein}g P"
+            if why else None)
+    emit(date, entry, dry_run=args.dry_run, lead=lead, commit=lambda: append_entry(date, entry))
+
+
 def cmd_show(args):
     render_day(args.date or today())
 
@@ -1198,6 +1224,17 @@ def build_parser() -> argparse.ArgumentParser:
     lo.add_argument("--time")
     lo.add_argument("--date")
     lo.add_argument("--dry-run", action="store_true")
+
+    ea = sub.add_parser("eat")
+    ea.set_defaults(func=cmd_eat)
+    ea.add_argument("--item", required=True)
+    ea.add_argument("--kcal100", type=nonneg, required=True)
+    ea.add_argument("--protein100", type=nonneg, default=0)
+    ea.add_argument("--fat100", type=nonneg, default=0)
+    ea.add_argument("--carbs100", type=nonneg, default=0)
+    ea.add_argument("--unit")
+    ea.add_argument("--note")
+    add_amount_flags(ea, ("--amount", {"type": positive}))
 
     sh = sub.add_parser("show")
     sh.set_defaults(func=cmd_show)
