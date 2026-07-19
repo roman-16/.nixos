@@ -24,7 +24,7 @@ The text accompanying the invocation is `<args>`. Resolve it into a target PATH 
 3. The whole string is an existing file/dir (`test -e`) -> it is `PATH`, no context.
 4. Otherwise take the first whitespace token `T`: if `test -e T`, then `PATH=T` and `CONTEXT=` the rest; else `PATH="."` and `CONTEXT=` the whole string.
 
-State the resolved PATH and CONTEXT back before planning. Confirm scope with a `questionnaire` when it was inferred rather than explicit - i.e. when `PATH="."` was reached with leftover CONTEXT (a first token that looked like a path but does not exist is likely a typo), or before any whole-repo (`.`) rewrite, since the blast radius is large. CONTEXT is intent (focus, constraints, motivation); fold it in, but it never shrinks the rewrite below the whole PATH.
+State the resolved PATH and CONTEXT back before planning so the resolution is visible and you can correct a misread (e.g. a mistyped path that fell through to `.`). No confirmation gate is needed, including for a whole-repo (`.`) scope - the plan skill's read-only hand-off is the safety net. CONTEXT is intent (focus, constraints, motivation); fold it in, but it never shrinks the rewrite below the whole PATH.
 
 ## Freeze the contract
 
