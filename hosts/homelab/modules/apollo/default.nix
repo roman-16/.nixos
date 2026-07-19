@@ -337,13 +337,13 @@ in
                 APOLLO_WORKSPACE = "%S/apollo/workspace";
                 # The browser skill runs `browse` via bunx (`bunx --bun browse@latest`). bunx
                 # caches the download under BUN_INSTALL_CACHE_DIR and stages the runnable tree
-                # under $TMPDIR; HOME (the DynamicUser StateDirectory) is a noexec mount, so the
-                # cache lives on the service's exec /tmp, keeping the whole exec surface on one
-                # exec filesystem so a native prebuild (e.g. bufferutil) never hits "Permission
-                # denied". It's ephemeral, so the first browse after a restart re-downloads (~50s,
-                # within the tool timeout). No ignore-scripts flag is needed: bun does not run
-                # dependencies' lifecycle scripts by default, and browse's natives ship prebuilt
-                # (bufferutil) or as platform packages (esbuild), so nothing compiles.
+                # under $TMPDIR; pointing the cache at the service's own PrivateTmp /tmp keeps the
+                # whole exec surface on one exec-capable filesystem so a native prebuild (e.g.
+                # bufferutil) never hits "Permission denied". It's ephemeral, so the first browse
+                # after a restart re-downloads (~50s, within the tool timeout). No ignore-scripts
+                # flag is needed: bun does not run dependencies' lifecycle scripts by default, and
+                # browse's natives ship prebuilt (bufferutil) or as platform packages (esbuild), so
+                # nothing compiles.
                 BUN_INSTALL_CACHE_DIR = "/tmp/bun-cache";
                 CHROME_PATH = "${chromeWrapper}";
                 HOME = "%S/apollo";
@@ -358,13 +358,15 @@ in
               path = agentPkgs;
 
               serviceConfig = {
-                DynamicUser = true;
                 EnvironmentFile = protonEnv;
                 ExecStart = "${apolloApp}/bin/apollo";
                 ExecStartPre = [
                   setup
                   gitBootstrap
                 ];
+                Group = "apollo";
+                PrivateTmp = true;
+                RemoveIPC = true;
                 Restart = "on-failure";
                 RestartSec = "10s";
                 StateDirectory = "apollo";
@@ -390,9 +392,9 @@ in
               path = gitPkgs;
 
               serviceConfig = {
-                DynamicUser = true;
                 ExecStart = "${./agent/skills/backup}/scripts/backup.sh";
                 ExecStartPre = gitBootstrap;
+                Group = "apollo";
                 StateDirectory = "apollo";
                 Type = "oneshot";
                 User = "apollo";
@@ -474,6 +476,16 @@ in
         };
 
         time.timeZone = "Europe/Vienna";
+
+        users.groups.apollo.gid = 970;
+
+        users.users.apollo = {
+          description = "Apollo WhatsApp assistant";
+          group = "apollo";
+          home = "/var/lib/apollo";
+          isSystemUser = true;
+          uid = 970;
+        };
 
         users.users.roman = {
           extraGroups = [ "wheel" ];
