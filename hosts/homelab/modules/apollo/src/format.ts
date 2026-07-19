@@ -1,3 +1,8 @@
+/** Tailwind fill class for a 0-100 percentage: green below 70, amber below 90, red at or above. */
+export function barColor(pct: number): string {
+  return pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
+}
+
 /** Escape HTML-significant characters for safe interpolation into markup. */
 export function escapeHtml(value: string): string {
   return value

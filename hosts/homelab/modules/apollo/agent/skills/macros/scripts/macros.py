@@ -33,6 +33,9 @@ FUZZY_CUTOFF = 0.6
 # previous calendar date (a 02:00 snack lands on the day before).
 DAY_START_HOUR = 4
 
+# The four macro keys every food, day, and portion is measured in, in display order.
+MACROS = ("kcal", "protein", "fat", "carbs")
+
 
 def die(msg: str):
     print(f"error: {msg}", file=sys.stderr)
@@ -232,6 +235,15 @@ def recompute_from(date: str):
             refresh_ledger(d)
 
 
+def blank_day(date: str, goal: dict) -> dict:
+    """A fresh day seeded from the goal: the target starts at the daily goal, the ledger at zero."""
+    return {
+        "date": date, "phase": goal.get("phase"), "tdee": goal.get("tdee"),
+        "dailyGoal": goal.get("dailyGoal"), "proteinGoal": goal.get("proteinGoal"),
+        "target": goal.get("dailyGoal"), "cumulative": 0, "weight": None, "entries": [],
+    }
+
+
 def compute_day(date: str, extra_entries=()) -> dict | None:
     """A day's in-memory snapshot with the ledger applied and `extra_entries`
     appended, persisting nothing. Uses the stored day, or synthesizes one from
@@ -241,12 +253,7 @@ def compute_day(date: str, extra_entries=()) -> dict | None:
     if path.exists():
         day = load(path, {})
     elif GOAL_FILE.exists():
-        g = load(GOAL_FILE, {})
-        day = {
-            "date": date, "phase": g.get("phase"), "tdee": g.get("tdee"),
-            "dailyGoal": g.get("dailyGoal"), "proteinGoal": g.get("proteinGoal"),
-            "target": g.get("dailyGoal"), "cumulative": 0, "weight": None, "entries": [],
-        }
+        day = blank_day(date, load(GOAL_FILE, {}))
     else:
         return None
     if extra_entries:
@@ -272,18 +279,7 @@ def ensure_day(date: str):
         return
     if not GOAL_FILE.exists():
         die("no goal set - run: macros.py goal-set --tdee N --daily-goal N --protein N --phase cut")
-    g = load(GOAL_FILE, {})
-    save(day_path(date), {
-        "date": date,
-        "phase": g.get("phase"),
-        "tdee": g.get("tdee"),
-        "dailyGoal": g.get("dailyGoal"),
-        "proteinGoal": g.get("proteinGoal"),
-        "target": g.get("dailyGoal"),
-        "cumulative": 0,
-        "weight": None,
-        "entries": [],
-    })
+    save(day_path(date), blank_day(date, load(GOAL_FILE, {})))
     refresh_ledger(date)
 
 
@@ -654,7 +650,7 @@ def cmd_food_eat(args):
                                noun="saved food", listing="food-list", strict=False)
     per100 = food["per100"]
     unit = food.get("unit", "g")
-    rate = {k: per100[k] / 100 for k in ("kcal", "protein", "fat", "carbs")}
+    rate = {k: per100[k] / 100 for k in MACROS}
     date = args.date or today()
     why = None
     if has_target(args):
@@ -716,9 +712,6 @@ def cmd_food_rm(args):
     del food[key]
     save(FOOD_FILE, food)
     print(f"removed food: {entry['name']}")
-
-
-MACROS = ("kcal", "protein", "fat", "carbs")
 
 
 def zero() -> dict:

@@ -65,6 +65,26 @@ function unwrap(content: Content): Content {
   );
 }
 
+/** Download an inbound media attachment to a buffer, logging and swallowing a failure. */
+async function downloadMedia(
+  sock: Socket,
+  message: WAMessage,
+  logger: Logger,
+  kind: "audio" | "image",
+): Promise<Buffer | undefined> {
+  try {
+    return await downloadMediaMessage(
+      message,
+      "buffer",
+      {},
+      { logger, reuploadRequest: sock.updateMediaMessage },
+    );
+  } catch (error) {
+    logger.error({ error }, `failed to download ${kind}`);
+    return undefined;
+  }
+}
+
 async function toInbound(
   sock: Socket,
   message: WAMessage,
@@ -86,40 +106,26 @@ async function toInbound(
   const image = content.imageMessage;
   const images: ImageContent[] = [];
   if (image) {
-    try {
-      const buffer = await downloadMediaMessage(
-        message,
-        "buffer",
-        {},
-        { logger, reuploadRequest: sock.updateMediaMessage },
-      );
+    const buffer = await downloadMedia(sock, message, logger, "image");
+    if (buffer) {
       images.push({
         data: buffer.toString("base64"),
         mimeType: image.mimetype ?? "image/jpeg",
         type: "image",
       });
-    } catch (error) {
-      logger.error({ error }, "failed to download image");
     }
   }
 
   const audioMessage = content.audioMessage;
   let audio: InboundMessage["audio"];
   if (audioMessage) {
-    try {
-      const buffer = await downloadMediaMessage(
-        message,
-        "buffer",
-        {},
-        { logger, reuploadRequest: sock.updateMediaMessage },
-      );
+    const buffer = await downloadMedia(sock, message, logger, "audio");
+    if (buffer) {
       audio = {
         data: buffer,
         mimeType: audioMessage.mimetype ?? "audio/ogg",
         seconds: audioMessage.seconds ?? undefined,
       };
-    } catch (error) {
-      logger.error({ error }, "failed to download audio");
     }
   }
 

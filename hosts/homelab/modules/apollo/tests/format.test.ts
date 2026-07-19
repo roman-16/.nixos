@@ -1,6 +1,17 @@
 import { describe, expect, it } from "bun:test";
 
-import { escapeHtml, humanTokens, truncate } from "../src/format";
+import { barColor, escapeHtml, humanTokens, truncate } from "../src/format";
+
+describe("barColor", () => {
+  it("grades a percentage green, amber, then red", () => {
+    expect(barColor(0)).toBe("bg-emerald-500");
+    expect(barColor(69)).toBe("bg-emerald-500");
+    expect(barColor(70)).toBe("bg-amber-500");
+    expect(barColor(89)).toBe("bg-amber-500");
+    expect(barColor(90)).toBe("bg-red-500");
+    expect(barColor(100)).toBe("bg-red-500");
+  });
+});
 
 describe("escapeHtml", () => {
   it("escapes HTML-significant characters", () => {

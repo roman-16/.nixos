@@ -1,7 +1,7 @@
 import type { ContextUsage } from "@earendil-works/pi-coding-agent";
 import QRCode from "qrcode";
 
-import { escapeHtml, humanTokens, truncate } from "./format";
+import { barColor, escapeHtml, humanTokens, truncate } from "./format";
 import type { LogRecord } from "./logs";
 import { RANGE_LABELS } from "./tokens";
 import { renderUsage, type UsageData } from "./usage";
@@ -277,7 +277,7 @@ export function renderContext(usage: ContextUsage | undefined): string {
     </div>`;
   }
   const pct = Math.min(100, Math.max(0, usage.percent));
-  const color = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
+  const color = barColor(pct);
   return `<div>
     <div class="mb-1.5 flex justify-between text-xs">
       <span class="text-neutral-400">Context</span><span class="text-neutral-500">${pct.toFixed(1)}% / ${window}</span>

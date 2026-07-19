@@ -23,8 +23,9 @@ from pathlib import Path
 _DEFAULT_DIR = Path(os.environ.get("APOLLO_WORKSPACE") or os.getcwd()) / "reminders"
 REMINDERS_DIR = Path(os.environ.get("APOLLO_REMINDERS_DIR") or _DEFAULT_DIR)
 
-DURATION_RE = re.compile(r"(\d+)([wdhms])")
 UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
+DURATION_PART = re.compile(r"(\d+)([wdhms])")
+DURATION_FULL = re.compile(r"(?:\d+[wdhms])+")
 
 
 def die(msg: str):
@@ -39,10 +40,9 @@ def now_ms() -> int:
 def parse_duration(text: str) -> int:
     """Parse a duration like '90m', '2h', or '1h30m' into milliseconds."""
     cleaned = text.strip().lower().replace(" ", "")
-    matches = DURATION_RE.findall(cleaned)
-    if not matches or "".join(f"{n}{u}" for n, u in matches) != cleaned:
+    if not DURATION_FULL.fullmatch(cleaned):
         die(f'invalid duration "{text}" (use e.g. 90m, 2h, 1d, 1h30m)')
-    seconds = sum(int(n) * UNIT_SECONDS[u] for n, u in matches)
+    seconds = sum(int(n) * UNIT_SECONDS[u] for n, u in DURATION_PART.findall(cleaned))
     if seconds <= 0:
         die("duration must be positive")
     return seconds * 1000
@@ -57,6 +57,7 @@ def parse_at(text: str) -> int:
 
 
 def resolve_at(args) -> int:
+    """The fire time in epoch-ms from --in or --at (exactly one required)."""
     if args.in_ and args.at:
         die("give either --in or --at, not both")
     if args.in_:
@@ -67,12 +68,13 @@ def resolve_at(args) -> int:
 
 
 def fmt_delta(ms: int) -> str:
+    """A relative label like 'in 2h 30m' for a millisecond offset from now."""
     if ms <= 0:
         return "now"
-    d, rem = divmod(ms // 1000, 86400)
-    h, rem = divmod(rem, 3600)
-    m, _ = divmod(rem, 60)
-    parts = [f"{n}{u}" for n, u in ((d, "d"), (h, "h"), (m, "m")) if n]
+    days, rem = divmod(ms // 1000, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, _ = divmod(rem, 60)
+    parts = [f"{n}{u}" for n, u in ((days, "d"), (hours, "h"), (minutes, "m")) if n]
     return "in " + " ".join(parts) if parts else "in <1m"
 
 

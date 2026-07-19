@@ -1,3 +1,5 @@
+import { barColor } from "./format";
+
 export interface UsageLimit {
   resets_at: string | null;
   utilization: number;
@@ -54,10 +56,6 @@ export function extraUsageValue(extra: ExtraUsage): string {
   return extra.monthly_limit == null
     ? `${spent} · no limit`
     : `${spent} / $${(extra.monthly_limit / 100).toFixed(2)}`;
-}
-
-function barColor(pct: number): string {
-  return pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
 }
 
 /** A labelled progress bar for a resettable limit (session / weekly). */
