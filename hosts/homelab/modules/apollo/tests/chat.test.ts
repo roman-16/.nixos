@@ -330,7 +330,7 @@ describe("renderChat", () => {
 describe("copyText", () => {
   it("formats a user message WhatsApp-style with an ISO date stamp", () => {
     const text = copyText({ images: [], kind: "user", text: "hi", time: "2026-07-19T09:01:00Z" });
-    expect(text).toMatch(/^\[\d{2}:\d{2}, \d{4}-\d{2}-\d{2}\] Roman: hi$/);
+    expect(text).toMatch(/^\[\d{2}:\d{2}, \d{4}-\d{2}-\d{2}\] User: hi$/);
   });
 
   it("omits the stamp when there is no time", () => {
@@ -340,7 +340,7 @@ describe("copyText", () => {
   it("notes images on a user message", () => {
     expect(
       copyText({ images: [{ data: "", mimeType: "image/png" }], kind: "user", text: "" }),
-    ).toBe("Roman: [1 image]");
+    ).toBe("User: [1 image]");
     expect(
       copyText({
         images: [
@@ -350,7 +350,7 @@ describe("copyText", () => {
         kind: "user",
         text: "look",
       }),
-    ).toBe("Roman: look [2 images]");
+    ).toBe("User: look [2 images]");
   });
 
   it("renders a tool call with args preview, status, and output", () => {

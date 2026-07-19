@@ -17,6 +17,7 @@ import {
   renderSummary,
   sessionStatus,
 } from "./dashboard";
+import { createDayState } from "./daystate";
 import { openDatabase } from "./db";
 import { createLogStore, createThrottle, parseLevel, shouldNotify } from "./logs";
 import {
@@ -27,6 +28,7 @@ import {
   jidForNumber,
   voiceText,
 } from "./messages";
+import { dayBoundaryNotes, withDayContext } from "./newday";
 import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
 import { createReminderWatcher, formatReminder } from "./reminders";
 import { createTokenStore, parseRange, renderTokens, renderTokensDaily } from "./tokens";
@@ -62,6 +64,7 @@ export async function main(): Promise<void> {
   const db = openDatabase(config.dbPath);
   const logStore = createLogStore(db);
   const tokenStore = createTokenStore(db);
+  const dayState = createDayState(db);
   const logger = pino({ level: config.logLevel }, logStore.stream);
   const logRetentionMs = config.logRetentionDays * 24 * 60 * 60 * 1000;
   logStore.prune(Date.now() - logRetentionMs);
@@ -242,9 +245,12 @@ export async function main(): Promise<void> {
       }
 
       const prompt = text || "(image)";
+      const dayNotes = dayBoundaryNotes(dayState.getLast(), new Date(), config.dayStartHour);
+      dayState.setLast(Date.now());
       logger.info(
         {
           chars: prompt.length,
+          dayNotes: dayNotes.length,
           from: message.number,
           images: message.images.length,
           voice: Boolean(message.audio),
@@ -252,7 +258,7 @@ export async function main(): Promise<void> {
         "prompt",
       );
       try {
-        await deliver(session, prompt, message.images);
+        await deliver(session, withDayContext(dayNotes, prompt), message.images);
       } catch (error) {
         logger.error({ error }, "prompt failed");
         stopTyping();

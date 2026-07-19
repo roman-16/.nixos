@@ -326,7 +326,7 @@ export function copyText(item: LogItem): string {
         item.images.length > 0
           ? `${item.text ? " " : ""}[${item.images.length} image${item.images.length > 1 ? "s" : ""}]`
           : "";
-      return `${lead}Roman: ${item.text}${note}`;
+      return `${lead}User: ${item.text}${note}`;
     }
   }
 }

@@ -13,6 +13,10 @@ After any code change, run all of the following and make sure they pass before c
 
 The dashboard must stay responsive - everything has to work on both mobile and desktop.
 
+## Naming
+
+Never write the user's real name anywhere in this project - code, comments, tests, prompts, or docs. Refer to the user as "User" / "the user". The single exception is the one canonical mention in `agent/SYSTEM_PROMPT.md`'s Context section. This does not apply to real system identities (the git commit author, the `roman` system user), which stay as-is.
+
 ## Tests
 
 - Tests live under `tests/`, mirroring the `src/` tree: `src/foo/bar.ts` is tested by `tests/foo/bar.test.ts`.

@@ -29,14 +29,24 @@ PREP_FILE = MACROS_DIR / "prep.json"
 # Score below which difflib stops proposing a fuzzy name match (0..1).
 FUZZY_CUTOFF = 0.6
 
+# The user's day rolls over at this hour, not midnight: times before it count toward the
+# previous calendar date (a 02:00 snack lands on the day before).
+DAY_START_HOUR = 4
+
 
 def die(msg: str):
     print(f"error: {msg}", file=sys.stderr)
     raise SystemExit(1)
 
 
+def macro_date(dt: datetime) -> str:
+    """The macro-day of a timestamp: the day rolls over at DAY_START_HOUR, so a time
+    before it (e.g. a 02:00 snack) counts toward the previous calendar date."""
+    return (dt - timedelta(hours=DAY_START_HOUR)).strftime("%Y-%m-%d")
+
+
 def today() -> str:
-    return datetime.now().strftime("%Y-%m-%d")
+    return macro_date(datetime.now())
 
 
 def now_time() -> str:
@@ -449,7 +459,7 @@ def cmd_show(args):
 
 
 def cmd_summary(args):
-    end = parse_date(args.to) if args.to else datetime.now().date()
+    end = parse_date(args.to) if args.to else parse_date(today())
     if args.from_:
         start = parse_date(args.from_)
         label_days = None

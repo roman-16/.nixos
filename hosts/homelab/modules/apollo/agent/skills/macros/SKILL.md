@@ -196,6 +196,7 @@ After a manual JSON edit or a phase change, re-fold the balance forward:
 
 ## Notes
 
+- The macro day rolls over at **04:00**, not midnight: an entry made between 00:00 and 04:00 counts toward the previous calendar date. `today`, `summary`, and the whole rolling balance use this 04:00-based day, while `now_time` still records the real wall-clock time on the entry - so at 02:00, "today" is still yesterday. Pass an explicit `--date` only to override.
 - Dates and times come from the system clock; only pass `--date`/`--time` to correct a past entry. Adjusting a day that has already passed (`log`, `edit`, `rm`, `food-eat`, or `prep-eat` with `--date`) reprints today's summary after the changed day, since a past change cascades through the rolling balance and moves today's target - relay both blocks verbatim.
 - Estimate freely for vague inputs or photos and pass `--note estimated` - the totals stay exact regardless.
 - Every macro must be non-negative and every amount positive; the script rejects impossible values, so a slip like `--kcal -5` errors out instead of silently corrupting a total.

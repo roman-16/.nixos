@@ -38,6 +38,12 @@ const MIGRATIONS: string[][] = [
     `ALTER TABLE tokens ADD COLUMN cost_cache_read  REAL NOT NULL DEFAULT 0`,
     `ALTER TABLE tokens ADD COLUMN cost_cache_write REAL NOT NULL DEFAULT 0`,
   ],
+  [
+    `CREATE TABLE kv (
+       key   TEXT PRIMARY KEY,
+       value TEXT NOT NULL
+     )`,
+  ],
 ];
 
 /** Apply every migration newer than the DB's user_version, each in its own transaction. */

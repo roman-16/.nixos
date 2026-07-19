@@ -53,7 +53,21 @@ def day_entries():
 
 
 def days_ago(n: int) -> str:
-    return (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")
+    return (datetime.strptime(macros.today(), "%Y-%m-%d") - timedelta(days=n)).strftime("%Y-%m-%d")
+
+
+class TestMacroDate:
+    def test_before_4am_counts_as_previous_day(self):
+        assert macros.macro_date(datetime(2026, 7, 19, 2, 0)) == "2026-07-18"
+
+    def test_at_4am_is_the_new_day(self):
+        assert macros.macro_date(datetime(2026, 7, 19, 4, 0)) == "2026-07-19"
+
+    def test_after_4am_is_same_day(self):
+        assert macros.macro_date(datetime(2026, 7, 19, 6, 0)) == "2026-07-19"
+
+    def test_late_evening_stays_that_day(self):
+        assert macros.macro_date(datetime(2026, 7, 19, 23, 30)) == "2026-07-19"
 
 
 class TestNumify:
