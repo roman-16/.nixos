@@ -163,7 +163,7 @@
 
           grr = "git branch | rga --invert-match \"\\*\" | xargs git branch -D; git remote prune origin";
 
-          ls = "eza --icons=always --color=always --group-directories-first --hyperlink";
+          ls = "eza --icons=always --color=always --group-directories-first --hyperlink=always";
           ll = "ls -lh";
           la = "ls -lha";
 
