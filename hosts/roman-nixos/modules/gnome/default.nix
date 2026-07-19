@@ -12,6 +12,28 @@
         sha256 = "sha256-f1JYxJ3/L/WZGR/g6AcrpsA8Vf+CpcnAzP2FaiHMgGU=";
         metadata = "eyJ1dWlkIjoiZHluYW1pYy1tdXNpYy1waWxsQGFuZGJhbCIsIm5hbWUiOiJEeW5hbWljIE11c2ljIFBpbGwiLCJkZXNjcmlwdGlvbiI6IkFuIGVsZWdhbnQsIHBpbGwtc2hhcGVkIG11c2ljIHBsYXllciBmb3IgeW91ciBkZXNrdG9wLiIsInNoZWxsLXZlcnNpb24iOlsiNDUiLCI0NiIsIjQ3IiwiNDgiLCI0OSJdLCJ1cmwiOiJodHRwczovL2dpdGh1Yi5jb20vQW5kYmFsMjMvZHluYW1pYy1tdXNpYy1waWxsIn0K";
       };
+
+      murmur = pkgs.stdenv.mkDerivation {
+        pname = "gnome-shell-extension-murmur";
+        version = "1.0.3";
+        src = pkgs.fetchFromGitHub {
+          owner = "roman-16";
+          repo = "murmur";
+          rev = "9965636188be7bdd9636f685942709bb5794d76a";
+          hash = "sha256-GvpvkiVe877lwtYqg8hkBjDNV0BJmaE/fDTJiKvlVy0=";
+        };
+        nativeBuildInputs = [ pkgs.glib ];
+        dontConfigure = true;
+        dontBuild = true;
+        installPhase = ''
+          runHook preInstall
+          dir="$out/share/gnome-shell/extensions/murmur@roman-16.github.io"
+          mkdir -p "$dir"
+          cp -r extension.js prefs.js metadata.json stylesheet.css lib schemas LICENSE "$dir/"
+          glib-compile-schemas "$dir/schemas"
+          runHook postInstall
+        '';
+      };
     in
     {
       environment = {
@@ -33,8 +55,10 @@
 
         systemPackages = with pkgs; [
           dconf-editor
+          dotool
           gnome-tweaks
           dynamic-music-pill
+          murmur
           gnome49Extensions."lockkeys@vaina.lt"
           gnomeExtensions.alphabetical-app-grid
           gnomeExtensions.appindicator
@@ -51,10 +75,14 @@
         ];
       };
 
+      hardware.uinput.enable = true;
+
       services = {
         desktopManager.gnome.enable = true;
         displayManager.gdm.enable = true;
       };
+
+      users.users.roman.extraGroups = [ "uinput" ];
     };
 
   home =
@@ -64,6 +92,9 @@
       lib,
       ...
     }:
+    let
+      secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
+    in
     with lib.hm.gvariant;
     {
       dconf.settings = {
@@ -214,6 +245,7 @@
           enabled-extensions = with pkgs; [
             "dynamic-music-pill@andbal"
             "lockkeys@vaina.lt"
+            "murmur@roman-16.github.io"
             gnomeExtensions.alphabetical-app-grid.extensionUuid
             gnomeExtensions.appindicator.extensionUuid
             gnomeExtensions.blur-my-shell.extensionUuid
@@ -296,6 +328,10 @@
         "org/gnome/shell/extensions/lockkeys" = {
           capslock-indicator = "when-active";
           numlock-indicator = "when-active";
+        };
+
+        "org/gnome/shell/extensions/murmur" = {
+          mistral-api-key = secrets.mistralApiKey;
         };
 
         "org/gnome/shell/extensions/vitals" = {
