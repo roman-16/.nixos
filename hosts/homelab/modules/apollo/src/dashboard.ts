@@ -61,7 +61,6 @@ export function renderPage(version: string): string {
         "conversation",
         `<span id="session-status" class="text-xs"></span>
         <div class="ml-auto flex items-center gap-2">
-          <button type="button" data-copy-all class="${GHOST_BUTTON}">Copy</button>
           <button hx-post="/compact" hx-target="#session-status" hx-swap="innerHTML" hx-disabled-elt="this"
             class="${GHOST_BUTTON}">Compact</button>
           <button hx-post="/reload" hx-target="#session-status" hx-swap="innerHTML" hx-disabled-elt="this"
@@ -164,34 +163,6 @@ export function renderPage(version: string): string {
         document.body.addEventListener("htmx:beforeSwap", function (e) {
           if (e.target && e.target.id === "chat" && selectedRows().length > 0) {
             e.detail.shouldSwap = false;
-          }
-        });
-        // "Copy" button grabs the whole rendered conversation.
-        document.addEventListener("click", function (e) {
-          var btn = e.target && e.target.closest ? e.target.closest("[data-copy-all]") : null;
-          if (!btn) return;
-          var text = transcript(chatRows());
-          var flash = function () {
-            var prev = btn.textContent;
-            btn.textContent = "Copied";
-            setTimeout(function () {
-              btn.textContent = prev;
-            }, 1500);
-          };
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(flash, function () {});
-          } else {
-            var area = document.createElement("textarea");
-            area.value = text;
-            area.style.position = "fixed";
-            area.style.left = "-9999px";
-            document.body.appendChild(area);
-            area.select();
-            try {
-              document.execCommand("copy");
-              flash();
-            } catch (err) {}
-            document.body.removeChild(area);
           }
         });
       })();

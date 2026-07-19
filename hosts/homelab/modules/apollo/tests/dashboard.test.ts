@@ -50,7 +50,6 @@ describe("renderPage", () => {
 
   it("wires up WhatsApp-style chat copy", () => {
     const html = renderPage("v");
-    expect(html).toContain("data-copy-all");
     expect(html).toContain('addEventListener("copy"');
     expect(html).toContain("shouldSwap");
   });
