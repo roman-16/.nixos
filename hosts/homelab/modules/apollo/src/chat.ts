@@ -195,9 +195,19 @@ function clock(iso: string): string {
   return `${two(date.getHours())}:${two(date.getMinutes())}`;
 }
 
+/** WhatsApp-style `[HH:MM, YYYY-MM-DD]` prefix for copied text; empty when the time is unknown. */
+function copyStamp(time: string | undefined): string {
+  if (!time) return "";
+  const date = new Date(time);
+  if (Number.isNaN(date.getTime())) return "";
+  return `[${two(date.getHours())}:${two(date.getMinutes())}, ${date.getFullYear()}-${two(
+    date.getMonth() + 1,
+  )}-${two(date.getDate())}]`;
+}
+
 function stamp(time: string | undefined): string {
   return time
-    ? `<span class="mt-1 block text-right text-[10px] leading-none opacity-50">${clock(time)}</span>`
+    ? `<span class="mt-1 block select-none text-right text-[10px] leading-none opacity-50">${clock(time)}</span>`
     : "";
 }
 
@@ -209,15 +219,26 @@ function dayLabel(date: Date, now: Date): string {
   return `${two(date.getDate())}.${two(date.getMonth() + 1)}.${date.getFullYear()}`;
 }
 
-function chipDivider(label: string): string {
-  return `<div class="flex justify-center py-1">
+/** A `data-copy` attribute carrying an item's canonical plain text, or nothing. */
+function copyAttr(text: string | undefined): string {
+  return text == undefined ? "" : ` data-copy="${escapeHtml(text)}"`;
+}
+
+function chipDivider(label: string, dataCopy?: string): string {
+  return `<div class="flex justify-center py-1"${copyAttr(dataCopy)}>
     <span class="rounded-full border border-white/10 bg-neutral-900/90 px-3 py-1 text-[11px] font-medium text-neutral-400">${escapeHtml(label)}</span>
   </div>`;
 }
 
-function bubble(side: "left" | "right", tone: string, body: string, time?: string): string {
+function bubble(
+  side: "left" | "right",
+  tone: string,
+  body: string,
+  time?: string,
+  dataCopy?: string,
+): string {
   const align = side === "right" ? "items-end" : "items-start";
-  return `<div class="flex flex-col ${align}">
+  return `<div class="flex flex-col ${align}"${copyAttr(dataCopy)}>
     <div class="max-w-[85%] px-3.5 py-2 text-sm shadow-sm sm:max-w-[75%] ${tone}">${body}${stamp(time)}</div>
   </div>`;
 }
@@ -253,8 +274,8 @@ function toolBadge(item: Extract<LogItem, { kind: "tool" }>, running: boolean): 
     : `<span class="text-neutral-500">interrupted</span>`;
 }
 
-function disclosure(summary: string, detail: string): string {
-  return `<details class="group overflow-hidden rounded-xl border border-white/10 bg-neutral-950/40 transition hover:border-white/20">
+function disclosure(summary: string, detail: string, dataCopy?: string): string {
+  return `<details class="group overflow-hidden rounded-xl border border-white/10 bg-neutral-950/40 transition hover:border-white/20"${copyAttr(dataCopy)}>
     <summary class="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs text-neutral-300 transition hover:bg-white/5">
       <span class="shrink-0 text-[10px] text-neutral-400 transition group-open:rotate-90">▶</span>
       ${summary}
@@ -274,7 +295,44 @@ function pre(text: string): string {
   )}</pre>`;
 }
 
+/** Canonical WhatsApp-style plain text for an item, embedded as `data-copy` for clean copy/paste. */
+export function copyText(item: LogItem): string {
+  const at = copyStamp(item.time);
+  const lead = at ? `${at} ` : "";
+  switch (item.kind) {
+    case "assistant":
+      return `${lead}Apollo: ${item.text}`;
+    case "bash": {
+      const body = item.output ? `\n${truncate(item.output, MAX_OUTPUT_CHARS)}` : "";
+      return `${lead}Apollo → bash: ${item.command}${body}\n(exit ${item.exitCode ?? "?"})`;
+    }
+    case "compaction": {
+      const tokens = item.tokensBefore ? ` (~${humanTokens(item.tokensBefore)} tokens)` : "";
+      const summary = item.summary ? `\n${truncate(item.summary, MAX_OUTPUT_CHARS)}` : "";
+      return `${lead}Context compacted${tokens}${summary}`;
+    }
+    case "divider":
+      return `${lead}${item.label}`;
+    case "thinking":
+      return `${lead}Apollo (thinking): ${truncate(item.text, MAX_OUTPUT_CHARS)}`;
+    case "tool": {
+      const status = item.isError ? "error" : item.hasResult ? "ok" : "no result";
+      const body = item.output ? `\n${truncate(item.output, MAX_OUTPUT_CHARS)}` : "";
+      const note = item.images > 0 ? `\n[${item.images} image(s)]` : "";
+      return `${lead}Apollo → ${item.name}(${truncate(argPreview(item.args), MAX_OUTPUT_CHARS)}) [${status}]${body}${note}`;
+    }
+    case "user": {
+      const note =
+        item.images.length > 0
+          ? `${item.text ? " " : ""}[${item.images.length} image${item.images.length > 1 ? "s" : ""}]`
+          : "";
+      return `${lead}Roman: ${item.text}${note}`;
+    }
+  }
+}
+
 function renderItem(item: LogItem, running = false): string {
+  const copy = copyText(item);
   switch (item.kind) {
     case "assistant":
       return bubble(
@@ -282,12 +340,13 @@ function renderItem(item: LogItem, running = false): string {
         "rounded-2xl rounded-bl-sm border border-white/5 bg-neutral-800/80 text-neutral-100",
         textBlock(item.text),
         item.time,
+        copy,
       );
     case "bash": {
       const summary = `${tag("bash")}<span class="min-w-0 truncate font-mono text-neutral-200">$ ${escapeHtml(
         truncate(item.command, PREVIEW_CHARS),
       )}</span><span class="ml-auto shrink-0 text-neutral-500">exit ${item.exitCode ?? "?"}</span>`;
-      return disclosure(summary, pre(item.output));
+      return disclosure(summary, pre(item.output), copy);
     }
     case "compaction": {
       const meta =
@@ -297,7 +356,7 @@ function renderItem(item: LogItem, running = false): string {
             item.summary,
           )}</div>`
         : "";
-      return `<details class="group py-1 text-center">
+      return `<details class="group py-1 text-center"${copyAttr(copy)}>
         <summary class="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full border border-white/10 bg-neutral-900/90 px-3 py-1 text-[11px] font-medium text-neutral-400 transition hover:text-neutral-200">
           Context compacted${meta}<span class="transition group-open:rotate-180">▾</span>
         </summary>
@@ -305,7 +364,7 @@ function renderItem(item: LogItem, running = false): string {
       </details>`;
     }
     case "divider":
-      return chipDivider(item.label);
+      return chipDivider(item.label, copy);
     case "thinking": {
       const preview = escapeHtml(truncate(item.text.replace(/\s+/g, " ").trim(), PREVIEW_CHARS));
       const summary = `${tag("thinking")}<span class="min-w-0 truncate italic text-neutral-400">${preview}</span>`;
@@ -314,6 +373,7 @@ function renderItem(item: LogItem, running = false): string {
         `<p class="whitespace-pre-wrap break-words italic text-neutral-500">${escapeHtml(
           truncate(item.text, MAX_OUTPUT_CHARS),
         )}</p>`,
+        copy,
       );
     }
     case "tool": {
@@ -325,7 +385,7 @@ function renderItem(item: LogItem, running = false): string {
       const detail = `<pre class="mb-2 overflow-x-auto whitespace-pre-wrap break-words text-neutral-500">${escapeHtml(
         JSON.stringify(item.args, null, 2),
       )}</pre>${output}${note}`;
-      return disclosure(summary, detail);
+      return disclosure(summary, detail, copy);
     }
     case "user":
       return bubble(
@@ -333,6 +393,7 @@ function renderItem(item: LogItem, running = false): string {
         "rounded-2xl rounded-br-sm bg-indigo-500 text-white",
         `${item.text ? textBlock(item.text) : ""}${images(item.images)}`,
         item.time,
+        copy,
       );
   }
 }

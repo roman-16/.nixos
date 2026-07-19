@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { parseTranscript, renderChat } from "../src/chat";
+import { copyText, parseTranscript, renderChat } from "../src/chat";
 
 const header = JSON.stringify({ cwd: "/w", id: "s", timestamp: "t", type: "session", version: 3 });
 
@@ -324,5 +324,113 @@ describe("renderChat", () => {
       new Date("2026-07-14T12:00:00.000Z"),
     );
     expect(html.indexOf("newer")).toBeLessThan(html.indexOf("older"));
+  });
+});
+
+describe("copyText", () => {
+  it("formats a user message WhatsApp-style with an ISO date stamp", () => {
+    const text = copyText({ images: [], kind: "user", text: "hi", time: "2026-07-19T09:01:00Z" });
+    expect(text).toMatch(/^\[\d{2}:\d{2}, \d{4}-\d{2}-\d{2}\] Roman: hi$/);
+  });
+
+  it("omits the stamp when there is no time", () => {
+    expect(copyText({ kind: "assistant", text: "yo" })).toBe("Apollo: yo");
+  });
+
+  it("notes images on a user message", () => {
+    expect(
+      copyText({ images: [{ data: "", mimeType: "image/png" }], kind: "user", text: "" }),
+    ).toBe("Roman: [1 image]");
+    expect(
+      copyText({
+        images: [
+          { data: "", mimeType: "image/png" },
+          { data: "", mimeType: "image/png" },
+        ],
+        kind: "user",
+        text: "look",
+      }),
+    ).toBe("Roman: look [2 images]");
+  });
+
+  it("renders a tool call with args preview, status, and output", () => {
+    expect(
+      copyText({
+        args: { command: "ls" },
+        hasResult: true,
+        images: 0,
+        isError: false,
+        kind: "tool",
+        name: "bash",
+        output: "file.txt",
+      }),
+    ).toBe("Apollo → bash(ls) [ok]\nfile.txt");
+  });
+
+  it("marks tool errors and missing results", () => {
+    expect(
+      copyText({
+        args: {},
+        hasResult: true,
+        images: 0,
+        isError: true,
+        kind: "tool",
+        name: "bash",
+        output: "boom",
+      }),
+    ).toContain("[error]");
+    expect(
+      copyText({
+        args: {},
+        hasResult: false,
+        images: 0,
+        isError: false,
+        kind: "tool",
+        name: "read",
+        output: "",
+      }),
+    ).toContain("[no result]");
+  });
+
+  it("renders a bash execution with command, output, and exit", () => {
+    expect(copyText({ command: "echo hi", exitCode: 0, kind: "bash", output: "hi" })).toBe(
+      "Apollo → bash: echo hi\nhi\n(exit 0)",
+    );
+  });
+
+  it("renders thinking, compaction, and dividers", () => {
+    expect(copyText({ kind: "thinking", text: "hmm" })).toBe("Apollo (thinking): hmm");
+    expect(copyText({ kind: "compaction", summary: "recap", tokensBefore: 123456 })).toBe(
+      "Context compacted (~123K tokens)\nrecap",
+    );
+    expect(copyText({ kind: "divider", label: "Reloaded" })).toBe("Reloaded");
+  });
+
+  it("truncates long tool output", () => {
+    const text = copyText({
+      args: {},
+      hasResult: true,
+      images: 0,
+      isError: false,
+      kind: "tool",
+      name: "bash",
+      output: "x".repeat(20000),
+    });
+    expect(text).toContain("more chars");
+  });
+});
+
+describe("renderChat data-copy", () => {
+  it("embeds a data-copy attribute on message rows", () => {
+    expect(renderChat([{ kind: "assistant", text: "hi" }])).toContain('data-copy="Apollo: hi"');
+  });
+
+  it("does not embed data-copy on day dividers", () => {
+    const html = renderChat(
+      [{ images: [], kind: "user", text: "a", time: "2026-07-19T09:00:00.000Z" }],
+      new Date("2026-07-19T12:00:00.000Z"),
+    );
+    // Only the user row carries data-copy; the inserted day divider must not.
+    expect((html.match(/data-copy=/g) ?? []).length).toBe(1);
   });
 });

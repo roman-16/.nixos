@@ -48,6 +48,13 @@ describe("renderPage", () => {
     expect(html).toContain(`id="lightbox"`);
   });
 
+  it("wires up WhatsApp-style chat copy", () => {
+    const html = renderPage("v");
+    expect(html).toContain("data-copy-all");
+    expect(html).toContain('addEventListener("copy"');
+    expect(html).toContain("shouldSwap");
+  });
+
   it("anchors the chat to the bottom with a column-reverse container and no scroll JS", () => {
     const html = renderPage("v");
     expect(html).toContain("flex-col-reverse");
