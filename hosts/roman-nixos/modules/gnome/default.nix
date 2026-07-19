@@ -2,17 +2,6 @@
   nixos =
     { pkgs, ... }:
     let
-      dynamic-music-pill = pkgs.gnomeExtensions.buildShellExtension {
-        uuid = "dynamic-music-pill@andbal";
-        name = "Dynamic Music Pill";
-        pname = "dynamic-music-pill";
-        version = "29";
-        description = "An elegant, pill-shaped music player for your desktop";
-        link = "https://extensions.gnome.org/extension/9334/dynamic-music-pill/";
-        sha256 = "sha256-f1JYxJ3/L/WZGR/g6AcrpsA8Vf+CpcnAzP2FaiHMgGU=";
-        metadata = "eyJ1dWlkIjoiZHluYW1pYy1tdXNpYy1waWxsQGFuZGJhbCIsIm5hbWUiOiJEeW5hbWljIE11c2ljIFBpbGwiLCJkZXNjcmlwdGlvbiI6IkFuIGVsZWdhbnQsIHBpbGwtc2hhcGVkIG11c2ljIHBsYXllciBmb3IgeW91ciBkZXNrdG9wLiIsInNoZWxsLXZlcnNpb24iOlsiNDUiLCI0NiIsIjQ3IiwiNDgiLCI0OSJdLCJ1cmwiOiJodHRwczovL2dpdGh1Yi5jb20vQW5kYmFsMjMvZHluYW1pYy1tdXNpYy1waWxsIn0K";
-      };
-
       murmur = pkgs.stdenv.mkDerivation {
         pname = "gnome-shell-extension-murmur";
         version = "1.0.3";
@@ -57,7 +46,6 @@
           dconf-editor
           dotool
           gnome-tweaks
-          dynamic-music-pill
           murmur
           gnome49Extensions."lockkeys@vaina.lt"
           gnomeExtensions.alphabetical-app-grid
@@ -65,6 +53,7 @@
           gnomeExtensions.blur-my-shell
           gnomeExtensions.burn-my-windows
           gnomeExtensions.dash-to-panel
+          gnomeExtensions.dynamic-music-pill
           gnomeExtensions.pip-on-top
           gnomeExtensions.quake-terminal
           gnomeExtensions.rounded-window-corners-reborn
@@ -243,7 +232,6 @@
           disable-extension-version-validation = true;
           disable-user-extensions = false;
           enabled-extensions = with pkgs; [
-            "dynamic-music-pill@andbal"
             "lockkeys@vaina.lt"
             "murmur@roman-16.github.io"
             gnomeExtensions.alphabetical-app-grid.extensionUuid
@@ -251,6 +239,7 @@
             gnomeExtensions.blur-my-shell.extensionUuid
             gnomeExtensions.burn-my-windows.extensionUuid
             gnomeExtensions.dash-to-panel.extensionUuid
+            gnomeExtensions.dynamic-music-pill.extensionUuid
             gnomeExtensions.pip-on-top.extensionUuid
             gnomeExtensions.quake-terminal.extensionUuid
             gnomeExtensions.rounded-window-corners-reborn.extensionUuid
