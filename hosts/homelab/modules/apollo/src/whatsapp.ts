@@ -15,9 +15,11 @@ import makeWASocket, {
 import type { Logger } from "pino";
 
 import { numberFromJid, splitMessage } from "./messages";
+import { describeQuotedMessage, type QuotedContext } from "./quoted";
 
 type Socket = ReturnType<typeof makeWASocket>;
 type Content = NonNullable<WAMessage["message"]>;
+type QuotedInfo = NonNullable<NonNullable<Content["extendedTextMessage"]>["contextInfo"]>;
 
 export type WhatsAppStatus = "connected" | "connecting" | "loggedOut" | "qr";
 
@@ -33,6 +35,7 @@ export interface InboundMessage {
   images: ImageContent[];
   key: WAMessage["key"];
   number: string;
+  quoted: QuotedContext | undefined;
   text: string;
 }
 
@@ -86,6 +89,57 @@ async function downloadMedia(
   }
 }
 
+/**
+ * Build the quoted-reply context from a message's contextInfo: classify the quoted
+ * message, work out who sent it (Apollo, the user, or unknown), and download its image
+ * or voice bytes so the agent can see/hear it. Media download is best-effort - a failure
+ * just leaves the media out, and the [context] line degrades to a plain label.
+ */
+async function toQuoted(
+  sock: Socket,
+  message: WAMessage,
+  contextInfo: QuotedInfo,
+  userNumber: string,
+  logger: Logger,
+): Promise<QuotedContext> {
+  const quotedMessage = contextInfo.quotedMessage!;
+  const { kind, text } = describeQuotedMessage(quotedMessage);
+  const self = sock.user?.id ? numberFromJid(sock.user.id) : "";
+  const author = numberFromJid(contextInfo.participant ?? "");
+  const sender: QuotedContext["sender"] =
+    author && author === self ? "apollo" : author && author === userNumber ? "user" : "unknown";
+
+  const images: ImageContent[] = [];
+  let audio: QuotedContext["audio"];
+  if (kind === "image" || kind === "voice") {
+    const quotedWA = {
+      key: {
+        fromMe: sender === "apollo",
+        id: contextInfo.stanzaId ?? undefined,
+        participant: contextInfo.participant ?? undefined,
+        remoteJid: message.key.remoteJid,
+      },
+      message: quotedMessage,
+    } as WAMessage;
+    const buffer = await downloadMedia(
+      sock,
+      quotedWA,
+      logger,
+      kind === "image" ? "image" : "audio",
+    );
+    if (buffer && kind === "image") {
+      images.push({
+        data: buffer.toString("base64"),
+        mimeType: quotedMessage.imageMessage?.mimetype ?? "image/jpeg",
+        type: "image",
+      });
+    } else if (buffer) {
+      audio = { data: buffer, mimeType: quotedMessage.audioMessage?.mimetype ?? "audio/ogg" };
+    }
+  }
+  return { audio, images, kind, sender, text };
+}
+
 async function toInbound(
   sock: Socket,
   message: WAMessage,
@@ -102,6 +156,7 @@ async function toInbound(
   // number used for the allowlist lives on remoteJidAlt when addressed by LID.
   const phoneJid = isLidUser(remote) ? (message.key.remoteJidAlt ?? remote) : remote;
   const from = jidNormalizedUser(phoneJid);
+  const number = numberFromJid(from);
 
   const content = unwrap(message.message);
   const image = content.imageMessage;
@@ -136,8 +191,21 @@ async function toInbound(
     image?.caption ??
     ""
   ).trim();
-  if (!text && images.length === 0 && !audio) return undefined;
-  return { audio, from, images, key: message.key, number: numberFromJid(from), text };
+
+  const contextInfo =
+    content.extendedTextMessage?.contextInfo ??
+    content.imageMessage?.contextInfo ??
+    content.videoMessage?.contextInfo ??
+    content.audioMessage?.contextInfo ??
+    content.documentMessage?.contextInfo ??
+    content.stickerMessage?.contextInfo ??
+    undefined;
+  const quoted = contextInfo?.quotedMessage
+    ? await toQuoted(sock, message, contextInfo, number, logger)
+    : undefined;
+
+  if (!text && images.length === 0 && !audio && !quoted) return undefined;
+  return { audio, from, images, key: message.key, number, quoted, text };
 }
 
 /** Connect to WhatsApp via Baileys, tracking link state and dispatching inbound messages. */

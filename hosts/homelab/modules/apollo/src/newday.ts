@@ -48,7 +48,7 @@ export function dayBoundaryNotes(last: Date | undefined, now: Date, dayStartHour
 }
 
 /** Prepend each note as its own `[context]` line, then the real prompt (kept to one turn). */
-export function withDayContext(notes: string[], prompt: string): string {
+export function withContext(notes: string[], prompt: string): string {
   if (notes.length === 0) return prompt;
   const block = notes.map((note) => `[context] ${note}`).join("\n");
   return `${block}\n\n${prompt}`;

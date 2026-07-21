@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { dayBoundaryNotes, withDayContext } from "../src/newday";
+import { dayBoundaryNotes, withContext } from "../src/newday";
 
 /** Local-time constructor (month is 1-based here for readability). */
 function at(year: number, month: number, day: number, hour: number, minute = 0): Date {
@@ -48,12 +48,12 @@ describe("dayBoundaryNotes", () => {
   });
 });
 
-describe("withDayContext", () => {
+describe("withContext", () => {
   it("returns the prompt unchanged when there are no notes", () => {
-    expect(withDayContext([], "hello")).toBe("hello");
+    expect(withContext([], "hello")).toBe("hello");
   });
 
   it("prepends each note as a [context] line before the prompt", () => {
-    expect(withDayContext(["a", "b"], "hello")).toBe("[context] a\n[context] b\n\nhello");
+    expect(withContext(["a", "b"], "hello")).toBe("[context] a\n[context] b\n\nhello");
   });
 });

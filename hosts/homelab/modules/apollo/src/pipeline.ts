@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
+import type { ImageContent } from "@earendil-works/pi-ai";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { Logger } from "pino";
 
@@ -16,7 +17,8 @@ import {
   jidForNumber,
   voiceText,
 } from "./messages";
-import { dayBoundaryNotes, withDayContext } from "./newday";
+import { dayBoundaryNotes, withContext } from "./newday";
+import { quotedContextNote } from "./quoted";
 import { transcribeAudio } from "./transcribe";
 import type { InboundMessage, WhatsApp, WhatsAppState } from "./whatsapp";
 
@@ -198,6 +200,33 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     }
   }
 
+  // Turn a reply-quote into a [context] note: transcribe a quoted voice note (best-effort;
+  // a failure falls back to a bare "voice message" label) and pass its downloaded image(s)
+  // through to the turn so the agent can see what's being referenced.
+  async function resolveQuoted(
+    quoted: NonNullable<InboundMessage["quoted"]>,
+  ): Promise<{ images: ImageContent[]; note: string }> {
+    let { text } = quoted;
+    if (quoted.audio) {
+      try {
+        text = await transcribeAudio(quoted.audio.data, {
+          apiKey: config.mistralApiKey,
+          model: config.transcribeModel,
+        });
+      } catch (error) {
+        logger.warn({ error }, "quoted voice transcription failed");
+        text = "";
+      }
+    }
+    const note = quotedContextNote({
+      attached: quoted.images.length > 0,
+      kind: quoted.kind,
+      sender: quoted.sender,
+      text,
+    });
+    return { images: quoted.images, note };
+  }
+
   return {
     attach(next) {
       socket = next;
@@ -225,18 +254,28 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         config.dayStartHour,
       );
       kv.set("lastInboundAt", String(Date.now()));
+
+      const notes = [...dayNotes];
+      let images = message.images;
+      if (message.quoted) {
+        const resolved = await resolveQuoted(message.quoted);
+        notes.push(resolved.note);
+        images = [...images, ...resolved.images];
+      }
+
       logger.info(
         {
           chars: prompt.length,
           dayNotes: dayNotes.length,
           from: message.number,
-          images: message.images.length,
+          images: images.length,
+          quoted: message.quoted?.kind,
           voice: Boolean(message.audio),
         },
         "prompt",
       );
       try {
-        await deliver(session, withDayContext(dayNotes, prompt), message.images);
+        await deliver(session, withContext(notes, prompt), images);
       } catch (error) {
         logger.error({ error }, "prompt failed");
         stopTyping();
