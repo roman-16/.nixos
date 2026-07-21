@@ -1,10 +1,9 @@
-import { stat } from "node:fs/promises";
-
 import type { AgentSession, AuthStorage } from "@earendil-works/pi-coding-agent";
 import type { Logger } from "pino";
 
 import { assetsVersion, htmlHeaders, serveAsset } from "./assets";
 import { parseTranscript, renderChat } from "./chat";
+import type { ChatStore } from "./chat-store";
 import type { Config } from "./config";
 import {
   renderContext,
@@ -19,7 +18,6 @@ import { type LogStore, parseLevel } from "./logs";
 import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
 import type { Pipeline } from "./pipeline";
 import { parseRange, renderTokens, renderTokensDaily, type TokenStore } from "./tokens";
-import { createMediaReader, readTail } from "./transcript";
 import { fetchUsage, type UsageData } from "./usage";
 
 const BACKUP_ALERT =
@@ -96,6 +94,7 @@ export function fragmentCache(): FragmentCache {
 
 export interface ServerDeps {
   authStorage: AuthStorage;
+  chatStore: ChatStore;
   config: Config;
   logStore: LogStore;
   logger: Logger;
@@ -106,7 +105,7 @@ export interface ServerDeps {
 
 /** Start the dashboard + health HTTP server: htmx polls each fragment endpoint and swaps its region. */
 export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
-  const { authStorage, config, logStore, logger, pipeline, session, tokenStore } = deps;
+  const { authStorage, chatStore, config, logStore, logger, pipeline, session, tokenStore } = deps;
 
   const caches = {
     chat: fragmentCache(),
@@ -118,49 +117,39 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
     summary: fragmentCache(),
   };
 
-  const media = createMediaReader();
-
   // Anthropic OAuth login state for the dashboard: one PKCE verifier held until it's used.
   let pendingVerifier: string | undefined;
   const loginUrl = () => authorizeUrl((pendingVerifier ??= createVerifier()));
   let linking = false;
 
-  let chatCache: { body: string; count: number; live: boolean; mtimeMs: number } | undefined;
+  let chatCache: { body: string; key: string } | undefined;
   let usage: { data: UsageData | null; fetchedAt: number } | undefined;
 
-  async function renderChatBody(count: number): Promise<string> {
-    const file = session.sessionFile;
-    if (!file) return renderChat([]);
-    try {
-      const { mtimeMs } = await stat(file);
-      const live = session.isStreaming;
-      if (
-        !chatCache ||
-        chatCache.mtimeMs !== mtimeMs ||
-        chatCache.live !== live ||
-        chatCache.count !== count
-      ) {
-        const { more, text } = await readTail(file, count);
-        chatCache = {
-          body:
-            renderChat(parseTranscript(text), new Date(), live) + (more ? CHAT_MORE_MARKER : ""),
-          count,
-          live,
-          mtimeMs,
-        };
-      }
-      return chatCache.body;
-    } catch {
-      return renderChat([]);
+  /** Render the chat window from SQLite (the source of truth), memoized by a cheap version tag. */
+  function renderChatBody(count: number): string {
+    const { entries, more, version } = chatStore.tail(session.sessionId, count);
+    const live = session.isStreaming;
+    const key = `${version}:${live}`;
+    if (!chatCache || chatCache.key !== key) {
+      chatCache = {
+        body:
+          renderChat(parseTranscript(entries.join("\n")), new Date(), live) +
+          (more ? CHAT_MORE_MARKER : ""),
+        key,
+      };
     }
+    return chatCache.body;
   }
 
-  /** Serve one transcript image (`/media/<entryId>/<n>`) with a long immutable cache. */
-  async function serveMedia(pathname: string): Promise<Response> {
-    const file = session.sessionFile;
+  /** Serve one chat image (`/media/<entryId>/<n>`) from SQLite with a long immutable cache. */
+  function serveMedia(pathname: string): Response {
     const match = /^\/media\/([^/]+)\/(\d+)$/.exec(pathname);
-    if (!file || !match) return new Response("Not found", { status: 404 });
-    const image = await media.readImage(file, decodeURIComponent(match[1]!), Number(match[2]!));
+    if (!match) return new Response("Not found", { status: 404 });
+    const image = chatStore.image(
+      session.sessionId,
+      decodeURIComponent(match[1]!),
+      Number(match[2]!),
+    );
     if (!image) return new Response("Not found", { status: 404 });
     return new Response(image.bytes, {
       headers: { "cache-control": IMMUTABLE_CACHE, "content-type": image.mimeType },
@@ -205,8 +194,8 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
     ],
     [
       "GET /chat",
-      async (_req, url) => {
-        const body = await renderChatBody(chatLines(url.searchParams.get("count")));
+      (_req, url) => {
+        const body = renderChatBody(chatLines(url.searchParams.get("count")));
         return caches.chat.serve(body, () => body);
       },
     ],

@@ -1,6 +1,7 @@
 import { pino } from "pino";
 
 import { createApolloSession } from "./agent";
+import { createChatStore } from "./chat-store";
 import { loadConfig } from "./config";
 import { openDatabase } from "./db";
 import { createKv } from "./kv";
@@ -17,6 +18,7 @@ const HOUR_MS = 60 * 60 * 1000;
 export async function main(): Promise<void> {
   const config = loadConfig();
   const db = openDatabase(config.dbPath);
+  const chatStore = createChatStore(db);
   const logStore = createLogStore(db);
   const tokenStore = createTokenStore(db);
   const kv = createKv(db);
@@ -35,8 +37,27 @@ export async function main(): Promise<void> {
 
   const pipeline = createPipeline({ config, kv, logStore, logger, session });
 
-  // Record every assistant turn's token usage for the dashboard's token accounting.
+  // Mirror the pi session's entries into SQLite - the dashboard's source of truth. Seed from
+  // the resumed session, then keep it current by diffing getEntries() after pi persists.
+  // Listeners fire before persistence, so a short debounce lets the just-appended entry land
+  // first (and coalesces streaming bursts); the 2s dashboard poll is far slower, so nothing
+  // perceptible lags.
+  const mirror = () => {
+    try {
+      chatStore.sync(session.sessionId, session.sessionManager.getEntries());
+    } catch (error) {
+      logger.error({ error }, "chat mirror failed");
+    }
+  };
+  mirror();
+  let mirrorTimer: ReturnType<typeof setTimeout> | undefined;
+
   session.subscribe((event) => {
+    mirrorTimer ??= setTimeout(() => {
+      mirrorTimer = undefined;
+      mirror();
+    }, 150);
+    // Record every assistant turn's token usage for the dashboard's token accounting.
     if (event.type === "turn_end" && event.message.role === "assistant") {
       try {
         tokenStore.record(event.message.usage, event.message.model, event.message.timestamp);
@@ -63,7 +84,7 @@ export async function main(): Promise<void> {
     onFire: (reminder) => pipeline.sendToUser(formatReminder(reminder.text)),
   }).start();
 
-  startServer({ authStorage, config, logStore, logger, pipeline, session, tokenStore });
+  startServer({ authStorage, chatStore, config, logStore, logger, pipeline, session, tokenStore });
   logger.info({ port: config.port }, "dashboard + health listening");
 }
 

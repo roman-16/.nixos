@@ -1,8 +1,8 @@
 /**
- * Renders the persistent pi session (its JSONL file) as a chat log for the
- * dashboard. The file is the source of truth: unlike the in-memory context it
- * survives compaction and restarts, so it holds everything ever said, including
- * tool use. Apollo never branches, so the tree is treated as a linear sequence.
+ * Parses and renders the conversation transcript - pi session entries mirrored into
+ * SQLite (the app's source of truth), each the same JSON pi writes to its session
+ * file - as a chat log for the dashboard. Apollo never branches, so the tree is
+ * treated as a linear sequence.
  */
 
 import { escapeHtml, humanTokens, truncate } from "./format";
@@ -12,21 +12,6 @@ const PREVIEW_CHARS = 100;
 
 /** Argument keys, in priority order, worth showing in a tool's one-line summary. */
 const PREVIEW_KEYS = ["command", "file_path", "path", "pattern", "query", "url"];
-
-/**
- * The last `count` non-empty lines of a JSONL transcript, in original order. The
- * dashboard renders only this tail so cost is bounded by the window, not by the
- * full (unbounded, append-only) session history.
- */
-export function tailLines(content: string, count: number): string {
-  if (count <= 0) return "";
-  const lines = content.split("\n");
-  const kept: string[] = [];
-  for (let i = lines.length - 1; i >= 0 && kept.length < count; i -= 1) {
-    if (lines[i]!.trim()) kept.push(lines[i]!);
-  }
-  return kept.reverse().join("\n");
-}
 
 export interface ChatImage {
   id: string;
@@ -192,6 +177,35 @@ export function parseTranscript(jsonl: string): LogItem[] {
     }
   }
   return items;
+}
+
+export interface ImageBytes {
+  bytes: Buffer;
+  mimeType: string;
+}
+
+/** The Nth image block of a transcript entry (a stored JSONL line) as raw bytes, or undefined. */
+export function imageFromLine(line: string, index: number): ImageBytes | undefined {
+  let content: unknown;
+  try {
+    content = (JSON.parse(line) as { message?: { content?: unknown } }).message?.content;
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(content)) return undefined;
+  let seen = 0;
+  for (const block of content) {
+    if (block?.type === "image" && typeof block.data === "string") {
+      if (seen === index) {
+        return {
+          bytes: Buffer.from(block.data, "base64"),
+          mimeType: typeof block.mimeType === "string" ? block.mimeType : "image/jpeg",
+        };
+      }
+      seen += 1;
+    }
+  }
+  return undefined;
 }
 
 function argPreview(args: Record<string, unknown>): string {

@@ -1,7 +1,4 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import type { Config } from "../src/config";
 import type { Pipeline } from "../src/pipeline";
@@ -55,6 +52,11 @@ function stubDeps(over: Partial<ServerDeps> = {}): ServerDeps {
   const noop = () => {};
   return {
     authStorage: { hasAuth: () => false } as unknown as ServerDeps["authStorage"],
+    chatStore: {
+      image: () => undefined,
+      sync: () => {},
+      tail: () => ({ entries: [], more: false, version: "0:0" }),
+    } as unknown as ServerDeps["chatStore"],
     config: { port: 0 } as unknown as Config,
     logStore: { query: () => [], seq: 0 } as unknown as ServerDeps["logStore"],
     logger: { debug: noop, error: noop, info: noop, warn: noop } as unknown as ServerDeps["logger"],
@@ -66,7 +68,7 @@ function stubDeps(over: Partial<ServerDeps> = {}): ServerDeps {
       getContextUsage: () => undefined,
       isStreaming: false,
       resourceLoader: { getSkills: () => ({ skills: [] }) },
-      sessionFile: undefined,
+      sessionId: "s1",
     } as unknown as ServerDeps["session"],
     tokenStore: {
       daily: () => [],
@@ -144,32 +146,20 @@ describe("startServer routing", () => {
     expect((await get(base, "/stop-button")).status).toBe(200);
   });
 
-  it("404s a media request when there is no session file", async () => {
+  it("404s a media request for an unknown image", async () => {
     expect((await get(boot(), "/media/whatever/0")).status).toBe(404);
   });
 
-  it("serves a transcript image out-of-band with an immutable cache", async () => {
-    const file = join(mkdtempSync(join(tmpdir(), "apollo-server-")), "session.jsonl");
-    writeFileSync(
-      file,
-      `${JSON.stringify({
-        id: "m1",
-        message: {
-          content: [
-            { data: Buffer.from("hello").toString("base64"), mimeType: "image/png", type: "image" },
-          ],
-          role: "user",
-        },
-        type: "message",
-      })}\n`,
-    );
+  it("serves a chat image from the store with an immutable cache", async () => {
     const base = boot({
-      session: {
-        getContextUsage: () => undefined,
-        isStreaming: false,
-        resourceLoader: { getSkills: () => ({ skills: [] }) },
-        sessionFile: file,
-      } as unknown as ServerDeps["session"],
+      chatStore: {
+        image: (_session: string, id: string, index: number) =>
+          id === "m1" && index === 0
+            ? { bytes: Buffer.from("hello"), mimeType: "image/png" }
+            : undefined,
+        sync: () => {},
+        tail: () => ({ entries: [], more: false, version: "0:0" }),
+      } as unknown as ServerDeps["chatStore"],
     });
     const res = await get(base, "/media/m1/0");
     expect(res.status).toBe(200);
@@ -179,18 +169,21 @@ describe("startServer routing", () => {
   });
 
   it("marks older history with #chat-more only when the window doesn't cover it", async () => {
-    const file = join(mkdtempSync(join(tmpdir(), "apollo-chat-")), "session.jsonl");
-    const lines = Array.from({ length: 5 }, (_, i) =>
-      JSON.stringify({ id: `u${i}`, message: { content: `m${i}`, role: "user" }, type: "message" }),
-    );
-    writeFileSync(file, `${lines.join("\n")}\n`);
+    const row = (id: string) =>
+      JSON.stringify({ id, message: { content: id, role: "user" }, type: "message" });
     const base = boot({
-      session: {
-        getContextUsage: () => undefined,
-        isStreaming: false,
-        resourceLoader: { getSkills: () => ({ skills: [] }) },
-        sessionFile: file,
-      } as unknown as ServerDeps["session"],
+      chatStore: {
+        image: () => undefined,
+        sync: () => {},
+        tail: (_session: string, count: number) =>
+          count < 5
+            ? { entries: ["m3", "m4"].map(row), more: true, version: `${count}:5` }
+            : {
+                entries: ["m0", "m1", "m2", "m3", "m4"].map(row),
+                more: false,
+                version: `${count}:5`,
+              },
+      } as unknown as ServerDeps["chatStore"],
     });
     expect(await (await get(base, "/chat?count=2")).text()).toContain('id="chat-more"');
     expect(await (await get(base, "/chat?count=50")).text()).not.toContain('id="chat-more"');

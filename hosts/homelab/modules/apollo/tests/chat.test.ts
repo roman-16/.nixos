@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { copyText, parseTranscript, renderChat, tailLines } from "../src/chat";
+import { copyText, imageFromLine, parseTranscript, renderChat } from "../src/chat";
 
 const header = JSON.stringify({ cwd: "/w", id: "s", timestamp: "t", type: "session", version: 3 });
 
@@ -176,21 +176,35 @@ describe("parseTranscript", () => {
   });
 });
 
-describe("tailLines", () => {
-  it("returns the last N non-empty lines in order", () => {
-    expect(tailLines("a\nb\nc\nd", 2)).toBe("c\nd");
+describe("imageFromLine", () => {
+  const b64 = (text: string) => Buffer.from(text).toString("base64");
+
+  it("extracts the Nth image block as bytes with its mime type", () => {
+    const line = message("a", {
+      content: [
+        { text: "hi", type: "text" },
+        { data: b64("one"), mimeType: "image/png", type: "image" },
+        { data: b64("two"), mimeType: "image/webp", type: "image" },
+      ],
+      role: "user",
+    });
+    expect(imageFromLine(line, 0)).toEqual({ bytes: Buffer.from("one"), mimeType: "image/png" });
+    expect(imageFromLine(line, 1)).toEqual({ bytes: Buffer.from("two"), mimeType: "image/webp" });
   });
 
-  it("skips blank lines", () => {
-    expect(tailLines("a\n\n\nb\n", 2)).toBe("a\nb");
+  it("defaults a missing mime type to image/jpeg", () => {
+    const line = message("a", { content: [{ data: b64("x"), type: "image" }], role: "user" });
+    expect(imageFromLine(line, 0)?.mimeType).toBe("image/jpeg");
   });
 
-  it("returns everything when N exceeds the line count", () => {
-    expect(tailLines("a\nb", 10)).toBe("a\nb");
-  });
-
-  it("is empty for a non-positive count", () => {
-    expect(tailLines("a\nb", 0)).toBe("");
+  it("returns undefined for an out-of-range index, no images, or bad JSON", () => {
+    const line = message("a", {
+      content: [{ data: b64("x"), mimeType: "image/png", type: "image" }],
+      role: "user",
+    });
+    expect(imageFromLine(line, 5)).toBeUndefined();
+    expect(imageFromLine(message("b", { content: "hi", role: "user" }), 0)).toBeUndefined();
+    expect(imageFromLine("{not json", 0)).toBeUndefined();
   });
 });
 

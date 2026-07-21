@@ -44,6 +44,18 @@ const MIGRATIONS: string[][] = [
        value TEXT NOT NULL
      )`,
   ],
+  [
+    `CREATE TABLE chat (
+       id         INTEGER PRIMARY KEY AUTOINCREMENT,
+       session_id TEXT    NOT NULL,
+       entry_id   TEXT    NOT NULL,
+       type       TEXT    NOT NULL DEFAULT '',
+       time       INTEGER,
+       data       TEXT    NOT NULL
+     )`,
+    `CREATE UNIQUE INDEX chat_session_entry ON chat (session_id, entry_id)`,
+    `CREATE INDEX chat_session_id ON chat (session_id, id)`,
+  ],
 ];
 
 /** Apply every migration newer than the DB's user_version, each in its own transaction. */
