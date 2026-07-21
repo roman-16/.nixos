@@ -47,6 +47,7 @@ export interface WhatsApp {
 }
 
 export interface WhatsAppOptions {
+  baileysLogLevel: string;
   logger: Logger;
   maxChars: number;
   onConnect?: () => void;
@@ -160,8 +161,10 @@ export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp>
     const socket = makeWASocket({
       auth: auth.state,
       browser: Browsers.ubuntu("Apollo"),
-      // Tagged so its chatter is stored/shown but never forwarded to WhatsApp (see shouldNotify).
-      logger: options.logger.child({ src: "baileys" }),
+      // Baileys chatter is pure WhatsApp-transport noise, so it's silenced by default
+      // (baileysLogLevel). When raised for debugging, its records are tagged src:baileys so they
+      // still never forward to WhatsApp (see shouldNotify).
+      logger: options.logger.child({ src: "baileys" }, { level: options.baileysLogLevel }),
     });
 
     socket.ev.on("creds.update", auth.saveCreds);

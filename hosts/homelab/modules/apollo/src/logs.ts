@@ -29,8 +29,8 @@ export function parseLevel(value: string | null | undefined): LogLevel {
 
 /**
  * Whether a log record clears the notify threshold (its level is the alert-worthiness).
- * Baileys is handed our logger and is chatty (and unreachable when WhatsApp is down), so its
- * tagged records never forward - they stay in stdout + SQLite for the dashboard.
+ * Baileys logging is silenced by default (baileysLogLevel); if it's raised for debugging, its
+ * tagged records are pure transport noise, so they still never forward to WhatsApp.
  */
 export function shouldNotify(record: LogRecord, minLevel: LogLevel): boolean {
   if (record.src === "baileys") return false;

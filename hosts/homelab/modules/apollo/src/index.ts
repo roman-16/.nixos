@@ -47,6 +47,7 @@ export async function main(): Promise<void> {
   });
 
   const whatsapp = await startWhatsApp({
+    baileysLogLevel: config.baileysLogLevel,
     logger,
     maxChars: config.maxMessageChars,
     onConnect: () => pipeline.handleConnect(),

@@ -11,6 +11,7 @@ describe("loadConfig", () => {
   it("applies defaults", () => {
     const config = loadConfig({ HOME: "/tmp/apollo" });
     expect(config.allowFrom).toEqual([]);
+    expect(config.baileysLogLevel).toBe("silent");
     expect(config.model).toBe("anthropic/claude-sonnet-5");
     expect(config.thinkingLevel).toBe("medium");
     expect(config.port).toBe(8080);

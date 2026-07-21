@@ -10,6 +10,7 @@ export type ThinkingLevel = "high" | "low" | "max" | "medium" | "minimal" | "off
 export interface Config {
   agentDir: string;
   allowFrom: string[];
+  baileysLogLevel: string;
   compactionPromptFile: string;
   dayStartHour: number;
   dbPath: string;
@@ -43,6 +44,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   return {
     agentDir,
     allowFrom: (env.APOLLO_ALLOW_FROM ?? "").split(",").map(digits).filter(Boolean),
+    baileysLogLevel: env.APOLLO_BAILEYS_LOG_LEVEL ?? "silent",
     compactionPromptFile: join(agentDir, "COMPACTION_PROMPT.md"),
     dayStartHour: Number(env.APOLLO_DAY_START_HOUR ?? 4),
     dbPath: env.APOLLO_DB_PATH ?? join(home, "apollo.sqlite"),
