@@ -44,6 +44,11 @@ export function formatLogNotice(record: LogRecord): string {
   return `⚠️ ${logLevelLabel(level)}: ${msg}${detail ? ` - ${truncate(detail, 300)}` : ""}`;
 }
 
+/** [context] note telling the agent a skill delivered a message to the user out of band. */
+export function skillContextNote(source: string, text: string): string {
+  return `The ${source} skill sent the user a message directly (already delivered - don't resend it): "${truncate(text, 300)}"`;
+}
+
 /** Strip a WhatsApp JID to its bare number (drops the device suffix and domain). */
 export function numberFromJid(jid: string): string {
   const user = jid.split("@")[0] ?? "";

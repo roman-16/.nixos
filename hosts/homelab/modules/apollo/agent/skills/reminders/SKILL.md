@@ -54,5 +54,6 @@ Reschedule and/or change the text by id (get ids from `list`). Pass only what ch
 
 - `--in` is computed against the real clock at the moment you run it, so it is always accurate.
 - After creating or updating, tell the user when it will fire. After `list`, relay the list.
+- When a reminder fires it is sent to the user directly and shown in the dashboard chat; on the user's next message you get a `[context]` line noting it went out - it's already delivered, so don't resend it.
 
 `{baseDir}` = this skill's directory. Always resolve to the absolute path before executing.

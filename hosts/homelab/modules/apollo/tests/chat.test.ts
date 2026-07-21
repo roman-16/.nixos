@@ -125,6 +125,20 @@ describe("parseTranscript", () => {
     ]);
   });
 
+  it("renders a skill_message custom entry as a skill item", () => {
+    const jsonl = JSON.stringify({
+      customType: "skill_message",
+      data: { source: "reminders", text: "⏰ get my food" },
+      id: "sk",
+      parentId: null,
+      timestamp: "t",
+      type: "custom",
+    });
+    expect(parseTranscript(jsonl)).toEqual([
+      { kind: "skill", source: "reminders", text: "⏰ get my food" },
+    ]);
+  });
+
   it("ignores custom entries of other types", () => {
     const jsonl = JSON.stringify({
       customType: "something_else",
@@ -349,6 +363,19 @@ describe("renderChat", () => {
     expect(renderChat([{ kind: "assistant", text: "x" }])).not.toContain("Today");
   });
 
+  it("renders a skill message as a badged left bubble, escaping content", () => {
+    const html = renderChat([{ kind: "skill", source: "reminders", text: "⏰ get my food" }]);
+    expect(html).toContain("via reminders");
+    expect(html).toContain("get my food");
+
+    const unsafe = renderChat([
+      { kind: "skill", source: "<x>", text: "<script>alert(1)</script>" },
+    ]);
+    expect(unsafe).toContain("&lt;x&gt;");
+    expect(unsafe).toContain("&lt;script&gt;");
+    expect(unsafe).not.toContain("<script>");
+  });
+
   it("emits newest-first so the column-reverse container shows the latest at the bottom", () => {
     const html = renderChat(
       [
@@ -438,6 +465,12 @@ describe("copyText", () => {
       "Context compacted (~123K tokens)\nrecap",
     );
     expect(copyText({ kind: "divider", label: "Reloaded" })).toBe("Reloaded");
+  });
+
+  it("formats a skill message with its source", () => {
+    expect(copyText({ kind: "skill", source: "macros", text: "Today: 400 kcal" })).toBe(
+      "Apollo (via macros): Today: 400 kcal",
+    );
   });
 
   it("truncates long tool output", () => {

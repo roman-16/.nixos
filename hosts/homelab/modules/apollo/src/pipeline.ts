@@ -6,6 +6,7 @@ import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { Logger } from "pino";
 
 import { deliver, onAssistantText, onRunError } from "./agent";
+import type { ChatStore } from "./chat-store";
 import type { Config } from "./config";
 import type { Kv } from "./kv";
 import { createThrottle, type LogStore, shouldNotify } from "./logs";
@@ -15,6 +16,7 @@ import {
   formatLogNotice,
   isAllowed,
   jidForNumber,
+  skillContextNote,
   voiceText,
 } from "./messages";
 import { dayBoundaryNotes, withContext } from "./newday";
@@ -29,6 +31,7 @@ const TYPING_REFRESH_MS = 4000;
 const TYPING_MAX_TICKS = 120;
 
 export interface PipelineDeps {
+  chatStore: ChatStore;
   config: Config;
   kv: Kv;
   logStore: LogStore;
@@ -40,6 +43,8 @@ export interface PipelineDeps {
 export interface Pipeline {
   /** Bind the live socket once WhatsApp has connected. */
   attach(socket: WhatsApp): void;
+  /** Deliver a skill-originated message to the user out of band: send it, record it in the chat DB, and queue a [context] note for the agent's next turn. */
+  emitSkillMessage(text: string, source: string): Promise<void>;
   /** Handle a (re)connect: apply the configured profile picture if it changed. */
   handleConnect(): void;
   /** Handle one allowlisted inbound message: transcribe, add day context, and prompt the session. */
@@ -55,7 +60,7 @@ export interface Pipeline {
 }
 
 export function createPipeline(deps: PipelineDeps): Pipeline {
-  const { config, kv, logStore, logger, session } = deps;
+  const { chatStore, config, kv, logStore, logger, session } = deps;
 
   let socket: WhatsApp | undefined;
   let target: string | undefined;
@@ -108,6 +113,43 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     } catch (error) {
       logger.debug({ error }, "notify send failed");
     }
+  }
+
+  // Notes about out-of-band skill sends since the agent's last turn, persisted (survives restarts)
+  // and capped, drained into the next inbound prompt as [context] lines.
+  const SKILL_NOTES_MAX = 10;
+
+  function readSkillNotes(): string[] {
+    try {
+      const parsed: unknown = JSON.parse(kv.get("skillNotes") ?? "[]");
+      return Array.isArray(parsed) ? parsed.filter((n): n is string => typeof n === "string") : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function drainSkillNotes(): string[] {
+    const notes = readSkillNotes();
+    if (notes.length > 0) kv.set("skillNotes", "[]");
+    return notes;
+  }
+
+  // Deliver a message a skill produced (a fired reminder, a macros reply) directly to the user,
+  // record it in the chat DB as a "via <source>" bubble, and queue a [context] note so the agent
+  // learns about it next turn. Send first, so a failed send (the reminder watcher retries) never
+  // logs or contexts a message the user never received.
+  async function emitSkillMessage(text: string, source: string): Promise<void> {
+    await sendToUser(text);
+    try {
+      chatStore.appendSkillMessage(session.sessionId, source, text);
+    } catch (error) {
+      logger.error({ error }, "skill message chat-log append failed");
+    }
+    kv.set(
+      "skillNotes",
+      JSON.stringify([...readSkillNotes(), skillContextNote(source, text)].slice(-SKILL_NOTES_MAX)),
+    );
+    if (typingTimer) sendComposing(); // a send clears the recipient's indicator; re-assert if mid-turn
   }
 
   // Fan every warn+ log line out to WhatsApp - the log level is the single source of truth for
@@ -231,6 +273,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     attach(next) {
       socket = next;
     },
+    emitSkillMessage,
     handleConnect() {
       void applyProfilePicture();
     },
@@ -255,7 +298,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       );
       kv.set("lastInboundAt", String(Date.now()));
 
-      const notes = [...dayNotes];
+      const notes = [...dayNotes, ...drainSkillNotes()];
       let images = message.images;
       if (message.quoted) {
         const resolved = await resolveQuoted(message.quoted);

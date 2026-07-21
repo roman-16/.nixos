@@ -7,6 +7,7 @@ import {
   isAllowed,
   jidForNumber,
   numberFromJid,
+  skillContextNote,
   splitMessage,
   voiceText,
 } from "../src/messages";
@@ -124,5 +125,18 @@ describe("formatLogNotice", () => {
     expect(formatLogNotice({ err: { message: "nested" }, level: 50, msg: "boom" })).toContain(
       "nested",
     );
+  });
+});
+
+describe("skillContextNote", () => {
+  it("names the source and includes the delivered text", () => {
+    const note = skillContextNote("reminders", "⏰ get my food");
+    expect(note).toContain("reminders");
+    expect(note).toContain("⏰ get my food");
+    expect(note).toContain("don't resend");
+  });
+
+  it("truncates a long message", () => {
+    expect(skillContextNote("macros", "x".repeat(500))).toContain("more chars");
   });
 });

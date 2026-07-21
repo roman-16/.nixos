@@ -50,6 +50,11 @@ function chatLines(value: string | null): number {
     : DEFAULT_CHAT_LINES;
 }
 
+/** Whether a socket address is loopback - the guard for localhost-only /internal endpoints. */
+export function isLoopback(address: string): boolean {
+  return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
+}
+
 /** Gzip a textual response when the client accepts it and it clears a size floor. */
 async function maybeGzip(req: Request, res: Response): Promise<Response> {
   if (res.status === 204 || res.headers.has("content-encoding")) return res;
@@ -344,11 +349,34 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
         return new Response(null, { status: 204 });
       },
     ],
+    // Localhost-only hook skills curl to push a message straight to the user (macros; the reminder
+    // watcher uses the same pipeline method in-process). Guarded to loopback in the fetch handler.
+    [
+      "POST /internal/skill-message",
+      async (req, url) => {
+        const text = (await req.text()).trim();
+        if (!text) return new Response(null, { status: 204 });
+        try {
+          await pipeline.emitSkillMessage(text, url.searchParams.get("source") ?? "skill");
+          return new Response(null, { status: 204 });
+        } catch {
+          return new Response("not delivered", { status: 503 });
+        }
+      },
+    ],
   ]);
 
   return Bun.serve({
-    fetch: async (req) => {
+    fetch: async (req, server) => {
       const url = new URL(req.url);
+      // /internal/* sends WhatsApp messages and injects agent context - a prompt-injection vector,
+      // so restrict it to same-host callers (LAN/tunnel traffic arrives from a non-loopback source).
+      if (
+        url.pathname.startsWith("/internal/") &&
+        !isLoopback(server.requestIP(req)?.address ?? "")
+      ) {
+        return new Response("Not found", { status: 404 });
+      }
       const asset = serveAsset(url.pathname);
       if (asset) return maybeGzip(req, asset);
       if (req.method === "GET" && url.pathname.startsWith("/media/"))

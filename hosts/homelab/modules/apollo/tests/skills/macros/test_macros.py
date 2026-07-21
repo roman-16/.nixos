@@ -821,3 +821,40 @@ class TestPastDayCascade:
         capsys.readouterr()
         run("log", "--item", "E", "--kcal", "300", "--protein", "20")
         assert capsys.readouterr().out.count("Today (") == 1
+
+
+class TestDelivery:
+    def test_every_command_delivers(self):
+        assert macros.should_deliver(False) is True
+
+    def test_dry_run_does_not_deliver(self):
+        assert macros.should_deliver(True) is False
+
+    def test_deliver_to_user_posts_and_reports_success(self, monkeypatch):
+        seen = {}
+
+        class Resp:
+            status = 204
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        def fake_urlopen(request, timeout=None):
+            seen["url"] = request.full_url
+            seen["data"] = request.data
+            return Resp()
+
+        monkeypatch.setattr(macros.urllib.request, "urlopen", fake_urlopen)
+        assert macros.deliver_to_user("hello") is True
+        assert "source=macros" in seen["url"]
+        assert seen["data"] == b"hello"
+
+    def test_deliver_to_user_reports_failure(self, monkeypatch):
+        def boom(request, timeout=None):
+            raise OSError("refused")
+
+        monkeypatch.setattr(macros.urllib.request, "urlopen", boom)
+        assert macros.deliver_to_user("hello") is False

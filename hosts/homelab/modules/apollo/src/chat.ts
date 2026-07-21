@@ -30,6 +30,7 @@ export type LogItem =
     }
   | { kind: "compaction"; summary: string; time?: string; tokensBefore: number | undefined }
   | { kind: "divider"; label: string; time?: string }
+  | { kind: "skill"; source: string; text: string; time?: string }
   | { kind: "thinking"; text: string; time?: string }
   | {
       args: Record<string, unknown>;
@@ -148,6 +149,16 @@ export function parseTranscript(jsonl: string): LogItem[] {
     }
     if (entry.type === "custom" && entry.customType === "apollo_reload") {
       items.push({ kind: "divider", label: "Reloaded" });
+      continue;
+    }
+    if (entry.type === "custom" && entry.customType === "skill_message") {
+      const data = (entry.data ?? {}) as { source?: unknown; text?: unknown };
+      items.push({
+        kind: "skill",
+        source: typeof data.source === "string" ? data.source : "skill",
+        text: typeof data.text === "string" ? data.text : "",
+        time,
+      });
       continue;
     }
     if (entry.type !== "message") continue;
@@ -347,6 +358,8 @@ export function copyText(item: LogItem): string {
     }
     case "divider":
       return `${lead}${item.label}`;
+    case "skill":
+      return `${lead}Apollo (via ${item.source}): ${item.text}`;
     case "thinking":
       return `${lead}Apollo (thinking): ${truncate(item.text, MAX_OUTPUT_CHARS)}`;
     case "tool": {
@@ -399,6 +412,16 @@ function renderItem(item: LogItem, running = false): string {
     }
     case "divider":
       return chipDivider(item.label, copy);
+    case "skill":
+      return bubble(
+        "left",
+        "rounded-2xl rounded-bl-sm border border-indigo-400/30 bg-neutral-800/80 text-neutral-100",
+        `<div class="mb-1"><span class="rounded bg-indigo-500/20 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-indigo-200">via ${escapeHtml(
+          item.source,
+        )}</span></div>${textBlock(item.text)}`,
+        item.time,
+        copy,
+      );
     case "thinking": {
       const preview = escapeHtml(truncate(item.text.replace(/\s+/g, " ").trim(), PREVIEW_CHARS));
       const summary = `${tag("thinking")}<span class="min-w-0 truncate italic text-neutral-400">${preview}</span>`;

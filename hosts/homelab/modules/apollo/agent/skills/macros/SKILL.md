@@ -20,9 +20,11 @@ Tracks daily nutrition as JSON under `macros/` in the working directory. Every r
 
 ## Replying
 
-Whenever a command prints a day summary or list (`log`, `eat`, `food-eat`, `show`, `summary`, `entries`, `edit`, `prep-eat`, `prep-remove`, `prep-uneat`, `prep-size`, `prep-list`, `prep-get`, `food-list`, `goal`), your reply **is** that output, sent back verbatim: the exact lines the script printed, in full and unchanged. Do not summarize it, rephrase it, reformat it, turn it into prose, trim it, or wrap it in your own commentary - the user wants to read the list itself.
+**The script sends its output to the user itself - do not relay it.** Every command (except a `--dry-run`) posts its printed output straight to the user on WhatsApp (as a "via macros" message), then prints `[macros: delivered to the user ✓ - do not relay]`. When you see that line, **stay silent**: don't repeat, summarize, rephrase, or comment on the output - the user already got it verbatim, and restating it double-sends.
 
-A `--dry-run` preview (see [Previewing](#previewing)) is relayed the same way, verbatim - but because it answers a "what if", you may add one short line after it, e.g. "Want me to log it?".
+Because every command's output goes to the user, only run one when you mean for the user to see it - don't run a command just to inform yourself. A `--dry-run` is the one thing the script does **not** send: relay it yourself when the user asked "what if", and you may add one short line after, e.g. "Want me to log it?".
+
+If the script prints `[macros: delivery FAILED ...]` instead, the send didn't happen: relay that command's output yourself, just this once (the data was still saved - don't re-run the command).
 
 ## Setup (once, or when targets change)
 
@@ -42,7 +44,7 @@ A `--dry-run` preview (see [Previewing](#previewing)) is relayed the same way, v
 {baseDir}/scripts/macros.py log --item "Burger and fries" --kcal 900 --protein 40 --fat 45 --carbs 80 --note estimated
 ```
 
-`log` prints the day summary - send that exact output back as your reply, verbatim (see [Replying](#replying)).
+`log` prints the day summary; the script sends it to the user (see [Replying](#replying)).
 
 ## Logging from a nutrition label (photo)
 
@@ -54,7 +56,7 @@ When the user sends a photo or screenshot of a nutrition label - macros **per 10
 {baseDir}/scripts/macros.py eat --item "Chips" --kcal100 536 --protein100 6 --fat100 32 --carbs100 53 --amount 60 --note estimated
 ```
 
-`--kcal100` is required; `--protein100/--fat100/--carbs100` default to 0. `--unit` defaults to `g` (set `ml` for liquids, etc.), and the amount and logged label then read in that unit (`235g`, `500ml`). Pass `--note estimated` when the _amount_ is a guess - the label's per-100 numbers stay exact regardless. `eat` prints the day summary; relay it verbatim (see [Replying](#replying)).
+`--kcal100` is required; `--protein100/--fat100/--carbs100` default to 0. `--unit` defaults to `g` (set `ml` for liquids, etc.), and the amount and logged label then read in that unit (`235g`, `500ml`). Pass `--note estimated` when the _amount_ is a guess - the label's per-100 numbers stay exact regardless. `eat` prints the day summary; the script sends it to the user (see [Replying](#replying)).
 
 In place of `--amount` it accepts the same `--fit-*`/`--target-*` sizing as `food-eat`, so you can answer "how much of this for my remaining protein?" straight from a photo:
 
@@ -81,7 +83,7 @@ For any "average", "last N days", or "this week/month" question, use this - **on
 {baseDir}/scripts/macros.py summary --from 2026-06-01 --to 2026-06-30
 ```
 
-`--days N` counts back from today (`--days 7` is today plus the 6 days before it); `--from`/`--to` give an explicit range (`--to` defaults to today, and the two selectors are mutually exclusive). The output is a ready-to-send summary - relay it verbatim (see [Replying](#replying)).
+`--days N` counts back from today (`--days 7` is today plus the 6 days before it); `--from`/`--to` give an explicit range (`--to` defaults to today, and the two selectors are mutually exclusive). The output is a ready-to-send summary the script sends to the user (see [Replying](#replying)).
 
 ## Saved foods (per 100 of a unit + default serving)
 
@@ -96,9 +98,9 @@ Each saved food stores its macros per 100 of a **unit** - grams by default, or `
 {baseDir}/scripts/macros.py food-eat --name skyr --target-protein 40  # enough to supply 40g protein
 ```
 
-`--fit-kcal` and `--target-kcal` size by calories the same way. Amounts and the logged label read in the food's unit (`500ml`, `4 pieces`, `500g`). `food-eat` prints the day summary - relay it verbatim.
+`--fit-kcal` and `--target-kcal` size by calories the same way. Amounts and the logged label read in the food's unit (`500ml`, `4 pieces`, `500g`). `food-eat` prints the day summary; the script sends it to the user.
 
-`food-get` looks a food up; `food-add` saves one (only when the user explicitly asks); `food-edit` corrects a saved food's numbers, unit, or name; `food-rm` deletes one. Look one up before estimating. `--unit` defaults to `g`; set it for liquids/countables and the per-100 values are then per 100 of that unit.
+`food-get` looks a food up (its output is shown to the user, so run it only when they want to see a food - not as a silent pre-check; `food-eat` resolves names itself); `food-add` saves one (only when the user explicitly asks); `food-edit` corrects a saved food's numbers, unit, or name; `food-rm` deletes one. `--unit` defaults to `g`; set it for liquids/countables and the per-100 values are then per 100 of that unit.
 
 ```bash
 {baseDir}/scripts/macros.py food-get skyr
@@ -219,10 +221,10 @@ After a manual JSON edit or a phase change, re-fold the balance forward:
 ## Notes
 
 - The macro day rolls over at **04:00**, not midnight: an entry made between 00:00 and 04:00 counts toward the previous calendar date. `today`, `summary`, and the whole rolling balance use this 04:00-based day, while `now_time` still records the real wall-clock time on the entry - so at 02:00, "today" is still yesterday. Pass an explicit `--date` only to override.
-- Dates and times come from the system clock; only pass `--date`/`--time` to correct a past entry. Adjusting a day that has already passed (`log`, `edit`, `rm`, `food-eat`, or `prep-eat` with `--date`) reprints today's summary after the changed day, since a past change cascades through the rolling balance and moves today's target - relay both blocks verbatim.
+- Dates and times come from the system clock; only pass `--date`/`--time` to correct a past entry. Adjusting a day that has already passed (`log`, `edit`, `rm`, `food-eat`, or `prep-eat` with `--date`) reprints today's summary after the changed day, since a past change cascades through the rolling balance and moves today's target (both blocks are sent to the user).
 - Estimate freely for vague inputs - a described meal, or a photo with no legible label - and pass `--note estimated`; when a photo _does_ show a per-100 label, use `eat` instead so the script scales it exactly. The totals stay exact regardless.
 - Every macro must be non-negative and every amount positive; the script rejects impossible values, so a slip like `--kcal -5` errors out instead of silently corrupting a total.
 - For "how much to hit X" or "how would my day look", use `--fit-*`/`--target-*` and `--dry-run` - never work out the amount or the projected totals yourself.
-- Relay the script's output verbatim (see [Replying](#replying)) - never paraphrase its numbers, shorten its summary, or reformat the list.
+- The script delivers its own replies to the user (see [Replying](#replying)); don't relay or restate them - that double-sends.
 
 `{baseDir}` = this skill's directory. Always resolve to the absolute path before executing.

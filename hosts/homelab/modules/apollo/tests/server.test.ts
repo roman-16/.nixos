@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 
 import type { Config } from "../src/config";
 import type { Pipeline } from "../src/pipeline";
-import { fragmentCache, type ServerDeps, startServer } from "../src/server";
+import { fragmentCache, isLoopback, type ServerDeps, startServer } from "../src/server";
 
 type Server = ReturnType<typeof startServer>;
 
@@ -47,6 +47,19 @@ describe("fragmentCache", () => {
   });
 });
 
+describe("isLoopback", () => {
+  it("accepts loopback addresses", () => {
+    expect(isLoopback("127.0.0.1")).toBe(true);
+    expect(isLoopback("::1")).toBe(true);
+    expect(isLoopback("::ffff:127.0.0.1")).toBe(true);
+  });
+
+  it("rejects non-loopback and empty addresses", () => {
+    expect(isLoopback("192.168.70.70")).toBe(false);
+    expect(isLoopback("")).toBe(false);
+  });
+});
+
 /** Minimal deps exercising the read-only routes; action routes and their session calls are unused here. */
 function stubDeps(over: Partial<ServerDeps> = {}): ServerDeps {
   const noop = () => {};
@@ -61,6 +74,7 @@ function stubDeps(over: Partial<ServerDeps> = {}): ServerDeps {
     logStore: { query: () => [], seq: 0 } as unknown as ServerDeps["logStore"],
     logger: { debug: noop, error: noop, info: noop, warn: noop } as unknown as ServerDeps["logger"],
     pipeline: {
+      emitSkillMessage: async () => {},
       notify: async () => {},
       state: () => ({ qr: undefined, status: "connecting", user: undefined }),
     } as unknown as Pipeline,
@@ -202,5 +216,24 @@ describe("startServer routing", () => {
     const res = await fetch(`${base}/internal/backup-alert`, { method: "POST" });
     expect(res.status).toBe(204);
     expect(notified).toContain("backup FAILED");
+  });
+
+  it("delivers a skill message via the loopback hook", async () => {
+    let got: { source: string; text: string } | undefined;
+    const base = boot({
+      pipeline: {
+        emitSkillMessage: async (text: string, source: string) => {
+          got = { source, text };
+        },
+        notify: async () => {},
+        state: () => ({ qr: undefined, status: "connecting", user: undefined }),
+      } as unknown as Pipeline,
+    });
+    const res = await fetch(`${base}/internal/skill-message?source=macros`, {
+      method: "POST",
+      body: "hi there",
+    });
+    expect(res.status).toBe(204);
+    expect(got).toEqual({ source: "macros", text: "hi there" });
   });
 });

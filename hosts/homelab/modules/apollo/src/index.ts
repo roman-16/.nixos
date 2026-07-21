@@ -35,7 +35,7 @@ export async function main(): Promise<void> {
   const { authStorage, session } = await createApolloSession(config, logger);
   logger.info({ model: config.model, workspace: config.workspace }, "pi session ready");
 
-  const pipeline = createPipeline({ config, kv, logStore, logger, session });
+  const pipeline = createPipeline({ chatStore, config, kv, logStore, logger, session });
 
   // Mirror the pi session's entries into SQLite - the dashboard's source of truth. Seed from
   // the resumed session, then keep it current by diffing getEntries() after pi persists.
@@ -81,7 +81,7 @@ export async function main(): Promise<void> {
   createReminderWatcher({
     dir: config.remindersDir,
     logger,
-    onFire: (reminder) => pipeline.sendToUser(formatReminder(reminder.text)),
+    onFire: (reminder) => pipeline.emitSkillMessage(formatReminder(reminder.text), "reminders"),
   }).start();
 
   startServer({ authStorage, chatStore, config, logStore, logger, pipeline, session, tokenStore });

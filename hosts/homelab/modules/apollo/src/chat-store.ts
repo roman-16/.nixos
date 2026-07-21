@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { Database } from "bun:sqlite";
 
@@ -21,6 +23,8 @@ export interface ChatTail {
 }
 
 export interface ChatStore {
+  /** Record an out-of-band skill message (a fired reminder, a macros reply) as a chat entry. */
+  appendSkillMessage(sessionId: string, source: string, text: string): void;
   image(sessionId: string, entryId: string, index: number): ImageBytes | undefined;
   sync(sessionId: string, entries: SessionEntry[]): void;
   tail(sessionId: string, count: number): ChatTail;
@@ -42,6 +46,19 @@ export function createChatStore(db: Database): ChatStore {
   const cursors = new Map<string, number>();
 
   return {
+    appendSkillMessage(sessionId, source, text) {
+      const timestamp = new Date().toISOString();
+      const id = `skill-${randomUUID()}`;
+      const entry = {
+        customType: "skill_message",
+        data: { source, text },
+        id,
+        parentId: null,
+        timestamp,
+        type: "custom",
+      };
+      insert.run(sessionId, id, "custom", Date.parse(timestamp), JSON.stringify(entry));
+    },
     image(sessionId, entryId, index) {
       const row = selectData.get(sessionId, entryId) as { data: string } | null;
       return row ? imageFromLine(row.data, index) : undefined;

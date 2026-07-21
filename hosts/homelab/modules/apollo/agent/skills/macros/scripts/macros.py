@@ -11,11 +11,14 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import io
 import json
 import os
 import secrets
 import sys
 import tempfile
+import urllib.request
+from contextlib import redirect_stdout
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import NamedTuple
@@ -1402,9 +1405,46 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def should_deliver(dry_run: bool) -> bool:
+    """Every command sends its output to the user, except a --dry-run preview."""
+    return not dry_run
+
+
+def deliver_to_user(text: str) -> bool:
+    """POST the reply to the app's localhost hook, which sends it to the user on WhatsApp. Returns
+    True on success; on any failure the caller lets the agent relay the output instead."""
+    port = os.environ.get("PORT", "8080")
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{port}/internal/skill-message?source=macros",
+        data=text.encode("utf-8"),
+        method="POST",
+        headers={"Content-Type": "text/plain; charset=utf-8"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            return 200 <= response.status < 300
+    except Exception:
+        return False
+
+
 def main():
     args = build_parser().parse_args()
-    args.func(args)
+    # Capture the command's output so it can be delivered to the user directly, while still writing
+    # it to stdout so the agent sees it (for its reasoning and to detect delivery success/failure).
+    buffer = io.StringIO()
+    try:
+        with redirect_stdout(buffer):
+            args.func(args)
+    finally:
+        sys.stdout.write(buffer.getvalue())
+    output = buffer.getvalue()
+    if should_deliver(getattr(args, "dry_run", False)) and output.strip():
+        sent = deliver_to_user(output)
+        sys.stdout.write(
+            "\n[macros: delivered to the user \u2713 - do not relay]\n"
+            if sent
+            else "\n[macros: delivery FAILED - relay the output above to the user yourself]\n"
+        )
 
 
 if __name__ == "__main__":

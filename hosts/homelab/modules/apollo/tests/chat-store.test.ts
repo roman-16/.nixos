@@ -99,6 +99,29 @@ describe("createChatStore", () => {
     expect(store.image("s1", "missing", 0)).toBeUndefined();
   });
 
+  it("records an out-of-band skill message as a rendered chat entry", () => {
+    const store = createChatStore(openDatabase(":memory:"));
+    store.appendSkillMessage("s1", "reminders", "⏰ get my food");
+    const tail = store.tail("s1", 10);
+    expect(tail.entries).toHaveLength(1);
+    const stored = JSON.parse(tail.entries[0]!);
+    expect(stored.type).toBe("custom");
+    expect(stored.customType).toBe("skill_message");
+    expect(stored.data).toEqual({ source: "reminders", text: "⏰ get my food" });
+  });
+
+  it("interleaves skill messages with mirrored entries in insertion order", () => {
+    const store = createChatStore(openDatabase(":memory:"));
+    store.sync("s1", [entry({ id: "a" })]);
+    store.appendSkillMessage("s1", "macros", "summary");
+    store.sync("s1", [entry({ id: "a" }), entry({ id: "b" })]);
+    const order = store.tail("s1", 10).entries.map((line) => {
+      const e = JSON.parse(line);
+      return e.customType ?? e.id;
+    });
+    expect(order).toEqual(["a", "skill_message", "b"]);
+  });
+
   it("returns an empty tail for an unknown session", () => {
     const store = createChatStore(openDatabase(":memory:"));
     expect(store.tail("nope", 10)).toEqual({ entries: [], more: false, version: "10:0" });
