@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { copyText, parseTranscript, renderChat } from "../src/chat";
+import { copyText, parseTranscript, renderChat, tailLines } from "../src/chat";
 
 const header = JSON.stringify({ cwd: "/w", id: "s", timestamp: "t", type: "session", version: 3 });
 
@@ -86,7 +86,7 @@ describe("parseTranscript", () => {
       }),
     );
     expect(items[0]).toEqual({
-      images: [{ data: "AAAA", mimeType: "image/png" }],
+      images: [{ id: "a", index: 0, mimeType: "image/png" }],
       kind: "user",
       text: "look",
     });
@@ -176,6 +176,24 @@ describe("parseTranscript", () => {
   });
 });
 
+describe("tailLines", () => {
+  it("returns the last N non-empty lines in order", () => {
+    expect(tailLines("a\nb\nc\nd", 2)).toBe("c\nd");
+  });
+
+  it("skips blank lines", () => {
+    expect(tailLines("a\n\n\nb\n", 2)).toBe("a\nb");
+  });
+
+  it("returns everything when N exceeds the line count", () => {
+    expect(tailLines("a\nb", 10)).toBe("a\nb");
+  });
+
+  it("is empty for a non-positive count", () => {
+    expect(tailLines("a\nb", 0)).toBe("");
+  });
+});
+
 describe("renderChat", () => {
   it("shows a placeholder when there is nothing to show", () => {
     expect(renderChat([])).toContain("No messages yet");
@@ -251,13 +269,15 @@ describe("renderChat", () => {
     expect(html).toContain("more chars");
   });
 
-  it("embeds user images as data URIs that open the lightbox", () => {
+  it("references user images out-of-band with lazy loading and opens the lightbox", () => {
     const html = renderChat([
-      { images: [{ data: "AAAA", mimeType: "image/png" }], kind: "user", text: "" },
+      { images: [{ id: "a", index: 0, mimeType: "image/png" }], kind: "user", text: "" },
     ]);
-    expect(html).toContain("data:image/png;base64,AAAA");
+    expect(html).toContain('src="/media/a/0"');
+    expect(html).toContain('loading="lazy"');
     expect(html).toContain("cursor-zoom-in");
     expect(html).toContain("lightbox");
+    expect(html).not.toContain("base64");
   });
 
   it("renders a compaction entry as an expandable summary with token count", () => {
@@ -339,13 +359,13 @@ describe("copyText", () => {
 
   it("notes images on a user message", () => {
     expect(
-      copyText({ images: [{ data: "", mimeType: "image/png" }], kind: "user", text: "" }),
+      copyText({ images: [{ id: "a", index: 0, mimeType: "image/png" }], kind: "user", text: "" }),
     ).toBe("User: [1 image]");
     expect(
       copyText({
         images: [
-          { data: "", mimeType: "image/png" },
-          { data: "", mimeType: "image/png" },
+          { id: "a", index: 0, mimeType: "image/png" },
+          { id: "a", index: 1, mimeType: "image/png" },
         ],
         kind: "user",
         text: "look",

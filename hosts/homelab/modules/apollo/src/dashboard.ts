@@ -14,6 +14,10 @@ const GHOST_BUTTON =
 const PRIMARY_BUTTON =
   "inline-block rounded-xl bg-indigo-500 px-5 py-2 text-sm font-medium text-white transition hover:bg-indigo-400";
 
+/** Chat window: transcript lines rendered initially, and the step "Load older" adds. */
+const CHAT_WINDOW_START = 60;
+const CHAT_WINDOW_STEP = 60;
+
 function headingRow(title: string, right = ""): string {
   return `<div class="mt-8 mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
     <h3 class="${HEADING}">${title}</h3>${right}
@@ -61,6 +65,10 @@ export function renderPage(version: string): string {
         "conversation",
         `<span id="session-status" class="text-xs"></span>
         <div class="ml-auto flex items-center gap-2">
+          <input id="chat-window" type="hidden" name="count" value="${CHAT_WINDOW_START}" />
+          <button type="button" title="Load older messages"
+            onclick="var w=document.getElementById('chat-window');w.value=String(Number(w.value)+${CHAT_WINDOW_STEP});htmx.trigger('#chat','chatReload')"
+            class="${GHOST_BUTTON}">Load older</button>
           <button hx-post="/compact" hx-target="#session-status" hx-swap="innerHTML" hx-disabled-elt="this"
             class="${GHOST_BUTTON}">Compact</button>
           <button hx-post="/reload" hx-target="#session-status" hx-swap="innerHTML" hx-disabled-elt="this"
@@ -69,7 +77,7 @@ export function renderPage(version: string): string {
       )}
       <div class="${SURFACE} flex flex-col overflow-hidden">
         <div id="chat" class="flex h-[70dvh] flex-col-reverse gap-3 [&>*]:shrink-0 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:h-[75dvh]"
-          hx-get="/chat" hx-trigger="load, every 2s" hx-swap="innerHTML">
+          hx-get="/chat" hx-include="#chat-window" hx-trigger="load, every 2s, chatReload" hx-swap="innerHTML">
           <p class="text-sm text-neutral-500">Loading…</p>
         </div>
         <footer class="flex items-center gap-3 border-t border-white/5 px-4 py-3 sm:px-5">

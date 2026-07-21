@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import type { Config } from "../src/config";
 import type { Pipeline } from "../src/pipeline";
@@ -139,6 +142,40 @@ describe("startServer routing", () => {
     await get(base, "/stop-button"); // 204
     await get(base, "/"); // resets caches
     expect((await get(base, "/stop-button")).status).toBe(200);
+  });
+
+  it("404s a media request when there is no session file", async () => {
+    expect((await get(boot(), "/media/whatever/0")).status).toBe(404);
+  });
+
+  it("serves a transcript image out-of-band with an immutable cache", async () => {
+    const file = join(mkdtempSync(join(tmpdir(), "apollo-server-")), "session.jsonl");
+    writeFileSync(
+      file,
+      `${JSON.stringify({
+        id: "m1",
+        message: {
+          content: [
+            { data: Buffer.from("hello").toString("base64"), mimeType: "image/png", type: "image" },
+          ],
+          role: "user",
+        },
+        type: "message",
+      })}\n`,
+    );
+    const base = boot({
+      session: {
+        getContextUsage: () => undefined,
+        isStreaming: false,
+        resourceLoader: { getSkills: () => ({ skills: [] }) },
+        sessionFile: file,
+      } as unknown as ServerDeps["session"],
+    });
+    const res = await get(base, "/media/m1/0");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/png");
+    expect(res.headers.get("cache-control")).toContain("immutable");
+    expect(await res.text()).toBe("hello");
   });
 
   it("notifies on the backup-alert hook and returns 204", async () => {

@@ -13,8 +13,24 @@ const PREVIEW_CHARS = 100;
 /** Argument keys, in priority order, worth showing in a tool's one-line summary. */
 const PREVIEW_KEYS = ["command", "file_path", "path", "pattern", "query", "url"];
 
+/**
+ * The last `count` non-empty lines of a JSONL transcript, in original order. The
+ * dashboard renders only this tail so cost is bounded by the window, not by the
+ * full (unbounded, append-only) session history.
+ */
+export function tailLines(content: string, count: number): string {
+  if (count <= 0) return "";
+  const lines = content.split("\n");
+  const kept: string[] = [];
+  for (let i = lines.length - 1; i >= 0 && kept.length < count; i -= 1) {
+    if (lines[i]!.trim()) kept.push(lines[i]!);
+  }
+  return kept.reverse().join("\n");
+}
+
 export interface ChatImage {
-  data: string;
+  id: string;
+  index: number;
   mimeType: string;
 }
 
@@ -48,8 +64,12 @@ interface ToolResult {
   output: string;
 }
 
-/** Split a message `content` (string or block array) into plain text and images. */
-function splitContent(content: unknown): { images: ChatImage[]; text: string } {
+/**
+ * Split a message `content` (string or block array) into plain text and image
+ * references. Images are referenced by their entry `id` and position (served
+ * out-of-band via /media), never inlined, so the transcript HTML stays small.
+ */
+function splitContent(content: unknown, id: string): { images: ChatImage[]; text: string } {
   if (typeof content === "string") return { images: [], text: content };
   if (!Array.isArray(content)) return { images: [], text: "" };
 
@@ -58,14 +78,14 @@ function splitContent(content: unknown): { images: ChatImage[]; text: string } {
   for (const block of content) {
     if (block?.type === "text" && typeof block.text === "string") texts.push(block.text);
     else if (block?.type === "image" && typeof block.data === "string") {
-      images.push({ data: block.data, mimeType: block.mimeType ?? "image/jpeg" });
+      images.push({ id, index: images.length, mimeType: block.mimeType ?? "image/jpeg" });
     }
   }
   return { images, text: texts.join("\n").trim() };
 }
 
 function toolResult(message: Record<string, any>): ToolResult {
-  const { images, text } = splitContent(message.content);
+  const { images, text } = splitContent(message.content, "");
   return { images: images.length, isError: Boolean(message.isError), output: text };
 }
 
@@ -163,7 +183,7 @@ export function parseTranscript(jsonl: string): LogItem[] {
         });
         break;
       case "user": {
-        const { images, text } = splitContent(message.content);
+        const { images, text } = splitContent(message.content, String(entry.id ?? ""));
         if (text || images.length > 0) items.push({ images, kind: "user", text, time });
         break;
       }
@@ -252,7 +272,7 @@ function images(list: ChatImage[]): string {
   const tags = list
     .map(
       (image) =>
-        `<img src="data:${escapeHtml(image.mimeType)};base64,${image.data}" alt="image"
+        `<img src="/media/${encodeURIComponent(image.id)}/${image.index}" alt="image" loading="lazy"
           class="max-h-40 cursor-zoom-in rounded-xl"
           onclick="const box = document.getElementById('lightbox'); box.querySelector('img').src = this.src; box.showModal()" />`,
     )

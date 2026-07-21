@@ -48,6 +48,15 @@ describe("renderPage", () => {
     expect(html).toContain(`id="lightbox"`);
   });
 
+  it("wires the chat window control that grows on Load older", () => {
+    const html = renderPage("v");
+    expect(html).toContain(`id="chat-window"`);
+    expect(html).toContain(`name="count"`);
+    expect(html).toContain("Load older");
+    expect(html).toContain(`hx-include="#chat-window"`);
+    expect(html).toContain("chatReload");
+  });
+
   it("wires up WhatsApp-style chat copy", () => {
     const html = renderPage("v");
     expect(html).toContain('addEventListener("copy"');

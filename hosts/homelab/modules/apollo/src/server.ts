@@ -1,4 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 
 import type { AgentSession, AuthStorage } from "@earendil-works/pi-coding-agent";
 import type { Logger } from "pino";
@@ -19,6 +19,7 @@ import { type LogStore, parseLevel } from "./logs";
 import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
 import type { Pipeline } from "./pipeline";
 import { parseRange, renderTokens, renderTokensDaily, type TokenStore } from "./tokens";
+import { createMediaReader, readTail } from "./transcript";
 import { fetchUsage, type UsageData } from "./usage";
 
 const BACKUP_ALERT =
@@ -27,7 +28,39 @@ const BACKUP_ALERT =
 /** The Anthropic usage endpoint rate-limits hard, so fetch it at most this often. */
 const USAGE_TTL_MS = 5 * 60 * 1000;
 
+/** Default transcript lines the chat renders; the dashboard's "Load older" grows this. */
+const DEFAULT_CHAT_LINES = 60;
+const MAX_CHAT_LINES = 5000;
+
+/** Long-lived cache for immutable transcript media (an entry's image never changes). */
+const IMMUTABLE_CACHE = "public, max-age=31536000, immutable";
+
+/** Textual content types worth gzipping; binary (images) is left untouched. */
+const GZIPPABLE = /^(?:text\/|application\/(?:json|javascript)|image\/svg)/;
+const GZIP_MIN_BYTES = 1024;
+
 type Handler = (req: Request, url: URL) => Response | Promise<Response>;
+
+/** Coerce the chat window's `count` query into a sane, bounded line count. */
+function chatLines(value: string | null): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 1
+    ? Math.min(Math.floor(n), MAX_CHAT_LINES)
+    : DEFAULT_CHAT_LINES;
+}
+
+/** Gzip a textual response when the client accepts it and it clears a size floor. */
+async function maybeGzip(req: Request, res: Response): Promise<Response> {
+  if (res.status === 204 || res.headers.has("content-encoding")) return res;
+  if (!(req.headers.get("accept-encoding") ?? "").includes("gzip")) return res;
+  if (!GZIPPABLE.test(res.headers.get("content-type") ?? "")) return res;
+  const body = new Uint8Array(await res.arrayBuffer());
+  const headers = new Headers(res.headers);
+  if (body.byteLength < GZIP_MIN_BYTES) return new Response(body, { headers, status: res.status });
+  headers.set("content-encoding", "gzip");
+  headers.set("vary", "accept-encoding");
+  return new Response(Bun.gzipSync(body), { headers, status: res.status });
+}
 
 /**
  * A polled dashboard fragment with `204`-when-unchanged dedup: `serve` compares a caller-supplied
@@ -82,23 +115,31 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
     summary: fragmentCache(),
   };
 
+  const media = createMediaReader();
+
   // Anthropic OAuth login state for the dashboard: one PKCE verifier held until it's used.
   let pendingVerifier: string | undefined;
   const loginUrl = () => authorizeUrl((pendingVerifier ??= createVerifier()));
   let linking = false;
 
-  let chatCache: { body: string; live: boolean; mtimeMs: number } | undefined;
+  let chatCache: { body: string; count: number; live: boolean; mtimeMs: number } | undefined;
   let usage: { data: UsageData | null; fetchedAt: number } | undefined;
 
-  async function renderChatBody(): Promise<string> {
+  async function renderChatBody(count: number): Promise<string> {
     const file = session.sessionFile;
     if (!file) return renderChat([]);
     try {
       const { mtimeMs } = await stat(file);
       const live = session.isStreaming;
-      if (!chatCache || chatCache.mtimeMs !== mtimeMs || chatCache.live !== live) {
+      if (
+        !chatCache ||
+        chatCache.mtimeMs !== mtimeMs ||
+        chatCache.live !== live ||
+        chatCache.count !== count
+      ) {
         chatCache = {
-          body: renderChat(parseTranscript(await readFile(file, "utf8")), new Date(), live),
+          body: renderChat(parseTranscript(await readTail(file, count)), new Date(), live),
+          count,
           live,
           mtimeMs,
         };
@@ -107,6 +148,18 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
     } catch {
       return renderChat([]);
     }
+  }
+
+  /** Serve one transcript image (`/media/<entryId>/<n>`) with a long immutable cache. */
+  async function serveMedia(pathname: string): Promise<Response> {
+    const file = session.sessionFile;
+    const match = /^\/media\/([^/]+)\/(\d+)$/.exec(pathname);
+    if (!file || !match) return new Response("Not found", { status: 404 });
+    const image = await media.readImage(file, decodeURIComponent(match[1]!), Number(match[2]!));
+    if (!image) return new Response("Not found", { status: 404 });
+    return new Response(image.bytes, {
+      headers: { "cache-control": IMMUTABLE_CACHE, "content-type": image.mimeType },
+    });
   }
 
   /**
@@ -147,8 +200,8 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
     ],
     [
       "GET /chat",
-      async () => {
-        const body = await renderChatBody();
+      async (_req, url) => {
+        const body = await renderChatBody(chatLines(url.searchParams.get("count")));
         return caches.chat.serve(body, () => body);
       },
     ],
@@ -300,12 +353,15 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
   ]);
 
   return Bun.serve({
-    fetch: (req) => {
+    fetch: async (req) => {
       const url = new URL(req.url);
       const asset = serveAsset(url.pathname);
-      if (asset) return asset;
+      if (asset) return maybeGzip(req, asset);
+      if (req.method === "GET" && url.pathname.startsWith("/media/"))
+        return serveMedia(url.pathname);
       const handler = routes.get(`${req.method} ${url.pathname}`);
-      return handler ? handler(req, url) : new Response("Not found", { status: 404 });
+      const res = handler ? await handler(req, url) : new Response("Not found", { status: 404 });
+      return maybeGzip(req, res);
     },
     port: config.port,
   });
