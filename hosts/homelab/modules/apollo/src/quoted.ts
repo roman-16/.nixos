@@ -1,8 +1,6 @@
 import type { ImageContent } from "@earendil-works/pi-ai";
 import { getContentType, type WAMessageContent } from "@whiskeysockets/baileys";
 
-import { truncate } from "./format";
-
 export type QuotedKind =
   | "document"
   | "gif"
@@ -83,8 +81,17 @@ export interface QuotedNote {
   text: string;
 }
 
-function quote(value: string, max: number): string {
-  return `"${truncate(value, max)}"`;
+/** Longest quoted body/caption/transcript kept in the context line before a trailing ellipsis. */
+const QUOTE_MAX = 2000;
+
+/** Clip to `max` characters with a clean trailing ellipsis - no "(N more chars)" meta, no newline. */
+function clip(value: string, max: number = QUOTE_MAX): string {
+  const trimmed = value.trim();
+  return trimmed.length > max ? `${trimmed.slice(0, max).trimEnd()}\u2026` : trimmed;
+}
+
+function quote(value: string): string {
+  return `"${clip(value)}"`;
 }
 
 /** Describe the quoted content for the [context] line: its media kind and any text/transcript. */
@@ -92,19 +99,19 @@ function contentClause(note: QuotedNote): string {
   const { attached, kind, text } = note;
   switch (kind) {
     case "text":
-      return text ? `: ${quote(text, 300)}` : "";
+      return text ? `: ${quote(text)}` : "";
     case "image":
       return attached
-        ? ` - an image (attached to this message)${text ? `, captioned ${quote(text, 200)}` : ""}`
-        : ` - an image${text ? ` captioned ${quote(text, 200)}` : ""}`;
+        ? ` - an image (attached to this message)${text ? `, captioned ${quote(text)}` : ""}`
+        : ` - an image${text ? ` captioned ${quote(text)}` : ""}`;
     case "voice":
-      return text ? ` - a voice message that said ${quote(text, 300)}` : " - a voice message";
+      return text ? ` - a voice message that said ${quote(text)}` : " - a voice message";
     case "video":
-      return ` - a video${text ? ` captioned ${quote(text, 200)}` : ""}`;
+      return ` - a video${text ? ` captioned ${quote(text)}` : ""}`;
     case "gif":
       return " - a GIF";
     case "document":
-      return ` - a document${text ? ` (${truncate(text, 120)})` : ""}`;
+      return ` - a document${text ? ` (${clip(text, 200)})` : ""}`;
     case "sticker":
       return " - a sticker";
     default:

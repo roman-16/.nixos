@@ -132,9 +132,16 @@ describe("quotedContextNote", () => {
     expect(quotedContextNote(note({ kind: "sticker" }))).toContain("a sticker");
   });
 
-  it("truncates a long quoted body", () => {
-    expect(quotedContextNote(note({ kind: "text", text: "x".repeat(500) }))).toContain(
-      "more chars",
-    );
+  it("keeps a normal-length message in full", () => {
+    const body = "a".repeat(400);
+    expect(quotedContextNote(note({ kind: "text", text: body }))).toContain(body);
+  });
+
+  it("clips an over-long body with a trailing ellipsis and no meta noise", () => {
+    const long = "x".repeat(2500);
+    const clipped = quotedContextNote(note({ kind: "text", text: long }));
+    expect(clipped).toContain("\u2026");
+    expect(clipped).not.toContain("more chars");
+    expect(clipped.length).toBeLessThan(long.length);
   });
 });
