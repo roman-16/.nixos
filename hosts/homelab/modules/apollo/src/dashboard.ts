@@ -401,9 +401,16 @@ function logLevel(level: number): { color: string; text: string } {
   return { color: "text-neutral-500", text: "TRACE" };
 }
 
+function two(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/** Local `DD.MM HH:MM:SS` stamp for a log record's epoch-ms time; empty when unparseable. */
 function logTime(time: unknown): string {
   const ms = typeof time === "number" ? time : Number(time);
-  return Number.isFinite(ms) ? new Date(ms).toLocaleTimeString("en-GB", { hour12: false }) : "";
+  if (!Number.isFinite(ms)) return "";
+  const at = new Date(ms);
+  return `${two(at.getDate())}.${two(at.getMonth() + 1)} ${two(at.getHours())}:${two(at.getMinutes())}:${two(at.getSeconds())}`;
 }
 
 function logExtras(record: LogRecord): string {

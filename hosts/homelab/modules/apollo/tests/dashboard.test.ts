@@ -204,6 +204,11 @@ describe("renderLogs", () => {
     expect(html).not.toContain("<oops>");
     expect(html).toContain("err");
   });
+
+  it("stamps each row with a DD.MM date and HH:MM:SS time", () => {
+    const html = renderLogs([{ level: 30, msg: "hi", time: 1_700_000_000_000 }]);
+    expect(html).toMatch(/\d{2}\.\d{2} \d{2}:\d{2}:\d{2}/);
+  });
 });
 
 describe("renderStop", () => {
