@@ -48,13 +48,15 @@ describe("renderPage", () => {
     expect(html).toContain(`id="lightbox"`);
   });
 
-  it("wires the chat window control that grows on Load older", () => {
+  it("auto-loads older messages on scroll instead of a button", () => {
     const html = renderPage("v");
     expect(html).toContain(`id="chat-window"`);
     expect(html).toContain(`name="count"`);
-    expect(html).toContain("Load older");
     expect(html).toContain(`hx-include="#chat-window"`);
     expect(html).toContain("chatReload");
+    expect(html).toContain("chat-more"); // server-rendered "more history" marker the script watches
+    expect(html).toContain("distanceToOldest"); // the near-top scroll handler
+    expect(html).not.toContain("Load older"); // loading is scroll-driven, not a manual button
   });
 
   it("wires up WhatsApp-style chat copy", () => {
@@ -63,11 +65,12 @@ describe("renderPage", () => {
     expect(html).toContain("shouldSwap");
   });
 
-  it("anchors the chat to the bottom with a column-reverse container and no scroll JS", () => {
+  it("anchors the chat to the bottom with a column-reverse container, no manual stick management", () => {
     const html = renderPage("v");
     expect(html).toContain("flex-col-reverse");
     // Rows must not flex-shrink, or overflow-hidden disclosures collapse to their border.
     expect(html).toContain("[&>*]:shrink-0");
+    // Bottom-anchoring is the container's job, not hand-rolled scroll-to-bottom on each swap.
     expect(html).not.toContain("hx-on::before-swap");
     expect(html).not.toContain("hx-on::after-settle");
     expect(html).not.toContain("dataset.stick");

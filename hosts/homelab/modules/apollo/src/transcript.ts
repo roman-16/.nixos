@@ -4,13 +4,20 @@ import { tailLines } from "./chat";
 
 const TAIL_CHUNK = 64 * 1024;
 
+export interface Tail {
+  /** Whether older lines exist above the window, so the chat can load more. */
+  more: boolean;
+  text: string;
+}
+
 /**
  * The tail of a JSONL transcript: the last `count` complete lines, read by
  * seeking backward in chunks so cost is bounded by the window, never by the
  * full append-only session file. A partial leading line (from cutting mid-file)
  * is dropped by tailLines, which keeps only the last `count` non-empty lines.
+ * `more` reports whether older lines remain above the returned window.
  */
-export async function readTail(file: string, count: number): Promise<string> {
+export async function readTail(file: string, count: number): Promise<Tail> {
   const handle = await open(file, "r");
   try {
     const { size } = await handle.stat();
@@ -25,7 +32,12 @@ export async function readTail(file: string, count: number): Promise<string> {
       parts.unshift(buf);
       pos = from;
     }
-    return tailLines(Buffer.concat(parts).toString("utf8"), count);
+    const text = Buffer.concat(parts).toString("utf8");
+    // Older history remains if we stopped before the file start, or the whole
+    // file was read but holds more non-empty lines than the window keeps.
+    const more =
+      pos > 0 || text.split("\n").reduce((n, line) => (line.trim() ? n + 1 : n), 0) > count;
+    return { more, text: tailLines(text, count) };
   } finally {
     await handle.close();
   }

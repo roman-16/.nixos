@@ -35,6 +35,9 @@ const MAX_CHAT_LINES = 5000;
 /** Long-lived cache for immutable transcript media (an entry's image never changes). */
 const IMMUTABLE_CACHE = "public, max-age=31536000, immutable";
 
+/** Zero-height marker at the oldest end; its presence tells the chat more history remains. */
+const CHAT_MORE_MARKER = `<div id="chat-more" hidden></div>`;
+
 /** Textual content types worth gzipping; binary (images) is left untouched. */
 const GZIPPABLE = /^(?:text\/|application\/(?:json|javascript)|image\/svg)/;
 const GZIP_MIN_BYTES = 1024;
@@ -137,8 +140,10 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
         chatCache.live !== live ||
         chatCache.count !== count
       ) {
+        const { more, text } = await readTail(file, count);
         chatCache = {
-          body: renderChat(parseTranscript(await readTail(file, count)), new Date(), live),
+          body:
+            renderChat(parseTranscript(text), new Date(), live) + (more ? CHAT_MORE_MARKER : ""),
           count,
           live,
           mtimeMs,

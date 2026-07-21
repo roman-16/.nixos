@@ -14,9 +14,10 @@ const GHOST_BUTTON =
 const PRIMARY_BUTTON =
   "inline-block rounded-xl bg-indigo-500 px-5 py-2 text-sm font-medium text-white transition hover:bg-indigo-400";
 
-/** Chat window: transcript lines rendered initially, and the step "Load older" adds. */
+/** Chat window: lines rendered initially, the step each auto-load adds, and the ceiling. */
 const CHAT_WINDOW_START = 60;
 const CHAT_WINDOW_STEP = 60;
+const CHAT_WINDOW_MAX = 5000;
 
 function headingRow(title: string, right = ""): string {
   return `<div class="mt-8 mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -66,9 +67,6 @@ export function renderPage(version: string): string {
         `<span id="session-status" class="text-xs"></span>
         <div class="ml-auto flex items-center gap-2">
           <input id="chat-window" type="hidden" name="count" value="${CHAT_WINDOW_START}" />
-          <button type="button" title="Load older messages"
-            onclick="var w=document.getElementById('chat-window');w.value=String(Number(w.value)+${CHAT_WINDOW_STEP});htmx.trigger('#chat','chatReload')"
-            class="${GHOST_BUTTON}">Load older</button>
           <button hx-post="/compact" hx-target="#session-status" hx-swap="innerHTML" hx-disabled-elt="this"
             class="${GHOST_BUTTON}">Compact</button>
           <button hx-post="/reload" hx-target="#session-status" hx-swap="innerHTML" hx-disabled-elt="this"
@@ -172,6 +170,53 @@ export function renderPage(version: string): string {
           if (e.target && e.target.id === "chat" && selectedRows().length > 0) {
             e.detail.shouldSwap = false;
           }
+        });
+      })();
+      // Infinite scroll upward: widen the transcript window (via the #chat-window count the
+      // poll includes) whenever the user nears the oldest end, and shrink it back once they
+      // return to the newest end so the live poll stays cheap. #chat-more, rendered by the
+      // server only while older lines remain, is the stop signal.
+      (function () {
+        var chat = document.getElementById("chat");
+        var win = document.getElementById("chat-window");
+        if (!chat || !win) return;
+        var start = ${CHAT_WINDOW_START};
+        var step = ${CHAT_WINDOW_STEP};
+        var max = ${CHAT_WINDOW_MAX};
+        var inFlight = false;
+        // column-reverse: |scrollTop| is the distance from the newest end in every browser,
+        // so (scrollable span - that) is the distance left to the oldest end.
+        function distanceToOldest() {
+          return chat.scrollHeight - chat.clientHeight - Math.abs(chat.scrollTop);
+        }
+        function growIfNearTop() {
+          if (inFlight || Number(win.value) >= max) return;
+          if (!document.getElementById("chat-more")) return; // nothing older remains
+          if (chat.scrollHeight <= chat.clientHeight || distanceToOldest() > 300) return;
+          inFlight = true;
+          win.value = String(Math.min(Number(win.value) + step, max));
+          htmx.trigger(chat, "chatReload");
+        }
+        function shrinkIfAtBottom() {
+          if (Math.abs(chat.scrollTop) < 40 && Number(win.value) !== start) win.value = String(start);
+        }
+        chat.addEventListener(
+          "scroll",
+          function () {
+            window.requestAnimationFrame(function () {
+              growIfNearTop();
+              shrinkIfAtBottom();
+            });
+          },
+          { passive: true },
+        );
+        // Once older messages land, keep going if still parked at the top.
+        chat.addEventListener("htmx:afterSettle", function () {
+          inFlight = false;
+          growIfNearTop();
+        });
+        chat.addEventListener("htmx:afterRequest", function () {
+          inFlight = false;
         });
       })();
     </script>

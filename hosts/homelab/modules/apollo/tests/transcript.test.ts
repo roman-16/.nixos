@@ -52,23 +52,29 @@ describe("imageFromLine", () => {
 });
 
 describe("readTail", () => {
-  it("returns the last N complete lines", async () => {
+  it("returns the last N complete lines and flags more history", async () => {
     const path = tmpFile(`${["one", "two", "three", "four"].join("\n")}\n`);
-    expect(await readTail(path, 2)).toBe("three\nfour");
+    expect(await readTail(path, 2)).toEqual({ more: true, text: "three\nfour" });
   });
 
-  it("returns everything when N exceeds the line count", async () => {
-    expect(await readTail(tmpFile("a\nb\n"), 10)).toBe("a\nb");
+  it("returns everything with more=false when N covers the file", async () => {
+    expect(await readTail(tmpFile("a\nb\n"), 10)).toEqual({ more: false, text: "a\nb" });
+  });
+
+  it("flags more history when a whole small file exceeds the window", async () => {
+    expect(await readTail(tmpFile("a\nb\nc\n"), 2)).toEqual({ more: true, text: "b\nc" });
   });
 
   it("reads a tail that spans many backward chunks", async () => {
     const lines = Array.from({ length: 4000 }, (_, i) => `line-${i}-${"x".repeat(40)}`);
     const path = tmpFile(`${lines.join("\n")}\n`);
-    expect(await readTail(path, 2)).toBe(`${lines[3998]}\n${lines[3999]}`);
+    const tail = await readTail(path, 2);
+    expect(tail.text).toBe(`${lines[3998]}\n${lines[3999]}`);
+    expect(tail.more).toBe(true);
   });
 
-  it("is empty for an empty file", async () => {
-    expect(await readTail(tmpFile(""), 5)).toBe("");
+  it("is empty with more=false for an empty file", async () => {
+    expect(await readTail(tmpFile(""), 5)).toEqual({ more: false, text: "" });
   });
 });
 

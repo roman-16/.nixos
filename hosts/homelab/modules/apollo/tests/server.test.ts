@@ -178,6 +178,24 @@ describe("startServer routing", () => {
     expect(await res.text()).toBe("hello");
   });
 
+  it("marks older history with #chat-more only when the window doesn't cover it", async () => {
+    const file = join(mkdtempSync(join(tmpdir(), "apollo-chat-")), "session.jsonl");
+    const lines = Array.from({ length: 5 }, (_, i) =>
+      JSON.stringify({ id: `u${i}`, message: { content: `m${i}`, role: "user" }, type: "message" }),
+    );
+    writeFileSync(file, `${lines.join("\n")}\n`);
+    const base = boot({
+      session: {
+        getContextUsage: () => undefined,
+        isStreaming: false,
+        resourceLoader: { getSkills: () => ({ skills: [] }) },
+        sessionFile: file,
+      } as unknown as ServerDeps["session"],
+    });
+    expect(await (await get(base, "/chat?count=2")).text()).toContain('id="chat-more"');
+    expect(await (await get(base, "/chat?count=50")).text()).not.toContain('id="chat-more"');
+  });
+
   it("notifies on the backup-alert hook and returns 204", async () => {
     let notified: string | undefined;
     const base = boot({
