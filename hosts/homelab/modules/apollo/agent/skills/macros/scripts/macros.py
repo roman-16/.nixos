@@ -116,6 +116,16 @@ def parse_fraction(s: str) -> float:
     return float(s)
 
 
+def remaining_fraction(value: str) -> float:
+    """A --remaining amount as a fraction of what's *left* ("1/2", "50%", "0.5"; the bare flag
+    passes "1" for all of it). It's a share of the leftovers, so it can't exceed 1."""
+    frac = parse_fraction(value)
+    if frac > 1 + 1e-6:
+        die("a --remaining amount is a share of what's left, so it can't exceed 1 "
+            "(use --remaining on its own to take all of it)")
+    return frac
+
+
 class Match(NamedTuple):
     """Outcome of resolving a food/prep reference.
 
@@ -1103,12 +1113,12 @@ def cmd_prep_eat(args):
         if not batch.get("size"):
             die(f'"{batch["name"]}" has no size set - set one with prep-size, or use --fraction')
         frac = args.size / batch["size"]["amount"]
-    elif args.remaining:
-        frac = left
+    elif args.remaining is not None:
+        frac = remaining_fraction(args.remaining) * left
     elif args.fraction is not None:
         frac = parse_fraction(args.fraction)
     else:
-        die("give an amount: --fraction, --remaining, --size, --fit-protein/--fit-kcal, or --target-protein/--target-kcal")
+        die("give an amount: --fraction, --remaining [frac], --size, --fit-protein/--fit-kcal, or --target-protein/--target-kcal")
     if frac <= 0:
         die("amount must be positive")
     # An explicit over-ask is a mistake; a fit/target over-ask is capped above.
@@ -1160,12 +1170,12 @@ def cmd_prep_remove(args):
         if not batch.get("size"):
             die(f'"{batch["name"]}" has no size set - set one with prep-size, or use --fraction')
         frac = args.size / batch["size"]["amount"]
-    elif args.remaining:
-        frac = left
+    elif args.remaining is not None:
+        frac = remaining_fraction(args.remaining) * left
     elif args.fraction is not None:
         frac = parse_fraction(args.fraction)
     else:
-        die("give an amount: --fraction, --remaining, or --size")
+        die("give an amount: --fraction, --remaining [frac], or --size")
     if frac <= 0:
         die("amount must be positive")
     if frac > left + 1e-6:
@@ -1441,7 +1451,7 @@ def build_parser() -> argparse.ArgumentParser:
     pe = sub.add_parser("prep-eat")
     pe.set_defaults(func=cmd_prep_eat)
     pe.add_argument("--name", required=True)
-    add_amount_flags(pe, ("--fraction", {}), ("--remaining", {"action": "store_true"}),
+    add_amount_flags(pe, ("--fraction", {}), ("--remaining", {"nargs": "?", "const": "1", "default": None}),
                      ("--size", {"type": positive}))
 
     prem = sub.add_parser("prep-remove")
@@ -1449,7 +1459,7 @@ def build_parser() -> argparse.ArgumentParser:
     prem.add_argument("--name", required=True)
     grp = prem.add_mutually_exclusive_group()
     grp.add_argument("--fraction")
-    grp.add_argument("--remaining", action="store_true")
+    grp.add_argument("--remaining", nargs="?", const="1", default=None)
     grp.add_argument("--size", type=positive)
     prem.add_argument("--date")
 

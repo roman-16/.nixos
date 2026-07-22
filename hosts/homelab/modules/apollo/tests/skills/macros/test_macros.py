@@ -765,6 +765,61 @@ class TestPrepPortionOutput:
         assert "of what was left" not in out
 
 
+class TestRemainingFraction:
+    def test_parses_the_usual_forms(self):
+        assert macros.remaining_fraction("1/2") == 0.5
+        assert macros.remaining_fraction("50%") == 0.5
+        assert macros.remaining_fraction("0.5") == 0.5
+        assert macros.remaining_fraction("1") == 1.0
+
+    def test_rejects_a_share_above_one(self):
+        with pytest.raises(SystemExit):
+            macros.remaining_fraction("3/2")
+
+
+class TestPrepRemainingShare:
+    def test_half_of_a_full_batch(self, store):
+        set_goal()
+        add_bolognese()  # 1800 kcal total
+        run("prep-eat", "--name", "bolognese", "--remaining", "1/2")
+        batch = macros.load(macros.PREP_FILE, {})["bolognese"]
+        assert macros.frac_left(batch) == pytest.approx(0.5)
+        assert macros.consumed(batch, "eaten")["kcal"] == pytest.approx(900)
+
+    def test_half_of_what_is_left_after_a_prior_eat(self, store, capsys):
+        set_goal()
+        add_bolognese()
+        run("prep-eat", "--name", "bolognese", "--fraction", "1/2")  # 50% left
+        capsys.readouterr()
+        run("prep-eat", "--name", "bolognese", "--remaining", "1/2")  # half of the 50% = 25% of whole
+        assert "50% of what's left" in capsys.readouterr().out
+        batch = macros.load(macros.PREP_FILE, {})["bolognese"]
+        assert macros.frac_left(batch) == pytest.approx(0.25)
+
+    def test_bare_remaining_still_takes_all(self, store):
+        set_goal()
+        add_bolognese()
+        run("prep-eat", "--name", "bolognese", "--fraction", "1/4")  # 75% left
+        run("prep-eat", "--name", "bolognese", "--remaining")
+        batch = macros.load(macros.PREP_FILE, {})["bolognese"]
+        assert macros.frac_left(batch) == pytest.approx(0.0)
+
+    def test_share_above_one_errors(self, store):
+        set_goal()
+        add_bolognese()
+        with pytest.raises(SystemExit):
+            run("prep-eat", "--name", "bolognese", "--remaining", "3/2")
+
+    def test_remove_half_of_what_is_left(self, store):
+        set_goal()
+        add_bolognese()
+        run("prep-eat", "--name", "bolognese", "--fraction", "1/2")  # 50% left
+        run("prep-remove", "--name", "bolognese", "--remaining", "1/2")  # half of the 50%, unlogged
+        batch = macros.load(macros.PREP_FILE, {})["bolognese"]
+        assert macros.frac_left(batch) == pytest.approx(0.25)
+        assert macros.consumed(batch, "removed")["kcal"] == pytest.approx(450)
+
+
 class TestEdit:
     def test_edit_single_field_preserves_rest_and_ledger(self, store):
         set_goal()

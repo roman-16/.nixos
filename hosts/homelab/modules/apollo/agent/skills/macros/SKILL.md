@@ -149,18 +149,19 @@ A batch is built up ingredient by ingredient, and everything that leaves it is a
 **Eating, unlogged removal, undo** - the core verbs. `prep-eat` is a portion **you** eat (logged to your day); `prep-remove` is one that leaves the batch **unlogged**; `prep-uneat` reverses any event; `prep-rm` deletes the whole batch:
 
 ```bash
-{baseDir}/scripts/macros.py prep-eat --name bolognese --fraction 1/5    # you ate 1/5 of the WHOLE batch (also 20% or 0.2)
-{baseDir}/scripts/macros.py prep-eat --name bolognese --remaining       # you finish whatever is left
-{baseDir}/scripts/macros.py prep-eat --name "ice cream" --size 250      # you ate 250g (needs a size set)
-{baseDir}/scripts/macros.py prep-eat --name bolognese --fit-protein     # enough to reach today's protein goal
-{baseDir}/scripts/macros.py prep-eat --name bolognese --target-kcal 500 # a portion worth 500 kcal
-{baseDir}/scripts/macros.py prep-remove --name bolognese --fraction 1/3 # someone else ate / spilled / gave away 1/3 - NOT your intake
+{baseDir}/scripts/macros.py prep-eat --name bolognese --remaining        # you finish whatever is left
+{baseDir}/scripts/macros.py prep-eat --name bolognese --remaining 1/2    # HALF of what's LEFT (also 50% or 0.5) - the default for "half the prep"
+{baseDir}/scripts/macros.py prep-eat --name bolognese --fraction 1/5     # 1/5 of the WHOLE original batch - only when they mean the original
+{baseDir}/scripts/macros.py prep-eat --name "ice cream" --size 250       # you ate 250g (needs a size set)
+{baseDir}/scripts/macros.py prep-eat --name bolognese --fit-protein      # enough to reach today's protein goal
+{baseDir}/scripts/macros.py prep-eat --name bolognese --target-kcal 500  # a portion worth 500 kcal
+{baseDir}/scripts/macros.py prep-remove --name bolognese --remaining 1/3 # someone else ate / spilled 1/3 of what's LEFT - NOT your intake
 {baseDir}/scripts/macros.py prep-uneat --name bolognese --last          # undo the last event (or --index N from prep-get, or --all)
 {baseDir}/scripts/macros.py prep-rm --name bolognese                    # delete the batch entirely
 {baseDir}/scripts/macros.py prep-list                                   # active batches (add --all to include finished ones)
 ```
 
-`--fraction` (on eat and remove) is a share of the whole batch, not of what remains, and errors if it exceeds what's left; use `--remaining` to take the rest. Once a batch is partway down, the reply reframes any portion as its share **of what's left** (e.g. `45% of what's left (30% of batch, ~250g)`) and adds a `🥘` line with the batch's remaining before/after (a projection on `--dry-run`), so you always see how much is left - never assume it's full. `prep-eat`'s `--fit-*`/`--target-*` size the portion for you and cap to what remains. A finished batch (0% left) is **not** deleted - it just drops out of `prep-list` (see it with `--all`), so its log stays inspectable and undoable; `prep-rm` is the explicit "done, throw it away".
+**A share is of what's left by default.** When the user talks about a share of the prep - "half of it", "a third", "most of what's left", "the rest" - they mean of what's currently **left**, so use `--remaining <frac>` (`--remaining` on its own = all of it; it's a share of the leftovers, so it errors above 1). Reach for `--fraction <frac>` only when they clearly mean the **whole original** batch - a fixed meal-prep serving like "one of the 5" or "a fifth of what I made"; it's a share of the whole and errors if it exceeds what's left. On a full batch the two coincide, so `--remaining <frac>` is always the safe default; `--size` is for absolute grams. Once a batch is partway down, the reply reframes the portion as its share **of what's left** (e.g. `50% of what's left (30% of batch, ~250g)`) and adds a `🥘` line with the batch's remaining before/after (a projection on `--dry-run`), so you always see how much is left - never assume it's full. `prep-eat`'s `--fit-*`/`--target-*` size the portion for you and cap to what remains. A finished batch (0% left) is **not** deleted - it just drops out of `prep-list` (see it with `--all`), so its log stays inspectable and undoable; `prep-rm` is the explicit "done, throw it away".
 
 ### Size (grams / ml / pieces)
 
