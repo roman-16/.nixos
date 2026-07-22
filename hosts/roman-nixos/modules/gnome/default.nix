@@ -4,7 +4,7 @@
     let
       murmur = pkgs.stdenv.mkDerivation {
         pname = "gnome-shell-extension-murmur";
-        version = "1.0.3";
+        version = "1.0.4";
         src = pkgs.fetchFromGitHub {
           owner = "roman-16";
           repo = "murmur";
