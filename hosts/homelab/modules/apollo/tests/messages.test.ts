@@ -136,7 +136,14 @@ describe("skillContextNote", () => {
     expect(note).toContain("don't resend");
   });
 
-  it("truncates a long message", () => {
-    expect(skillContextNote("macros", "x".repeat(500))).toContain("more chars");
+  it("keeps a long (under-cap) message intact", () => {
+    const text = "x".repeat(1000);
+    const note = skillContextNote("reminders", text);
+    expect(note).toContain(text);
+    expect(note).not.toContain("more chars");
+  });
+
+  it("truncates only a very long message", () => {
+    expect(skillContextNote("macros", "x".repeat(5000))).toContain("more chars");
   });
 });

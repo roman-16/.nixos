@@ -126,26 +126,41 @@ class TestList:
 class TestUpdate:
     def test_changes_text_only_keeps_time(self, spool):
         reminders.write_reminder({"id": "a1", "text": "old", "at": 5000, "createdAt": 0})
-        run("update", "--id", "a1", "--text", "new")
+        run("update", "a1", "--text", "new")
         saved = json.loads(reminders.path_for("a1").read_text())
         assert saved["text"] == "new"
         assert saved["at"] == 5000
 
     def test_reschedules(self, spool, frozen):
         reminders.write_reminder({"id": "a1", "text": "x", "at": 5000, "createdAt": 0})
-        run("update", "--id", "a1", "--in", "1h")
+        run("update", "a1", "--in", "1h")
         saved = json.loads(reminders.path_for("a1").read_text())
         assert saved["at"] == frozen + 3600 * 1000
 
-    def test_missing_id_errors(self, spool):
+    def test_targets_by_text_substring(self, spool):
+        reminders.write_reminder({"id": "a1", "text": "call the dentist", "at": 5000, "createdAt": 0})
+        run("update", "dentist", "--text", "call the dentist (morning)")
+        assert json.loads(reminders.path_for("a1").read_text())["text"] == "call the dentist (morning)"
+
+    def test_requires_a_change(self, spool):
+        reminders.write_reminder({"id": "a1", "text": "x", "at": 5000, "createdAt": 0})
         with pytest.raises(SystemExit):
-            run("update", "--id", "nope", "--text", "x")
+            run("update", "a1")
+
+    def test_missing_reminder_errors(self, spool):
+        with pytest.raises(SystemExit):
+            run("update", "nope", "--text", "x")
 
 
 class TestRemove:
     def test_by_id(self, spool):
         reminders.write_reminder({"id": "a1", "text": "x", "at": 5000, "createdAt": 0})
-        run("remove", "--id", "a1")
+        run("remove", "a1")
+        assert not reminders.path_for("a1").exists()
+
+    def test_targets_by_text_substring(self, spool):
+        reminders.write_reminder({"id": "a1", "text": "buy milk", "at": 5000, "createdAt": 0})
+        run("remove", "milk")
         assert not reminders.path_for("a1").exists()
 
     def test_all(self, spool, capsys):
@@ -155,11 +170,11 @@ class TestRemove:
         assert list(spool.glob("*.json")) == []
         assert "Removed 2 reminder(s)" in capsys.readouterr().out
 
-    def test_missing_id_errors(self, spool):
+    def test_missing_reminder_errors(self, spool):
         with pytest.raises(SystemExit):
-            run("remove", "--id", "nope")
+            run("remove", "nope")
 
-    def test_requires_id_or_all(self, spool):
+    def test_requires_query_or_all(self, spool):
         with pytest.raises(SystemExit):
             run("remove")
 
@@ -170,3 +185,64 @@ class TestLoadAll:
         (spool / "broken.json").write_text("{not json")
         loaded = reminders.load_all()
         assert [r["id"] for r in loaded] == ["ok"]
+
+
+class TestFindReminder:
+    def test_exact_id(self, spool):
+        reminders.write_reminder({"id": "a1b2c3", "text": "call dentist", "at": 1, "createdAt": 0})
+        assert reminders.find_reminder("a1b2c3")["text"] == "call dentist"
+
+    def test_unique_id_prefix(self, spool):
+        reminders.write_reminder({"id": "a1b2c3", "text": "x", "at": 1, "createdAt": 0})
+        assert reminders.find_reminder("a1b")["id"] == "a1b2c3"
+
+    def test_text_substring_is_case_insensitive(self, spool):
+        reminders.write_reminder({"id": "a1", "text": "Call the Dentist", "at": 1, "createdAt": 0})
+        reminders.write_reminder({"id": "b2", "text": "buy milk", "at": 2, "createdAt": 0})
+        assert reminders.find_reminder("dentist")["id"] == "a1"
+
+    def test_ambiguous_text_errors(self, spool):
+        reminders.write_reminder({"id": "a1", "text": "call dentist", "at": 1, "createdAt": 0})
+        reminders.write_reminder({"id": "b2", "text": "call vet", "at": 2, "createdAt": 0})
+        with pytest.raises(SystemExit):
+            reminders.find_reminder("call")
+
+    def test_no_match_errors(self, spool):
+        reminders.write_reminder({"id": "a1", "text": "x", "at": 1, "createdAt": 0})
+        with pytest.raises(SystemExit):
+            reminders.find_reminder("zzz")
+
+    def test_blank_query_errors(self, spool):
+        with pytest.raises(SystemExit):
+            reminders.find_reminder("   ")
+
+
+class TestDelivery:
+    def test_deliver_to_user_posts_and_reports_success(self, monkeypatch):
+        seen = {}
+
+        class Resp:
+            status = 204
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        def fake_urlopen(request, timeout=None):
+            seen["url"] = request.full_url
+            seen["data"] = request.data
+            return Resp()
+
+        monkeypatch.setattr(reminders.urllib.request, "urlopen", fake_urlopen)
+        assert reminders.deliver_to_user("hello") is True
+        assert "source=reminders" in seen["url"]
+        assert seen["data"] == b"hello"
+
+    def test_deliver_to_user_reports_failure(self, monkeypatch):
+        def boom(request, timeout=None):
+            raise OSError("refused")
+
+        monkeypatch.setattr(reminders.urllib.request, "urlopen", boom)
+        assert reminders.deliver_to_user("hello") is False

@@ -13,7 +13,15 @@ Sets real reminders that fire even when the conversation is idle: at the chosen 
 {baseDir}/scripts/reminders.py <command> [flags]
 ```
 
-The script owns all time math and storage; you pass what the user wants and relay the confirmation it prints. You never deliver the reminder yourself - Apollo fires it at the time. Just set it.
+The script owns all time math, storage, and the reply: you pass what the user wants, and it delivers its own confirmation to the user (see [Replying](#replying)). You never deliver a fired reminder yourself either - Apollo fires it at its time. Just set it.
+
+## Replying
+
+**The script sends its output to the user itself - do not relay it.** Every command posts its printed output straight to the user on WhatsApp (as a "via reminders" message), then prints `[reminders: delivered to the user ✓ - do not relay]`. When you see that line, **stay silent**: don't repeat, summarize, or rephrase it - the user already got it verbatim, and restating it double-sends.
+
+Because every command's output goes to the user, only run one when you mean for the user to see it - never as a silent pre-check. This is why `update` and `remove` resolve the reminder themselves (below), so you never need a lookup `list` first.
+
+If the script prints `[reminders: delivery FAILED ...]` instead, the send didn't happen: relay that output yourself, just this once (the reminder was still saved - don't re-run the command).
 
 ## Create
 
@@ -24,7 +32,7 @@ Give the reminder text plus when. Use `--in` for a delay (you don't know the cur
 {baseDir}/scripts/reminders.py add --text "call the dentist" --at 2026-07-15T09:00
 ```
 
-`--in` accepts combined units `s m h d w` (e.g. `90m`, `2h`, `1d`, `1h30m`). `--at` is ISO 8601 in local time (Europe/Vienna).
+`--in` accepts combined units `s m h d w` (e.g. `90m`, `2h`, `1d`, `1h30m`). `--at` is ISO 8601 in local time (Europe/Vienna). The confirmation names the fire time; the script sends it to the user.
 
 ## List
 
@@ -32,28 +40,34 @@ Give the reminder text plus when. Use `--in` for a delay (you don't know the cur
 {baseDir}/scripts/reminders.py list
 ```
 
-Shows each pending reminder with its id, when it fires (absolute + relative), and text.
+Shows each pending reminder with its id, when it fires (absolute + relative), and text. Its output is sent to the user, so run it only when they actually want to see their reminders - not to look up an id for yourself (`update`/`remove` do that themselves).
 
 ## Update
 
-Reschedule and/or change the text by id (get ids from `list`). Pass only what changes; a time flag reschedules, otherwise the time is kept.
+Reschedule and/or change the text. Target the reminder by a word from its text or by the id `list` shows (an id prefix is fine) - the script resolves it, so no lookup `list` first. Pass only what changes; a time flag reschedules, otherwise the time is kept.
 
 ```bash
-{baseDir}/scripts/reminders.py update --id a1b2c3 --in 30m
-{baseDir}/scripts/reminders.py update --id a1b2c3 --text "get my food (cold section)"
+{baseDir}/scripts/reminders.py update dentist --in 30m
+{baseDir}/scripts/reminders.py update "get my food" --text "get my food (cold section)"
+{baseDir}/scripts/reminders.py update a1b2c3 --at 2026-07-15T10:00
 ```
 
 ## Delete
 
+Target by text or id, exactly like `update`, or clear them all.
+
 ```bash
-{baseDir}/scripts/reminders.py remove --id a1b2c3
+{baseDir}/scripts/reminders.py remove dentist
+{baseDir}/scripts/reminders.py remove a1b2c3
 {baseDir}/scripts/reminders.py remove --all
 ```
+
+If the reference matches several reminders (or none), the script says so on stderr and does nothing - it is not sent to the user, so relay it yourself and narrow it down (or ask which one).
 
 ## Notes
 
 - `--in` is computed against the real clock at the moment you run it, so it is always accurate.
-- After creating or updating, tell the user when it will fire. After `list`, relay the list.
+- The script delivers every command's output to the user (see [Replying](#replying)); don't relay or restate it - that double-sends.
 - When a reminder fires it is sent to the user directly and shown in the dashboard chat; on the user's next message you get a `[context]` line noting it went out - it's already delivered, so don't resend it.
 
 `{baseDir}` = this skill's directory. Always resolve to the absolute path before executing.
