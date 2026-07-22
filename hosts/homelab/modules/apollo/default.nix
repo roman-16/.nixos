@@ -116,6 +116,7 @@ in
           ln -sfn ${./agent/skills/backup} "$agentDir/skills/backup"
           ln -sfn ${./agent/skills/macros} "$agentDir/skills/macros"
           ln -sfn ${./agent/skills/proton} "$agentDir/skills/proton"
+          ln -sfn ${./agent/skills/recall} "$agentDir/skills/recall"
           ln -sfn ${./agent/skills/reminders} "$agentDir/skills/reminders"
 
           # Extensions pi discovers from $agentDir/extensions. directory-agents-md
