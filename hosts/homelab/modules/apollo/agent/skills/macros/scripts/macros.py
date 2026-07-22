@@ -277,6 +277,16 @@ def day_macros(date: str) -> dict | None:
     return {"macros": {k: sum(e[k] for e in entries) for k in MACROS}, "proteinGoal": day.get("proteinGoal")}
 
 
+def day_weight(date: str) -> float | int | None:
+    """The day's recorded weight in kg, or None when none was logged that day (independent of
+    whether any food was logged, so a weigh-in-only day still counts)."""
+    path = day_path(date)
+    if not path.exists():
+        return None
+    w = load(path, {}).get("weight")
+    return w["kg"] if w else None
+
+
 def ensure_day(date: str):
     if day_path(date).exists():
         return
@@ -368,6 +378,17 @@ def dm(date: str) -> str:
     return f"{date[8:10]}.{date[5:7]}"
 
 
+def weight_goal():
+    """The configured goal weight in kg, or "?" when none is set."""
+    return load(GOAL_FILE, {}).get("weightGoal", "?")
+
+
+def weight_line(day: dict) -> str | None:
+    """The day's weigh-in as a standalone summary line, or None when no weight was recorded."""
+    w = day.get("weight")
+    return f"Weight {w['kg']} kg (goal {weight_goal()})." if w else None
+
+
 def render_day_dict(day: dict, *, preview: bool = False):
     date = day["date"]
     base = f"Today ({dm(date)})" if date == today() else dm(date)
@@ -375,14 +396,16 @@ def render_day_dict(day: dict, *, preview: bool = False):
     entries = day["entries"]
     protein_goal = day["proteinGoal"]
     if not entries:
-        print(f"{label}: nothing logged yet.")
-        print(f"Target: {day['target']} kcal, {protein_goal}g+ protein")
+        lines = [f"{label}: nothing logged yet.", f"Target: {day['target']} kcal, {protein_goal}g+ protein"]
+        weigh_in = weight_line(day)
+        if weigh_in:
+            lines.append(weigh_in)
+        print("\n".join(lines))
         return
     tk = sum(e["kcal"] for e in entries)
     tp = sum(e["protein"] for e in entries)
     tf = sum(e["fat"] for e in entries)
     tc = sum(e["carbs"] for e in entries)
-    weight_goal = load(GOAL_FILE, {}).get("weightGoal", "?")
     tomorrow = max(day["dailyGoal"] - day["cumulative"], floor_of(day))
     left = day["target"] - tk
 
@@ -392,14 +415,16 @@ def render_day_dict(day: dict, *, preview: bool = False):
         lines.append(f"- {e['item']} - {e['kcal']} kcal, {round(e['protein'])}g P{note}")
     kcal_part = f"{round(left)} kcal left" if left >= 0 else f"{round(-left)} kcal over"
     protein_part = "protein hit ✅" if tp >= protein_goal else f"{round(protein_goal - tp)}g protein to go"
-    weight = f"Weight {day['weight']['kg']} kg (goal {weight_goal}). " if day.get("weight") else ""
     lines += [
         "",
         f"Total: {round(tk)} kcal | {round(tp)}g protein, {round(tf)}g fat, {round(tc)}g carbs",
         f"Target: {day['target']} kcal, {protein_goal}g+ protein",
         f"Left: {kcal_part}, {protein_part}",
-        f"{weight}Tomorrow's target: {tomorrow} kcal.",
     ]
+    weigh_in = weight_line(day)
+    if weigh_in:
+        lines.append(weigh_in)
+    lines.append(f"Tomorrow's target: {tomorrow} kcal.")
     print("\n".join(lines))
 
 
@@ -502,6 +527,7 @@ def cmd_summary(args):
     today_str = today()
     completed = []
     partial = None
+    weights = []
     day = start
     while day <= end:
         ds = day.strftime("%Y-%m-%d")
@@ -511,12 +537,15 @@ def cmd_summary(args):
                 partial = rec["macros"]
             else:
                 completed.append(rec)
+        kg = day_weight(ds)
+        if kg is not None:
+            weights.append(kg)
         day += timedelta(days=1)
 
     span = f"{dm(start.strftime('%Y-%m-%d'))}-{dm(end.strftime('%Y-%m-%d'))}"
     header = f"Last {label_days} day{'s' if label_days != 1 else ''} ({span})" if label_days is not None else span
 
-    if not completed and partial is None:
+    if not completed and partial is None and not weights:
         print(f"{header}: nothing logged.")
         return
 
@@ -539,13 +568,24 @@ def cmd_summary(args):
         if extras:
             joined = "; ".join(extras)
             lines.append(joined[0].upper() + joined[1:])
-    else:
+    elif partial is not None:
         lines.append("No complete days logged in this range yet.")
+    else:
+        lines.append("No food logged in this range.")
     if partial is not None:
         lines.append(
             f"Today so far ({dm(today_str)}): {round(partial['kcal'])} kcal | "
             f"{round(partial['protein'])}g protein, {round(partial['fat'])}g fat, {round(partial['carbs'])}g carbs"
         )
+    if weights:
+        goal = weight_goal()
+        if len(weights) >= 2:
+            delta = r1(weights[-1] - weights[0])
+            sign = "+" if delta > 0 else ""
+            avg_weight = r1(sum(weights) / len(weights))
+            lines.append(f"Weight: {weights[0]} → {weights[-1]} kg ({sign}{delta}), avg {avg_weight} (goal {goal})")
+        else:
+            lines.append(f"Weight: {weights[0]} kg (goal {goal})")
     print("\n".join(lines))
 
 

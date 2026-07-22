@@ -728,6 +728,35 @@ class TestValidation:
         assert "0 kcal" in capsys.readouterr().out
 
 
+class TestWeight:
+    def test_shown_with_no_entries(self, store, capsys):
+        set_goal()
+        capsys.readouterr()
+        run("weight", "--kg", "66.4")
+        assert "Weight 66.4 kg" in capsys.readouterr().out
+
+    def test_shown_alongside_entries(self, store, capsys):
+        set_goal()
+        run("weight", "--kg", "66.4")
+        run("log", "--item", "A", "--kcal", "500", "--protein", "30")
+        capsys.readouterr()
+        run("show")
+        assert "Weight 66.4 kg" in capsys.readouterr().out
+
+    def test_goal_shown_when_set(self, store, capsys):
+        run("goal-set", "--phase", "cut", "--tdee", "2400", "--daily-goal", "2100",
+            "--protein", "150", "--weight-goal", "66")
+        capsys.readouterr()
+        run("weight", "--kg", "66.4")
+        assert "(goal 66)" in capsys.readouterr().out
+
+    def test_no_line_when_unset(self, store, capsys):
+        set_goal()
+        capsys.readouterr()
+        run("show")
+        assert "Weight" not in capsys.readouterr().out
+
+
 class TestSummary:
     def test_averages_completed_days_and_shows_today_apart(self, store, capsys):
         set_goal()
@@ -775,6 +804,41 @@ class TestSummary:
         out = capsys.readouterr().out
         assert "01.06-30.06" in out
         assert "Avg/day over 2 days: 2200 kcal" in out
+
+    def test_weight_trend_and_average(self, store, capsys):
+        set_goal()
+        run("log", "--item", "A", "--kcal", "2000", "--protein", "150", "--date", days_ago(2))
+        run("log", "--item", "B", "--kcal", "2000", "--protein", "150", "--date", days_ago(1))
+        run("weight", "--kg", "67.2", "--date", days_ago(2))
+        run("weight", "--kg", "66.4", "--date", days_ago(1))
+        capsys.readouterr()
+        run("summary", "--days", "3")
+        assert "Weight: 67.2 → 66.4 kg (-0.8), avg 66.8" in capsys.readouterr().out
+
+    def test_single_weigh_in_shows_the_value(self, store, capsys):
+        set_goal()
+        run("log", "--item", "A", "--kcal", "2000", "--protein", "150", "--date", days_ago(1))
+        run("weight", "--kg", "66.4", "--date", days_ago(1))
+        capsys.readouterr()
+        run("summary", "--days", "3")
+        assert "Weight: 66.4 kg (goal ?)" in capsys.readouterr().out
+
+    def test_weigh_in_only_range_is_not_nothing_logged(self, store, capsys):
+        set_goal()
+        run("weight", "--kg", "66.4", "--date", days_ago(1))
+        capsys.readouterr()
+        run("summary", "--days", "3")
+        out = capsys.readouterr().out
+        assert "nothing logged" not in out
+        assert "No food logged in this range." in out
+        assert "Weight: 66.4 kg" in out
+
+    def test_no_weigh_in_no_weight_line(self, store, capsys):
+        set_goal()
+        run("log", "--item", "A", "--kcal", "2000", "--protein", "150", "--date", days_ago(1))
+        capsys.readouterr()
+        run("summary", "--days", "3")
+        assert "Weight" not in capsys.readouterr().out
 
 
 class TestPastDayCascade:

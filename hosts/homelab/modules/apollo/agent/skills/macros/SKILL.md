@@ -83,7 +83,7 @@ For any "average", "last N days", or "this week/month" question, use this - **on
 {baseDir}/scripts/macros.py summary --from 2026-06-01 --to 2026-06-30
 ```
 
-`--days N` counts back from today (`--days 7` is today plus the 6 days before it); `--from`/`--to` give an explicit range (`--to` defaults to today, and the two selectors are mutually exclusive). The output is a ready-to-send summary the script sends to the user (see [Replying](#replying)).
+`--days N` counts back from today (`--days 7` is today plus the 6 days before it); `--from`/`--to` give an explicit range (`--to` defaults to today, and the two selectors are mutually exclusive). The output is a ready-to-send summary the script sends to the user (see [Replying](#replying)). When the range contains any weigh-ins it also appends a weight line - the trend (first → latest) plus the average, or just the value for a single one - and a range with only weigh-ins and no food still reports them.
 
 ## Saved foods (per 100 of a unit + default serving)
 
@@ -117,6 +117,8 @@ Name matching is forgiving: an exact alias wins, else a unique substring, else t
 ```bash
 {baseDir}/scripts/macros.py weight --kg 66.4
 ```
+
+A recorded weigh-in is echoed in that day's summary (`Weight 66.4 kg (goal ...)`), even before any food is logged, and is rolled into `summary`'s weight line across a range.
 
 ## Fixing mistakes
 
