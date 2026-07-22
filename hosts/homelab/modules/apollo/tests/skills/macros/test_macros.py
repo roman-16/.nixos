@@ -727,14 +727,22 @@ class TestPrepPortionOutput:
         assert "50% of what's left (25% of batch)" in out
         assert "🥘 Bolognese: 50% → 25% left" in out
 
-    def test_full_batch_explicit_portion_adds_no_lead(self, store, capsys):
+    def test_full_batch_explicit_states_remaining_without_left_framing(self, store, capsys):
         set_goal()
         add_bolognese()
         capsys.readouterr()
         run("prep-eat", "--name", "bolognese", "--fraction", "1/4")
         out = capsys.readouterr().out
-        assert "of what's left" not in out
-        assert "🥘" not in out
+        assert "🥘 Bolognese: 100% → 75% left" in out  # remaining is always stated
+        assert "of what's left" not in out               # full batch: single framing
+        assert "🍽️" not in out                          # no portion line for a plain full-batch eat
+
+    def test_full_batch_explicit_dry_run_states_remaining(self, store, capsys):
+        set_goal()
+        add_bolognese()
+        capsys.readouterr()
+        run("prep-eat", "--name", "bolognese", "--fraction", "1/4", "--dry-run")
+        assert "🥘 Bolognese: 100% left now, 75% if eaten" in capsys.readouterr().out
 
     def test_full_batch_fit_shows_single_framing_and_remaining(self, store, capsys):
         set_goal()

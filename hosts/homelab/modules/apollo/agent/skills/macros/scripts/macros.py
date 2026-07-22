@@ -1132,20 +1132,22 @@ def cmd_prep_eat(args):
     entry = make_entry(now_time(), item, round(portion["kcal"]), r1(portion["protein"]),
                        r1(portion["fat"]), r1(portion["carbs"]), "prep")
     partial = 0 < left < 1 - 1e-6
-    # A lead is worth showing for a fit/target portion (always) or any portion of an
-    # already-partial batch (where "of what's left" and the remaining state add real info);
-    # a plain portion of a full batch is left to the day summary alone, as before.
+    # The portion line is worth showing for a fit/target portion (always) or any portion of an
+    # already-partial batch (where "of what's left" adds real info); on a full batch a plain
+    # portion just repeats the day-summary label, so it's skipped there.
     if has_target(args) or partial:
         why_txt = f"{why} " if has_target(args) else ""
         leads.append(f"🍽️ {batch['name']}: {portion_desc(batch, frac, left)} {why_txt}- "
                      f"{round(portion['kcal'])} kcal, {r1(portion['protein'])}g P")
-        if has_target(args) and capped:
-            short = requested - portion[dim]
-            short_txt = f"{round(short)}g P" if dim == "protein" else f"{round(short)} kcal"
-            leads.append(f"⚠️ only {round(left * 100)}% of the batch is left - "
-                         f"capped to that, {short_txt} short of the target.")
-        else:
-            leads.append(remaining_note(batch, frac, left, dry_run=args.dry_run))
+    # The batch's remaining is stated on every eat, so no reply (least of all a --dry-run) ever
+    # leaves it unclear how full the batch is. A capped fit/target already says it in its warning.
+    if has_target(args) and capped:
+        short = requested - portion[dim]
+        short_txt = f"{round(short)}g P" if dim == "protein" else f"{round(short)} kcal"
+        leads.append(f"⚠️ only {round(left * 100)}% of the batch is left - "
+                     f"capped to that, {short_txt} short of the target.")
+    else:
+        leads.append(remaining_note(batch, frac, left, dry_run=args.dry_run))
 
     def commit():
         event = make_event("eaten", date, portion, f"{round(frac * 100)}% of batch")
