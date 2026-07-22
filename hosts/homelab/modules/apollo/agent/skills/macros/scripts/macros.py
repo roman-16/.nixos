@@ -863,6 +863,30 @@ def prep_line(batch: dict) -> str:
             f"({size_txt}{round(rem['kcal'])} kcal, {r1(rem['protein'])}g P)")
 
 
+def portion_desc(batch: dict, frac: float, left: float) -> str:
+    """How a portion reads to the user: its share of what's currently left (the actionable
+    framing) plus, in parentheses, its share of the whole batch and its size. Before anything
+    has been eaten the two shares coincide, so only the whole-batch one is shown. `left` is the
+    remaining fraction before this portion, passed in so callers that have already mutated the
+    batch still describe it against the pre-consumption state."""
+    of_whole = round(frac * 100)
+    size = portion_size(batch, frac)
+    if 0 < left < 1 - 1e-6:
+        size_txt = f", ~{size}" if size else ""
+        return f"{round(frac / left * 100)}% of what's left ({of_whole}% of batch{size_txt})"
+    size_txt = f" (~{size})" if size else ""
+    return f"{of_whole}% of batch{size_txt}"
+
+
+def remaining_note(batch: dict, frac: float, left: float, *, dry_run: bool) -> str:
+    """The batch's remaining share before and after taking `frac` of the whole - the one place
+    prep-eat surfaces how much is left, phrased as a projection on a dry run."""
+    before, after = round(left * 100), round(max(left - frac, 0) * 100)
+    if dry_run:
+        return f"🥘 {batch['name']}: {before}% left now, {after}% if eaten"
+    return f"🥘 {batch['name']}: {before}% → {after}% left"
+
+
 def make_event(kind: str, date: str, macros: dict, label: str) -> dict:
     """One consumption event: a portion that left the batch, eaten (logged to your day)
     or removed (unlogged). Macros are snapshotted, so past days never shift under it."""
@@ -1097,15 +1121,21 @@ def cmd_prep_eat(args):
     item = f"{batch['name']} ({round(frac * 100)}% of batch{f', {size_part}' if size_part else ''})"
     entry = make_entry(now_time(), item, round(portion["kcal"]), r1(portion["protein"]),
                        r1(portion["fat"]), r1(portion["carbs"]), "prep")
-    if has_target(args):
-        size_hint = f" (~{size_part})" if size_part else ""
-        leads.append(f"🍽️ {batch['name']}: {round(frac * 100)}% of batch{size_hint} {why} - "
+    partial = 0 < left < 1 - 1e-6
+    # A lead is worth showing for a fit/target portion (always) or any portion of an
+    # already-partial batch (where "of what's left" and the remaining state add real info);
+    # a plain portion of a full batch is left to the day summary alone, as before.
+    if has_target(args) or partial:
+        why_txt = f"{why} " if has_target(args) else ""
+        leads.append(f"🍽️ {batch['name']}: {portion_desc(batch, frac, left)} {why_txt}- "
                      f"{round(portion['kcal'])} kcal, {r1(portion['protein'])}g P")
-        if capped:
+        if has_target(args) and capped:
             short = requested - portion[dim]
             short_txt = f"{round(short)}g P" if dim == "protein" else f"{round(short)} kcal"
             leads.append(f"⚠️ only {round(left * 100)}% of the batch is left - "
                          f"capped to that, {short_txt} short of the target.")
+        else:
+            leads.append(remaining_note(batch, frac, left, dry_run=args.dry_run))
 
     def commit():
         event = make_event("eaten", date, portion, f"{round(frac * 100)}% of batch")
@@ -1146,7 +1176,8 @@ def cmd_prep_remove(args):
     prep[key] = batch
     save(PREP_FILE, prep)
     leads = [f'📝 read "{args.name}" as {assumed}'] if assumed else []
-    leads.append(f"removed {round(frac * 100)}% of {batch['name']} (unlogged - not your intake)")
+    extra = f"{round(frac / left * 100)}% of what was left; " if 0 < left < 1 - 1e-6 else ""
+    leads.append(f"removed {round(frac * 100)}% of {batch['name']} ({extra}unlogged - not your intake)")
     leads.append(prep_line(batch))
     print("\n".join(leads))
 

@@ -677,6 +677,94 @@ class TestPrepSize:
         assert "900ml" in capsys.readouterr().out
 
 
+class TestPortionDesc:
+    def batch(self, size=None):
+        b = {"name": "Bolognese"}
+        if size is not None:
+            b["size"] = {"amount": size, "unit": "g"}
+        return b
+
+    def test_full_batch_shows_only_whole_share(self):
+        assert macros.portion_desc(self.batch(), 0.3, 1.0) == "30% of batch"
+
+    def test_partial_batch_shows_share_of_what_is_left(self):
+        assert macros.portion_desc(self.batch(), 0.3, 0.6) == "50% of what's left (30% of batch)"
+
+    def test_size_is_appended_in_both_framings(self):
+        assert macros.portion_desc(self.batch(1000), 0.25, 1.0) == "25% of batch (~250g)"
+        assert macros.portion_desc(self.batch(1000), 0.25, 0.5) == (
+            "50% of what's left (25% of batch, ~250g)"
+        )
+
+    def test_remaining_note_real_and_dry_run(self):
+        b = self.batch()
+        assert macros.remaining_note(b, 0.3, 0.67, dry_run=False) == "🥘 Bolognese: 67% → 37% left"
+        assert macros.remaining_note(b, 0.3, 0.67, dry_run=True) == (
+            "🥘 Bolognese: 67% left now, 37% if eaten"
+        )
+
+
+class TestPrepPortionOutput:
+    def eat_half(self):
+        add_bolognese()
+        run("prep-eat", "--name", "bolognese", "--fraction", "1/2")
+
+    def test_fit_target_on_partial_shows_left_framing_and_dry_run_remaining(self, store, capsys):
+        set_goal()
+        self.eat_half()
+        capsys.readouterr()
+        run("prep-eat", "--name", "bolognese", "--target-kcal", "180", "--dry-run")
+        out = capsys.readouterr().out
+        assert "20% of what's left (10% of batch)" in out
+        assert "🥘 Bolognese: 50% left now, 40% if eaten" in out
+
+    def test_explicit_fraction_on_partial_shows_framing_and_remaining(self, store, capsys):
+        set_goal()
+        self.eat_half()
+        capsys.readouterr()
+        run("prep-eat", "--name", "bolognese", "--fraction", "1/4")
+        out = capsys.readouterr().out
+        assert "50% of what's left (25% of batch)" in out
+        assert "🥘 Bolognese: 50% → 25% left" in out
+
+    def test_full_batch_explicit_portion_adds_no_lead(self, store, capsys):
+        set_goal()
+        add_bolognese()
+        capsys.readouterr()
+        run("prep-eat", "--name", "bolognese", "--fraction", "1/4")
+        out = capsys.readouterr().out
+        assert "of what's left" not in out
+        assert "🥘" not in out
+
+    def test_full_batch_fit_shows_single_framing_and_remaining(self, store, capsys):
+        set_goal()
+        add_bolognese()
+        capsys.readouterr()
+        run("prep-eat", "--name", "bolognese", "--target-kcal", "180", "--dry-run")
+        out = capsys.readouterr().out
+        assert "10% of batch" in out
+        assert "of what's left" not in out
+        assert "🥘 Bolognese: 100% left now, 90% if eaten" in out
+
+    def test_remove_on_partial_notes_share_of_what_was_left(self, store, capsys):
+        set_goal()
+        self.eat_half()
+        capsys.readouterr()
+        run("prep-remove", "--name", "bolognese", "--fraction", "1/4")
+        out = capsys.readouterr().out
+        assert "50% of what was left" in out
+        assert "unlogged" in out
+
+    def test_remove_on_full_batch_is_unchanged(self, store, capsys):
+        set_goal()
+        add_bolognese()
+        capsys.readouterr()
+        run("prep-remove", "--name", "bolognese", "--fraction", "1/4")
+        out = capsys.readouterr().out
+        assert "removed 25% of Bolognese (unlogged - not your intake)" in out
+        assert "of what was left" not in out
+
+
 class TestEdit:
     def test_edit_single_field_preserves_rest_and_ledger(self, store):
         set_goal()

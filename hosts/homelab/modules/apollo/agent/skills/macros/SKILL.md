@@ -160,7 +160,7 @@ A batch is built up ingredient by ingredient, and everything that leaves it is a
 {baseDir}/scripts/macros.py prep-list                                   # active batches (add --all to include finished ones)
 ```
 
-`--fraction` (on eat and remove) is a share of the whole batch, not of what remains, and errors if it exceeds what's left; use `--remaining` to take the rest. `prep-eat`'s `--fit-*`/`--target-*` size the portion for you and cap to what remains. A finished batch (0% left) is **not** deleted - it just drops out of `prep-list` (see it with `--all`), so its log stays inspectable and undoable; `prep-rm` is the explicit "done, throw it away".
+`--fraction` (on eat and remove) is a share of the whole batch, not of what remains, and errors if it exceeds what's left; use `--remaining` to take the rest. Once a batch is partway down, the reply reframes any portion as its share **of what's left** (e.g. `45% of what's left (30% of batch, ~250g)`) and adds a `🥘` line with the batch's remaining before/after (a projection on `--dry-run`), so you always see how much is left - never assume it's full. `prep-eat`'s `--fit-*`/`--target-*` size the portion for you and cap to what remains. A finished batch (0% left) is **not** deleted - it just drops out of `prep-list` (see it with `--all`), so its log stays inspectable and undoable; `prep-rm` is the explicit "done, throw it away".
 
 ### Size (grams / ml / pieces)
 
@@ -172,7 +172,7 @@ A batch optionally carries a total **size** so portions read in real units, not 
 {baseDir}/scripts/macros.py prep-size --name "ice cream" --clear               # drop the size again
 ```
 
-With a size set, every portion also shows its weight and `prep-eat --fit-kcal` answers in grams (`31% of batch (~295g)`). If asked "how much of X can I eat in grams" and the batch has no size, offer to record one. Size scales with the kcal fraction, so it stays a `~` estimate; if you change the composition a lot, re-run `prep-size`.
+With a size set, every portion also shows its weight and `prep-eat --fit-kcal` answers in grams (`31% of batch (~295g)`, or `46% of what's left (31% of batch, ~295g)` once it's partway down). If asked "how much of X can I eat in grams" and the batch has no size, offer to record one. Size scales with the kcal fraction, so it stays a `~` estimate; if you change the composition a lot, re-run `prep-size`.
 
 ### Undoing a consumption mistake
 
