@@ -8,8 +8,8 @@
         src = pkgs.fetchFromGitHub {
           owner = "roman-16";
           repo = "murmur";
-          rev = "9965636188be7bdd9636f685942709bb5794d76a";
-          hash = "sha256-GvpvkiVe877lwtYqg8hkBjDNV0BJmaE/fDTJiKvlVy0=";
+          rev = "d96ca19b234f9fd0903c4489c825def99a44b3ea";
+          hash = "sha256-UjxWomaSCpBwRzegzqJSXYfRXEme7naoXiyq4xHUwWc=";
         };
         nativeBuildInputs = [ pkgs.glib ];
         dontConfigure = true;
