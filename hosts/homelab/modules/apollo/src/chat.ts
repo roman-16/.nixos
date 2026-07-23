@@ -7,7 +7,7 @@
 
 import { escapeHtml, humanTokens, truncate } from "./format";
 
-import type { ContextNote } from "./newday";
+import { type ContextNote, withContext } from "./newday";
 
 const MAX_OUTPUT_CHARS = 10000;
 const PREVIEW_CHARS = 100;
@@ -443,11 +443,13 @@ export function copyText(item: LogItem): string {
       return `${lead}Apollo → ${item.name}(${truncate(argPreview(item.args), MAX_OUTPUT_CHARS)}) [${status}]${body}${note}`;
     }
     case "user": {
+      // Reconstruct the exact turn the model received - the `<context>` element(s) plus the message.
+      const body = withContext(item.contexts ?? [], item.text);
       const note =
         item.images.length > 0
-          ? `${item.text ? " " : ""}[${item.images.length} image${item.images.length > 1 ? "s" : ""}]`
+          ? `${body ? " " : ""}[${item.images.length} image${item.images.length > 1 ? "s" : ""}]`
           : "";
-      return `${lead}User: ${item.text}${note}`;
+      return `${lead}User: ${body}${note}`;
     }
   }
 }

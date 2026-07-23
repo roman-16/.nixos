@@ -542,7 +542,7 @@ describe("copyText", () => {
     );
   });
 
-  it("excludes injected context, copying only the user's message", () => {
+  it("keeps the injected context (as a <context> element) in the copied user message", () => {
     expect(
       copyText({
         contexts: [{ body: "b", info: "i", source: "reply" }],
@@ -550,7 +550,18 @@ describe("copyText", () => {
         kind: "user",
         text: "yo",
       }),
-    ).toBe("User: yo");
+    ).toBe('User: <context source="reply" info="i">b</context>\n\nyo');
+  });
+
+  it("copies a body-less context note as a self-closing element", () => {
+    expect(
+      copyText({
+        contexts: [{ body: "", info: "A new day.", source: "day" }],
+        images: [],
+        kind: "user",
+        text: "morning",
+      }),
+    ).toBe('User: <context source="day" info="A new day." />\n\nmorning');
   });
 
   it("truncates long tool output", () => {
