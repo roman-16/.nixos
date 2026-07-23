@@ -77,71 +77,71 @@ describe("quotedContextNote", () => {
     ...over,
   });
 
-  it("names the sender: Apollo, the user, or neither", () => {
-    expect(quotedContextNote(note({ sender: "apollo", text: "on it" }))).toBe(
-      'The user is replying to a message you sent earlier: "on it".',
+  it("tags the note as a reply and names the sender in info", () => {
+    expect(quotedContextNote(note({ sender: "apollo", text: "on it" }))).toEqual({
+      body: "on it",
+      info: "The user is replying to a message you sent earlier.",
+      source: "reply",
+    });
+    expect(quotedContextNote(note({ sender: "user", text: "remind me" })).info).toBe(
+      "The user is replying to an earlier message they sent.",
     );
-    expect(quotedContextNote(note({ sender: "user", text: "remind me" }))).toBe(
-      'The user is replying to an earlier message they sent: "remind me".',
-    );
-    expect(quotedContextNote(note({ sender: "unknown", text: "hi" }))).toBe(
-      'The user is replying to an earlier message: "hi".',
-    );
-  });
-
-  it("omits the quote when a text message has no body", () => {
-    expect(quotedContextNote(note({ kind: "text", text: "" }))).toBe(
+    expect(quotedContextNote(note({ sender: "unknown", text: "hi" })).info).toBe(
       "The user is replying to an earlier message.",
     );
   });
 
-  it("notes an attached image and its caption", () => {
-    expect(quotedContextNote(note({ attached: true, kind: "image", sender: "user" }))).toBe(
+  it("puts the quoted words in the body", () => {
+    expect(quotedContextNote(note({ sender: "user", text: "remind me" })).body).toBe("remind me");
+    expect(quotedContextNote(note({ kind: "text", text: "" })).body).toBe("");
+  });
+
+  it("notes an attached image in info and its caption in the body", () => {
+    expect(quotedContextNote(note({ attached: true, kind: "image", sender: "user" })).info).toBe(
       "The user is replying to an earlier message they sent - an image (attached to this message).",
     );
     expect(
-      quotedContextNote(note({ attached: true, kind: "image", sender: "user", text: "this one" })),
-    ).toBe(
-      'The user is replying to an earlier message they sent - an image (attached to this message), captioned "this one".',
-    );
+      quotedContextNote(note({ attached: true, kind: "image", sender: "user", text: "this one" }))
+        .body,
+    ).toBe("this one");
   });
 
   it("describes an image that could not be attached", () => {
-    expect(quotedContextNote(note({ attached: false, kind: "image" }))).toBe(
+    expect(quotedContextNote(note({ attached: false, kind: "image" })).info).toBe(
       "The user is replying to an earlier message - an image.",
     );
   });
 
-  it("includes a voice transcript, or a bare label without one", () => {
-    expect(quotedContextNote(note({ kind: "voice", sender: "user", text: "buy milk" }))).toBe(
-      'The user is replying to an earlier message they sent - a voice message that said "buy milk".',
-    );
-    expect(quotedContextNote(note({ kind: "voice", sender: "user" }))).toBe(
+  it("puts a voice transcript in the body under a voice-message info", () => {
+    const voiced = quotedContextNote(note({ kind: "voice", sender: "user", text: "buy milk" }));
+    expect(voiced.info).toBe(
       "The user is replying to an earlier message they sent - a voice message.",
     );
+    expect(voiced.body).toBe("buy milk");
+    expect(quotedContextNote(note({ kind: "voice", sender: "user" })).body).toBe("");
   });
 
-  it("labels video, GIF, document, and sticker", () => {
-    expect(quotedContextNote(note({ kind: "video", text: "clip" }))).toContain(
-      'a video captioned "clip"',
+  it("labels video, GIF, document, and sticker in info", () => {
+    expect(quotedContextNote(note({ kind: "video", text: "clip" })).info).toContain("a video");
+    expect(quotedContextNote(note({ kind: "video", text: "clip" })).body).toBe("clip");
+    expect(quotedContextNote(note({ kind: "gif" })).info).toContain("a GIF");
+    expect(quotedContextNote(note({ kind: "document", text: "q3.pdf" })).info).toContain(
+      "a document",
     );
-    expect(quotedContextNote(note({ kind: "gif" }))).toContain("a GIF");
-    expect(quotedContextNote(note({ kind: "document", text: "q3.pdf" }))).toContain(
-      "a document (q3.pdf)",
-    );
-    expect(quotedContextNote(note({ kind: "sticker" }))).toContain("a sticker");
+    expect(quotedContextNote(note({ kind: "document", text: "q3.pdf" })).body).toBe("q3.pdf");
+    expect(quotedContextNote(note({ kind: "sticker" })).info).toContain("a sticker");
   });
 
-  it("keeps a normal-length message in full", () => {
+  it("keeps a normal-length body in full", () => {
     const body = "a".repeat(400);
-    expect(quotedContextNote(note({ kind: "text", text: body }))).toContain(body);
+    expect(quotedContextNote(note({ kind: "text", text: body })).body).toBe(body);
   });
 
   it("clips an over-long body with a trailing ellipsis and no meta noise", () => {
     const long = "x".repeat(2500);
-    const clipped = quotedContextNote(note({ kind: "text", text: long }));
-    expect(clipped).toContain("\u2026");
-    expect(clipped).not.toContain("more chars");
-    expect(clipped.length).toBeLessThan(long.length);
+    const { body } = quotedContextNote(note({ kind: "text", text: long }));
+    expect(body).toContain("\u2026");
+    expect(body).not.toContain("more chars");
+    expect(body.length).toBeLessThan(long.length);
   });
 });

@@ -19,7 +19,7 @@ import {
   skillContextNote,
   voiceText,
 } from "./messages";
-import { dayBoundaryNotes, withContext } from "./newday";
+import { type ContextNote, dayBoundaryNotes, withContext } from "./newday";
 import { quotedContextNote } from "./quoted";
 import { transcribeAudio } from "./transcribe";
 import type { InboundMessage, WhatsApp, WhatsAppState } from "./whatsapp";
@@ -43,7 +43,7 @@ export interface PipelineDeps {
 export interface Pipeline {
   /** Bind the live socket once WhatsApp has connected. */
   attach(socket: WhatsApp): void;
-  /** Deliver a skill-originated message to the user out of band: send it, record it in the chat DB, and queue a [context] note for the agent's next turn. */
+  /** Deliver a skill-originated message to the user out of band: send it, record it in the chat DB, and queue a context note for the agent's next turn. */
   emitSkillMessage(text: string, source: string): Promise<void>;
   /** Handle a (re)connect: apply the configured profile picture if it changed. */
   handleConnect(): void;
@@ -116,26 +116,45 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   }
 
   // Notes about out-of-band skill sends since the agent's last turn, persisted (survives restarts)
-  // and capped, drained into the next inbound prompt as [context] lines.
+  // and capped, drained into the next inbound prompt as <context> elements.
   const SKILL_NOTES_MAX = 10;
 
-  function readSkillNotes(): string[] {
+  function readSkillNotes(): ContextNote[] {
     try {
       const parsed: unknown = JSON.parse(kv.get("skillNotes") ?? "[]");
-      return Array.isArray(parsed) ? parsed.filter((n): n is string => typeof n === "string") : [];
+      if (!Array.isArray(parsed)) return [];
+      return parsed.flatMap((entry): ContextNote[] => {
+        // Tolerate the older shape where a note was persisted as a single pre-formatted string.
+        if (typeof entry === "string") return [{ body: "", info: entry, source: "skill" }];
+        if (
+          entry &&
+          typeof entry === "object" &&
+          typeof (entry as { info?: unknown }).info === "string"
+        ) {
+          const note = entry as { body?: unknown; info: string; source?: unknown };
+          return [
+            {
+              body: typeof note.body === "string" ? note.body : "",
+              info: note.info,
+              source: typeof note.source === "string" ? note.source : "skill",
+            },
+          ];
+        }
+        return [];
+      });
     } catch {
       return [];
     }
   }
 
-  function drainSkillNotes(): string[] {
+  function drainSkillNotes(): ContextNote[] {
     const notes = readSkillNotes();
     if (notes.length > 0) kv.set("skillNotes", "[]");
     return notes;
   }
 
   // Deliver a message a skill produced (a fired reminder, a macros reply) directly to the user,
-  // record it in the chat DB as a "via <source>" bubble, and queue a [context] note so the agent
+  // record it in the chat DB as a "via <source>" bubble, and queue a context note so the agent
   // learns about it next turn. Send first, so a failed send (the reminder watcher retries) never
   // logs or contexts a message the user never received.
   async function emitSkillMessage(text: string, source: string): Promise<void> {
@@ -242,12 +261,12 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     }
   }
 
-  // Turn a reply-quote into a [context] note: transcribe a quoted voice note (best-effort;
+  // Turn a reply-quote into a context note: transcribe a quoted voice note (best-effort;
   // a failure falls back to a bare "voice message" label) and pass its downloaded image(s)
   // through to the turn so the agent can see what's being referenced.
   async function resolveQuoted(
     quoted: NonNullable<InboundMessage["quoted"]>,
-  ): Promise<{ images: ImageContent[]; note: string }> {
+  ): Promise<{ images: ImageContent[]; note: ContextNote }> {
     let { text } = quoted;
     if (quoted.audio) {
       try {

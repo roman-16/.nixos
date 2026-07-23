@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 
-import { copyText, imageFromLine, parseTranscript, renderChat } from "../src/chat";
+import { copyText, imageFromLine, type LogItem, parseTranscript, renderChat } from "../src/chat";
+
+import type { ContextNote } from "../src/newday";
 
 const header = JSON.stringify({ cwd: "/w", id: "s", timestamp: "t", type: "session", version: 3 });
 
@@ -17,7 +19,7 @@ describe("parseTranscript", () => {
     ].join("\n");
 
     expect(parseTranscript(jsonl)).toEqual([
-      { images: [], kind: "user", text: "hello" },
+      { contexts: [], images: [], kind: "user", text: "hello" },
       { kind: "assistant", text: "hi there" },
     ]);
   });
@@ -86,6 +88,7 @@ describe("parseTranscript", () => {
       }),
     );
     expect(items[0]).toEqual({
+      contexts: [],
       images: [{ id: "a", index: 0, mimeType: "image/png" }],
       kind: "user",
       text: "look",
@@ -121,7 +124,7 @@ describe("parseTranscript", () => {
 
     expect(parseTranscript(jsonl)).toEqual([
       { kind: "divider", label: "Reloaded" },
-      { images: [], kind: "user", text: "hi" },
+      { contexts: [], images: [], kind: "user", text: "hi" },
     ]);
   });
 
@@ -161,7 +164,9 @@ describe("parseTranscript", () => {
     const jsonl = [header, "", message("a", { content: "ok", role: "user" }), '{"type":"mess'].join(
       "\n",
     );
-    expect(parseTranscript(jsonl)).toEqual([{ images: [], kind: "user", text: "ok" }]);
+    expect(parseTranscript(jsonl)).toEqual([
+      { contexts: [], images: [], kind: "user", text: "ok" },
+    ]);
   });
 
   it("drops empty user messages", () => {
@@ -187,6 +192,70 @@ describe("parseTranscript", () => {
       time?: string;
     };
     expect(item.time).toBeUndefined();
+  });
+});
+
+describe("parseTranscript context", () => {
+  const userItem = (jsonl: string) =>
+    parseTranscript(jsonl)[0] as Extract<LogItem, { kind: "user" }>;
+
+  it("splits leading <context> elements from the user's message", () => {
+    const content =
+      '<context source="reply" info="The user is replying to an earlier message they sent.">ty</context>\n\nyo';
+    expect(parseTranscript(message("a", { content, role: "user" }))).toEqual([
+      {
+        contexts: [
+          {
+            body: "ty",
+            info: "The user is replying to an earlier message they sent.",
+            source: "reply",
+          },
+        ],
+        images: [],
+        kind: "user",
+        text: "yo",
+      },
+    ]);
+  });
+
+  it("reads a self-closing note as an empty body and splits several notes", () => {
+    const content =
+      '<context source="day" info="A new calendar day has started." />\n<context source="macros" info="The macros skill sent the user a message directly.">Today: 400 kcal</context>\n\nthanks';
+    const item = userItem(message("a", { content, role: "user" }));
+    expect(item.contexts).toEqual([
+      { body: "", info: "A new calendar day has started.", source: "day" },
+      {
+        body: "Today: 400 kcal",
+        info: "The macros skill sent the user a message directly.",
+        source: "macros",
+      },
+    ]);
+    expect(item.text).toBe("thanks");
+  });
+
+  it("preserves a multi-line context body", () => {
+    const content = '<context source="macros" info="summary">line1\n\nline2</context>\n\nhi';
+    const item = userItem(message("a", { content, role: "user" }));
+    expect(item.contexts?.[0]?.body).toBe("line1\n\nline2");
+    expect(item.text).toBe("hi");
+  });
+
+  it("unescapes a quoted attribute value", () => {
+    const content = '<context source="day" info="say &quot;hi&quot;" />\n\nyo';
+    expect(userItem(message("a", { content, role: "user" })).contexts?.[0]?.info).toBe('say "hi"');
+  });
+
+  it("leaves an ordinary message untouched", () => {
+    const item = userItem(message("a", { content: "just a message", role: "user" }));
+    expect(item.contexts).toEqual([]);
+    expect(item.text).toBe("just a message");
+  });
+
+  it("treats the older [context] line format as plain message text", () => {
+    const content = "[context] old style\n\nhey";
+    const item = userItem(message("a", { content, role: "user" }));
+    expect(item.contexts).toEqual([]);
+    expect(item.text).toBe(content);
   });
 });
 
@@ -473,6 +542,17 @@ describe("copyText", () => {
     );
   });
 
+  it("excludes injected context, copying only the user's message", () => {
+    expect(
+      copyText({
+        contexts: [{ body: "b", info: "i", source: "reply" }],
+        images: [],
+        kind: "user",
+        text: "yo",
+      }),
+    ).toBe("User: yo");
+  });
+
   it("truncates long tool output", () => {
     const text = copyText({
       args: {},
@@ -499,5 +579,54 @@ describe("renderChat data-copy", () => {
     );
     // Only the user row carries data-copy; the inserted day divider must not.
     expect((html.match(/data-copy=/g) ?? []).length).toBe(1);
+  });
+});
+
+describe("renderChat context notes", () => {
+  const userItem = (contexts: ContextNote[], text = "hi"): LogItem => ({
+    contexts,
+    images: [],
+    kind: "user",
+    text,
+  });
+
+  it("renders a note with a body as an expandable dropdown (source tag + info + body)", () => {
+    const html = renderChat([
+      userItem([
+        {
+          body: "Today: 400 kcal",
+          info: "The macros skill sent the user a message directly.",
+          source: "macros",
+        },
+      ]),
+    ]);
+    expect(html).toContain("<details");
+    expect(html).toContain("macros");
+    expect(html).toContain("The macros skill sent the user a message directly.");
+    expect(html).toContain("Today: 400 kcal");
+  });
+
+  it("renders a body-less note as a static chip, not a dropdown", () => {
+    const html = renderChat([
+      userItem([{ body: "", info: "A new calendar day has started.", source: "day" }]),
+    ]);
+    expect(html).toContain("A new calendar day has started.");
+    expect(html).not.toContain("<details");
+  });
+
+  it("still renders the user's message alongside the context", () => {
+    expect(
+      renderChat([userItem([{ body: "b", info: "i", source: "reply" }], "my message")]),
+    ).toContain("my message");
+  });
+
+  it("escapes source, info, and body", () => {
+    const html = renderChat([
+      userItem([{ body: "<b>x</b>", info: "<i>y</i>", source: "<s>" }], "ok"),
+    ]);
+    expect(html).toContain("&lt;s&gt;");
+    expect(html).toContain("&lt;i&gt;y&lt;/i&gt;");
+    expect(html).toContain("&lt;b&gt;x&lt;/b&gt;");
+    expect(html).not.toContain("<b>x</b>");
   });
 });

@@ -129,21 +129,25 @@ describe("formatLogNotice", () => {
 });
 
 describe("skillContextNote", () => {
-  it("names the source and includes the delivered text", () => {
+  it("puts a coherent description in info and the delivered message in the body", () => {
     const note = skillContextNote("reminders", "⏰ get my food");
-    expect(note).toContain("reminders");
-    expect(note).toContain("⏰ get my food");
-    expect(note).toContain("don't resend");
+    expect(note.source).toBe("reminders");
+    expect(note.info).toBe("The reminders skill sent the user a message directly.");
+    expect(note.body).toBe("⏰ get my food");
   });
 
-  it("keeps a long (under-cap) message intact", () => {
+  it("drops the old don't-resend hint", () => {
+    expect(skillContextNote("macros", "hi").info).not.toContain("resend");
+  });
+
+  it("keeps a long (under-cap) message intact in the body", () => {
     const text = "x".repeat(1000);
     const note = skillContextNote("reminders", text);
-    expect(note).toContain(text);
-    expect(note).not.toContain("more chars");
+    expect(note.body).toBe(text);
+    expect(note.body).not.toContain("more chars");
   });
 
-  it("truncates only a very long message", () => {
-    expect(skillContextNote("macros", "x".repeat(5000))).toContain("more chars");
+  it("truncates only a very long body", () => {
+    expect(skillContextNote("macros", "x".repeat(5000)).body).toContain("more chars");
   });
 });

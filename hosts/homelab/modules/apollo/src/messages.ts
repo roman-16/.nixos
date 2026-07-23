@@ -1,12 +1,13 @@
 import { humanTokens, truncate } from "./format";
 
 import type { LogRecord } from "./logs";
+import type { ContextNote } from "./newday";
 
 const DEFAULT_MAX_CHARS = 4000;
 
-// The [context] breadcrumb for an out-of-band skill send is the agent's only record of what it
-// sent once the original send is compacted out, so it quotes the message nearly whole (a full
-// WhatsApp message's worth) rather than clipping it to a stub.
+// The context breadcrumb for an out-of-band skill send is the agent's only record of what it sent
+// once the original send is compacted out, so it keeps the message nearly whole (a full WhatsApp
+// message's worth) rather than clipping it to a stub.
 const SKILL_NOTE_MAX_CHARS = 4000;
 
 /** Build the brief WhatsApp notice sent when the session context is compacted. */
@@ -49,9 +50,16 @@ export function formatLogNotice(record: LogRecord): string {
   return `⚠️ ${logLevelLabel(level)}: ${msg}${detail ? ` - ${truncate(detail, 300)}` : ""}`;
 }
 
-/** [context] note telling the agent a skill delivered a message to the user out of band. */
-export function skillContextNote(source: string, text: string): string {
-  return `The ${source} skill sent the user a message directly (already delivered - don't resend it): "${truncate(text, SKILL_NOTE_MAX_CHARS)}"`;
+/**
+ * Context note telling the agent a skill delivered a message to the user out of band: a coherent
+ * description in `info`, the delivered message itself in `body`.
+ */
+export function skillContextNote(source: string, text: string): ContextNote {
+  return {
+    body: truncate(text, SKILL_NOTE_MAX_CHARS),
+    info: `The ${source} skill sent the user a message directly.`,
+    source,
+  };
 }
 
 /** Strip a WhatsApp JID to its bare number (drops the device suffix and domain). */

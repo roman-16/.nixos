@@ -7,6 +7,8 @@
 
 import { escapeHtml, humanTokens, truncate } from "./format";
 
+import type { ContextNote } from "./newday";
+
 const MAX_OUTPUT_CHARS = 10000;
 const PREVIEW_CHARS = 100;
 
@@ -42,7 +44,7 @@ export type LogItem =
       output: string;
       time?: string;
     }
-  | { images: ChatImage[]; kind: "user"; text: string; time?: string };
+  | { contexts?: ContextNote[]; images: ChatImage[]; kind: "user"; text: string; time?: string };
 
 interface ToolResult {
   images: number;
@@ -68,6 +70,39 @@ function splitContent(content: unknown, id: string): { images: ChatImage[]; text
     }
   }
   return { images, text: texts.join("\n").trim() };
+}
+
+/** One `<context ...>` element at the start of a user turn: its source + info attributes and an
+ * optional body (self-closing when there is none). */
+const CONTEXT_ELEMENT =
+  /^<context source="([^"]*)" info="([^"]*)"(?:\s*\/>|>([\s\S]*?)<\/context>)/;
+
+function unescapeAttribute(value: string): string {
+  return value.replaceAll("&quot;", '"');
+}
+
+/**
+ * Split a user turn's raw text into the leading `<context>` notes the app injected and the user's
+ * actual message. `withContext` emits a self-delimiting block, so this reverses it exactly; text that
+ * doesn't open with a `<context>` element (an ordinary message, or the older `[context]` line format)
+ * is returned untouched as the message.
+ */
+function splitUserContext(text: string): { contexts: ContextNote[]; message: string } {
+  if (!text.startsWith("<context ")) return { contexts: [], message: text };
+  const contexts: ContextNote[] = [];
+  let rest = text;
+  for (;;) {
+    const match = CONTEXT_ELEMENT.exec(rest);
+    if (!match) break;
+    contexts.push({
+      body: match[3] ?? "",
+      info: unescapeAttribute(match[2] ?? ""),
+      source: unescapeAttribute(match[1] ?? ""),
+    });
+    rest = rest.slice(match[0].length);
+    if (rest.startsWith("\n")) rest = rest.slice(1);
+  }
+  return { contexts, message: rest.startsWith("\n") ? rest.slice(1) : rest };
 }
 
 function toolResult(message: Record<string, any>): ToolResult {
@@ -180,7 +215,10 @@ export function parseTranscript(jsonl: string): LogItem[] {
         break;
       case "user": {
         const { images, text } = splitContent(message.content, String(entry.id ?? ""));
-        if (text || images.length > 0) items.push({ images, kind: "user", text, time });
+        if (text || images.length > 0) {
+          const { contexts, message: body } = splitUserContext(text);
+          items.push({ contexts, images, kind: "user", text: body, time });
+        }
         break;
       }
       default:
@@ -290,6 +328,42 @@ function bubble(
 
 function textBlock(text: string): string {
   return `<p class="whitespace-pre-wrap break-words">${escapeHtml(text)}</p>`;
+}
+
+/** The origin tag ("macros", "reply", "day", ...) for an injected context note, styled for the user bubble. */
+function contextSourceTag(source: string): string {
+  return `<span class="shrink-0 rounded bg-white/20 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white/90">${escapeHtml(
+    source,
+  )}</span>`;
+}
+
+/**
+ * One injected context note inside the user bubble: an expandable dropdown (source tag + info summary,
+ * revealing the body) when it carries detail, or a static chip (tag + info) when it doesn't.
+ */
+function contextNote(note: ContextNote): string {
+  const tagHtml = contextSourceTag(note.source);
+  if (!note.body) {
+    return `<div class="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-[11px] text-white/80">${tagHtml}<span class="min-w-0 break-words">${escapeHtml(
+      note.info,
+    )}</span></div>`;
+  }
+  return `<details class="group rounded-lg bg-white/10 text-white/90">
+    <summary class="flex cursor-pointer list-none items-center gap-1.5 px-2 py-1 text-[11px]">
+      <span class="shrink-0 text-[9px] text-white/60 transition group-open:rotate-90">\u25b6</span>
+      ${tagHtml}
+      <span class="min-w-0 truncate text-white/80">${escapeHtml(note.info)}</span>
+    </summary>
+    <div class="whitespace-pre-wrap break-words border-t border-white/15 px-2 py-1.5 text-xs text-white/90">${escapeHtml(
+      note.body,
+    )}</div>
+  </details>`;
+}
+
+/** The stack of injected context notes shown above the message inside the user bubble. */
+function contextNotes(notes: ContextNote[] | undefined): string {
+  if (!notes || notes.length === 0) return "";
+  return `<div class="mb-1.5 flex flex-col gap-1">${notes.map(contextNote).join("")}</div>`;
 }
 
 function images(list: ChatImage[]): string {
@@ -448,7 +522,7 @@ function renderItem(item: LogItem, running = false): string {
       return bubble(
         "right",
         "rounded-2xl rounded-br-sm bg-indigo-500 text-white",
-        `${item.text ? textBlock(item.text) : ""}${images(item.images)}`,
+        `${contextNotes(item.contexts)}${item.text ? textBlock(item.text) : ""}${images(item.images)}`,
         item.time,
         copy,
       );

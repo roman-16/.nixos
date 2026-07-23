@@ -1,6 +1,8 @@
 import type { ImageContent } from "@earendil-works/pi-ai";
 import { getContentType, type WAMessageContent } from "@whiskeysockets/baileys";
 
+import type { ContextNote } from "./newday";
+
 export type QuotedKind =
   | "document"
   | "gif"
@@ -90,28 +92,19 @@ function clip(value: string, max: number = QUOTE_MAX): string {
   return trimmed.length > max ? `${trimmed.slice(0, max).trimEnd()}\u2026` : trimmed;
 }
 
-function quote(value: string): string {
-  return `"${clip(value)}"`;
-}
-
-/** Describe the quoted content for the [context] line: its media kind and any text/transcript. */
-function contentClause(note: QuotedNote): string {
-  const { attached, kind, text } = note;
-  switch (kind) {
-    case "text":
-      return text ? `: ${quote(text)}` : "";
+/** The media-kind suffix for the reply's `info` sentence; the quoted words themselves go in the body. */
+function mediaClause(note: QuotedNote): string {
+  switch (note.kind) {
     case "image":
-      return attached
-        ? ` - an image (attached to this message)${text ? `, captioned ${quote(text)}` : ""}`
-        : ` - an image${text ? ` captioned ${quote(text)}` : ""}`;
+      return note.attached ? " - an image (attached to this message)" : " - an image";
     case "voice":
-      return text ? ` - a voice message that said ${quote(text)}` : " - a voice message";
+      return " - a voice message";
     case "video":
-      return ` - a video${text ? ` captioned ${quote(text)}` : ""}`;
+      return " - a video";
     case "gif":
       return " - a GIF";
     case "document":
-      return ` - a document${text ? ` (${clip(text, 200)})` : ""}`;
+      return " - a document";
     case "sticker":
       return " - a sticker";
     default:
@@ -119,13 +112,20 @@ function contentClause(note: QuotedNote): string {
   }
 }
 
-/** The `[context]`-worthy sentence naming which earlier message the user is replying to. */
-export function quotedContextNote(note: QuotedNote): string {
+/**
+ * The reply context: `info` names which earlier message the user is replying to (who + media kind),
+ * `body` carries its words - the quoted text, a caption, or a transcribed voice note.
+ */
+export function quotedContextNote(note: QuotedNote): ContextNote {
   const who =
     note.sender === "apollo"
       ? "a message you sent earlier"
       : note.sender === "user"
         ? "an earlier message they sent"
         : "an earlier message";
-  return `The user is replying to ${who}${contentClause(note)}.`;
+  return {
+    body: clip(note.text),
+    info: `The user is replying to ${who}${mediaClause(note)}.`,
+    source: "reply",
+  };
 }
