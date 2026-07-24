@@ -59,7 +59,7 @@
 
       settings = {
         compaction.enabled = false;
-        defaultModel = "claude-opus-4-8";
+        defaultModel = "claude-opus-5";
         defaultProjectTrust = "always";
         defaultProvider = "anthropic";
         defaultThinkingLevel = "max";
