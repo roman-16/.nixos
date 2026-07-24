@@ -366,6 +366,11 @@ in
                 CHROME_PATH = "${chromeWrapper}";
                 HOME = "%S/apollo";
                 MISTRAL_API_KEY = secrets.mistralApiKey;
+                # Opt pi into Anthropic's 1h prompt-cache TTL (default is 5min). The assistant is
+                # messaged in bursts separated by idle gaps, so a return within the hour reuses the
+                # cached conversation (cheap cache reads) instead of re-priming the whole prefix
+                # (expensive cache writes) as a 5min cache would after every gap.
+                PI_CACHE_RETENTION = "long";
                 PORT = toString port;
                 SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
               };
