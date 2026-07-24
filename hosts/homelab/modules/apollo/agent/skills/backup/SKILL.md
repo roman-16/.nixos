@@ -5,7 +5,7 @@ description: Commit and push the working directory to its private git backup rep
 
 # Backup
 
-Commits everything in the working directory and pushes it to the private backup repo - the same action that runs automatically every 6 hours, available on demand.
+Commits everything in the working directory and pushes it to the private backup repo - the same action that runs automatically every 3 hours, available on demand.
 
 Run it and relay the output:
 

@@ -1,7 +1,10 @@
 {
   nixos = { inputs, ... }: {
     environment = {
-      sessionVariables.PI_CACHE_RETENTION = "long";
+      sessionVariables = {
+        PI_CACHE_RETENTION = "long";
+        PI_FFF_MODE = "override";
+      };
 
       systemPackages = [
         inputs.llm-agents.packages.x86_64-linux.pi
@@ -67,6 +70,11 @@
         followUpMode = "all";
         hideThinkingBlock = false;
         images.autoResize = true;
+        npmCommand = [
+          "bunx"
+          "npm"
+        ];
+        packages = [ "npm:@ff-labs/pi-fff" ];
         steeringMode = "all";
         theme = "dark";
         warnings.anthropicExtraUsage = false;
@@ -96,6 +104,32 @@
 
       config = {
         pi.agentsMd = builtins.readFile ./AGENTS.md;
+
+        # pi auto-installs missing packages on startup; this keeps them at latest.
+        systemd.user = {
+          services.pi-update = {
+            Service = {
+              Environment = "PATH=${
+                lib.makeBinPath [
+                  pkgs.bun
+                  pkgs.coreutils
+                ]
+              }";
+              ExecStart = "${pi}/bin/pi update --extensions";
+              TimeoutStartSec = 300;
+              Type = "oneshot";
+            };
+            Unit.Description = "Update pi packages to latest";
+          };
+          timers.pi-update = {
+            Install.WantedBy = [ "timers.target" ];
+            Timer = {
+              OnCalendar = "daily";
+              Persistent = true;
+            };
+            Unit.Description = "Daily update of pi packages";
+          };
+        };
 
         home = {
           file = {

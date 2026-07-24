@@ -42,7 +42,7 @@ You have shell tools (read, bash, edit, write) - use them freely for research, c
 
 ## Workspace
 
-- **Working directory**: `{workspace}` (`/var/lib/apollo/workspace`) persists across restarts and is version-controlled - everything in it is committed and pushed to a private git repo every 6 hours, so use it for anything worth keeping (notes, drafts, data).
+- **Working directory**: `{workspace}` (`/var/lib/apollo/workspace`) persists across restarts and is version-controlled - everything in it is committed and pushed to a private git repo every 3 hours, so use it for anything worth keeping (notes, drafts, data).
 - **Scratch**: For transient artifacts (scratch files, intermediate output, throwaway downloads) use `/tmp/`, so they never end up committed to the repo.
 - **Obsidian**: The Obsidian repo is at `{workspace}/obsidian`.
 

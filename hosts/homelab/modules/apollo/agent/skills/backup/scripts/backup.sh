@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Canonical workspace backup: commit everything and push. The "backup" skill
-# runs this on demand and apollo-backup.service runs it every 6h (both as the
+# runs this on demand and apollo-backup.service runs it every 3h (both as the
 # apollo user). git, ssh and coreutils come from the unit PATH; HOME and
 # APOLLO_WORKSPACE from the unit environment. A clean workspace is a no-op that
 # prints "Nothing to back up."; otherwise everything is committed with a

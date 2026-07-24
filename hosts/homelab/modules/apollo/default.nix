@@ -471,10 +471,10 @@ in
           };
 
           timers.apollo-backup = {
-            description = "Back up the Apollo workspace every 6 hours";
+            description = "Back up the Apollo workspace every 3 hours";
 
             timerConfig = {
-              OnCalendar = "*-*-* 00/06:00:00";
+              OnCalendar = "*-*-* 00/03:00:00";
               Persistent = true;
             };
 
