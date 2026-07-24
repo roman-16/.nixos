@@ -306,13 +306,13 @@ def ensure_day(date: str):
     refresh_ledger(date)
 
 
-def make_entry(time, item, kcal, protein, fat, carbs, note, *, prep_key=None, event_id=None) -> dict:
+def make_entry(time, item, kcal, protein, fat, carbs, note, *, prep_id=None, event_id=None) -> dict:
     entry = {
         "time": time, "item": item, "kcal": kcal,
         "protein": protein, "fat": fat, "carbs": carbs, "note": note or None,
     }
-    if prep_key is not None:
-        entry["prepKey"] = prep_key
+    if prep_id is not None:
+        entry["prepId"] = prep_id
         entry["eventId"] = event_id
     return entry
 
@@ -609,11 +609,11 @@ def cmd_weight(args):
 
 
 def entry_locked(entry: dict) -> bool:
-    """True for a day entry that projects a still-live prep consumption event: it is
-    corrected through prep-uneat, not from the day. Once its batch is gone (discarded)
-    the entry is plain history and freely editable again."""
-    key = entry.get("prepKey")
-    return bool(key) and key in load(PREP_FILE, {})
+    """True for a day entry that projects a prep consumption event: it is corrected through
+    prep-uneat (unarchiving its batch first if archived), not edited from the day. A batch is
+    never deleted, so a prep-sourced entry stays managed by its batch for good."""
+    prep_id = entry.get("prepId")
+    return bool(prep_id) and prep_id in load(PREP_FILE, {})
 
 
 def cmd_rm(args):
@@ -864,13 +864,14 @@ def portion_size(batch: dict, frac: float) -> str | None:
 
 
 def prep_line(batch: dict) -> str:
+    tag = f" \u00b7 archived {dm(batch['archivedAt'])}" if batch.get("archivedAt") else ""
     if not batch["ingredients"]:
-        return f"{batch['name']}: empty (no ingredients yet)"
+        return f"{batch['name']}: empty (no ingredients yet){tag}"
     rem = prep_remaining(batch)
     size = portion_size(batch, frac_left(batch))
     size_txt = f"{size}, " if size else ""
     return (f"{batch['name']}: {round(frac_left(batch) * 100)}% left "
-            f"({size_txt}{round(rem['kcal'])} kcal, {r1(rem['protein'])}g P)")
+            f"({size_txt}{round(rem['kcal'])} kcal, {r1(rem['protein'])}g P){tag}")
 
 
 def portion_desc(batch: dict, frac: float, left: float) -> str:
@@ -925,7 +926,7 @@ def apply_delta(batch: dict, key: str, delta: dict, *, date: str, label: str, ve
             append_entry(date, make_entry(
                 now_time(), f"{batch['name']} - {verb} {label} (already-eaten share)",
                 kcal, r1(mine["protein"]), r1(mine["fat"]), r1(mine["carbs"]), "prep-fix",
-                prep_key=key, event_id=event["id"]))
+                prep_id=key, event_id=event["id"]))
             leads.append(f"logged the {kcal} kcal you'd already eaten from it (today)" if kcal > 0
                          else f"un-logged the {-kcal} kcal of it you'd already eaten (today)")
     if any(abs(others[k]) > 1e-9 for k in MACROS):
@@ -950,15 +951,72 @@ def prep_size_from_args(args) -> dict | None:
     return {"amount": args.size, "unit": args.unit or "g"} if getattr(args, "size", None) is not None else None
 
 
+def live_preps(prep: dict) -> dict:
+    """Batches still in play (not archived). Every acting verb resolves names over these, so
+    there is at most one match per name - a finished batch archives itself and steps aside."""
+    return {k: v for k, v in prep.items() if v.get("archivedAt") is None}
+
+
+def archived_preps(prep: dict) -> dict:
+    return {k: v for k, v in prep.items() if v.get("archivedAt") is not None}
+
+
+def new_prep_id(prep: dict) -> str:
+    while True:
+        candidate = secrets.token_hex(4)
+        if candidate not in prep:
+            return candidate
+
+
+def live_named(prep: dict, name: str) -> dict | None:
+    """The live batch of this name (case-insensitive), or None - the guard behind one live
+    batch per name."""
+    q = name.lower().strip()
+    return next((b for b in live_preps(prep).values() if b["name"].lower() == q), None)
+
+
+def maybe_archive(batch: dict):
+    """A batch eaten or given down to nothing files itself away: kept for lookup, out of the
+    active set. Reopen with prep-unarchive to correct the final portion."""
+    if batch.get("archivedAt") is None and prep_total(batch)["kcal"] > 0 and frac_left(batch) <= 0.0001:
+        batch["archivedAt"] = today()
+
+
+def match_by_name(mapping: dict, query: str) -> list:
+    q = query.lower().strip()
+    return [(k, v) for k, v in mapping.items() if q and any(q in label for label in labels_of(k, v))]
+
+
+def archived_choice(hits: list) -> str:
+    """A pick-one list of archived candidates, newest first, each tagged with its id."""
+    ordered = sorted(hits, key=lambda kv: kv[1].get("archivedAt") or "", reverse=True)
+    return ", ".join(f'{v["name"]} (archived {dm(v["archivedAt"])}, id {k})' for k, v in ordered)
+
+
+def resolve_prep_lookup(prep: dict, query: str) -> tuple:
+    """Resolve a name for inspection: prefer the live batch, else archived history (a lone
+    match wins; several same-name archived batches need --id). Returns (id, batch)."""
+    live = find(live_preps(prep), query)
+    if live.kind in ("exact", "substring") or (live.kind == "fuzzy" and len(live.candidates) == 1):
+        return live.key, live.value
+    hits = match_by_name(archived_preps(prep), query)
+    if len(hits) == 1:
+        return hits[0]
+    if hits:
+        die(f'several archived preps match "{query}": {archived_choice(hits)}. Re-run prep-get with --id.')
+    die(f'no prep matches "{query}" - check prep-list --all.')
+
+
 def cmd_prep_add(args):
     prep = load(PREP_FILE, {})
-    key = args.name.lower()
-    if key in prep:
-        die(f'a prep called "{prep[key]["name"]}" already exists ({round(frac_left(prep[key]) * 100)}% left) - '
-            f"add to it with prep-ingredient-add, or prep-rm first to start over.")
+    active = live_named(prep, args.name)
+    if active is not None:
+        die(f'a prep called "{active["name"]}" is already active ({round(frac_left(active) * 100)}% left) - '
+            f"add to it with prep-ingredient-add, or prep-archive it first.")
+    key = new_prep_id(prep)
     size = prep_size_from_args(args)
-    prep[key] = {"name": args.name, "created": today(), "size": size,
-                 "ingredients": [], "consumption": []}
+    prep[key] = {"id": key, "name": args.name, "created": today(), "archivedAt": None,
+                 "size": size, "ingredients": [], "consumption": []}
     save(PREP_FILE, prep)
     size_txt = f", {fmt_amount(size['amount'], size['unit'])}" if size else ""
     print(f"created prep: {args.name}{size_txt} (empty - add ingredients with prep-ingredient-add)")
@@ -966,7 +1024,7 @@ def cmd_prep_add(args):
 
 def cmd_prep_size(args):
     prep = load(PREP_FILE, {})
-    _, batch, assumed = resolve(prep, args.name, noun="prep", listing="prep-list", strict=False)
+    _, batch, assumed = resolve(live_preps(prep), args.name, noun="active prep", listing="prep-list", strict=False)
     if assumed:
         print(f'📝 read "{args.name}" as {assumed}')
     if args.clear:
@@ -982,7 +1040,7 @@ def cmd_prep_size(args):
 
 def cmd_prep_ingredient_add(args):
     prep = load(PREP_FILE, {})
-    key, batch, assumed = resolve(prep, args.name, noun="prep", listing="prep-list", strict=False)
+    key, batch, assumed = resolve(live_preps(prep), args.name, noun="active prep", listing="prep-list", strict=False)
     ingredient = {"label": args.label, "kcal": args.kcal, "protein": args.protein,
                   "fat": args.fat, "carbs": args.carbs}
     date = args.date or today()
@@ -1010,7 +1068,7 @@ def cmd_prep_ingredient_add(args):
 
 def cmd_prep_ingredient_edit(args):
     prep = load(PREP_FILE, {})
-    key, batch, assumed = resolve(prep, args.name, noun="prep", listing="prep-list", strict=False)
+    key, batch, assumed = resolve(live_preps(prep), args.name, noun="active prep", listing="prep-list", strict=False)
     idx = pick_index(batch["ingredients"], args, "ingredient")
     ingredient = batch["ingredients"][idx]
     old = {k: ingredient[k] for k in MACROS}
@@ -1037,7 +1095,7 @@ def cmd_prep_ingredient_edit(args):
 
 def cmd_prep_ingredient_rm(args):
     prep = load(PREP_FILE, {})
-    key, batch, assumed = resolve(prep, args.name, noun="prep", listing="prep-list", strict=False)
+    key, batch, assumed = resolve(live_preps(prep), args.name, noun="active prep", listing="prep-list", strict=False)
     idx = pick_index(batch["ingredients"], args, "ingredient")
     ingredient = batch["ingredients"][idx]
     label, kcal = ingredient["label"], round(ingredient["kcal"])
@@ -1055,13 +1113,19 @@ def cmd_prep_ingredient_rm(args):
 
 
 def cmd_prep_get(args):
-    _, batch, assumed = resolve(load(PREP_FILE, {}), args.name,
-                                noun="prep", listing="prep-list", strict=False)
-    if assumed:
-        print(f'📝 read "{args.name}" as {assumed}')
+    prep = load(PREP_FILE, {})
+    if getattr(args, "id", None):
+        batch = prep.get(args.id)
+        if batch is None:
+            die(f'no prep with id "{args.id}" - see prep-list --all')
+    elif args.name:
+        _, batch = resolve_prep_lookup(prep, args.name)
+    else:
+        die("give --name or --id")
     size = batch.get("size")
     size_txt = f", {fmt_amount(size['amount'], size['unit'])}" if size else ""
-    print(f"{batch['name']} ({dm(batch['created'])}){size_txt}:")
+    state = f" \u00b7 archived {dm(batch['archivedAt'])}" if batch.get("archivedAt") else ""
+    print(f"{batch['name']} ({dm(batch['created'])}){size_txt}{state} \u00b7 id {batch['id']}:")
     if not batch["ingredients"]:
         print("  empty - no ingredients yet")
     for i, ingredient in enumerate(batch["ingredients"], 1):
@@ -1092,7 +1156,7 @@ def cmd_prep_get(args):
 
 def cmd_prep_eat(args):
     prep = load(PREP_FILE, {})
-    key, batch, assumed = resolve(prep, args.name, noun="prep", listing="prep-list", strict=False)
+    key, batch, assumed = resolve(live_preps(prep), args.name, noun="active prep", listing="prep-list", strict=False)
     total = prep_total(batch)
     if total["kcal"] <= 0:
         die(f'"{batch["name"]}" has no ingredients yet - add some with prep-ingredient-add')
@@ -1148,13 +1212,18 @@ def cmd_prep_eat(args):
                      f"capped to that, {short_txt} short of the target.")
     else:
         leads.append(remaining_note(batch, frac, left, dry_run=args.dry_run))
+    if total["kcal"] > 0 and left - frac <= 1e-6:
+        leads.append("\U0001f5c4\ufe0f that would finish and archive the batch (kept in prep-list --all)"
+                     if args.dry_run else
+                     "\U0001f5c4\ufe0f batch finished - archived (still in prep-list --all)")
 
     def commit():
         event = make_event("eaten", date, portion, f"{round(frac * 100)}% of batch")
         append_entry(date, make_entry(now_time(), item, round(portion["kcal"]), r1(portion["protein"]),
                                       r1(portion["fat"]), r1(portion["carbs"]), "prep",
-                                      prep_key=key, event_id=event["id"]))
+                                      prep_id=key, event_id=event["id"]))
         batch["consumption"].append(event)
+        maybe_archive(batch)
         prep[key] = batch
         save(PREP_FILE, prep)
 
@@ -1163,7 +1232,7 @@ def cmd_prep_eat(args):
 
 def cmd_prep_remove(args):
     prep = load(PREP_FILE, {})
-    key, batch, assumed = resolve(prep, args.name, noun="prep", listing="prep-list", strict=False)
+    key, batch, assumed = resolve(live_preps(prep), args.name, noun="active prep", listing="prep-list", strict=False)
     total = prep_total(batch)
     if total["kcal"] <= 0:
         die(f'"{batch["name"]}" has no ingredients yet')
@@ -1185,11 +1254,14 @@ def cmd_prep_remove(args):
             f"Use --remaining to clear the rest.")
     portion = macro_scale(total, frac)
     batch["consumption"].append(make_event("removed", args.date or today(), portion, "unlogged"))
+    maybe_archive(batch)
     prep[key] = batch
     save(PREP_FILE, prep)
     leads = [f'📝 read "{args.name}" as {assumed}'] if assumed else []
     extra = f"{round(frac / left * 100)}% of what was left; " if 0 < left < 1 - 1e-6 else ""
     leads.append(f"removed {round(frac * 100)}% of {batch['name']} ({extra}unlogged - not your intake)")
+    if batch.get("archivedAt"):
+        leads.append("\U0001f5c4\ufe0f that empties the batch - archived (still in prep-list --all)")
     leads.append(prep_line(batch))
     print("\n".join(leads))
 
@@ -1209,7 +1281,7 @@ def remove_linked_entry(event: dict, dates: set):
 
 def cmd_prep_uneat(args):
     prep = load(PREP_FILE, {})
-    key, batch, _ = resolve(prep, args.name, noun="prep", listing="prep-list", strict=True)
+    key, batch, _ = resolve(live_preps(prep), args.name, noun="active prep", listing="prep-list", strict=True)
     events = batch["consumption"]
     if not events:
         die(f'nothing has been eaten or removed from "{batch["name"]}" yet')
@@ -1245,7 +1317,7 @@ def cmd_prep_uneat(args):
 
 def cmd_prep_list(args):
     prep = load(PREP_FILE, {})
-    shown = [b for b in prep.values() if args.all or not b["ingredients"] or frac_left(b) > 0.0001]
+    shown = [b for b in prep.values() if args.all or b.get("archivedAt") is None]
     if not shown:
         print("no active preps" if prep else "no preps saved")
         return
@@ -1253,12 +1325,35 @@ def cmd_prep_list(args):
         print(f"- {prep_line(b)}")
 
 
-def cmd_prep_rm(args):
+def cmd_prep_archive(args):
     prep = load(PREP_FILE, {})
-    key, batch, _ = resolve(prep, args.name, noun="prep", listing="prep-list", strict=True)
-    del prep[key]
+    _, batch, _ = resolve(live_preps(prep), args.name, noun="active prep", listing="prep-list", strict=True)
+    batch["archivedAt"] = today()
     save(PREP_FILE, prep)
-    print(f"removed prep: {batch['name']} (was {round(frac_left(batch) * 100)}% left)")
+    print(f"archived {batch['name']} (was {round(frac_left(batch) * 100)}% left) - kept, see prep-list --all")
+
+
+def cmd_prep_unarchive(args):
+    prep = load(PREP_FILE, {})
+    if getattr(args, "id", None):
+        batch = archived_preps(prep).get(args.id)
+        if batch is None:
+            die(f'no archived prep with id "{args.id}" - see prep-list --all')
+    elif args.name:
+        hits = match_by_name(archived_preps(prep), args.name)
+        if not hits:
+            die(f'no archived prep matches "{args.name}" - see prep-list --all')
+        if len(hits) > 1:
+            die(f'several archived preps match "{args.name}": {archived_choice(hits)}. Re-run with --id.')
+        batch = hits[0][1]
+    else:
+        die("give --name or --id")
+    clash = live_named(prep, batch["name"])
+    if clash is not None:
+        die(f'a prep named "{batch["name"]}" is already active - archive it before reopening this one.')
+    batch["archivedAt"] = None
+    save(PREP_FILE, prep)
+    print(f"reopened {batch['name']} ({round(frac_left(batch) * 100)}% left)")
 
 
 def cmd_recompute(args):
@@ -1448,7 +1543,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     pget = sub.add_parser("prep-get")
     pget.set_defaults(func=cmd_prep_get)
-    pget.add_argument("--name", required=True)
+    pget.add_argument("--name")
+    pget.add_argument("--id")
 
     pe = sub.add_parser("prep-eat")
     pe.set_defaults(func=cmd_prep_eat)
@@ -1473,9 +1569,14 @@ def build_parser() -> argparse.ArgumentParser:
     grp.add_argument("--index", type=int)
     grp.add_argument("--all", action="store_true")
 
-    prm = sub.add_parser("prep-rm")
-    prm.set_defaults(func=cmd_prep_rm)
-    prm.add_argument("--name", required=True)
+    par = sub.add_parser("prep-archive")
+    par.set_defaults(func=cmd_prep_archive)
+    par.add_argument("--name", required=True)
+
+    pua = sub.add_parser("prep-unarchive")
+    pua.set_defaults(func=cmd_prep_unarchive)
+    pua.add_argument("--name")
+    pua.add_argument("--id")
 
     pl = sub.add_parser("prep-list")
     pl.set_defaults(func=cmd_prep_list)

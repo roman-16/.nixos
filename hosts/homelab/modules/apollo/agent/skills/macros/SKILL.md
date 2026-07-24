@@ -144,9 +144,9 @@ A batch is built up ingredient by ingredient, and everything that leaves it is a
 {baseDir}/scripts/macros.py prep-get --name bolognese                          # ingredients, total, consumption log, % (and size) left
 ```
 
-`prep-add` makes an empty batch and refuses a name that already exists (so you never wipe a half-eaten one); a batch whose total you already know is just `prep-add` plus one `prep-ingredient-add`.
+`prep-add` makes an empty batch and refuses a name that's already **active** (so you never wipe one you're part-way through) - but a finished batch steps aside (it archives itself, below), so reusing its name for a fresh cook just works; a batch whose total you already know is just `prep-add` plus one `prep-ingredient-add`.
 
-**Eating, unlogged removal, undo** - the core verbs. `prep-eat` is a portion **you** eat (logged to your day); `prep-remove` is one that leaves the batch **unlogged**; `prep-uneat` reverses any event; `prep-rm` deletes the whole batch:
+**Eating, unlogged removal, undo** - the core verbs. `prep-eat` is a portion **you** eat (logged to your day); `prep-remove` is one that leaves the batch **unlogged**; `prep-uneat` reverses any event; `prep-archive` files a batch away when you're done (it's never deleted, just kept for lookup), and `prep-unarchive` brings one back:
 
 ```bash
 {baseDir}/scripts/macros.py prep-eat --name bolognese --remaining        # you finish whatever is left
@@ -157,11 +157,12 @@ A batch is built up ingredient by ingredient, and everything that leaves it is a
 {baseDir}/scripts/macros.py prep-eat --name bolognese --target-kcal 500  # a portion worth 500 kcal
 {baseDir}/scripts/macros.py prep-remove --name bolognese --remaining 1/3 # someone else ate / spilled 1/3 of what's LEFT - NOT your intake
 {baseDir}/scripts/macros.py prep-uneat --name bolognese --last          # undo the last event (or --index N from prep-get, or --all)
-{baseDir}/scripts/macros.py prep-rm --name bolognese                    # delete the batch entirely
-{baseDir}/scripts/macros.py prep-list                                   # active batches (add --all to include finished ones)
+{baseDir}/scripts/macros.py prep-archive --name bolognese               # done with it - file it away (kept forever, never deleted)
+{baseDir}/scripts/macros.py prep-unarchive --name bolognese             # bring an archived batch back (or --id from prep-list --all)
+{baseDir}/scripts/macros.py prep-list                                   # active batches (add --all to include archived ones)
 ```
 
-**A share is of what's left by default.** When the user talks about a share of the prep - "half of it", "a third", "most of what's left", "the rest" - they mean of what's currently **left**, so use `--remaining <frac>` (`--remaining` on its own = all of it; it's a share of the leftovers, so it errors above 1). Reach for `--fraction <frac>` only when they clearly mean the **whole original** batch - a fixed meal-prep serving like "one of the 5" or "a fifth of what I made"; it's a share of the whole and errors if it exceeds what's left. On a full batch the two coincide, so `--remaining <frac>` is always the safe default; `--size` is for absolute grams. Every eat adds a `🥘` line with the batch's remaining before/after (a projection on `--dry-run`), so you always see how full it is - never assume it's full; once a batch is partway down the reply also reframes the portion as its share **of what's left** (e.g. `50% of what's left (30% of batch, ~250g)`). `prep-eat`'s `--fit-*`/`--target-*` size the portion for you and cap to what remains. A finished batch (0% left) is **not** deleted - it just drops out of `prep-list` (see it with `--all`), so its log stays inspectable and undoable; `prep-rm` is the explicit "done, throw it away".
+**A share is of what's left by default.** When the user talks about a share of the prep - "half of it", "a third", "most of what's left", "the rest" - they mean of what's currently **left**, so use `--remaining <frac>` (`--remaining` on its own = all of it; it's a share of the leftovers, so it errors above 1). Reach for `--fraction <frac>` only when they clearly mean the **whole original** batch - a fixed meal-prep serving like "one of the 5" or "a fifth of what I made"; it's a share of the whole and errors if it exceeds what's left. On a full batch the two coincide, so `--remaining <frac>` is always the safe default; `--size` is for absolute grams. Every eat adds a `🥘` line with the batch's remaining before/after (a projection on `--dry-run`), so you always see how full it is - never assume it's full; once a batch is partway down the reply also reframes the portion as its share **of what's left** (e.g. `50% of what's left (30% of batch, ~250g)`). `prep-eat`'s `--fit-*`/`--target-*` size the portion for you and cap to what remains. **Batches are never deleted, only archived** - eating (or removing) a batch down to 0% archives it automatically, and `prep-archive` files one away on demand. Archived batches drop out of `prep-list` (see them with `--all`) but are kept forever for lookup with `prep-get` (by name, or `--id` when several archived batches share a name). To fix a finished batch, `prep-unarchive` it first, then `prep-uneat`/`prep-ingredient-edit`.
 
 ### Size (grams / ml / pieces)
 
@@ -177,7 +178,7 @@ With a size set, every portion also shows its weight and `prep-eat --fit-kcal` a
 
 ### Undoing a consumption mistake
 
-`prep-get` numbers each consumption event; `prep-uneat` reverses one by `--index N`, the most recent with `--last`, or clears the whole log with `--all`. Reversing an **eaten** event also removes the day entry it created and re-folds the ledger; reversing a **removed** event just restores it to the batch. This is the fix for "logged it against the wrong batch": `prep-uneat` the wrong one, then apply it to the right one.
+`prep-get` numbers each consumption event; `prep-uneat` reverses one by `--index N`, the most recent with `--last`, or clears the whole log with `--all`. Reversing an **eaten** event also removes the day entry it created and re-folds the ledger; reversing a **removed** event just restores it to the batch. This is the fix for "logged it against the wrong batch": `prep-uneat` the wrong one, then apply it to the right one. `prep-uneat` acts on active batches, so a batch that has been archived (e.g. auto-archived at 0%) must be `prep-unarchive`d first.
 
 ### Adding an ingredient after eating some
 
