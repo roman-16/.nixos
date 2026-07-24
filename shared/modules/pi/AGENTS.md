@@ -31,8 +31,9 @@ Available on the system:
 
 ### Code
 
-- **Ahistorical**: Write code as if it had no history, as if you were writing it for the first time. Never reference, explain, or hint at prior states or the fact that something changed. This applies to code, comments, and everything surrounding it: express what *is*, never what *changed* or *used to be*.
+- **Ahistorical**: Write code as if it had no history, as if you were writing it for the first time - design the target state as if building it fresh today, and never contort a change to preserve a flawed existing structure. Never reference, explain, or hint at prior states or the fact that something changed. This applies to code, comments, and everything surrounding it: express what *is*, never what *changed* or *used to be*.
 - **Comments**: Default to NONE. Add one only when the *why* is genuinely non-obvious (workaround, gotcha, surprising decision) and would otherwise be lost, never to restate *what* the code does. Don't narrate or over-explain. When in doubt, leave it out.
+- **Migrations**: The shipped code assumes the current design only - no compatibility shims, no "old shape" branches, no in-app migration or legacy-tolerance logic. A fresh install starts in the current shape and needs no migration. When data or state that already exists must move to the new shape, do it out-of-band: a one-off transform run once against the affected data (throwaway script in `/tmp/`, idempotent, not committed), or, where such changes recur, a dedicated versioned migration system (ordered migration files). This is the intended exception to Idempotent changes - a one-time transform of existing mutable state is not a reproducible config fix, so it lives outside the source rather than as a permanent runtime shim.
 - **Ordering**: When the order of fields, list items, keys, arguments, imports, or similar has no functional or semantic significance, order them alphabetically.
 
 ### Shell
