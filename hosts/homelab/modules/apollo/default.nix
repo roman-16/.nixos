@@ -129,12 +129,11 @@ in
           github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
         '';
 
-        # Provision the workspace repo + install the per-repo deploy keys (workspace
-        # backup + obsidian vault). Shared by the app and the backup timer (both run
-        # as the "apollo" dynamic user, so they see the same $HOME and workspace). The
-        # private keys land in the world-readable /nix/store, an accepted trade-off on
-        # this single-purpose VM (as with trader's wallet key); each is a read-write
-        # deploy key scoped to its one private repo.
+        # Provision the workspace repo + install the per-repo deploy keys (workspace backup +
+        # obsidian vault) and clone the vault. Shared by the app and the backup unit (both run as the
+        # apollo user). The private keys land in the world-readable /nix/store, an accepted trade-off
+        # on this single-purpose VM (as with trader's wallet key); each is a read-write deploy key
+        # scoped to its one private repo.
         gitBootstrap = pkgs.writeShellScript "apollo-git-bootstrap" ''
           set -euo pipefail
           export PATH=${lib.makeBinPath gitPkgs}:$PATH
@@ -171,6 +170,35 @@ in
             git -C "$APOLLO_WORKSPACE/obsidian" config user.email roman@lerchster.dev
           fi
         '';
+
+        # The workspace backup itself: commit everything and push, printing the one-line outcome. It
+        # runs server-side only - by the 3h timer (apollo-backup.service) and, on demand, spawned by
+        # the app from /internal/backup. The agent triggers it over HTTP and relays the outcome; the
+        # backup skill never runs git itself.
+        workspaceBackupScript = pkgs.writeShellApplication {
+          name = "apollo-workspace-backup";
+          runtimeInputs = with pkgs; [
+            coreutils
+            git
+            openssh
+          ];
+          text = ''
+            export GIT_AUTHOR_NAME=Roman GIT_COMMITTER_NAME=Roman
+            export GIT_AUTHOR_EMAIL=roman@lerchster.dev GIT_COMMITTER_EMAIL=roman@lerchster.dev
+            export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0='*'
+            export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/id_apollo -o IdentitiesOnly=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes"
+
+            cd "''${APOLLO_WORKSPACE:-/var/lib/apollo/workspace}"
+            git add -A
+            if git diff --cached --quiet; then
+              echo "Nothing to back up."
+            else
+              git commit -q -m "$(date '+%Y-%m-%d %H:%M:%S')"
+              git push -q -u origin main
+              echo "Backed up and pushed (commit $(git rev-parse --short HEAD))."
+            fi
+          '';
+        };
 
         # Proton credentials, consumed as the unit EnvironmentFile by both the app
         # (so the agent's proton-cli is authenticated) and the SQLite backup job (same
@@ -348,6 +376,7 @@ in
 
               environment = {
                 APOLLO_ALLOW_FROM = secrets.mainNumber;
+                APOLLO_BACKUP_SCRIPT = lib.getExe workspaceBackupScript;
                 APOLLO_DB_PATH = "%S/apollo/apollo.sqlite";
                 APOLLO_MODEL = "anthropic/claude-sonnet-5";
                 APOLLO_PROFILE_PICTURE = "${profilePicture}";
@@ -400,6 +429,8 @@ in
               };
             };
 
+            # Scheduled workspace backup (the 3h timer starts it). Runs the shared backup script as
+            # the apollo user; the app runs the same script on demand from /internal/backup.
             apollo-backup = {
               description = "Back up the Apollo workspace to git";
 
@@ -415,7 +446,7 @@ in
               path = gitPkgs;
 
               serviceConfig = {
-                ExecStart = "${./agent/skills/backup}/scripts/backup.sh --quiet";
+                ExecStart = lib.getExe workspaceBackupScript;
                 ExecStartPre = gitBootstrap;
                 Group = "apollo";
                 StateDirectory = "apollo";

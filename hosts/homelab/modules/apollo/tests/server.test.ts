@@ -78,6 +78,7 @@ function stubDeps(over: Partial<ServerDeps> = {}): ServerDeps {
       notify: async () => {},
       state: () => ({ qr: undefined, status: "connecting", user: undefined }),
     } as unknown as Pipeline,
+    runBackup: async () => "Backed up.",
     session: {
       getContextUsage: () => undefined,
       isStreaming: false,
@@ -218,7 +219,7 @@ describe("startServer routing", () => {
     expect(notified).toContain("backup FAILED");
   });
 
-  it("delivers a skill message via the loopback hook", async () => {
+  it("delivers a skill message via the loopback hook and returns the marker", async () => {
     let got: { source: string; text: string } | undefined;
     const base = boot({
       pipeline: {
@@ -233,7 +234,33 @@ describe("startServer routing", () => {
       method: "POST",
       body: "hi there",
     });
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("[macros: delivered to the user");
     expect(got).toEqual({ source: "macros", text: "hi there" });
+  });
+
+  it("returns the failed marker when delivery throws", async () => {
+    const base = boot({
+      pipeline: {
+        emitSkillMessage: async () => {
+          throw new Error("whatsapp down");
+        },
+        notify: async () => {},
+        state: () => ({ qr: undefined, status: "connecting", user: undefined }),
+      } as unknown as Pipeline,
+    });
+    const res = await fetch(`${base}/internal/skill-message?source=reminders`, {
+      method: "POST",
+      body: "x",
+    });
+    expect(res.status).toBe(503);
+    expect(await res.text()).toContain("[reminders: delivery FAILED");
+  });
+
+  it("runs the backup via the loopback hook and returns the outcome", async () => {
+    const base = boot({ runBackup: async () => "Backed up and pushed (commit abc1234)." });
+    const res = await fetch(`${base}/internal/backup`, { method: "POST" });
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("Backed up and pushed (commit abc1234).");
   });
 });

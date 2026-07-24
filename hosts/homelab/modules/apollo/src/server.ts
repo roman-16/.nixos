@@ -15,6 +15,7 @@ import {
   sessionStatus,
 } from "./dashboard";
 import { type LogStore, parseLevel } from "./logs";
+import { deliveredMarker, failedMarker } from "./messages";
 import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
 import type { Pipeline } from "./pipeline";
 import { parseRange, renderTokens, renderTokensDaily, type TokenStore } from "./tokens";
@@ -104,13 +105,24 @@ export interface ServerDeps {
   logStore: LogStore;
   logger: Logger;
   pipeline: Pipeline;
+  runBackup: () => Promise<string>;
   session: AgentSession;
   tokenStore: TokenStore;
 }
 
 /** Start the dashboard + health HTTP server: htmx polls each fragment endpoint and swaps its region. */
 export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
-  const { authStorage, chatStore, config, logStore, logger, pipeline, session, tokenStore } = deps;
+  const {
+    authStorage,
+    chatStore,
+    config,
+    logStore,
+    logger,
+    pipeline,
+    runBackup,
+    session,
+    tokenStore,
+  } = deps;
 
   const caches = {
     chat: fragmentCache(),
@@ -349,18 +361,31 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
         return new Response(null, { status: 204 });
       },
     ],
-    // Localhost-only hook skills curl to push a message straight to the user (macros; the reminder
-    // watcher uses the same pipeline method in-process). Guarded to loopback in the fetch handler.
+    // Localhost-only hook the backup skill curls to run the workspace backup. The git capability
+    // (deploy key + push) lives in the privileged root apollo-backup.service, not the agent's
+    // reach; this only triggers it and returns the outcome it recorded, for the skill to deliver.
+    [
+      "POST /internal/backup",
+      async () =>
+        new Response(await runBackup(), {
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        }),
+    ],
+    // Localhost-only hook skills curl to push a message straight to the user (macros, reminders,
+    // backup). Delivers it, then returns the marker for the skill to echo - one source of truth for
+    // the wording. The reminder watcher uses the same pipeline method in-process. Loopback-guarded.
     [
       "POST /internal/skill-message",
       async (req, url) => {
+        const source = url.searchParams.get("source") ?? "skill";
         const text = (await req.text()).trim();
         if (!text) return new Response(null, { status: 204 });
+        const headers = { "content-type": "text/plain; charset=utf-8" };
         try {
-          await pipeline.emitSkillMessage(text, url.searchParams.get("source") ?? "skill");
-          return new Response(null, { status: 204 });
+          await pipeline.emitSkillMessage(text, source);
+          return new Response(deliveredMarker(source), { headers, status: 200 });
         } catch {
-          return new Response("not delivered", { status: 503 });
+          return new Response(failedMarker(source), { headers, status: 503 });
         }
       },
     ],

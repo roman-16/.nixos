@@ -1,6 +1,7 @@
 import { pino } from "pino";
 
 import { createApolloSession } from "./agent";
+import { runWorkspaceBackup } from "./backup";
 import { createChatStore } from "./chat-store";
 import { loadConfig } from "./config";
 import { openDatabase } from "./db";
@@ -84,7 +85,17 @@ export async function main(): Promise<void> {
     onFire: (reminder) => pipeline.emitSkillMessage(formatReminder(reminder.text), "reminders"),
   }).start();
 
-  startServer({ authStorage, chatStore, config, logStore, logger, pipeline, session, tokenStore });
+  startServer({
+    authStorage,
+    chatStore,
+    config,
+    logStore,
+    logger,
+    pipeline,
+    runBackup: runWorkspaceBackup,
+    session,
+    tokenStore,
+  });
   logger.info({ port: config.port }, "dashboard + health listening");
 }
 

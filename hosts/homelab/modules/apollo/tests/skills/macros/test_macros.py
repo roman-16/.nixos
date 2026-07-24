@@ -1,4 +1,5 @@
 import argparse
+import io
 from datetime import datetime, timedelta
 
 import macros
@@ -1121,11 +1122,12 @@ class TestDelivery:
     def test_dry_run_does_not_deliver(self):
         assert macros.should_deliver(True) is False
 
-    def test_deliver_to_user_posts_and_reports_success(self, monkeypatch):
+    def test_deliver_to_user_posts_and_returns_the_marker(self, monkeypatch):
         seen = {}
 
         class Resp:
-            status = 204
+            def read(self):
+                return "\n[macros: delivered to the user \u2713 - do not relay]\n".encode("utf-8")
 
             def __enter__(self):
                 return self
@@ -1139,13 +1141,24 @@ class TestDelivery:
             return Resp()
 
         monkeypatch.setattr(macros.urllib.request, "urlopen", fake_urlopen)
-        assert macros.deliver_to_user("hello") is True
+        marker = macros.deliver_to_user("hello")
         assert "source=macros" in seen["url"]
         assert seen["data"] == b"hello"
+        assert "delivered to the user" in marker
 
-    def test_deliver_to_user_reports_failure(self, monkeypatch):
+    def test_deliver_to_user_returns_error_body_on_http_error(self, monkeypatch):
+        def raise_503(request, timeout=None):
+            raise macros.urllib.error.HTTPError(
+                request.full_url, 503, "err", {},
+                io.BytesIO("\n[macros: delivery FAILED - relay the output above to the user yourself]\n".encode("utf-8")),
+            )
+
+        monkeypatch.setattr(macros.urllib.request, "urlopen", raise_503)
+        assert "delivery FAILED" in macros.deliver_to_user("hello")
+
+    def test_deliver_to_user_returns_none_when_unreachable(self, monkeypatch):
         def boom(request, timeout=None):
             raise OSError("refused")
 
         monkeypatch.setattr(macros.urllib.request, "urlopen", boom)
-        assert macros.deliver_to_user("hello") is False
+        assert macros.deliver_to_user("hello") is None

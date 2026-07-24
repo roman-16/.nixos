@@ -62,6 +62,17 @@ export function skillContextNote(source: string, text: string): ContextNote {
   };
 }
 
+// The single source of truth for the trailing marker a skill script prints after handing its
+// output to /internal/skill-message. The endpoint returns one of these as its response body and
+// every skill just echoes it, so the wording lives in one place and stays identical everywhere.
+export function deliveredMarker(source: string): string {
+  return `\n[${source}: delivered to the user \u2713 - do not relay]\n`;
+}
+
+export function failedMarker(source: string): string {
+  return `\n[${source}: delivery FAILED - relay the output above to the user yourself]\n`;
+}
+
 /** Strip a WhatsApp JID to its bare number (drops the device suffix and domain). */
 export function numberFromJid(jid: string): string {
   const user = jid.split("@")[0] ?? "";

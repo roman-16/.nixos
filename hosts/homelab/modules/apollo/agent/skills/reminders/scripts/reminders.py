@@ -20,6 +20,7 @@ import secrets
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 from contextlib import redirect_stdout
 from datetime import datetime
@@ -211,9 +212,10 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def deliver_to_user(text: str) -> bool:
-    """POST the reply to the app's localhost hook, which sends it to the user on WhatsApp. Returns
-    True on success; on any failure the caller lets the agent relay the output instead."""
+def deliver_to_user(text: str) -> str | None:
+    """POST the reply to the app's localhost hook, which delivers it to the user on WhatsApp and
+    returns the marker to print. Returns the response body (the marker); None only if the app
+    could not be reached at all - the one case the caller falls back for."""
     port = os.environ.get("PORT", "8080")
     request = urllib.request.Request(
         f"http://127.0.0.1:{port}/internal/skill-message?source=reminders",
@@ -223,9 +225,11 @@ def deliver_to_user(text: str) -> bool:
     )
     try:
         with urllib.request.urlopen(request, timeout=8) as response:
-            return 200 <= response.status < 300
+            return response.read().decode("utf-8")
+    except urllib.error.HTTPError as error:
+        return error.read().decode("utf-8")
     except Exception:
-        return False
+        return None
 
 
 def main():
@@ -240,10 +244,10 @@ def main():
         sys.stdout.write(buffer.getvalue())
     output = buffer.getvalue()
     if output.strip():
-        sent = deliver_to_user(output)
+        marker = deliver_to_user(output)
         sys.stdout.write(
-            "\n[reminders: delivered to the user \u2713 - do not relay]\n"
-            if sent
+            marker
+            if marker is not None
             else "\n[reminders: delivery FAILED - relay the output above to the user yourself]\n"
         )
 

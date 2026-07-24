@@ -3,6 +3,8 @@ import { describe, expect, it } from "bun:test";
 import {
   claudeErrorNotice,
   compactionNotice,
+  deliveredMarker,
+  failedMarker,
   formatLogNotice,
   isAllowed,
   jidForNumber,
@@ -11,6 +13,20 @@ import {
   splitMessage,
   voiceText,
 } from "../src/messages";
+
+describe("deliveredMarker / failedMarker", () => {
+  it("tags the delivered marker with the source and the do-not-relay hint", () => {
+    const marker = deliveredMarker("macros");
+    expect(marker).toContain("[macros: delivered to the user");
+    expect(marker).toContain("do not relay");
+  });
+
+  it("tags the failed marker with the source and the relay instruction", () => {
+    const marker = failedMarker("backup");
+    expect(marker).toContain("[backup: delivery FAILED");
+    expect(marker).toContain("relay the output");
+  });
+});
 
 describe("numberFromJid", () => {
   it("strips domain and device suffix", () => {
