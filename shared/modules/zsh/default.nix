@@ -163,7 +163,6 @@
 
           grr = "git branch | rga --invert-match \"\\*\" | xargs git branch -D; git remote prune origin";
 
-          ls = "eza --icons=always --color=always --group-directories-first --hyperlink=always";
           ll = "ls -lh";
           la = "ls -lha";
 
@@ -198,6 +197,14 @@
           zstyle ':fzf-tab:*' query-string ""
 
           source ${pkgs.zsh-fzf-tab}/share/fzf-tab/fzf-tab.plugin.zsh;
+
+          # `ls` is a function, not an alias, so carapace doesn't expand it to eza
+          # for completion: its bundled eza spec still models --hyperlink as a bool
+          # and errors on our --hyperlink=always. As a function the flags stay hidden
+          # (carapace falls back to its own `ls` completer) while eza runs at runtime.
+          ls() {
+            eza --icons=always --color=always --group-directories-first --hyperlink=always "$@"
+          }
 
           gsc() {
             if [[ $(git status -s) ]]; then
