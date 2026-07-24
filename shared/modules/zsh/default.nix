@@ -202,6 +202,8 @@
           # for completion: its bundled eza spec still models --hyperlink as a bool
           # and errors on our --hyperlink=always. As a function the flags stay hidden
           # (carapace falls back to its own `ls` completer) while eza runs at runtime.
+          # oh-my-zsh already aliased `ls`, which would block the function; drop it first.
+          unalias ls 2>/dev/null
           ls() {
             eza --icons=always --color=always --group-directories-first --hyperlink=always "$@"
           }
