@@ -101,7 +101,13 @@ in
           export PATH=${lib.makeBinPath [ pkgs.coreutils ]}:$PATH
 
           agentDir="$HOME/.pi/agent"
-          mkdir -p "$agentDir/sessions" "$agentDir/skills" "$agentDir/extensions" "$HOME/whatsapp"
+          mkdir -p "$agentDir/sessions" "$agentDir/extensions" "$HOME/whatsapp"
+
+          # Recreate skills/ from scratch each start: the entries are all store symlinks, and a stale
+          # real directory left by an earlier layout would silently shadow `ln -sfn` (which cannot
+          # replace a real dir), pinning a skill to an old version across deploys.
+          rm -rf "$agentDir/skills"
+          mkdir -p "$agentDir/skills"
 
           # SYSTEM_PROMPT.md is the agent's system prompt
           ln -sfn ${./agent/SYSTEM_PROMPT.md} "$agentDir/SYSTEM_PROMPT.md"

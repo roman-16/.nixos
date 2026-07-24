@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# The backup skill only *triggers* the workspace backup and relays the outcome. The git capability
-# (deploy key, commit, push) lives in the privileged root apollo-backup.service, out of the agent's
-# reach - this script never runs git. Deterministic: fetch the outcome from the app's /internal/backup
-# hook, then hand it to /internal/skill-message, which delivers it and returns the marker to print.
+# The backup skill only *triggers* the workspace backup and relays the outcome; the git work runs
+# server-side (the app spawns the backup script), not here. Deterministic: fetch the outcome from the
+# app's /internal/backup hook, then hand it to /internal/skill-message, which delivers it to the user
+# and returns the marker to print.
 set -euo pipefail
 
 port="${PORT:-8080}"
