@@ -415,7 +415,7 @@ in
               path = gitPkgs;
 
               serviceConfig = {
-                ExecStart = "${./agent/skills/backup}/scripts/backup.sh";
+                ExecStart = "${./agent/skills/backup}/scripts/backup.sh --quiet";
                 ExecStartPre = gitBootstrap;
                 Group = "apollo";
                 StateDirectory = "apollo";
