@@ -2,13 +2,14 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 import type { ImageContent } from "@earendil-works/pi-ai";
-import type { AgentSession } from "@earendil-works/pi-coding-agent";
+import { type AgentSession, resizeImage } from "@earendil-works/pi-coding-agent";
 import type { Logger } from "pino";
 
 import { deliver, onAssistantText, onRunError } from "./agent";
 import { buildBacklog } from "./backlog";
 import type { ChatStore } from "./chat-store";
 import type { Config } from "./config";
+import { droppedImageNote, fitImages } from "./images";
 import type { Inbox, InboxEntry } from "./inbox";
 import type { Kv } from "./kv";
 import { createThrottle, type LogStore, shouldNotify } from "./logs";
@@ -429,14 +430,17 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       // a transcript rather than audio, downloaded images, the quoted message resolved.
       let admitted = 0;
       for (const message of allowed) {
-        const text = await transcribe(message);
+        const spoken = await transcribe(message);
         const contexts: ContextNote[] = [];
-        let images = message.images;
+        let raw = message.images;
         if (message.quoted) {
           const resolved = await resolveQuoted(message.quoted);
           contexts.push(resolved.note);
-          images = [...images, ...resolved.images];
+          raw = [...raw, ...resolved.images];
         }
+        const { dropped, images, resized } = await fitImages(raw, resizeImage);
+        if (dropped > 0) logger.warn({ dropped }, "images could not be fitted for the model");
+        const text = [spoken, droppedImageNote(dropped)].filter(Boolean).join("\n").trim();
         const stored = inbox.admit({
           contexts,
           images,
@@ -452,6 +456,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
             images: images.length,
             offline: message.offline,
             quoted: message.quoted?.kind,
+            resized,
             sentAt: new Date(message.sentAt).toISOString(),
             voice: Boolean(message.audio),
           },
