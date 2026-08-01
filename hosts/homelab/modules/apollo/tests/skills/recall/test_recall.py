@@ -132,6 +132,28 @@ class TestSearch:
         run("search", "zzznotanywhere")
         assert "No WhatsApp messages match" in capsys.readouterr().out
 
+    def test_snippets_are_trimmed_by_default(self, db, capsys):
+        insert([user(LONG)])
+        run("search", "dentist")
+        assert LONG not in capsys.readouterr().out
+
+    def test_full_returns_whole_messages(self, db, capsys):
+        insert([user(LONG)])
+        run("search", "dentist", "--full")
+        assert LONG in capsys.readouterr().out
+
+    def test_relevance_is_the_default_order(self, db, capsys):
+        insert([user("dentist once"), user("dentist dentist dentist twice")])
+        run("search", "dentist")
+        assert "most relevant first" in capsys.readouterr().out
+
+    def test_sort_time_reads_oldest_first(self, db, capsys):
+        insert([user("dentist once"), user("dentist dentist dentist twice")])
+        run("search", "dentist", "--sort", "time")
+        out = capsys.readouterr().out
+        assert "oldest first" in out
+        assert out.index("once") < out.index("twice")
+
     def test_since_until_filter(self, db, capsys):
         insert([user("dentist one")])  # 2023-11-14 ~ epoch 1.7e12
         run("search", "dentist", "--since", "2099-01-01")
@@ -157,20 +179,84 @@ class TestRecent:
         run("recent")
         assert "No WhatsApp history yet." in capsys.readouterr().out
 
+    def test_trimmed_by_default_and_whole_with_full(self, db, capsys):
+        insert([user(LONG)])
+        run("recent")
+        assert LONG not in capsys.readouterr().out
+        run("recent", "--full")
+        assert LONG in capsys.readouterr().out
 
-class TestAround:
-    def test_window_marks_target(self, db, capsys):
+
+LONG = (
+    "The dentist appointment is on tuesday at 14:30 with Dr. Berger, and I need to bring the "
+    "insurance card plus the x-rays from last year, otherwise they will have to redo them which "
+    "costs extra and takes another hour of my afternoon that I would rather spend anywhere else."
+)
+
+
+class TestShow:
+    def test_reads_a_message_whole(self, db, capsys):
+        insert([user(LONG)])
+        run("show", "--ids", "1")
+        out = capsys.readouterr().out
+        assert LONG in out
+        assert "…" not in out
+
+    def test_several_ids_in_one_call(self, db, capsys):
+        insert([user("first"), user("second"), user("third")])
+        run("show", "--ids", "1,3")
+        out = capsys.readouterr().out
+        assert "first" in out and "third" in out
+        assert "second" not in out
+
+    def test_ids_may_be_separated_by_spaces_or_hashes(self, db, capsys):
+        insert([user("first"), user("second")])
+        run("show", "--ids", "#1 #2")
+        out = capsys.readouterr().out
+        assert "first" in out and "second" in out
+
+    def test_context_widens_each_id_and_marks_the_targets(self, db, capsys):
         insert([user("a1"), user("a2"), user("a3"), user("a4"), user("a5")])
-        run("around", "--id", "3", "--context", "1")
+        run("show", "--ids", "3", "--context", "1")
         out = capsys.readouterr().out
         assert "a2" in out and "a3" in out and "a4" in out
         assert "a1" not in out and "a5" not in out
         assert "→ " in out and "#3" in out
 
+    def test_separate_stretches_are_marked_as_such(self, db, capsys):
+        insert([user("a1"), user("a2"), user("a3"), user("a4"), user("a5")])
+        run("show", "--ids", "1,5")
+        assert "…" in capsys.readouterr().out
+
+    def test_adjacent_ids_need_no_marker(self, db, capsys):
+        insert([user("a1"), user("a2")])
+        run("show", "--ids", "1,2")
+        assert "…" not in capsys.readouterr().out
+
     def test_unknown_id_errors(self, db):
         insert([user("x")])
         with pytest.raises(SystemExit):
-            run("around", "--id", "999")
+            run("show", "--ids", "999")
+
+    def test_a_nonsense_id_errors(self, db):
+        insert([user("x")])
+        with pytest.raises(SystemExit):
+            run("show", "--ids", "abc")
+
+
+class TestBudget:
+    def test_a_too_wide_call_stops_on_a_whole_message_and_says_so(self, db, capsys):
+        insert([user(f"message {n} " + "x" * 600) for n in range(60)])
+        run("recent", "--limit", "60", "--full")
+        out = capsys.readouterr().out
+        assert "capped at" in out
+        assert "narrow it" in out
+        assert len(out) < 25_000
+
+    def test_output_within_budget_is_never_capped(self, db, capsys):
+        insert([user("short one"), user("short two")])
+        run("recent", "--full")
+        assert "capped at" not in capsys.readouterr().out
 
 
 class TestImage:

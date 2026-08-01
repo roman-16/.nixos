@@ -189,22 +189,30 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="reminders.py", description="reminder CRUD")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    a = sub.add_parser("add")
+    # Every command answers to someone: by default the user, or the caller alone under --quiet.
+    shared = argparse.ArgumentParser(add_help=False)
+    shared.add_argument("--quiet", action="store_true",
+                        help="print the result here instead of sending it to the user")
+
+    def command(name: str) -> argparse.ArgumentParser:
+        return sub.add_parser(name, parents=[shared])
+
+    a = command("add")
     a.set_defaults(func=cmd_add)
     a.add_argument("--text", required=True)
     a.add_argument("--in", dest="in_")
     a.add_argument("--at")
 
-    sub.add_parser("list").set_defaults(func=cmd_list)
+    command("list").set_defaults(func=cmd_list)
 
-    u = sub.add_parser("update")
+    u = command("update")
     u.set_defaults(func=cmd_update)
     u.add_argument("query")
     u.add_argument("--text")
     u.add_argument("--in", dest="in_")
     u.add_argument("--at")
 
-    r = sub.add_parser("remove")
+    r = command("remove")
     r.set_defaults(func=cmd_remove)
     r.add_argument("query", nargs="?")
     r.add_argument("--all", action="store_true")
@@ -243,13 +251,18 @@ def main():
     finally:
         sys.stdout.write(buffer.getvalue())
     output = buffer.getvalue()
-    if output.strip():
-        marker = deliver_to_user(output)
-        sys.stdout.write(
-            marker
-            if marker is not None
-            else "\n[reminders: delivery FAILED - relay the output above to the user yourself]\n"
-        )
+    if not output.strip():
+        return
+    if getattr(args, "quiet", False):
+        # Say so explicitly: without a marker the caller cannot tell a silent run from a sent one.
+        sys.stdout.write("\n[reminders: quiet - not sent to the user]\n")
+        return
+    marker = deliver_to_user(output)
+    sys.stdout.write(
+        marker
+        if marker is not None
+        else "\n[reminders: delivery FAILED - relay the output above to the user yourself]\n"
+    )
 
 
 if __name__ == "__main__":

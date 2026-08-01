@@ -17,9 +17,9 @@ The script owns all time math, storage, and the reply: you pass what the user wa
 
 ## Replying
 
-**The script sends its output to the user itself - do not relay it.** Every command posts its printed output straight to the user on WhatsApp (as a "via reminders" message), then prints `[reminders: delivered to the user ✓ - do not relay]`. When you see that line, **stay silent**: don't repeat, summarize, or rephrase it - the user already got it verbatim, and restating it double-sends.
+Every command has an audience. **By default it is the user**: the script posts its printed output straight to them on WhatsApp (as a "via reminders" message) and prints `[reminders: delivered to the user ✓ - do not relay]`. When you see that line, **stay silent** - the user already got it verbatim, and restating it double-sends.
 
-Because every command's output goes to the user, only run one when you mean for the user to see it - never as a silent pre-check. This is why `update` and `remove` resolve the reminder themselves (below), so you never need a lookup `list` first.
+**`--quiet` makes the audience you.** Every command takes it: the output is printed here, nothing is sent, and the last line is `[reminders: quiet - not sent to the user]`. Use it when you need to know something rather than show it - `list --quiet` to check what is already set before answering, for instance - and then reply once in your own words. Silencing a change makes the news yours to deliver: if you set or cancel something quietly, say so.
 
 If the script prints `[reminders: delivery FAILED ...]` instead, the send didn't happen: relay that output yourself, just this once (the reminder was still saved - don't re-run the command).
 
@@ -38,9 +38,10 @@ Give the reminder text plus when. Use `--in` for a delay (you don't know the cur
 
 ```bash
 {baseDir}/scripts/reminders.py list
+{baseDir}/scripts/reminders.py list --quiet   # for your eyes only
 ```
 
-Shows each pending reminder with its id, when it fires (absolute + relative), and text. Its output is sent to the user, so run it only when they actually want to see their reminders - not to look up an id for yourself (`update`/`remove` do that themselves).
+Shows each pending reminder with its id, when it fires (absolute + relative), and text. Without `--quiet` it goes to the user, so run it plain when they actually want to see their reminders. You never need it just to find an id - `update`/`remove` resolve reminders themselves.
 
 ## Update
 

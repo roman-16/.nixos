@@ -1,5 +1,6 @@
 import io
 import json
+import sys
 from datetime import datetime
 
 import pytest
@@ -259,3 +260,44 @@ class TestDelivery:
 
         monkeypatch.setattr(reminders.urllib.request, "urlopen", boom)
         assert reminders.deliver_to_user("hello") is None
+
+
+class TestAudience:
+    def invoke(self, monkeypatch, *argv):
+        monkeypatch.setattr(sys, "argv", ["reminders.py", *argv])
+        reminders.main()
+
+    def spy(self, monkeypatch):
+        sent = []
+
+        def fake(text):
+            sent.append(text)
+            return "\n[reminders: delivered to the user \u2713 - do not relay]\n"
+
+        monkeypatch.setattr(reminders, "deliver_to_user", fake)
+        return sent
+
+    def test_a_plain_command_sends_its_result(self, spool, monkeypatch, capsys):
+        sent = self.spy(monkeypatch)
+        self.invoke(monkeypatch, "add", "--text", "call the dentist", "--in", "1h")
+        assert len(sent) == 1
+        assert "call the dentist" in sent[0]
+
+    def test_quiet_sends_nothing_and_says_so(self, spool, monkeypatch, capsys):
+        sent = self.spy(monkeypatch)
+        self.invoke(monkeypatch, "add", "--text", "call the dentist", "--in", "1h", "--quiet")
+        out = capsys.readouterr().out
+        assert sent == []
+        assert "call the dentist" in out
+        assert "quiet - not sent to the user" in out
+
+    def test_quiet_still_does_the_work(self, spool, monkeypatch):
+        self.spy(monkeypatch)
+        self.invoke(monkeypatch, "add", "--text", "buy milk", "--in", "1h", "--quiet")
+        assert [r["text"] for r in reminders.load_all()] == ["buy milk"]
+
+    def test_every_command_accepts_quiet(self):
+        parser = reminders.build_parser()
+        for argv in (["add", "--text", "x", "--in", "1h"], ["list"], ["update", "x", "--text", "y"],
+                     ["remove", "--all"]):
+            assert hasattr(parser.parse_args([*argv, "--quiet"]), "quiet"), argv

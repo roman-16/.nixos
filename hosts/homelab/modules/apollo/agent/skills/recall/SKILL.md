@@ -9,6 +9,13 @@ Searches the WhatsApp chat history - and only what actually appeared in the chat
 
 Results are for **you** to read and act on; they are **not** sent to the user, so answer in your own words. Searching is free and fast (a throwaway in-memory index over the local SQLite archive, rebuilt each call), so search whenever you're unsure rather than guessing or saying you don't remember.
 
+Two modes, and picking the right one is most of using this well:
+
+- **Scanning** - `search` and `recent` - answers _which_ messages matter. Output is trimmed to keep a wide net cheap.
+- **Reading** - `show` - answers _what was actually said_. Messages come back whole, because a clipped quote is worse than none.
+
+Every call is capped as a whole (~20k characters). If a query is too broad the output stops on a message boundary and says so - narrow it rather than working around it.
+
 `{baseDir}` is this skill's directory. Resolve it to an absolute path before running.
 
 ```bash
@@ -32,22 +39,32 @@ Results are for **you** to read and act on; they are **not** sent to the user, s
 
 Each hit prints `[#id] date · who: …snippet…` and flags any images. `--since`/`--until` (YYYY-MM-DD) bound the range.
 
-## Context around a hit
-
 ```bash
-{baseDir}/scripts/recall.py around --id 1234 --context 5
+{baseDir}/scripts/recall.py search "bike service" --full          # whole messages, not snippets
+{baseDir}/scripts/recall.py search "bike service" --sort time     # oldest first, for a narrative
 ```
 
-Shows the messages before and after `#1234` in the chat (the target marked with `→`), so you can reconstruct what was being discussed around it.
+`--sort time` only changes the order hits are shown in; `--limit` still selects the most relevant ones. To reconstruct how something developed, bound it with `--since`/`--until` and raise `--limit`, then read it chronologically.
+
+## Reading messages in full
+
+```bash
+{baseDir}/scripts/recall.py show --ids 1234                  # one message, whole
+{baseDir}/scripts/recall.py show --ids 254,260,791           # several at once, in one call
+{baseDir}/scripts/recall.py show --ids 1234 --context 5      # plus the 5 messages either side
+```
+
+This is how you quote or reconstruct anything: text is never truncated here. Targets are marked with `→`, `…` marks a jump between separate stretches of chat, and `--context` (default 0) widens each id into its surroundings when you need to see what was being discussed.
 
 ## Recent messages
 
 ```bash
 {baseDir}/scripts/recall.py recent --limit 20
 {baseDir}/scripts/recall.py recent --since 2026-07-01
+{baseDir}/scripts/recall.py recent --limit 10 --full
 ```
 
-The most recent WhatsApp messages, oldest-to-newest - for "what were we just doing" or scanning a date range.
+The most recent WhatsApp messages, oldest-to-newest - for "what were we just doing" or scanning a date range. Trimmed like `search`; add `--full` (with a small `--limit`) when you actually need the wording.
 
 ## View an image
 
@@ -56,13 +73,14 @@ The most recent WhatsApp messages, oldest-to-newest - for "what were we just doi
 {baseDir}/scripts/recall.py image --id 1234 --index 1  # the 2nd image, if several
 ```
 
-Writes the stored image to a temp file and prints its path; open that path with your `read` tool to actually see it. Use this to pull up a photo the user sent earlier - find the message first (by caption, date, or `around`), then view the image.
+Writes the stored image to a temp file and prints its path; open that path with your `read` tool to actually see it. Use this to pull up a photo the user sent earlier - find the message first (by caption, date, or `show`), then view the image.
 
 ## Notes
 
 - Only the WhatsApp-visible transcript is searched; nothing you did internally is.
-- An image with no caption has no text to match on, so find it via `recent` / `around` or a date range, then `image` to view it.
-- The `[#id]` in results is the handle for `around` and `image`.
+- An image with no caption has no text to match on, so find it via `recent` / `show` or a date range, then `image` to view it.
+- The `[#id]` in results is the handle for `show` and `image`.
+- Search to find, `show` to read: don't try to reconstruct a quote from snippets - collect the ids and open them.
 - Never paste raw results at the user - they're your notes; use them to answer naturally.
 
 `{baseDir}` = this skill's directory. Always resolve to the absolute path before executing.

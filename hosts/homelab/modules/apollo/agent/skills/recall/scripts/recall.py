@@ -26,6 +26,14 @@ from datetime import datetime
 
 EXT = {"image/gif": "gif", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 
+# Results are read by Apollo, so the cost that matters is the context one call consumes. That is a
+# property of the call, not of any single message, so the whole call is budgeted and messages arrive
+# whole - a clipped message is worse than a missing one, because it looks complete.
+OUTPUT_BUDGET = 20_000
+
+# How much of a message a scanning view shows before it is trimmed.
+SCAN_CHARS = 200
+
 
 def die(msg: str):
     print(f"error: {msg}", file=sys.stderr)
@@ -132,9 +140,32 @@ def marker(images: int) -> str:
     return f" [{images} image{'s' if images > 1 else ''}]" if images else ""
 
 
-def trim(text: str, limit: int = 200) -> str:
+def trim(text: str, limit: int = SCAN_CHARS) -> str:
     text = " ".join(text.split())
     return text if len(text) <= limit else text[:limit] + "…"
+
+
+def body(text: str, full: bool) -> str:
+    """A message as it should appear: whole when reading, trimmed when scanning."""
+    return text if full else trim(text)
+
+
+def emit(lines, tail: str = ""):
+    """Print within the call's budget. Stops on a whole message and says what it left out, so a
+    query that is too broad is visibly too broad rather than quietly incomplete."""
+    used = 0
+    shown = 0
+    for line in lines:
+        if used + len(line) > OUTPUT_BUDGET:
+            break
+        print(line)
+        used += len(line) + 1
+        shown += 1
+    if shown < len(lines):
+        print(f"… capped at {shown} of {len(lines)} messages - narrow it with --since/--until, "
+              "a smaller --limit, or fewer --ids.")
+    elif tail:
+        print(tail)
 
 
 def time_clause(args):
@@ -165,7 +196,7 @@ def cmd_search(args):
             continue
         who, text, images = seen
         if not text:
-            continue  # e.g. an uncaptioned image: reachable via recent/around, not keyword search
+            continue  # e.g. an uncaptioned image: reachable via recent/show, not keyword search
         batch.append((text, cid, tm or 0, who, images))
         if len(batch) >= 5000:
             mem.executemany("INSERT INTO fts(txt,cid,t,who,img) VALUES (?,?,?,?,?)", batch)
@@ -174,8 +205,10 @@ def cmd_search(args):
         mem.executemany("INSERT INTO fts(txt,cid,t,who,img) VALUES (?,?,?,?,?)", batch)
 
     try:
+        # Relevance always decides *which* messages come back, so --limit keeps meaning "the best N";
+        # --sort only decides the order they are read in.
         hits = mem.execute(
-            "SELECT cid, t, who, img, snippet(fts, 0, '«', '»', '…', 14) "
+            "SELECT cid, t, who, img, snippet(fts, 0, '«', '»', '…', 14), txt "
             "FROM fts WHERE fts MATCH ? ORDER BY bm25(fts) LIMIT ?",
             (args.query, args.limit),
         ).fetchall()
@@ -186,10 +219,16 @@ def cmd_search(args):
         print(f'No WhatsApp messages match "{args.query}". Try broader or different keywords '
               "(synonyms, OR, a prefix*).")
         return
-    print(f'Top {len(hits)} match(es) for "{args.query}" (most relevant first):')
-    for cid, tm, who, img, snip in hits:
-        print(f"[#{cid}] {when(tm)} · {who}: {snip}{marker(img)}")
-    print("→ `around --id <#>` for surrounding context; `image --id <#>` to view an image.")
+    chronological = args.sort == "time"
+    if chronological:
+        hits = sorted(hits, key=lambda h: h[1])
+    order = "oldest first" if chronological else "most relevant first"
+    print(f'Top {len(hits)} match(es) for "{args.query}" ({order}):')
+    lines = [
+        f"[#{cid}] {when(tm)} · {who}: {text if args.full else snip}{marker(img)}"
+        for cid, tm, who, img, snip, text in hits
+    ]
+    emit(lines, "→ `show --ids <#>` for the full message and its context; `image --id <#>` to view an image.")
 
 
 def cmd_recent(args):
@@ -209,26 +248,57 @@ def cmd_recent(args):
     if not out:
         print("No WhatsApp history yet.")
         return
-    for cid, tm, who, text, images in reversed(out):
-        print(f"[#{cid}] {when(tm)} · {who}: {trim(text) or '(no text)'}{marker(images)}")
+    emit([
+        f"[#{cid}] {when(tm)} · {who}: {body(text, args.full) or '(no text)'}{marker(images)}"
+        for cid, tm, who, text, images in reversed(out)
+    ])
 
 
-def cmd_around(args):
+def parse_ids(value: str) -> list:
+    ids = []
+    for part in value.replace(",", " ").split():
+        try:
+            ids.append(int(part.lstrip("#")))
+        except ValueError:
+            die(f'not a message id: "{part}" (ids look like 1234, from the [#id] in results)')
+    if not ids:
+        die("give at least one id: --ids 254,260,791")
+    return ids
+
+
+def cmd_show(args):
+    """Read specific messages in full, optionally with their surroundings. Reading is bounded by
+    what was asked for, so nothing is trimmed - that is the whole reason to open a message."""
     con = connect()
     seq = []
     for cid, tm, data in rows(con, "ASC"):
         seen = visible(data)
         if seen:
             seq.append((cid, tm, *seen))
-    pos = next((i for i, r in enumerate(seq) if r[0] == args.id), None)
-    if pos is None:
-        die(f"no WhatsApp message #{args.id} (it may be an internal, non-chat entry)")
-    lo = max(0, pos - args.context)
-    hi = min(len(seq), pos + args.context + 1)
-    for i in range(lo, hi):
+    positions = {row[0]: i for i, row in enumerate(seq)}
+
+    ids = parse_ids(args.ids)
+    missing = [i for i in ids if i not in positions]
+    if missing:
+        die(f"no WhatsApp message {', '.join('#' + str(i) for i in missing)} "
+            "(it may be an internal, non-chat entry)")
+
+    wanted = set()
+    for i in ids:
+        pos = positions[i]
+        wanted.update(range(max(0, pos - args.context), min(len(seq), pos + args.context + 1)))
+
+    targets = set(ids)
+    lines = []
+    previous = None
+    for i in sorted(wanted):
+        if previous is not None and i > previous + 1:
+            lines.append("…")
         cid, tm, who, text, images = seq[i]
-        prefix = "→ " if i == pos else "  "
-        print(f"{prefix}[#{cid}] {when(tm)} · {who}: {trim(text) or '(no text)'}{marker(images)}")
+        prefix = "→ " if cid in targets else "  "
+        lines.append(f"{prefix}[#{cid}] {when(tm)} · {who}: {text or '(no text)'}{marker(images)}")
+        previous = i
+    emit(lines)
 
 
 def cmd_image(args):
@@ -261,17 +331,21 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--limit", type=int, default=10)
     s.add_argument("--since")
     s.add_argument("--until")
+    s.add_argument("--full", action="store_true", help="whole messages instead of match snippets")
+    s.add_argument("--sort", choices=["relevance", "time"], default="relevance")
 
     r = sub.add_parser("recent")
     r.set_defaults(func=cmd_recent)
     r.add_argument("--limit", type=int, default=20)
     r.add_argument("--since")
     r.add_argument("--until")
+    r.add_argument("--full", action="store_true", help="whole messages instead of trimmed ones")
 
-    a = sub.add_parser("around")
-    a.set_defaults(func=cmd_around)
-    a.add_argument("--id", type=int, required=True)
-    a.add_argument("--context", type=int, default=4)
+    a = sub.add_parser("show")
+    a.set_defaults(func=cmd_show)
+    a.add_argument("--ids", required=True, help="one or more message ids: 254,260,791")
+    a.add_argument("--context", type=int, default=0,
+                   help="also show this many messages either side of each id")
 
     i = sub.add_parser("image")
     i.set_defaults(func=cmd_image)

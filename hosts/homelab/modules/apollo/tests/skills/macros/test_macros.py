@@ -1,5 +1,6 @@
 import argparse
 import io
+import sys
 from datetime import datetime, timedelta
 
 import macros
@@ -22,6 +23,7 @@ def run(*argv):
 
 @pytest.fixture
 def store(tmp_path, monkeypatch):
+    macros.NOTES.clear()
     root = tmp_path / "macros"
     monkeypatch.setattr(macros, "MACROS_DIR", root)
     monkeypatch.setattr(macros, "DAYS_DIR", root / "days")
@@ -419,8 +421,8 @@ class TestPrep:
         assert macros.consumed(batch, "eaten")["kcal"] == pytest.approx(360)
         assert len(batch["consumption"]) == 1
         entry = day_entries()[-1]
-        assert entry["prepId"] == batch["id"]
-        assert entry["eventId"] == batch["consumption"][0]["id"]
+        assert entry["source"]["prepId"] == batch["id"]
+        assert entry["source"]["eventId"] == batch["consumption"][0]["id"]
 
     def test_finishing_auto_archives_and_retains(self, store, capsys):
         set_goal()
@@ -1116,11 +1118,14 @@ class TestPastDayCascade:
 
 
 class TestDelivery:
-    def test_every_command_delivers(self):
-        assert macros.should_deliver(False) is True
+    def test_output_goes_to_the_user_by_default(self):
+        assert macros.should_deliver(False, False) is True
 
     def test_dry_run_does_not_deliver(self):
-        assert macros.should_deliver(True) is False
+        assert macros.should_deliver(True, False) is False
+
+    def test_quiet_does_not_deliver(self):
+        assert macros.should_deliver(False, True) is False
 
     def test_deliver_to_user_posts_and_returns_the_marker(self, monkeypatch):
         seen = {}
@@ -1162,3 +1167,209 @@ class TestDelivery:
 
         monkeypatch.setattr(macros.urllib.request, "urlopen", boom)
         assert macros.deliver_to_user("hello") is None
+
+
+class TestAudience:
+    def deliver_spy(self, monkeypatch):
+        sent = []
+
+        def fake(text):
+            sent.append(text)
+            return "\n[macros: delivered to the user \u2713 - do not relay]\n"
+
+        monkeypatch.setattr(macros, "deliver_to_user", fake)
+        return sent
+
+    def invoke(self, monkeypatch, *argv):
+        monkeypatch.setattr(sys, "argv", ["macros.py", *argv])
+        macros.main()
+
+    def test_a_plain_command_sends_its_result(self, store, monkeypatch, capsys):
+        set_goal()
+        sent = self.deliver_spy(monkeypatch)
+        self.invoke(monkeypatch, "show")
+        assert len(sent) == 1
+        assert "Target:" in sent[0]
+        assert "delivered to the user" in capsys.readouterr().out
+
+    def test_quiet_sends_nothing_and_says_so(self, store, monkeypatch, capsys):
+        set_goal()
+        sent = self.deliver_spy(monkeypatch)
+        self.invoke(monkeypatch, "show", "--quiet")
+        out = capsys.readouterr().out
+        assert sent == []
+        assert "Target:" in out                      # the caller still sees everything
+        assert "quiet - not sent to the user" in out
+
+    def test_every_command_accepts_quiet(self):
+        parser = macros.build_parser()
+        for name in ("goal", "log", "eat", "show", "summary", "weight", "rm", "entries", "edit",
+                     "food-get", "food-add", "food-list", "food-eat", "food-edit", "food-rm",
+                     "prep-add", "prep-eat", "prep-get", "prep-list", "recompute"):
+            args = parser.parse_args(macros_args(name))
+            assert hasattr(args, "quiet"), name
+
+    def test_a_note_never_reaches_the_user(self, store, monkeypatch, capsys):
+        set_goal()
+        sent = self.deliver_spy(monkeypatch)
+        macros.hint("[macros] a private note")
+        self.invoke(monkeypatch, "show")
+        assert "private note" not in sent[0]
+        assert "private note" in capsys.readouterr().out
+
+
+def macros_args(name):
+    """The smallest valid argv for a command, so the parser can be inspected."""
+    required = {
+        "log": ["--item", "x", "--kcal", "1"],
+        "eat": ["--item", "x", "--kcal100", "1", "--amount", "1"],
+        "weight": ["--kg", "60"],
+        "edit": ["--last", "--kcal", "1"],
+        "food-get": ["x"],
+        "food-add": ["--name", "x", "--kcal100", "1", "--protein100", "1", "--fat100", "1",
+                     "--carbs100", "1", "--serving", "1"],
+        "food-eat": ["--name", "x"],
+        "food-edit": ["--name", "x"],
+        "food-rm": ["--name", "x"],
+        "prep-add": ["--name", "x"],
+        "prep-eat": ["--name", "x", "--fraction", "1/2"],
+    }
+    return [name, *required.get(name, [])]
+
+
+class TestProvenance:
+    def test_eat_records_the_rate_it_scaled_from(self, store):
+        set_goal()
+        run("eat", "--item", "Granola", "--kcal100", "450", "--protein100", "10",
+            "--fat100", "20", "--carbs100", "55", "--amount", "235")
+        assert day_entries()[-1]["source"] == {
+            "kind": "eat", "name": "Granola", "amount": 235, "unit": "g",
+            "per100": {"kcal": 450, "protein": 10, "fat": 20, "carbs": 55},
+        }
+
+    def test_food_eat_snapshots_the_food_rate(self, store):
+        set_goal()
+        add_skyr()
+        run("food-eat", "--name", "skyr", "--amount", "400")
+        source = day_entries()[-1]["source"]
+        assert source["kind"] == "food"
+        assert source["name"] == "Skyr, plain"
+        assert source["per100"]["kcal"] == 64
+
+    def test_a_snapshot_does_not_move_when_the_food_is_edited(self, store):
+        set_goal()
+        add_skyr()
+        run("food-eat", "--name", "skyr", "--amount", "400")
+        run("food-edit", "--name", "skyr", "--kcal100", "999")
+        assert day_entries()[-1]["source"]["per100"]["kcal"] == 64
+
+    def test_log_records_that_it_has_no_rate(self, store):
+        set_goal()
+        run("log", "--item", "Burger", "--kcal", "900")
+        assert day_entries()[-1]["source"] == {"kind": "log"}
+
+
+class TestReScale:
+    def test_amount_rescales_and_relabels(self, store):
+        set_goal()
+        run("eat", "--item", "Granola", "--kcal100", "450", "--protein100", "10",
+            "--fat100", "20", "--carbs100", "55", "--amount", "200")
+        run("edit", "--last", "--amount", "300")
+        entry = day_entries()[-1]
+        assert entry["item"] == "Granola (300g)"
+        assert entry["kcal"] == 1350
+        assert entry["protein"] == 30
+        assert entry["source"]["amount"] == 300
+
+    def test_rescaling_keeps_the_unit(self, store):
+        set_goal()
+        run("eat", "--item", "Oat drink", "--unit", "ml", "--kcal100", "46", "--amount", "250")
+        run("edit", "--last", "--amount", "500")
+        assert day_entries()[-1]["item"] == "Oat drink (500ml)"
+
+    def test_an_explicit_macro_wins_over_the_rescale(self, store):
+        set_goal()
+        run("eat", "--item", "Granola", "--kcal100", "450", "--amount", "200")
+        run("edit", "--last", "--amount", "300", "--kcal", "1000")
+        assert day_entries()[-1]["kcal"] == 1000
+
+    def test_an_entry_without_a_rate_cannot_be_rescaled(self, store):
+        set_goal()
+        run("log", "--item", "Burger", "--kcal", "900")
+        with pytest.raises(SystemExit):
+            run("edit", "--last", "--amount", "300")
+
+
+class TestRepeatDetection:
+    KINDER = ["--kcal100", "579", "--protein100", "8.5", "--fat100", "35", "--carbs100", "55"]
+
+    def eat(self, item, *extra):
+        run("eat", "--item", item, *self.KINDER, "--amount", "100", *extra)
+
+    def notes(self):
+        return "\n".join(macros.NOTES)
+
+    def test_nothing_is_said_before_the_threshold(self, store):
+        set_goal()
+        self.eat("Kinder")
+        self.eat("Kinder")
+        assert self.notes() == ""
+
+    def test_the_third_typing_suggests_saving_it(self, store):
+        set_goal()
+        for _ in range(3):
+            self.eat("Kinder")
+        notes = self.notes()
+        assert "3x as a one-off" in notes
+        assert "food-add --name \"Kinder\"" in notes
+        assert "--kcal100 579" in notes
+
+    def test_a_differently_worded_label_still_counts_as_the_same_product(self, store):
+        set_goal()
+        self.eat("Kinder Happy Hippo")
+        run("eat", "--item", "Kinder hazelnut", "--kcal100", "580", "--protein100", "8.4",
+            "--fat100", "35", "--carbs100", "55.2", "--amount", "100")
+        self.eat("Kinder pieces")
+        assert "3x as a one-off" in self.notes()
+
+    def test_it_asks_only_once(self, store):
+        set_goal()
+        for _ in range(3):
+            self.eat("Kinder")
+        macros.NOTES.clear()
+        self.eat("Kinder")
+        assert self.notes() == ""
+
+    def test_a_different_product_does_not_count(self, store):
+        set_goal()
+        self.eat("Kinder")
+        self.eat("Kinder")
+        run("eat", "--item", "Granola", "--kcal100", "450", "--protein100", "10",
+            "--fat100", "20", "--carbs100", "55", "--amount", "100")
+        assert self.notes() == ""
+
+    def test_an_already_saved_rate_is_pointed_at_its_food(self, store):
+        set_goal()
+        run("food-add", "--name", "Kinder Happy Hippo", "--kcal100", "579", "--protein100", "8.5",
+            "--fat100", "35", "--carbs100", "55", "--serving", "100")
+        self.eat("Kinder")
+        notes = self.notes()
+        assert "already saved" in notes
+        assert "food-eat --name \"Kinder Happy Hippo\"" in notes
+
+    def test_a_saved_food_is_never_suggested_for_saving_again(self, store):
+        set_goal()
+        run("food-add", "--name", "Kinder Happy Hippo", "--kcal100", "579", "--protein100", "8.5",
+            "--fat100", "35", "--carbs100", "55", "--serving", "100")
+        for _ in range(3):
+            self.eat("Kinder")
+        assert "food-add" not in self.notes()
+
+    def test_a_preview_counts_for_nothing(self, store):
+        set_goal()
+        for _ in range(2):
+            self.eat("Kinder")
+        self.eat("Kinder", "--dry-run")
+        macros.NOTES.clear()
+        self.eat("Kinder")
+        assert "3x as a one-off" in self.notes()

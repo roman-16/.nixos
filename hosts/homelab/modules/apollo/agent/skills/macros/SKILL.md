@@ -20,11 +20,19 @@ Tracks daily nutrition as JSON under `macros/` in the working directory. Every r
 
 ## Replying
 
-**The script sends its output to the user itself - do not relay it.** Every command (except a `--dry-run`) posts its printed output straight to the user on WhatsApp (as a "via macros" message), then prints `[macros: delivered to the user ✓ - do not relay]`. When you see that line, **stay silent**: don't repeat, summarize, rephrase, or comment on the output - the user already got it verbatim, and restating it double-sends.
+Every command has an audience. **By default it is the user**: the script posts its printed output straight to them on WhatsApp (as a "via macros" message) and prints `[macros: delivered to the user ✓ - do not relay]`. When you see that line, **stay silent** - don't repeat, summarize, rephrase, or comment on it. The user already has it verbatim, and restating it double-sends.
 
-Because every command's output goes to the user, only run one when you mean for the user to see it - don't run a command just to inform yourself. A `--dry-run` is the one thing the script does **not** send: relay it yourself when the user asked "what if", and you may add one short line after, e.g. "Want me to log it?".
+**`--quiet` makes the audience you.** Every command takes it. The output is printed here, nothing is sent, and the last line is `[macros: quiet - not sent to the user]`. Reach for it whenever you need a number in order to answer something, so your reply is one message in your own words instead of a raw block followed by your commentary.
 
-If the script prints `[macros: delivery FAILED ...]` instead, the send didn't happen: relay that command's output yourself, just this once (the data was still saved - don't re-run the command).
+- **Answering a question** ("how far over am I?", "what did I have yesterday?"): `summary --quiet`, `show --quiet`, `entries --quiet`, `food-get --quiet`. Read as much as you need - it costs the user nothing - then reply once.
+- **Showing the user their data** ("show me today"): run it without `--quiet` and say nothing after.
+- **Logging several things at once**: log each with `--quiet`, then one plain `show` at the end. One summary instead of one per entry.
+
+Silencing a write makes the news yours to deliver: if you log something quietly, tell the user what you logged. A `--dry-run` is never sent either (it changes nothing); relay it yourself when the user asked "what if", and you may add one short line after, e.g. "Want me to log it?".
+
+If the script prints `[macros: delivery FAILED ...]`, the send didn't happen: relay that command's output yourself, just this once (the data was still saved - don't re-run the command).
+
+Lines starting `[macros]` after the result are notes for you alone - they are never part of what the user receives. Act on them; never paste them.
 
 ## Setup (once, or when targets change)
 
@@ -64,7 +72,7 @@ In place of `--amount` it accepts the same `--fit-*`/`--target-*` sizing as `foo
 {baseDir}/scripts/macros.py eat --item "Granola" --kcal100 450 --protein100 10 --fat100 20 --carbs100 55 --fit-protein --dry-run
 ```
 
-`eat` never saves; if it's something the user eats often, offer to `food-add` it so next time is a plain `food-eat`.
+`eat` never saves, but the script watches for repeats so you don't have to. If the rate you pass is already a saved food it says so on stderr (use `food-eat` next time - same numbers, no transcribing), and once the same rate has been typed in three times it prints a ready-to-run `food-add`. Saving is the user's call: ask them first, then run it.
 
 ## Viewing a day
 
@@ -100,7 +108,7 @@ Each saved food stores its macros per 100 of a **unit** - grams by default, or `
 
 `--fit-kcal` and `--target-kcal` size by calories the same way. Amounts and the logged label read in the food's unit (`500ml`, `4 pieces`, `500g`). `food-eat` prints the day summary; the script sends it to the user.
 
-`food-get` looks a food up (its output is shown to the user, so run it only when they want to see a food - not as a silent pre-check; `food-eat` resolves names itself); `food-add` saves one (only when the user explicitly asks); `food-edit` corrects a saved food's numbers, unit, or name; `food-rm` deletes one. `--unit` defaults to `g`; set it for liquids/countables and the per-100 values are then per 100 of that unit.
+`food-get` looks a food up (`--quiet` when you just need the numbers yourself; `food-eat` resolves names itself, so it is never needed as a pre-check); `food-add` saves one (only when the user explicitly asks); `food-edit` corrects a saved food's numbers, unit, or name; `food-rm` deletes one. `--unit` defaults to `g`; set it for liquids/countables and the per-100 values are then per 100 of that unit.
 
 ```bash
 {baseDir}/scripts/macros.py food-get skyr
@@ -124,13 +132,16 @@ A recorded weigh-in is echoed in that day's summary (`Weight 66.4 kg (goal ...)`
 
 ```bash
 {baseDir}/scripts/macros.py entries        # the day's entries with their index numbers
+{baseDir}/scripts/macros.py edit --last --amount 300                           # wrong portion: re-scale it
 {baseDir}/scripts/macros.py edit --last --kcal 538 --item "Ice cream (215g)"   # fix values in place; only what you pass changes
 {baseDir}/scripts/macros.py edit --index 2 --protein 30                        # correct the 2nd entry
 {baseDir}/scripts/macros.py rm --last
 {baseDir}/scripts/macros.py rm --index 2   # remove the 2nd entry (use `entries` to find the number)
 ```
 
-`edit` changes only the fields you pass and keeps the rest (time, note, untouched macros) - safer than delete-and-retype. Select with `--last` or `--index N` (from `entries`), like `rm`. It can't re-scale a saved food to a new gram amount (the entry isn't linked back to the food); for that, `rm` then `food-eat` again.
+`edit` changes only the fields you pass and keeps the rest (time, note, untouched macros) - safer than delete-and-retype. Select with `--last` or `--index N` (from `entries`), like `rm`.
+
+`--amount` re-scales an entry from its own per-100 rate and relabels it, so a misjudged portion is one command - it works for anything logged with `eat` or `food-eat`. An entry made with `log` has no rate behind it (you supplied final macros), so correct those with explicit `--kcal`/`--protein`/`--fat`/`--carbs`.
 
 ## Meal prep (batch cooking)
 

@@ -40,10 +40,31 @@ DAY_START_HOUR = 4
 # The four macro keys every food, day, and portion is measured in, in display order.
 MACROS = ("kcal", "protein", "fat", "carbs")
 
+# How often the same nutrition label may be typed in as a one-off before saving it is suggested,
+# and how far back that counting looks.
+REPEAT_NUDGE_AT = 3
+REPEAT_WINDOW_DAYS = 90
+
+# Slack that still counts two labels as the same product. All four values must agree, so the
+# tolerance absorbs a misread digit without ever merging two genuinely different foods.
+KCAL_TOLERANCE = 3
+MACRO_TOLERANCE = 0.5
+
 
 def die(msg: str):
     print(f"error: {msg}", file=sys.stderr)
     raise SystemExit(1)
+
+
+# Notes addressed to the caller rather than the user. What gets delivered is the command's printed
+# result - the document built up inside the output buffer - so these are collected during the run
+# and written after it, outside that buffer: same stream, never part of what the user receives.
+NOTES: list = []
+
+
+def hint(msg: str):
+    """Tell the caller something the user has no reason to read."""
+    NOTES.append(msg)
 
 
 def macro_date(dt: datetime) -> str:
@@ -307,15 +328,74 @@ def ensure_day(date: str):
     refresh_ledger(date)
 
 
-def make_entry(time, item, kcal, protein, fat, carbs, note, *, prep_id=None, event_id=None) -> dict:
-    entry = {
+def make_entry(time, item, kcal, protein, fat, carbs, note, *, source) -> dict:
+    """One logged entry. `source` records how it was produced - the per-100 rate and amount behind
+    it, the food or batch it came from - so an entry stays re-scalable, and so repeats of the same
+    label are recognisable later. Without it the numbers survive but their derivation is lost."""
+    return {
         "time": time, "item": item, "kcal": kcal,
         "protein": protein, "fat": fat, "carbs": carbs, "note": note or None,
+        "source": source,
     }
-    if prep_id is not None:
-        entry["prepId"] = prep_id
-        entry["eventId"] = event_id
-    return entry
+
+
+def rate_source(kind: str, name: str, per100: dict, amount, unit: str) -> dict:
+    """Provenance for an entry scaled from a per-100 rate. The rate is snapshotted rather than
+    referenced, so editing a saved food later never moves numbers on days already logged."""
+    return {
+        "kind": kind, "name": name, "amount": amount, "unit": unit,
+        "per100": {k: per100[k] for k in MACROS},
+    }
+
+
+def same_per100(a: dict, b: dict) -> bool:
+    """Whether two per-100 rates describe the same product, allowing for label-reading slack."""
+    if abs(a.get("kcal", 0) - b.get("kcal", 0)) > KCAL_TOLERANCE:
+        return False
+    return all(abs(a.get(k, 0) - b.get(k, 0)) <= MACRO_TOLERANCE for k in ("protein", "fat", "carbs"))
+
+
+def saved_food_matching(per100: dict, unit: str):
+    """A saved food with this rate, or None - so a label already in the catalog is never typed in
+    by hand a second time."""
+    for food in load(FOOD_FILE, {}).values():
+        if food.get("unit", "g") == unit and same_per100(food.get("per100", {}), per100):
+            return food
+    return None
+
+
+def eat_repeats(per100: dict, unit: str, upto: str) -> int:
+    """How many recent one-off entries share this rate. The entries are the count - remove one and
+    it drops by itself - so nothing separate has to be kept in step."""
+    start = (parse_date(upto) - timedelta(days=REPEAT_WINDOW_DAYS)).strftime("%Y-%m-%d")
+    seen = 0
+    for path in sorted(DAYS_DIR.glob("*.json")) if DAYS_DIR.exists() else []:
+        if not start <= path.stem <= upto:
+            continue
+        for entry in load(path, {}).get("entries", []):
+            source = entry.get("source") or {}
+            if source.get("kind") != "eat" or source.get("unit", "g") != unit:
+                continue
+            if same_per100(source.get("per100", {}), per100):
+                seen += 1
+    return seen
+
+
+def suggest_saving(item: str, per100: dict, unit: str, amount, date: str):
+    """Point out that a hand-typed label is already saved, or has now been typed often enough to be
+    worth saving. Saving stays the user's call, so this asks the agent to ask rather than acting."""
+    saved = saved_food_matching(per100, unit)
+    if saved:
+        hint(f'[macros] this rate is already saved as "{saved["name"]}" - next time: '
+             f'food-eat --name "{saved["name"]}" --amount {amount}')
+        return
+    if eat_repeats(per100, unit, date) != REPEAT_NUDGE_AT:
+        return
+    unit_flag = f" --unit {unit}" if unit != "g" else ""
+    hint(f'[macros] "{item}" has now been typed in {REPEAT_NUDGE_AT}x as a one-off. Ask whether to '
+         f"save it, then:\n  food-add --name \"{item}\" --kcal100 {per100['kcal']} "
+         f"--protein100 {per100['protein']} --fat100 {per100['fat']} --carbs100 {per100['carbs']} "
+         f"--serving {amount}{unit_flag}")
 
 
 def append_entry(date: str, entry: dict):
@@ -484,8 +564,10 @@ def cmd_goal_set(args):
 
 def cmd_log(args):
     date = args.date or today()
+    # No rate behind it: `log` transcribes final macros, which is exactly what "kind": "log" records.
     entry = make_entry(args.time or now_time(), args.item,
-                       args.kcal, args.protein, args.fat, args.carbs, args.note)
+                       args.kcal, args.protein, args.fat, args.carbs, args.note,
+                       source={"kind": "log"})
     emit(date, entry, dry_run=args.dry_run, commit=lambda: append_entry(date, entry))
 
 
@@ -493,7 +575,8 @@ def cmd_eat(args):
     """Log a one-off food from a per-100 nutrition label (a photo), scaling it by the amount
     here so that multiplication never happens in-model. Nothing is saved to the catalog."""
     unit = args.unit or "g"
-    rate = {k: getattr(args, f"{k}100") / 100 for k in MACROS}
+    per100 = {k: getattr(args, f"{k}100") for k in MACROS}
+    rate = {k: v / 100 for k, v in per100.items()}
     date = args.date or today()
     why = None
     if has_target(args):
@@ -509,10 +592,13 @@ def cmd_eat(args):
     kcal = round(rate["kcal"] * amount)
     protein = r1(rate["protein"] * amount)
     entry = make_entry(now_time(), f"{args.item} ({fmt_amount(amount, unit)})",
-                       kcal, protein, r1(rate["fat"] * amount), r1(rate["carbs"] * amount), args.note)
+                       kcal, protein, r1(rate["fat"] * amount), r1(rate["carbs"] * amount), args.note,
+                       source=rate_source("eat", args.item, per100, amount, unit))
     lead = (f"🍽️ {args.item}: {fmt_amount(amount, unit)} {why} - {kcal} kcal, {protein}g P"
             if why else None)
     emit(date, entry, dry_run=args.dry_run, lead=lead, commit=lambda: append_entry(date, entry))
+    if not args.dry_run:
+        suggest_saving(args.item, per100, unit, amount, date)
 
 
 def cmd_show(args):
@@ -613,7 +699,7 @@ def entry_locked(entry: dict) -> bool:
     """True for a day entry that projects a prep consumption event: it is corrected through
     prep-uneat (unarchiving its batch first if archived), not edited from the day. A batch is
     never deleted, so a prep-sourced entry stays managed by its batch for good."""
-    prep_id = entry.get("prepId")
+    prep_id = (entry.get("source") or {}).get("prepId")
     return bool(prep_id) and prep_id in load(PREP_FILE, {})
 
 
@@ -667,13 +753,28 @@ def cmd_edit(args):
         die("that entry comes from a prep batch - correct it with prep-ingredient-edit "
             "or reverse it with prep-uneat, not edit.")
     changed = False
+    # A new amount re-scales from the entry's own rate, so "make that 300g" is a correction rather
+    # than a delete-and-retype. Applied first, so any explicit macro passed alongside still wins.
+    if args.amount is not None:
+        source = entry.get("source") or {}
+        per100 = source.get("per100")
+        if not per100:
+            die("that entry has no per-100 rate to re-scale from - rm it and log it again")
+        unit = source.get("unit", "g")
+        amount = round(args.amount)
+        entry["kcal"] = round(per100["kcal"] / 100 * amount)
+        for m in ("protein", "fat", "carbs"):
+            entry[m] = r1(per100[m] / 100 * amount)
+        entry["item"] = f"{source['name']} ({fmt_amount(amount, unit)})"
+        source["amount"] = amount
+        changed = True
     for flag in ("item", "kcal", "protein", "fat", "carbs", "note"):
         value = getattr(args, flag)
         if value is not None:
             entry[flag] = value
             changed = True
     if not changed:
-        die("give at least one field to change (--item/--kcal/--protein/--fat/--carbs/--note)")
+        die("give at least one field to change (--amount/--item/--kcal/--protein/--fat/--carbs/--note)")
     save(path, day)
     recompute_from(date)
     render_after_change(date)
@@ -750,7 +851,8 @@ def cmd_food_eat(args):
     kcal = round(rate["kcal"] * amount)
     protein = r1(rate["protein"] * amount)
     entry = make_entry(now_time(), f"{food['name']} ({fmt_amount(amount, unit)})",
-                       kcal, protein, r1(rate["fat"] * amount), r1(rate["carbs"] * amount), None)
+                       kcal, protein, r1(rate["fat"] * amount), r1(rate["carbs"] * amount), None,
+                       source=rate_source("food", food["name"], per100, amount, unit))
     leads = []
     if assumed:
         leads.append(f'📝 read "{args.name}" as {assumed}')
@@ -927,7 +1029,7 @@ def apply_delta(batch: dict, key: str, delta: dict, *, date: str, label: str, ve
             append_entry(date, make_entry(
                 now_time(), f"{batch['name']} - {verb} {label} (already-eaten share)",
                 kcal, r1(mine["protein"]), r1(mine["fat"]), r1(mine["carbs"]), "prep-fix",
-                prep_id=key, event_id=event["id"]))
+                source={"kind": "prep", "prepId": key, "eventId": event["id"]}))
             leads.append(f"logged the {kcal} kcal you'd already eaten from it (today)" if kcal > 0
                          else f"un-logged the {-kcal} kcal of it you'd already eaten (today)")
     if any(abs(others[k]) > 1e-9 for k in MACROS):
@@ -1195,7 +1297,8 @@ def cmd_prep_eat(args):
     size_part = portion_size(batch, frac)
     item = f"{batch['name']} ({round(frac * 100)}% of batch{f', {size_part}' if size_part else ''})"
     entry = make_entry(now_time(), item, round(portion["kcal"]), r1(portion["protein"]),
-                       r1(portion["fat"]), r1(portion["carbs"]), "prep")
+                       r1(portion["fat"]), r1(portion["carbs"]), "prep",
+                       source={"kind": "prep", "prepId": key})
     partial = 0 < left < 1 - 1e-6
     # The portion line is worth showing for a fit/target portion (always) or any portion of an
     # already-partial batch (where "of what's left" adds real info); on a full batch a plain
@@ -1222,7 +1325,7 @@ def cmd_prep_eat(args):
         event = make_event("eaten", date, portion, f"{round(frac * 100)}% of batch")
         append_entry(date, make_entry(now_time(), item, round(portion["kcal"]), r1(portion["protein"]),
                                       r1(portion["fat"]), r1(portion["carbs"]), "prep",
-                                      prep_id=key, event_id=event["id"]))
+                                      source={"kind": "prep", "prepId": key, "eventId": event["id"]}))
         batch["consumption"].append(event)
         maybe_archive(batch)
         prep[key] = batch
@@ -1273,7 +1376,7 @@ def remove_linked_entry(event: dict, dates: set):
     if not path.exists():
         return
     day = load(path, {})
-    kept = [e for e in day["entries"] if e.get("eventId") != event["id"]]
+    kept = [e for e in day["entries"] if (e.get("source") or {}).get("eventId") != event["id"]]
     if len(kept) != len(day["entries"]):
         day["entries"] = kept
         save(path, day)
@@ -1385,9 +1488,17 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="macros.py", description="daily nutrition tracker")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    sub.add_parser("goal").set_defaults(func=cmd_goal)
+    # Every command answers to someone: by default the user, or the caller alone under --quiet.
+    shared = argparse.ArgumentParser(add_help=False)
+    shared.add_argument("--quiet", action="store_true",
+                        help="print the result here instead of sending it to the user")
 
-    g = sub.add_parser("goal-set")
+    def command(name: str) -> argparse.ArgumentParser:
+        return sub.add_parser(name, parents=[shared])
+
+    command("goal").set_defaults(func=cmd_goal)
+
+    g = command("goal-set")
     g.set_defaults(func=cmd_goal_set)
     g.add_argument("--phase", choices=["cut", "maintenance", "bulk"])
     g.add_argument("--tdee", type=positive)
@@ -1395,7 +1506,7 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--protein", type=positive)
     g.add_argument("--weight-goal", type=positive)
 
-    lo = sub.add_parser("log")
+    lo = command("log")
     lo.set_defaults(func=cmd_log)
     lo.add_argument("--item", required=True)
     lo.add_argument("--kcal", type=nonneg, required=True)
@@ -1407,7 +1518,7 @@ def build_parser() -> argparse.ArgumentParser:
     lo.add_argument("--date")
     lo.add_argument("--dry-run", action="store_true")
 
-    ea = sub.add_parser("eat")
+    ea = command("eat")
     ea.set_defaults(func=cmd_eat)
     ea.add_argument("--item", required=True)
     ea.add_argument("--kcal100", type=nonneg, required=True)
@@ -1418,37 +1529,38 @@ def build_parser() -> argparse.ArgumentParser:
     ea.add_argument("--note")
     add_amount_flags(ea, ("--amount", {"type": positive}))
 
-    sh = sub.add_parser("show")
+    sh = command("show")
     sh.set_defaults(func=cmd_show)
     sh.add_argument("--date")
 
-    sm = sub.add_parser("summary")
+    sm = command("summary")
     sm.set_defaults(func=cmd_summary)
     grp = sm.add_mutually_exclusive_group()
     grp.add_argument("--days", type=int)
     grp.add_argument("--from", dest="from_")
     sm.add_argument("--to")
 
-    w = sub.add_parser("weight")
+    w = command("weight")
     w.set_defaults(func=cmd_weight)
     w.add_argument("--kg", type=positive, required=True)
     w.add_argument("--at")
     w.add_argument("--date")
 
-    rm = sub.add_parser("rm")
+    rm = command("rm")
     rm.set_defaults(func=cmd_rm)
     rm.add_argument("--last", action="store_true")
     rm.add_argument("--index", type=int)
     rm.add_argument("--date")
 
-    en = sub.add_parser("entries")
+    en = command("entries")
     en.set_defaults(func=cmd_entries)
     en.add_argument("--date")
 
-    ed = sub.add_parser("edit")
+    ed = command("edit")
     ed.set_defaults(func=cmd_edit)
     ed.add_argument("--last", action="store_true")
     ed.add_argument("--index", type=int)
+    ed.add_argument("--amount", type=positive)
     ed.add_argument("--item")
     ed.add_argument("--kcal", type=nonneg)
     ed.add_argument("--protein", type=nonneg)
@@ -1457,11 +1569,11 @@ def build_parser() -> argparse.ArgumentParser:
     ed.add_argument("--note")
     ed.add_argument("--date")
 
-    fg = sub.add_parser("food-get")
+    fg = command("food-get")
     fg.set_defaults(func=cmd_food_get)
     fg.add_argument("query")
 
-    fa = sub.add_parser("food-add")
+    fa = command("food-add")
     fa.set_defaults(func=cmd_food_add)
     fa.add_argument("--name", required=True)
     fa.add_argument("--kcal100", type=nonneg, required=True)
@@ -1472,14 +1584,14 @@ def build_parser() -> argparse.ArgumentParser:
     fa.add_argument("--unit")
     fa.add_argument("--aliases")
 
-    sub.add_parser("food-list").set_defaults(func=cmd_food_list)
+    command("food-list").set_defaults(func=cmd_food_list)
 
-    fe = sub.add_parser("food-eat")
+    fe = command("food-eat")
     fe.set_defaults(func=cmd_food_eat)
     fe.add_argument("--name", required=True)
     add_amount_flags(fe, ("--amount", {"type": positive}), ("--servings", {"type": positive}))
 
-    fed = sub.add_parser("food-edit")
+    fed = command("food-edit")
     fed.set_defaults(func=cmd_food_edit)
     fed.add_argument("--name", required=True)
     fed.add_argument("--kcal100", type=nonneg)
@@ -1491,17 +1603,17 @@ def build_parser() -> argparse.ArgumentParser:
     fed.add_argument("--rename")
     fed.add_argument("--aliases")
 
-    frm = sub.add_parser("food-rm")
+    frm = command("food-rm")
     frm.set_defaults(func=cmd_food_rm)
     frm.add_argument("--name", required=True)
 
-    pa = sub.add_parser("prep-add")
+    pa = command("prep-add")
     pa.set_defaults(func=cmd_prep_add)
     pa.add_argument("--name", required=True)
     pa.add_argument("--size", type=positive)
     pa.add_argument("--unit")
 
-    psz = sub.add_parser("prep-size")
+    psz = command("prep-size")
     psz.set_defaults(func=cmd_prep_size)
     psz.add_argument("--name", required=True)
     grp = psz.add_mutually_exclusive_group(required=True)
@@ -1509,7 +1621,7 @@ def build_parser() -> argparse.ArgumentParser:
     grp.add_argument("--clear", action="store_true")
     psz.add_argument("--unit")
 
-    ping = sub.add_parser("prep-ingredient-add")
+    ping = command("prep-ingredient-add")
     ping.set_defaults(func=cmd_prep_ingredient_add)
     ping.add_argument("--name", required=True)
     ping.add_argument("--label", required=True)
@@ -1521,7 +1633,7 @@ def build_parser() -> argparse.ArgumentParser:
     ping.add_argument("--no-log-eaten", action="store_true")
     ping.add_argument("--date")
 
-    pied = sub.add_parser("prep-ingredient-edit")
+    pied = command("prep-ingredient-edit")
     pied.set_defaults(func=cmd_prep_ingredient_edit)
     pied.add_argument("--name", required=True)
     pied.add_argument("--last", action="store_true")
@@ -1534,7 +1646,7 @@ def build_parser() -> argparse.ArgumentParser:
     pied.add_argument("--no-log-eaten", action="store_true")
     pied.add_argument("--date")
 
-    pirm = sub.add_parser("prep-ingredient-rm")
+    pirm = command("prep-ingredient-rm")
     pirm.set_defaults(func=cmd_prep_ingredient_rm)
     pirm.add_argument("--name", required=True)
     pirm.add_argument("--last", action="store_true")
@@ -1542,18 +1654,18 @@ def build_parser() -> argparse.ArgumentParser:
     pirm.add_argument("--no-log-eaten", action="store_true")
     pirm.add_argument("--date")
 
-    pget = sub.add_parser("prep-get")
+    pget = command("prep-get")
     pget.set_defaults(func=cmd_prep_get)
     pget.add_argument("--name")
     pget.add_argument("--id")
 
-    pe = sub.add_parser("prep-eat")
+    pe = command("prep-eat")
     pe.set_defaults(func=cmd_prep_eat)
     pe.add_argument("--name", required=True)
     add_amount_flags(pe, ("--fraction", {}), ("--remaining", {"nargs": "?", "const": "1", "default": None}),
                      ("--size", {"type": positive}))
 
-    prem = sub.add_parser("prep-remove")
+    prem = command("prep-remove")
     prem.set_defaults(func=cmd_prep_remove)
     prem.add_argument("--name", required=True)
     grp = prem.add_mutually_exclusive_group()
@@ -1562,7 +1674,7 @@ def build_parser() -> argparse.ArgumentParser:
     grp.add_argument("--size", type=positive)
     prem.add_argument("--date")
 
-    pun = sub.add_parser("prep-uneat")
+    pun = command("prep-uneat")
     pun.set_defaults(func=cmd_prep_uneat)
     pun.add_argument("--name", required=True)
     grp = pun.add_mutually_exclusive_group(required=True)
@@ -1570,29 +1682,31 @@ def build_parser() -> argparse.ArgumentParser:
     grp.add_argument("--index", type=int)
     grp.add_argument("--all", action="store_true")
 
-    par = sub.add_parser("prep-archive")
+    par = command("prep-archive")
     par.set_defaults(func=cmd_prep_archive)
     par.add_argument("--name", required=True)
 
-    pua = sub.add_parser("prep-unarchive")
+    pua = command("prep-unarchive")
     pua.set_defaults(func=cmd_prep_unarchive)
     pua.add_argument("--name")
     pua.add_argument("--id")
 
-    pl = sub.add_parser("prep-list")
+    pl = command("prep-list")
     pl.set_defaults(func=cmd_prep_list)
     pl.add_argument("--all", action="store_true")
 
-    rc = sub.add_parser("recompute")
+    rc = command("recompute")
     rc.set_defaults(func=cmd_recompute)
     rc.add_argument("--from", dest="from_")
 
     return p
 
 
-def should_deliver(dry_run: bool) -> bool:
-    """Every command sends its output to the user, except a --dry-run preview."""
-    return not dry_run
+def should_deliver(dry_run: bool, quiet: bool) -> bool:
+    """Who this run is for. Output reaches the user by default, because these numbers should arrive
+    exactly as computed rather than retold - unless it is a preview, or the caller asked to read it
+    privately in order to answer something itself."""
+    return not (dry_run or quiet)
 
 
 def deliver_to_user(text: str) -> str | None:
@@ -1626,13 +1740,20 @@ def main():
     finally:
         sys.stdout.write(buffer.getvalue())
     output = buffer.getvalue()
-    if should_deliver(getattr(args, "dry_run", False)) and output.strip():
-        marker = deliver_to_user(output)
-        sys.stdout.write(
-            marker
-            if marker is not None
-            else "\n[macros: delivery FAILED - relay the output above to the user yourself]\n"
-        )
+    quiet = getattr(args, "quiet", False)
+    if output.strip():
+        if should_deliver(getattr(args, "dry_run", False), quiet):
+            marker = deliver_to_user(output)
+            sys.stdout.write(
+                marker
+                if marker is not None
+                else "\n[macros: delivery FAILED - relay the output above to the user yourself]\n"
+            )
+        elif quiet:
+            # Say so explicitly: without a marker the caller cannot tell a silent run from a sent one.
+            sys.stdout.write("\n[macros: quiet - not sent to the user]\n")
+    for note in NOTES:
+        sys.stdout.write(f"{note}\n")
 
 
 if __name__ == "__main__":
