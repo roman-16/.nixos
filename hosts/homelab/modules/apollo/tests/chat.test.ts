@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import { copyText, imageFromLine, type LogItem, parseTranscript, renderChat } from "../src/chat";
 
-import type { ContextNote } from "../src/newday";
+import type { ContextNote } from "../src/temporal";
 
 const header = JSON.stringify({ cwd: "/w", id: "s", timestamp: "t", type: "session", version: 3 });
 

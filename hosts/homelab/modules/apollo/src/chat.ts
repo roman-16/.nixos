@@ -7,7 +7,7 @@
 
 import { escapeHtml, humanTokens, truncate } from "./format";
 
-import { type ContextNote, withContext } from "./newday";
+import { type ContextNote, withContext } from "./temporal";
 
 const MAX_OUTPUT_CHARS = 10000;
 const PREVIEW_CHARS = 100;

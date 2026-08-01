@@ -1,7 +1,7 @@
 import { humanTokens, truncate } from "./format";
 
 import type { LogRecord } from "./logs";
-import type { ContextNote } from "./newday";
+import { type ContextNote, describeDelay, stamp } from "./temporal";
 
 const DEFAULT_MAX_CHARS = 4000;
 
@@ -14,6 +14,23 @@ const SKILL_NOTE_MAX_CHARS = 4000;
 export function compactionNotice(tokensBefore?: number): string {
   const count = tokensBefore && tokensBefore > 0 ? ` (~${humanTokens(tokensBefore)} tokens)` : "";
   return `🗜️ Context compacted${count}. Full summary on the dashboard.`;
+}
+
+/**
+ * What the user is told after the WhatsApp link was gone long enough to have missed something.
+ * WhatsApp replays what it queued, but a long enough gap outlives that queue, and only the user
+ * knows what they sent - so the gap is stated plainly rather than hidden.
+ */
+export function outageNotice(from: number, to: number): string {
+  return (
+    `⚠️ I was offline for ${describeDelay(to - from)}, from ${stamp(new Date(from))} until ${stamp(new Date(to))}. ` +
+    `I'll catch up on whatever WhatsApp kept for me - forward anything that's missing.`
+  );
+}
+
+/** Stand-in for a voice note that could not be transcribed, so the message still reaches the agent. */
+export function voiceFailure(): string {
+  return "🎤 (voice note - I couldn't transcribe it; ask the user what they said)";
 }
 
 /** Friendly WhatsApp notice when a Claude/agent run fails terminally (any provider error). */

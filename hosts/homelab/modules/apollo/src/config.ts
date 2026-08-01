@@ -10,10 +10,13 @@ export type ThinkingLevel = "high" | "low" | "max" | "medium" | "minimal" | "off
 export interface Config {
   agentDir: string;
   allowFrom: string[];
+  backlogMax: number;
   baileysLogLevel: string;
   compactionPromptFile: string;
   dayStartHour: number;
   dbPath: string;
+  inboxRetentionDays: number;
+  linkGraceMs: number;
   logLevel: string;
   logRetentionDays: number;
   maxMessageChars: number;
@@ -25,6 +28,7 @@ export interface Config {
   profilePicturePath: string;
   remindersDir: string;
   sessionDir: string;
+  staleMs: number;
   systemPromptFile: string;
   thinkingLevel: ThinkingLevel;
   transcribeModel: string;
@@ -44,10 +48,16 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   return {
     agentDir,
     allowFrom: (env.APOLLO_ALLOW_FROM ?? "").split(",").map(digits).filter(Boolean),
+    // How many owed messages one catch-up turn carries; the rest follow in the next turn.
+    backlogMax: Number(env.APOLLO_BACKLOG_MAX ?? 60),
     baileysLogLevel: env.APOLLO_BAILEYS_LOG_LEVEL ?? "silent",
     compactionPromptFile: join(agentDir, "COMPACTION_PROMPT.md"),
     dayStartHour: Number(env.APOLLO_DAY_START_HOUR ?? 4),
     dbPath: env.APOLLO_DB_PATH ?? join(home, "apollo.sqlite"),
+    inboxRetentionDays: Number(env.APOLLO_INBOX_RETENTION_DAYS ?? 30),
+    // How long the WhatsApp link may be down before /health reports the service unhealthy (so the
+    // status page goes red) and the user is told about the gap on reconnect.
+    linkGraceMs: Number(env.APOLLO_LINK_GRACE_MS ?? 10 * 60_000),
     logLevel: env.APOLLO_LOG_LEVEL ?? "info",
     logRetentionDays: Number(env.APOLLO_LOG_RETENTION_DAYS ?? 30),
     maxMessageChars: Number(env.APOLLO_MAX_MESSAGE_CHARS ?? 4000),
@@ -59,6 +69,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     profilePicturePath: env.APOLLO_PROFILE_PICTURE ?? "",
     remindersDir: env.APOLLO_REMINDERS_DIR ?? join(workspace, "reminders"),
     sessionDir: join(agentDir, "sessions"),
+    // Delay past which a message counts as late rather than live, and its turn says so.
+    staleMs: Number(env.APOLLO_STALE_MS ?? 2 * 60_000),
     systemPromptFile: join(agentDir, "SYSTEM_PROMPT.md"),
     thinkingLevel: (env.APOLLO_THINKING ?? "medium") as ThinkingLevel,
     transcribeModel: env.APOLLO_TRANSCRIBE_MODEL ?? "voxtral-mini-latest",

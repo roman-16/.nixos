@@ -84,14 +84,14 @@ function stubDeps(over: Partial<ServerDeps> = {}): ServerDeps {
       sync: () => {},
       tail: () => ({ entries: [], more: false, version: "0:0" }),
     } as unknown as ServerDeps["chatStore"],
-    config: { port: 0 } as unknown as Config,
+    config: { linkGraceMs: 600_000, port: 0 } as unknown as Config,
     logStore: { query: () => [], seq: 0 } as unknown as ServerDeps["logStore"],
     logger: { debug: noop, error: noop, info: noop, warn: noop } as unknown as ServerDeps["logger"],
     modelRuntime: stubRuntime(),
     pipeline: {
       emitSkillMessage: async () => {},
       notify: async () => {},
-      state: () => ({ qr: undefined, status: "connecting", user: undefined }),
+      state: () => ({ downSince: undefined, qr: undefined, status: "connected", user: "43" }),
     } as unknown as Pipeline,
     runBackup: async () => "Backed up.",
     session: {
@@ -124,10 +124,34 @@ describe("startServer routing", () => {
     server = undefined;
   });
 
-  it("answers the health check", async () => {
+  it("answers the health check while the whatsapp link is up", async () => {
     const res = await get(boot(), "/health");
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("ok");
+  });
+
+  it("stays healthy through a short reconnect", async () => {
+    const base = boot({
+      config: { linkGraceMs: 600_000, port: 0 } as unknown as Config,
+      pipeline: {
+        notify: async () => {},
+        state: () => ({ downSince: Date.now() - 30_000, qr: undefined, status: "connecting" }),
+      } as unknown as Pipeline,
+    });
+    expect((await get(base, "/health")).status).toBe(200);
+  });
+
+  it("reports unhealthy once the link has been down past the grace period", async () => {
+    const base = boot({
+      config: { linkGraceMs: 600_000, port: 0 } as unknown as Config,
+      pipeline: {
+        notify: async () => {},
+        state: () => ({ downSince: Date.now() - 3_600_000, qr: undefined, status: "connecting" }),
+      } as unknown as Pipeline,
+    });
+    const res = await get(base, "/health");
+    expect(res.status).toBe(503);
+    expect(await res.text()).toContain("whatsapp link down");
   });
 
   it("404s an unknown path", async () => {

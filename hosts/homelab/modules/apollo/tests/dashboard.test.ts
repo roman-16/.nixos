@@ -17,7 +17,7 @@ const summary = (over: Partial<SummaryArgs>): SummaryArgs => ({
   authUrl: "",
   linking: false,
   usage: null,
-  whatsapp: { qr: undefined, status: "connected", user: "4369912345678" },
+  whatsapp: { downSince: undefined, qr: undefined, status: "connected", user: "4369912345678" },
   ...over,
 });
 
@@ -122,7 +122,7 @@ describe("renderSummary", () => {
 
   it("offers the link flow when whatsapp is not connected", async () => {
     const html = await renderSummary(
-      summary({ whatsapp: { qr: undefined, status: "qr", user: undefined } }),
+      summary({ whatsapp: { downSince: 0, qr: undefined, status: "qr", user: undefined } }),
     );
     expect(html).toContain("Not linked");
     expect(html).toContain(`hx-post="/link"`);
@@ -130,7 +130,10 @@ describe("renderSummary", () => {
 
   it("renders a QR while linking", async () => {
     const html = await renderSummary(
-      summary({ linking: true, whatsapp: { qr: "2@abc,def", status: "qr", user: undefined } }),
+      summary({
+        linking: true,
+        whatsapp: { downSince: 0, qr: "2@abc,def", status: "qr", user: undefined },
+      }),
     );
     expect(html).toContain("<svg");
     expect(html).toContain("Waiting for scan");
@@ -141,7 +144,7 @@ describe("renderSummary", () => {
     const html = await renderSummary(
       summary({
         linking: true,
-        whatsapp: { qr: undefined, status: "connecting", user: undefined },
+        whatsapp: { downSince: 0, qr: undefined, status: "connecting", user: undefined },
       }),
     );
     expect(html).toContain("Generating QR");

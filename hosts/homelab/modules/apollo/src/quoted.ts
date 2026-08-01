@@ -1,7 +1,7 @@
 import type { ImageContent } from "@earendil-works/pi-ai";
 import { getContentType, type WAMessageContent } from "@whiskeysockets/baileys";
 
-import type { ContextNote } from "./newday";
+import type { ContextNote } from "./temporal";
 
 export type QuotedKind =
   | "document"

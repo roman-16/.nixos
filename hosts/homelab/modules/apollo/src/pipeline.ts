@@ -6,8 +6,10 @@ import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { Logger } from "pino";
 
 import { deliver, onAssistantText, onRunError } from "./agent";
+import { buildBacklog } from "./backlog";
 import type { ChatStore } from "./chat-store";
 import type { Config } from "./config";
+import type { Inbox, InboxEntry } from "./inbox";
 import type { Kv } from "./kv";
 import { createThrottle, type LogStore, shouldNotify } from "./logs";
 import {
@@ -16,23 +18,36 @@ import {
   formatLogNotice,
   isAllowed,
   jidForNumber,
+  outageNotice,
   skillContextNote,
+  voiceFailure,
   voiceText,
 } from "./messages";
-import { type ContextNote, dayBoundaryNotes, withContext } from "./newday";
 import { quotedContextNote } from "./quoted";
+import { type ContextNote, timeContext, withContext } from "./temporal";
 import { transcribeAudio } from "./transcribe";
 import type { InboundMessage, WhatsApp, WhatsAppState } from "./whatsapp";
-
-const DISCONNECTED: WhatsAppState = { qr: undefined, status: "connecting", user: undefined };
 
 /** Keep the WhatsApp "typing…" indicator alive between refreshes for ~8 minutes at most. */
 const TYPING_REFRESH_MS = 4000;
 const TYPING_MAX_TICKS = 120;
 
+/** How often the link's liveness is stamped, so a gap survives a restart or a dead VM. */
+const HEARTBEAT_MS = 60_000;
+
+/** Pause before a failed delivery is retried, so a persistent fault can't spin on the backlog. */
+const DELIVERY_RETRY_MS = 5 * 60_000;
+
+/** Sweep for anything still owed - covers rows placed in the inbox out of band. */
+const DRAIN_TICK_MS = 60_000;
+
+const LINK_ALIVE_KEY = "linkAliveAt";
+const LAST_SENT_KEY = "lastInboundSentAt";
+
 export interface PipelineDeps {
   chatStore: ChatStore;
   config: Config;
+  inbox: Inbox;
   kv: Kv;
   logStore: LogStore;
   logger: Logger;
@@ -45,10 +60,10 @@ export interface Pipeline {
   attach(socket: WhatsApp): void;
   /** Deliver a skill-originated message to the user out of band: send it, record it in the chat DB, and queue a context note for the agent's next turn. */
   emitSkillMessage(text: string, source: string): Promise<void>;
-  /** Handle a (re)connect: apply the configured profile picture if it changed. */
+  /** Handle a (re)connect: report any gap, apply the profile picture, and deliver what is owed. */
   handleConnect(): void;
-  /** Handle one allowlisted inbound message: transcribe, add day context, and prompt the session. */
-  handleInbound(message: InboundMessage): Promise<void>;
+  /** Take a delivery from WhatsApp into the durable inbox, then hand over whatever is owed. */
+  handleInbound(messages: InboundMessage[]): Promise<void>;
   /** Best-effort proactive message to the user; silently drops when not connected. */
   notify(text: string): Promise<void>;
   /** Drop the current session and re-issue a QR. */
@@ -60,7 +75,15 @@ export interface Pipeline {
 }
 
 export function createPipeline(deps: PipelineDeps): Pipeline {
-  const { chatStore, config, kv, logStore, logger, session } = deps;
+  const { chatStore, config, inbox, kv, logStore, logger, session } = deps;
+
+  const startedAt = Date.now();
+  const disconnected: WhatsAppState = {
+    downSince: startedAt,
+    qr: undefined,
+    status: "connecting",
+    user: undefined,
+  };
 
   let socket: WhatsApp | undefined;
   let target: string | undefined;
@@ -69,6 +92,10 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   const fallbackTarget = config.allowFrom[0] ? jidForNumber(config.allowFrom[0]) : undefined;
   const recipient = () => target ?? fallbackTarget;
   const connected = () => Boolean(socket) && socket!.getState().status === "connected";
+
+  // Only one drain runs at a time, and a failed delivery pauses the next one until `retryAfter`.
+  let draining = false;
+  let retryAfter = 0;
 
   // Hold the "typing…" indicator up from the moment a message arrives until the session settles.
   // WhatsApp drops it on every outbound message and auto-expires it after a few seconds, so it is
@@ -147,10 +174,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     }
   }
 
-  function drainSkillNotes(): ContextNote[] {
-    const notes = readSkillNotes();
-    if (notes.length > 0) kv.set("skillNotes", "[]");
-    return notes;
+  function clearSkillNotes(): void {
+    kv.set("skillNotes", "[]");
   }
 
   // Deliver a message a skill produced (a fired reminder, a macros reply) directly to the user,
@@ -239,7 +264,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     }
   }
 
-  async function transcribe(message: InboundMessage): Promise<string | undefined> {
+  // A voice note that cannot be transcribed still becomes a message: the agent is told what it was
+  // and can ask, rather than the recording vanishing between WhatsApp and the session.
+  async function transcribe(message: InboundMessage): Promise<string> {
     if (!message.audio) return message.text;
     try {
       return voiceText(
@@ -250,14 +277,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       );
     } catch (error) {
       logger.error({ error }, "transcription failed");
-      stopTyping();
-      void socket?.send(
-        message.from,
-        `🎤 Couldn't transcribe that voice note: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-      return undefined;
+      return voiceFailure();
     }
   }
 
@@ -288,6 +308,92 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     return { images: quoted.images, note };
   }
 
+  /**
+   * Turn the messages owed to the agent into one prompt: a single fresh message reads as itself,
+   * anything else as a timestamped catch-up transcript. Either way the turn states when each message
+   * was sent, so the agent never mistakes a queued message for a live one.
+   */
+  function buildTurn(batch: InboxEntry[]): { images: ImageContent[]; prompt: string } {
+    const now = Date.now();
+    const stored = Number(kv.get(LAST_SENT_KEY) ?? 0);
+    const previous = stored > 0 ? stored : undefined;
+    const images = batch.flatMap((entry) => entry.images);
+    const carried = batch.flatMap((entry) => entry.contexts);
+    const single = batch.length === 1 ? batch[0] : undefined;
+    if (single) {
+      const note = timeContext({
+        dayStartHour: config.dayStartHour,
+        now,
+        previous,
+        sentAt: single.sentAt,
+        staleMs: config.staleMs,
+      });
+      const notes = [note, ...readSkillNotes(), ...carried];
+      return { images, prompt: withContext(notes, single.text || "(image)") };
+    }
+    const { note, text } = buildBacklog(
+      batch.map((entry) => ({
+        images: entry.images.length,
+        sentAt: entry.sentAt,
+        text: entry.text || "(image)",
+      })),
+      now,
+    );
+    return { images, prompt: withContext([note, ...readSkillNotes(), ...carried], text) };
+  }
+
+  /**
+   * Hand the inbox's pending messages to the agent, oldest first, one turn at a time. The inbox is
+   * the queue, so nothing is delivered into a running turn: a message that arrives mid-run stays
+   * durable and joins the next batch. Nor is anything delivered without a link, since the agent's
+   * reply would have nowhere to go - it waits, which is the whole point of the inbox. A delivery
+   * that throws leaves its messages pending and backs off, so a persistent fault retries later
+   * instead of spinning.
+   */
+  async function drain(): Promise<void> {
+    if (draining || !connected() || session.isStreaming || Date.now() < retryAfter) return;
+    draining = true;
+    try {
+      for (;;) {
+        const batch = inbox.pending(config.backlogMax);
+        if (batch.length === 0) return;
+        const { images, prompt } = buildTurn(batch);
+        logger.info(
+          { chars: prompt.length, count: batch.length, images: images.length },
+          batch.length > 1 ? "catch-up prompt" : "prompt",
+        );
+        startTyping();
+        try {
+          await deliver(session, prompt, images);
+        } catch (error) {
+          retryAfter = Date.now() + DELIVERY_RETRY_MS;
+          logger.error({ error }, "prompt failed");
+          stopTyping();
+          void notify(`⚠️ ${error instanceof Error ? error.message : String(error)}`);
+          return;
+        }
+        inbox.markHandled(batch.map((entry) => entry.waId));
+        clearSkillNotes();
+        kv.set(LAST_SENT_KEY, String(batch[batch.length - 1]!.sentAt));
+      }
+    } finally {
+      draining = false;
+    }
+  }
+
+  // Anything owed when a run ends (messages that arrived while the agent was working, or rows placed
+  // in the inbox out of band) goes out as soon as the session is free again.
+  session.subscribe((event) => {
+    if (event.type === "agent_settled") void drain();
+  });
+  setInterval(() => void drain(), DRAIN_TICK_MS);
+
+  // Stamp the link's liveness while it is up, so the length of an outage survives a restart or a
+  // dead VM: on reconnect the gap is "now minus the last stamp", not "since this process started".
+  setInterval(() => {
+    if (connected()) kv.set(LINK_ALIVE_KEY, String(Date.now()));
+  }, HEARTBEAT_MS);
+
   return {
     attach(next) {
       socket = next;
@@ -295,57 +401,68 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     emitSkillMessage,
     handleConnect() {
       void applyProfilePicture();
-    },
-    async handleInbound(message) {
-      if (!isAllowed(message.number, config.allowFrom)) {
-        logger.warn({ from: message.number }, "ignored message from non-allowlisted number");
-        return;
-      }
-      target = message.from;
-      void socket?.read(message.key); // blue checkmarks so the user knows it arrived
-      startTyping();
-
-      const text = await transcribe(message);
-      if (text === undefined) return; // transcription failed and already reported
-
-      const prompt = text || "(image)";
-      const lastInbound = kv.get("lastInboundAt");
-      const dayNotes = dayBoundaryNotes(
-        lastInbound ? new Date(Number(lastInbound)) : undefined,
-        new Date(),
-        config.dayStartHour,
-      );
-      kv.set("lastInboundAt", String(Date.now()));
-
-      const notes = [...dayNotes, ...drainSkillNotes()];
-      let images = message.images;
-      if (message.quoted) {
-        const resolved = await resolveQuoted(message.quoted);
-        notes.push(resolved.note);
-        images = [...images, ...resolved.images];
-      }
-
-      logger.info(
-        {
-          chars: prompt.length,
-          dayNotes: dayNotes.length,
-          from: message.number,
-          images: images.length,
-          quoted: message.quoted?.kind,
-          voice: Boolean(message.audio),
-        },
-        "prompt",
-      );
-      try {
-        await deliver(session, withContext(notes, prompt), images);
-      } catch (error) {
-        logger.error({ error }, "prompt failed");
-        stopTyping();
-        void socket?.send(
-          message.from,
-          `⚠️ ${error instanceof Error ? error.message : String(error)}`,
+      const aliveAt = Number(kv.get(LINK_ALIVE_KEY) ?? 0);
+      const now = Date.now();
+      kv.set(LINK_ALIVE_KEY, String(now));
+      if (aliveAt > 0 && now - aliveAt > config.linkGraceMs) {
+        logger.info({ ms: now - aliveAt, since: new Date(aliveAt).toISOString() }, "link gap");
+        // Whatever WhatsApp queued arrives as its own catch-up turn; this covers the rest, since a
+        // long enough gap can outlive that queue and only the user knows what is missing.
+        void emitSkillMessage(outageNotice(aliveAt, now), "status").catch((error) =>
+          logger.warn({ error }, "outage notice failed"),
         );
       }
+      void drain();
+    },
+    async handleInbound(messages) {
+      const allowed: InboundMessage[] = [];
+      for (const message of messages) {
+        if (isAllowed(message.number, config.allowFrom)) allowed.push(message);
+        else logger.warn({ from: message.number }, "ignored message from non-allowlisted number");
+      }
+      if (allowed.length === 0) return;
+      target = allowed[allowed.length - 1]!.from;
+      for (const message of allowed) void socket?.read(message.key); // blue checkmarks
+      startTyping();
+
+      // Normalizing before admission means the stored message is exactly what the agent will see:
+      // a transcript rather than audio, downloaded images, the quoted message resolved.
+      let admitted = 0;
+      for (const message of allowed) {
+        const text = await transcribe(message);
+        const contexts: ContextNote[] = [];
+        let images = message.images;
+        if (message.quoted) {
+          const resolved = await resolveQuoted(message.quoted);
+          contexts.push(resolved.note);
+          images = [...images, ...resolved.images];
+        }
+        const stored = inbox.admit({
+          contexts,
+          images,
+          sentAt: message.sentAt,
+          text,
+          waId: message.waId,
+        });
+        if (stored) admitted += 1;
+        logger.info(
+          {
+            chars: text.length,
+            from: message.number,
+            images: images.length,
+            offline: message.offline,
+            quoted: message.quoted?.kind,
+            sentAt: new Date(message.sentAt).toISOString(),
+            voice: Boolean(message.audio),
+          },
+          stored ? "message admitted" : "message already seen",
+        );
+      }
+      if (admitted === 0) {
+        stopTyping();
+        return;
+      }
+      await drain();
     },
     notify,
     relink() {
@@ -353,7 +470,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     },
     sendToUser,
     state() {
-      return socket ? socket.getState() : DISCONNECTED;
+      return socket ? socket.getState() : disconnected;
     },
   };
 }

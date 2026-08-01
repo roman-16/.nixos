@@ -215,7 +215,19 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
   }
 
   const routes = new Map<string, Handler>([
-    ["GET /health", () => new Response("ok")],
+    // Health is the whole service, not just the HTTP server: an Apollo that cannot receive a message
+    // is down, however happily it serves pages. Reporting that is what turns the status page red.
+    [
+      "GET /health",
+      () => {
+        const { downSince } = pipeline.state();
+        const downFor = downSince === undefined ? 0 : Date.now() - downSince;
+        if (downFor <= config.linkGraceMs) return new Response("ok");
+        return new Response(`whatsapp link down for ${Math.round(downFor / 60_000)}m`, {
+          status: 503,
+        });
+      },
+    ],
     [
       "GET /",
       () => {

@@ -56,6 +56,17 @@ const MIGRATIONS: string[][] = [
     `CREATE UNIQUE INDEX chat_session_entry ON chat (session_id, entry_id)`,
     `CREATE INDEX chat_session_id ON chat (session_id, id)`,
   ],
+  [
+    `CREATE TABLE inbound (
+       id          INTEGER PRIMARY KEY AUTOINCREMENT,
+       wa_id       TEXT    NOT NULL UNIQUE,
+       sent_at     INTEGER NOT NULL,
+       received_at INTEGER NOT NULL,
+       payload     TEXT    NOT NULL DEFAULT '',
+       handled_at  INTEGER
+     )`,
+    `CREATE INDEX inbound_pending ON inbound (handled_at, sent_at)`,
+  ],
 ];
 
 /** Apply every migration newer than the DB's user_version, each in its own transaction. */

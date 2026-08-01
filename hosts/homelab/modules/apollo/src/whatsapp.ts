@@ -11,6 +11,7 @@ import makeWASocket, {
   isLidUser,
   jidNormalizedUser,
   S_WHATSAPP_NET,
+  toNumber,
   useMultiFileAuthState,
   type WAMessage,
   type WAVersion,
@@ -49,6 +50,8 @@ export function reconnectDelay(attempt: number): number {
 export type WhatsAppStatus = "connected" | "connecting" | "loggedOut" | "qr";
 
 export interface WhatsAppState {
+  /** Since when there has been no link (the process start counts); undefined while connected. */
+  downSince: number | undefined;
   qr: string | undefined;
   status: WhatsAppStatus;
   user: string | undefined;
@@ -60,8 +63,14 @@ export interface InboundMessage {
   images: ImageContent[];
   key: WAMessage["key"];
   number: string;
+  /** Whether WhatsApp held this message in its offline queue rather than delivering it live. */
+  offline: boolean;
   quoted: QuotedContext | undefined;
+  /** When the user sent it, per WhatsApp's clock. */
+  sentAt: number;
   text: string;
+  /** WhatsApp's own message id - the identity the inbox deduplicates on. */
+  waId: string;
 }
 
 export interface WhatsApp {
@@ -79,7 +88,8 @@ export interface WhatsAppOptions {
   logger: Logger;
   maxChars: number;
   onConnect?: () => void;
-  onMessage: (message: InboundMessage) => Promise<void> | void;
+  /** One delivery from WhatsApp, which may carry a whole queue's worth of messages at once. */
+  onMessages: (messages: InboundMessage[]) => Promise<void> | void;
   whatsappDir: string;
 }
 
@@ -169,9 +179,10 @@ async function toInbound(
   sock: Socket,
   message: WAMessage,
   logger: Logger,
+  offline: boolean,
 ): Promise<InboundMessage | undefined> {
   const remote = message.key.remoteJid;
-  if (!remote || message.key.fromMe || !message.message) return undefined;
+  if (!remote || message.key.fromMe || !message.message || !message.key.id) return undefined;
   // Individual chats only (skip groups, status broadcast, newsletters).
   if (isJidGroup(remote) || remote.endsWith("@broadcast") || remote.endsWith("@newsletter")) {
     return undefined;
@@ -230,7 +241,20 @@ async function toInbound(
     : undefined;
 
   if (!text && images.length === 0 && !audio && !quoted) return undefined;
-  return { audio, from, images, key: message.key, number, quoted, text };
+  // WhatsApp stamps the send time in seconds; a message with none is happening now.
+  const stamped = toNumber(message.messageTimestamp) * 1000;
+  return {
+    audio,
+    from,
+    images,
+    key: message.key,
+    number,
+    offline,
+    quoted,
+    sentAt: stamped > 0 ? stamped : Date.now(),
+    text,
+    waId: message.key.id,
+  };
 }
 
 /** Connect to WhatsApp via Baileys, tracking link state and dispatching inbound messages. */
@@ -243,6 +267,7 @@ export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp>
   let status: WhatsAppStatus = "connecting";
   let qr: string | undefined;
   let user: string | undefined;
+  let downSince: number | undefined = Date.now();
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 
   /** Drop the stored session, so the next connection pairs from scratch and issues a QR. */
@@ -308,6 +333,7 @@ export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp>
         attempts = 0;
         qr = undefined;
         status = "connected";
+        downSince = undefined;
         user = socket.user?.id;
         options.logger.info("whatsapp connected");
         void socket.sendPresenceUpdate("available");
@@ -318,6 +344,7 @@ export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp>
           | { message?: string; output?: { statusCode?: number } }
           | undefined;
         const code = error?.output?.statusCode;
+        downSince ??= Date.now();
         if (code === DisconnectReason.loggedOut) {
           options.logger.warn("whatsapp logged out; clearing creds and re-issuing a QR");
           attempts = 0;
@@ -342,26 +369,30 @@ export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp>
     });
 
     socket.ev.on("messages.upsert", async ({ messages, type }) => {
-      if (type !== "notify") return;
+      // "append" is what WhatsApp's offline queue and history syncs arrive as - the transport type
+      // must never decide whether a message is real, or an outage silently eats every message sent
+      // during it. What does not belong (our own sends, groups, newsletters, strangers) is filtered
+      // by toInbound and the allowlist, and the inbox settles duplicates by message id.
+      const offline = type !== "notify";
+      // The queue WhatsApp held during an outage arrives as one event, so it is passed on as one
+      // batch: that is what lets it be answered as a single catch-up rather than message by message.
+      const inbound: InboundMessage[] = [];
       for (const message of messages) {
-        options.logger.info(
-          {
-            fromMe: message.key.fromMe,
-            remoteJid: message.key.remoteJid,
-            remoteJidAlt: message.key.remoteJidAlt,
-          },
-          "inbound message",
-        );
-        const inbound = await toInbound(socket, message, options.logger);
-        if (inbound) await options.onMessage(inbound);
+        const one = await toInbound(socket, message, options.logger, offline);
+        if (one) inbound.push(one);
       }
+      options.logger.info(
+        { accepted: inbound.length, offline, received: messages.length },
+        "inbound delivery",
+      );
+      if (inbound.length > 0) await options.onMessages(inbound);
     });
   }
 
   void connect();
 
   return {
-    getState: () => ({ qr, status, user: user ? numberFromJid(user) : undefined }),
+    getState: () => ({ downSince, qr, status, user: user ? numberFromJid(user) : undefined }),
     presence: async (to, state) => {
       try {
         await sock?.sendPresenceUpdate(state, to);
@@ -380,6 +411,7 @@ export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp>
       attempts = 0;
       qr = undefined;
       status = "connecting";
+      downSince ??= Date.now();
       user = undefined;
       sock?.end(undefined);
       // Relinking means pairing a new device, so the stored session goes: while creds are on disk

@@ -5,6 +5,7 @@ import { runWorkspaceBackup } from "./backup";
 import { createChatStore } from "./chat-store";
 import { loadConfig } from "./config";
 import { openDatabase } from "./db";
+import { createInbox } from "./inbox";
 import { createKv } from "./kv";
 import { createLogStore } from "./logs";
 import { createPipeline } from "./pipeline";
@@ -26,8 +27,17 @@ export async function main(): Promise<void> {
   const logger = pino({ level: config.logLevel }, logStore.stream);
 
   const logRetentionMs = config.logRetentionDays * 24 * HOUR_MS;
-  logStore.prune(Date.now() - logRetentionMs);
-  setInterval(() => logStore.prune(Date.now() - logRetentionMs), HOUR_MS);
+  const inboxRetentionMs = config.inboxRetentionDays * 24 * HOUR_MS;
+  // The inbox remembers message ids exactly as long as it keeps their rows, so one window governs
+  // both what it prunes and how old a message may be and still count as unseen.
+  const inbox = createInbox(db, inboxRetentionMs);
+
+  const prune = () => {
+    logStore.prune(Date.now() - logRetentionMs);
+    inbox.prune(Date.now() - inboxRetentionMs);
+  };
+  prune();
+  setInterval(prune, HOUR_MS);
 
   if (config.allowFrom.length === 0) {
     logger.warn("APOLLO_ALLOW_FROM is empty; every inbound message will be ignored");
@@ -36,7 +46,7 @@ export async function main(): Promise<void> {
   const { modelRuntime, session } = await createApolloSession(config, logger);
   logger.info({ model: config.model, workspace: config.workspace }, "pi session ready");
 
-  const pipeline = createPipeline({ chatStore, config, kv, logStore, logger, session });
+  const pipeline = createPipeline({ chatStore, config, inbox, kv, logStore, logger, session });
 
   // Mirror the pi session's entries into SQLite - the dashboard's source of truth. Seed from
   // the resumed session, then keep it current by diffing getEntries() after pi persists.
@@ -73,7 +83,7 @@ export async function main(): Promise<void> {
     logger,
     maxChars: config.maxMessageChars,
     onConnect: () => pipeline.handleConnect(),
-    onMessage: (message) => pipeline.handleInbound(message),
+    onMessages: (messages) => pipeline.handleInbound(messages),
     whatsappDir: config.whatsappDir,
   });
   pipeline.attach(whatsapp);
