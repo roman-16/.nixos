@@ -6,6 +6,8 @@ import { fragmentCache, isLoopback, type ServerDeps, startServer } from "../src/
 
 type Server = ReturnType<typeof startServer>;
 
+const AUTH_URL = "https://claude.ai/oauth/authorize?code=true";
+
 describe("fragmentCache", () => {
   it("serves a body on the first key and 204s on a repeat", () => {
     const cache = fragmentCache();
@@ -60,11 +62,23 @@ describe("isLoopback", () => {
   });
 });
 
+/** A model runtime with no stored credential, parked on the sign-in exactly like pi's real flow. */
+function stubRuntime(over: Record<string, unknown> = {}): ServerDeps["modelRuntime"] {
+  return {
+    getAuth: async () => undefined,
+    hasConfiguredAuth: () => false,
+    login: (_provider: string, _type: string, interaction: any) => {
+      interaction.notify({ type: "auth_url", url: AUTH_URL });
+      return new Promise(() => {}); // parks until a code is submitted
+    },
+    ...over,
+  } as unknown as ServerDeps["modelRuntime"];
+}
+
 /** Minimal deps exercising the read-only routes; action routes and their session calls are unused here. */
 function stubDeps(over: Partial<ServerDeps> = {}): ServerDeps {
   const noop = () => {};
   return {
-    authStorage: { hasAuth: () => false } as unknown as ServerDeps["authStorage"],
     chatStore: {
       image: () => undefined,
       sync: () => {},
@@ -73,6 +87,7 @@ function stubDeps(over: Partial<ServerDeps> = {}): ServerDeps {
     config: { port: 0 } as unknown as Config,
     logStore: { query: () => [], seq: 0 } as unknown as ServerDeps["logStore"],
     logger: { debug: noop, error: noop, info: noop, warn: noop } as unknown as ServerDeps["logger"],
+    modelRuntime: stubRuntime(),
     pipeline: {
       emitSkillMessage: async () => {},
       notify: async () => {},
@@ -163,6 +178,30 @@ describe("startServer routing", () => {
 
   it("404s a media request for an unknown image", async () => {
     expect((await get(boot(), "/media/whatever/0")).status).toBe(404);
+  });
+
+  it("offers pi's authorize url while Anthropic is not connected", async () => {
+    expect(await (await get(boot(), "/summary")).text()).toContain(AUTH_URL);
+  });
+
+  it("hands a pasted code to the parked sign-in and reports a rejected one", async () => {
+    let pasted: string | undefined;
+    const base = boot({
+      modelRuntime: stubRuntime({
+        login: async (_provider: string, _type: string, interaction: any) => {
+          interaction.notify({ type: "auth_url", url: AUTH_URL });
+          pasted = await interaction.prompt({ type: "manual_code", message: "code?" });
+          throw new Error("bad code");
+        },
+      }),
+    });
+    const res = await fetch(`${base}/connect`, {
+      body: "code=abc123",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      method: "POST",
+    });
+    expect(pasted).toBe("abc123");
+    expect(await res.text()).toContain("That code didn't work");
   });
 
   it("serves a chat image from the store with an immutable cache", async () => {

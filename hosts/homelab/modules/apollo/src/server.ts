@@ -1,6 +1,7 @@
-import type { AgentSession, AuthStorage } from "@earendil-works/pi-coding-agent";
+import type { AgentSession, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { Logger } from "pino";
 
+import { type AnthropicLogin, createAnthropicLogin } from "./anthropic-login";
 import { assetsVersion, htmlHeaders, serveAsset } from "./assets";
 import { parseTranscript, renderChat } from "./chat";
 import type { ChatStore } from "./chat-store";
@@ -16,7 +17,6 @@ import {
 } from "./dashboard";
 import { type LogStore, parseLevel } from "./logs";
 import { deliveredMarker, failedMarker } from "./messages";
-import { authorizeUrl, createVerifier, exchangeCode, parseCode } from "./oauth";
 import type { Pipeline } from "./pipeline";
 import { parseRange, renderTokens, renderTokensDaily, type TokenStore } from "./tokens";
 import { fetchUsage, type UsageData } from "./usage";
@@ -99,11 +99,11 @@ export function fragmentCache(): FragmentCache {
 }
 
 export interface ServerDeps {
-  authStorage: AuthStorage;
   chatStore: ChatStore;
   config: Config;
   logStore: LogStore;
   logger: Logger;
+  modelRuntime: ModelRuntime;
   pipeline: Pipeline;
   runBackup: () => Promise<string>;
   session: AgentSession;
@@ -113,11 +113,11 @@ export interface ServerDeps {
 /** Start the dashboard + health HTTP server: htmx polls each fragment endpoint and swaps its region. */
 export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
   const {
-    authStorage,
     chatStore,
     config,
     logStore,
     logger,
+    modelRuntime,
     pipeline,
     runBackup,
     session,
@@ -134,9 +134,7 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
     summary: fragmentCache(),
   };
 
-  // Anthropic OAuth login state for the dashboard: one PKCE verifier held until it's used.
-  let pendingVerifier: string | undefined;
-  const loginUrl = () => authorizeUrl((pendingVerifier ??= createVerifier()));
+  const anthropicLogin: AnthropicLogin = createAnthropicLogin(modelRuntime);
   let linking = false;
 
   let chatCache: { body: string; key: string } | undefined;
@@ -173,27 +171,43 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
     });
   }
 
+  /** The current Anthropic access token, refreshed by the runtime when it is close to expiring. */
+  async function anthropicToken(): Promise<string | undefined> {
+    return (await modelRuntime.getAuth("anthropic"))?.auth.apiKey;
+  }
+
   /**
    * Build the #summary fragment from live state. Anthropic connection status is whether a credential
    * exists (no refresh, no network), so a usage-endpoint blip never shows "not connected". The usage
    * endpoint rate-limits aggressively: fetch at most once per TTL (stamp the time before awaiting so
    * concurrent polls dedupe), and keep the last good value across failures so a transient 429 never
-   * blanks the numbers.
+   * blanks the numbers. While disconnected, the sign-in is started so its authorization URL can be
+   * offered right in the section; it parks until a code is posted to /connect.
    */
   async function summaryBody(connectError?: string): Promise<string> {
     const state = pipeline.state();
     if (state.status === "connected") linking = false;
-    const connected = authStorage.hasAuth("anthropic");
+    const connected = modelRuntime.hasConfiguredAuth("anthropic");
     if (connected && (!usage || Date.now() - usage.fetchedAt >= USAGE_TTL_MS)) {
       usage = { data: usage?.data ?? null, fetchedAt: Date.now() };
-      const token = await authStorage.getApiKey("anthropic");
+      const token = await anthropicToken();
       const fresh = token ? await fetchUsage(token) : null;
       if (fresh) usage = { data: fresh, fetchedAt: usage.fetchedAt };
     }
+    let authUrl = "";
+    let error = connectError;
+    if (!connected) {
+      try {
+        authUrl = await anthropicLogin.url();
+      } catch (failure) {
+        logger.warn({ error: failure }, "anthropic login could not be started");
+        error ??= "Couldn't start the Anthropic sign-in. Reload the page to try again.";
+      }
+    }
     return renderSummary({
       anthropicConnected: connected,
-      authUrl: connected ? "" : loginUrl(),
-      connectError,
+      authUrl,
+      connectError: error,
       linking,
       usage: usage?.data ?? null,
       whatsapp: state,
@@ -338,16 +352,15 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
     [
       "POST /connect",
       async (req) => {
-        const code = parseCode(new URLSearchParams(await req.text()).get("code") ?? "");
-        const cred =
-          code && pendingVerifier ? await exchangeCode(code, pendingVerifier) : undefined;
+        const code = new URLSearchParams(await req.text()).get("code") ?? "";
         let error: string | undefined;
-        if (cred) {
-          authStorage.set("anthropic", { type: "oauth", ...cred });
-          pendingVerifier = undefined;
+        try {
+          await anthropicLogin.submit(code);
           logger.info("anthropic connected via dashboard");
-          usage = { data: await fetchUsage(cred.access), fetchedAt: Date.now() };
-        } else {
+          const token = await anthropicToken();
+          usage = { data: token ? await fetchUsage(token) : null, fetchedAt: Date.now() };
+        } catch (failure) {
+          logger.warn({ error: failure }, "anthropic login failed");
           error = "That code didn't work. Authorize again and paste the new code.";
         }
         return caches.summary.prime(await summaryBody(error));

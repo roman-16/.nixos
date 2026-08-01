@@ -5,12 +5,15 @@ import makeWASocket, {
   Browsers,
   DisconnectReason,
   downloadMediaMessage,
+  fetchLatestBaileysVersion,
+  fetchLatestWaWebVersion,
   isJidGroup,
   isLidUser,
   jidNormalizedUser,
   S_WHATSAPP_NET,
   useMultiFileAuthState,
   type WAMessage,
+  type WAVersion,
 } from "@whiskeysockets/baileys";
 import type { Logger } from "pino";
 
@@ -20,6 +23,28 @@ import { describeQuotedMessage, type QuotedContext } from "./quoted";
 type Socket = ReturnType<typeof makeWASocket>;
 type Content = NonNullable<WAMessage["message"]>;
 type QuotedInfo = NonNullable<NonNullable<Content["extendedTextMessage"]>["contextInfo"]>;
+
+/** Reconnect backoff: doubles from this floor up to the ceiling below. */
+const RECONNECT_BASE_MS = 2000;
+const RECONNECT_MAX_MS = 60_000;
+
+/** Consecutive failed reconnects before a disconnect is logged at warn instead of info. */
+const WARN_AFTER_ATTEMPTS = 3;
+
+/** How long a successfully resolved WhatsApp Web version is reused before it is looked up again. */
+const VERSION_TTL_MS = 6 * 60 * 60 * 1000;
+
+/** Cap on the WhatsApp Web version lookup, so a hanging fetch never stalls a connection attempt. */
+const VERSION_TIMEOUT_MS = 10_000;
+
+/**
+ * Delay before the nth consecutive reconnect (0-based): exponential from RECONNECT_BASE_MS to a
+ * RECONNECT_MAX_MS ceiling, so a persistent failure (a retired client version, an outage) re-dials
+ * at a sane rate instead of hammering WhatsApp every couple of seconds for days.
+ */
+export function reconnectDelay(attempt: number): number {
+  return Math.min(RECONNECT_BASE_MS * 2 ** attempt, RECONNECT_MAX_MS);
+}
 
 export type WhatsAppStatus = "connected" | "connecting" | "loggedOut" | "qr";
 
@@ -210,40 +235,77 @@ async function toInbound(
 
 /** Connect to WhatsApp via Baileys, tracking link state and dispatching inbound messages. */
 export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp> {
-  let auth = await useMultiFileAuthState(options.whatsappDir);
+  let session = await useMultiFileAuthState(options.whatsappDir);
+  let sessionReset: Promise<void> | undefined;
+  let version: { at: number; value: WAVersion } | undefined;
+  let attempts = 0;
   let sock: Socket | undefined;
   let status: WhatsAppStatus = "connecting";
   let qr: string | undefined;
   let user: string | undefined;
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 
+  /** Drop the stored session, so the next connection pairs from scratch and issues a QR. */
+  async function resetSession(): Promise<void> {
+    await rm(options.whatsappDir, { force: true, recursive: true });
+    session = await useMultiFileAuthState(options.whatsappDir);
+  }
+
+  /**
+   * The WhatsApp Web client version to announce. Baileys hardcodes one, and WhatsApp eventually
+   * retires it - from then on the server terminates every login, silently and forever - so the live
+   * version is looked up instead (web.whatsapp.com, then the Baileys release feed). Both helpers
+   * fall back to the bundled version rather than throwing, and report that as `isLatest: false`;
+   * only a real answer is cached, so a failed lookup is retried on the next attempt.
+   */
+  async function waVersion(): Promise<WAVersion> {
+    if (version && Date.now() - version.at < VERSION_TTL_MS) return version.value;
+    const web = await fetchLatestWaWebVersion({ signal: AbortSignal.timeout(VERSION_TIMEOUT_MS) });
+    const resolved = web.isLatest ? web : await fetchLatestBaileysVersion();
+    if (resolved.isLatest) {
+      version = { at: Date.now(), value: resolved.version };
+      options.logger.info({ version: resolved.version.join(".") }, "whatsapp web version resolved");
+    } else {
+      options.logger.warn(
+        { version: resolved.version.join(".") },
+        "could not resolve the current whatsapp web version; falling back to the bundled one",
+      );
+    }
+    return resolved.version;
+  }
+
   function scheduleReconnect(delayMs: number): void {
-    if (reconnectTimer) return;
+    clearTimeout(reconnectTimer);
     reconnectTimer = setTimeout(() => {
       reconnectTimer = undefined;
-      sock = connect();
+      void connect();
     }, delayMs);
   }
 
-  function connect(): Socket {
+  async function connect(): Promise<void> {
+    await sessionReset; // never dial while the stored session is being replaced
+    const { saveCreds, state } = session;
     const socket = makeWASocket({
-      auth: auth.state,
+      auth: state,
       browser: Browsers.ubuntu("Apollo"),
       // Baileys chatter is pure WhatsApp-transport noise, so it's silenced by default
       // (baileysLogLevel). When raised for debugging, its records are tagged src:baileys so they
       // still never forward to WhatsApp (see shouldNotify).
       logger: options.logger.child({ src: "baileys" }, { level: options.baileysLogLevel }),
+      version: await waVersion(),
     });
+    sock = socket;
 
-    socket.ev.on("creds.update", auth.saveCreds);
+    socket.ev.on("creds.update", saveCreds);
 
-    socket.ev.on("connection.update", async (update) => {
+    socket.ev.on("connection.update", (update) => {
       const { connection, lastDisconnect, qr: nextQr } = update;
       if (nextQr) {
         qr = nextQr;
         status = "qr";
       }
       if (connection === "open") {
+        attempts = 0;
         qr = undefined;
         status = "connected";
         user = socket.user?.id;
@@ -252,20 +314,30 @@ export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp>
         options.onConnect?.();
       }
       if (connection === "close") {
-        const code = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)
-          ?.output?.statusCode;
+        const error = lastDisconnect?.error as
+          | { message?: string; output?: { statusCode?: number } }
+          | undefined;
+        const code = error?.output?.statusCode;
         if (code === DisconnectReason.loggedOut) {
           options.logger.warn("whatsapp logged out; clearing creds and re-issuing a QR");
+          attempts = 0;
           status = "loggedOut";
           qr = undefined;
           user = undefined;
-          await rm(options.whatsappDir, { force: true, recursive: true });
-          auth = await useMultiFileAuthState(options.whatsappDir);
+          sessionReset = resetSession();
           scheduleReconnect(1000);
-        } else {
-          status = "connecting";
-          scheduleReconnect(2000);
+          return;
         }
+        status = "connecting";
+        const delayMs = reconnectDelay(attempts);
+        attempts += 1;
+        // A single blip is routine, so it stays at info; only a run of them is worth a warning. The
+        // message is constant either way, so the WhatsApp notifier's throttle collapses a storm of
+        // them into one line and the detail lives in the fields.
+        const detail = { attempt: attempts, code, delayMs, reason: error?.message };
+        const level = attempts >= WARN_AFTER_ATTEMPTS ? "warn" : "info";
+        options.logger[level](detail, "whatsapp disconnected; reconnecting");
+        scheduleReconnect(delayMs);
       }
     });
 
@@ -284,11 +356,9 @@ export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp>
         if (inbound) await options.onMessage(inbound);
       }
     });
-
-    return socket;
   }
 
-  sock = connect();
+  void connect();
 
   return {
     getState: () => ({ qr, status, user: user ? numberFromJid(user) : undefined }),
@@ -307,9 +377,14 @@ export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp>
       }
     },
     relink: () => {
+      attempts = 0;
       qr = undefined;
       status = "connecting";
+      user = undefined;
       sock?.end(undefined);
+      // Relinking means pairing a new device, so the stored session goes: while creds are on disk
+      // Baileys logs in instead of pairing and no QR is ever issued.
+      sessionReset = resetSession();
       scheduleReconnect(500);
     },
     send: async (to, text) => {

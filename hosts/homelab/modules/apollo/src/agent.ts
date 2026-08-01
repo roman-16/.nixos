@@ -4,10 +4,9 @@ import { join } from "node:path";
 import {
   type AgentSession,
   type AgentSessionEvent,
-  AuthStorage,
   createAgentSession,
   DefaultResourceLoader,
-  ModelRegistry,
+  ModelRuntime,
   resolveCliModel,
   SessionManager,
   SettingsManager,
@@ -25,20 +24,22 @@ function readTextIfExists(file: string): string | undefined {
 }
 
 export interface ApolloSession {
-  /** Credential store for reading/setting the Anthropic OAuth token. */
-  authStorage: AuthStorage;
+  /** Models plus their resolved auth: the dashboard's Anthropic sign-in and status run through it. */
+  modelRuntime: ModelRuntime;
   session: AgentSession;
 }
 
 /** Build the single, persistent, auto-compacting pi session Apollo talks to. */
 export async function createApolloSession(config: Config, logger: Logger): Promise<ApolloSession> {
-  const authStorage = AuthStorage.create(join(config.agentDir, "auth.json"));
-  const modelRegistry = ModelRegistry.create(authStorage, join(config.agentDir, "models.json"));
+  const modelRuntime = await ModelRuntime.create({
+    authPath: join(config.agentDir, "auth.json"),
+    modelsPath: join(config.agentDir, "models.json"),
+  });
 
   const resolved = resolveCliModel({
     cliModel: config.model,
     cliThinking: config.thinkingLevel,
-    modelRegistry,
+    modelRuntime,
   });
   if (resolved.error) throw new Error(`model "${config.model}": ${resolved.error}`);
   if (resolved.warning) console.warn(resolved.warning);
@@ -56,6 +57,7 @@ export async function createApolloSession(config: Config, logger: Logger): Promi
               instructions: compactionInstructions,
               logger,
               model: resolved.model,
+              modelRuntime,
             }),
             name: "apollo-compaction",
           },
@@ -73,16 +75,15 @@ export async function createApolloSession(config: Config, logger: Logger): Promi
 
   const { session } = await createAgentSession({
     agentDir: config.agentDir,
-    authStorage,
     cwd: config.workspace,
     model: resolved.model,
-    modelRegistry,
+    modelRuntime,
     resourceLoader,
     sessionManager: SessionManager.continueRecent(config.workspace, config.sessionDir),
     settingsManager,
     thinkingLevel: resolved.thinkingLevel ?? config.thinkingLevel,
   });
-  return { authStorage, session };
+  return { modelRuntime, session };
 }
 
 /** Fire `onText` the instant a normal assistant text block completes (skips thinking/tool output). */

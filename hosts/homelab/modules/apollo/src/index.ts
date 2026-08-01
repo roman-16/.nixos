@@ -33,7 +33,7 @@ export async function main(): Promise<void> {
     logger.warn("APOLLO_ALLOW_FROM is empty; every inbound message will be ignored");
   }
 
-  const { authStorage, session } = await createApolloSession(config, logger);
+  const { modelRuntime, session } = await createApolloSession(config, logger);
   logger.info({ model: config.model, workspace: config.workspace }, "pi session ready");
 
   const pipeline = createPipeline({ chatStore, config, kv, logStore, logger, session });
@@ -86,11 +86,11 @@ export async function main(): Promise<void> {
   }).start();
 
   startServer({
-    authStorage,
     chatStore,
     config,
     logStore,
     logger,
+    modelRuntime,
     pipeline,
     runBackup: runWorkspaceBackup,
     session,
