@@ -15,7 +15,7 @@ The dashboard must stay responsive - everything has to work on both mobile and d
 
 ## Naming
 
-Never write the user's real name anywhere in this project - code, comments, tests, prompts, or docs. Refer to the user as "User" / "the user". The single exception is the one canonical mention in `agent/SYSTEM_PROMPT.md`'s Context section. This does not apply to real system identities (the git commit author, the `roman` system user), which stay as-is.
+Never write the user's real name anywhere in this project - code, comments, tests, prompts, or docs. Refer to the user as "User" / "the user". There is no exception: who the user is lives in `MEMORY.md` in Apollo's working directory, which is not part of this repository. This does not apply to real system identities (the git commit author, the `roman` system user), which stay as-is.
 
 ## Tests
 
