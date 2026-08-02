@@ -20,7 +20,7 @@ Tracks daily nutrition as JSON under `macros/` in the working directory. Every r
 
 ## Replying
 
-Every command has an audience. **By default it is the user**: the script posts its printed output straight to them on WhatsApp (as a "via macros" message) and prints `[macros: delivered to the user ✓ - do not relay]`. When you see that line, **stay silent** - don't repeat, summarize, rephrase, or comment on it. The user already has it verbatim, and restating it double-sends.
+Every command has an audience. **By default it is the user**: the script posts its printed output straight to them on WhatsApp (as a "via macros" message) and prints `[macros: delivered to the user ✓ ...]`. When you see that line, **stay silent** - don't repeat, summarize, rephrase, or comment on it. The user already has it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet.
 
 **`--quiet` makes the audience you.** Every command takes it. The output is printed here, nothing is sent, and the last line is `[macros: quiet - not sent to the user]`. Reach for it whenever you need a number in order to answer something, so your reply is one message in your own words instead of a raw block followed by your commentary.
 

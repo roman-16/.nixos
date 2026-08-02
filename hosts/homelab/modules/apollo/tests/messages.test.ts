@@ -10,15 +10,72 @@ import {
   jidForNumber,
   numberFromJid,
   skillContextNote,
+  splitInternal,
   splitMessage,
   voiceText,
 } from "../src/messages";
+
+describe("splitInternal", () => {
+  it("leaves an ordinary message untouched", () => {
+    expect(splitInternal("logged it, 420 kcal left")).toEqual({
+      delivered: "logged it, 420 kcal left",
+      internal: [],
+    });
+  });
+
+  it("delivers nothing when the block is only a note", () => {
+    expect(splitInternal("<internal>macros already sent the summary</internal>")).toEqual({
+      delivered: "",
+      internal: ["macros already sent the summary"],
+    });
+  });
+
+  it("keeps the reply and holds back a note appended to it", () => {
+    expect(
+      splitInternal("Done \u2705\n\n<internal>the summary went out via macros</internal>"),
+    ).toEqual({ delivered: "Done \u2705", internal: ["the summary went out via macros"] });
+  });
+
+  it("holds back a note written before the reply", () => {
+    expect(splitInternal("<internal>checked the ledger first</internal>\nAll good.")).toEqual({
+      delivered: "All good.",
+      internal: ["checked the ledger first"],
+    });
+  });
+
+  it("collects several notes in order", () => {
+    expect(splitInternal("<internal>one</internal>hi<internal>two</internal>").internal).toEqual([
+      "one",
+      "two",
+    ]);
+  });
+
+  it("treats a forgotten closing tag as running to the end, so no markup leaks", () => {
+    expect(splitInternal("<internal>nothing to add")).toEqual({
+      delivered: "",
+      internal: ["nothing to add"],
+    });
+  });
+
+  it("drops an empty note without recording it", () => {
+    expect(splitInternal("<internal></internal>")).toEqual({ delivered: "", internal: [] });
+  });
+
+  it("delivers a block that only mentions the word internal", () => {
+    const text = "that is an internal detail";
+    expect(splitInternal(text).delivered).toBe(text);
+  });
+});
 
 describe("deliveredMarker / failedMarker", () => {
   it("tags the delivered marker with the source and the do-not-relay hint", () => {
     const marker = deliveredMarker("macros");
     expect(marker).toContain("[macros: delivered to the user");
     expect(marker).toContain("do not relay");
+  });
+
+  it("names how to stay silent, where the decision is made", () => {
+    expect(deliveredMarker("macros")).toContain("<internal>");
   });
 
   it("tags the failed marker with the source and the relay instruction", () => {

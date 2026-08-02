@@ -17,7 +17,7 @@ The script owns all time math, storage, and the reply: you pass what the user wa
 
 ## Replying
 
-Every command has an audience. **By default it is the user**: the script posts its printed output straight to them on WhatsApp (as a "via reminders" message) and prints `[reminders: delivered to the user ✓ - do not relay]`. When you see that line, **stay silent** - the user already got it verbatim, and restating it double-sends.
+Every command has an audience. **By default it is the user**: the script posts its printed output straight to them on WhatsApp (as a "via reminders" message) and prints `[reminders: delivered to the user ✓ ...]`. When you see that line, **stay silent** - the user already got it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet.
 
 **`--quiet` makes the audience you.** Every command takes it: the output is printed here, nothing is sent, and the last line is `[reminders: quiet - not sent to the user]`. Use it when you need to know something rather than show it - `list --quiet` to check what is already set before answering, for instance - and then reply once in your own words. Silencing a change makes the news yours to deliver: if you set or cancel something quietly, say so.
 

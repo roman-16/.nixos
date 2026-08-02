@@ -21,6 +21,7 @@ import {
   jidForNumber,
   outageNotice,
   skillContextNote,
+  splitInternal,
   voiceFailure,
   voiceText,
 } from "./messages";
@@ -220,10 +221,13 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
   // Each finished assistant text block is sent the instant it completes, so a short lead line reads
   // naturally. Sending clears the indicator on the recipient's side, so re-assert it while working.
+  // What Apollo marked internal stays behind, and a block that was nothing but such a note sends
+  // nothing: that is how a turn ends in silence.
   onAssistantText(session, (text) => {
-    if (!socket || !target) return;
+    const { delivered } = splitInternal(text);
+    if (!socket || !target || !delivered) return;
     void socket
-      .send(target, text)
+      .send(target, delivered)
       .then(() => {
         if (typingTimer) sendComposing();
       })

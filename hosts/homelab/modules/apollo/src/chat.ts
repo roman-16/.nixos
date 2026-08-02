@@ -6,6 +6,7 @@
  */
 
 import { escapeHtml, humanTokens, truncate } from "./format";
+import { splitInternal } from "./messages";
 
 import { type ContextNote, withContext } from "./temporal";
 
@@ -32,6 +33,7 @@ export type LogItem =
     }
   | { kind: "compaction"; summary: string; time?: string; tokensBefore: number | undefined }
   | { kind: "divider"; label: string; time?: string }
+  | { kind: "internal"; text: string; time?: string }
   | { kind: "skill"; source: string; text: string; time?: string }
   | { kind: "thinking"; text: string; time?: string }
   | {
@@ -124,7 +126,11 @@ function assistantItems(
   const content = Array.isArray(message.content) ? message.content : [];
   for (const block of content) {
     if (block?.type === "text" && block.text?.trim()) {
-      items.push({ kind: "assistant", text: block.text, time });
+      // What was sent, then the notes that were not: a note reads as a footnote to the reply,
+      // and a block that is only a note becomes an internal row on its own.
+      const { delivered, internal } = splitInternal(block.text);
+      if (delivered) items.push({ kind: "assistant", text: delivered, time });
+      for (const note of internal) items.push({ kind: "internal", text: note, time });
     } else if (block?.type === "thinking" && block.thinking?.trim()) {
       items.push({ kind: "thinking", text: block.thinking, time });
     } else if (block?.type === "toolCall") {
@@ -432,6 +438,8 @@ export function copyText(item: LogItem): string {
     }
     case "divider":
       return `${lead}${item.label}`;
+    case "internal":
+      return `${lead}Apollo (internal, not sent): ${item.text}`;
     case "skill":
       return `${lead}Apollo (via ${item.source}): ${item.text}`;
     case "thinking":
@@ -488,6 +496,16 @@ function renderItem(item: LogItem, running = false): string {
     }
     case "divider":
       return chipDivider(item.label, copy);
+    case "internal":
+      return bubble(
+        "left",
+        "rounded-2xl rounded-bl-sm border border-dashed border-white/15 bg-neutral-900/50 text-neutral-400",
+        `<div class="mb-1"><span class="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-400">not sent</span></div>${textBlock(
+          item.text,
+        )}`,
+        item.time,
+        copy,
+      );
     case "skill":
       return bubble(
         "left",

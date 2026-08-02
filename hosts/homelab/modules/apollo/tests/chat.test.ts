@@ -128,6 +128,25 @@ describe("parseTranscript", () => {
     ]);
   });
 
+  it("splits an assistant block into what was sent and the notes that were not", () => {
+    const jsonl = message("a", {
+      content: [{ text: "Done \u2705\n<internal>macros already sent it</internal>", type: "text" }],
+      role: "assistant",
+    });
+    expect(parseTranscript(jsonl)).toEqual([
+      { kind: "assistant", text: "Done \u2705" },
+      { kind: "internal", text: "macros already sent it" },
+    ]);
+  });
+
+  it("renders a silent turn as an internal item alone", () => {
+    const jsonl = message("a", {
+      content: [{ text: "<internal>nothing to add</internal>", type: "text" }],
+      role: "assistant",
+    });
+    expect(parseTranscript(jsonl)).toEqual([{ kind: "internal", text: "nothing to add" }]);
+  });
+
   it("renders a skill_message custom entry as a skill item", () => {
     const jsonl = JSON.stringify({
       customType: "skill_message",
@@ -432,6 +451,13 @@ describe("renderChat", () => {
     expect(renderChat([{ kind: "assistant", text: "x" }])).not.toContain("Today");
   });
 
+  it("marks an internal note as not sent and escapes it", () => {
+    const html = renderChat([{ kind: "internal", text: "<b>nothing to add</b>" }]);
+    expect(html).toContain("not sent");
+    expect(html).toContain("&lt;b&gt;");
+    expect(html).not.toContain("<b>nothing");
+  });
+
   it("renders a skill message as a badged left bubble, escaping content", () => {
     const html = renderChat([{ kind: "skill", source: "reminders", text: "⏰ get my food" }]);
     expect(html).toContain("via reminders");
@@ -547,6 +573,12 @@ describe("copyText", () => {
   it("formats a skill message with its source", () => {
     expect(copyText({ kind: "skill", source: "macros", text: "Today: 400 kcal" })).toBe(
       "Apollo (via macros): Today: 400 kcal",
+    );
+  });
+
+  it("marks a copied internal note as never delivered", () => {
+    expect(copyText({ kind: "internal", text: "nothing to add" })).toBe(
+      "Apollo (internal, not sent): nothing to add",
     );
   });
 

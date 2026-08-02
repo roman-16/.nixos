@@ -10,6 +10,37 @@ const DEFAULT_MAX_CHARS = 4000;
 // message's worth) rather than clipping it to a stub.
 const SKILL_NOTE_MAX_CHARS = 4000;
 
+// A span Apollo addresses to itself rather than to the user. Unterminated spans run to the end of
+// the block, so a forgotten closing tag stays silent instead of leaking markup into WhatsApp.
+const INTERNAL_SPAN = /<internal>[\s\S]*?(?:<\/internal>|$)/g;
+const INTERNAL_BODY = /^<internal>([\s\S]*?)(?:<\/internal>|$)$/;
+
+export interface SplitText {
+  /** What reaches the user: the block with every internal span removed. */
+  delivered: string;
+  /** The notes that stay behind, in the order they were written. */
+  internal: string[];
+}
+
+/**
+ * Split one assistant text block into what is delivered and what is not. Every text block is a
+ * WhatsApp message, so an `<internal>` span is how Apollo writes something down - a note to itself,
+ * or the reason it has nothing to send - without messaging the user. Spans are stripped wherever
+ * they sit in the block, and a block left empty by that is never sent at all, which is how Apollo
+ * ends a turn in silence rather than announcing that it has nothing to say.
+ */
+export function splitInternal(text: string): SplitText {
+  const internal: string[] = [];
+  const delivered = text
+    .replace(INTERNAL_SPAN, (span) => {
+      const note = (INTERNAL_BODY.exec(span)?.[1] ?? "").trim();
+      if (note) internal.push(note);
+      return "";
+    })
+    .trim();
+  return { delivered, internal };
+}
+
 /** Build the brief WhatsApp notice sent when the session context is compacted. */
 export function compactionNotice(tokensBefore?: number): string {
   const count = tokensBefore && tokensBefore > 0 ? ` (~${humanTokens(tokensBefore)} tokens)` : "";
@@ -83,7 +114,10 @@ export function skillContextNote(source: string, text: string): ContextNote {
 // output to /internal/skill-message. The endpoint returns one of these as its response body and
 // every skill just echoes it, so the wording lives in one place and stays identical everywhere.
 export function deliveredMarker(source: string): string {
-  return `\n[${source}: delivered to the user \u2713 - do not relay]\n`;
+  return (
+    `\n[${source}: delivered to the user \u2713 - do not relay; ` +
+    `end your turn with <internal>\u2026</internal> if you have nothing to add]\n`
+  );
 }
 
 export function failedMarker(source: string): string {

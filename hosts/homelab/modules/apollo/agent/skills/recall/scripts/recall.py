@@ -19,6 +19,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import sqlite3
 import sys
 import tempfile
@@ -33,6 +34,10 @@ OUTPUT_BUDGET = 20_000
 
 # How much of a message a scanning view shows before it is trimmed.
 SCAN_CHARS = 200
+
+# Spans Apollo addressed to itself. They live in the transcript but were never sent, so they are
+# not part of the chat and are never searched. An unterminated span runs to the end of the block.
+INTERNAL_SPAN = re.compile(r"<internal>.*?(?:</internal>|\Z)", re.DOTALL)
 
 
 def die(msg: str):
@@ -76,6 +81,11 @@ def text_of(content) -> str:
     return ""
 
 
+def strip_internal(text: str) -> str:
+    """An assistant message as WhatsApp saw it: without the notes Apollo kept to itself."""
+    return INTERNAL_SPAN.sub("", text).strip()
+
+
 def image_count(content) -> int:
     if isinstance(content, list):
         return sum(1 for b in content if isinstance(b, dict) and b.get("type") == "image")
@@ -85,7 +95,8 @@ def image_count(content) -> int:
 def visible(data: str):
     """(who, text, images) for a message that appeared in WhatsApp, else None. Internal
     entries - assistant thinking, tool results, bash, compaction, reload markers - return
-    None, and an assistant turn's thinking blocks are dropped by only reading text blocks."""
+    None, an assistant turn's thinking blocks are dropped by only reading text blocks, and
+    what Apollo wrote inside <internal> is dropped because it was never delivered."""
     try:
         entry = json.loads(data)
     except (json.JSONDecodeError, TypeError):
@@ -98,7 +109,7 @@ def visible(data: str):
         if role == "user":
             return "You", text_of(content), image_count(content)
         if role == "assistant":
-            text = text_of(content)
+            text = strip_internal(text_of(content))
             return ("Apollo", text, 0) if text else None
         return None  # toolResult / bashExecution never reached WhatsApp
     if kind == "custom" and entry.get("customType") == "skill_message":

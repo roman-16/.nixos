@@ -105,6 +105,17 @@ class TestSearch:
         for hidden in ("hidden pineapple thoughts", "only in thinking", "from a tool", "bash output", "compaction gist"):
             assert hidden not in out
 
+    def test_notes_apollo_kept_to_itself_are_not_searchable(self, db, capsys):
+        insert([
+            apollo("<internal>pineapple stays between me and the log</internal>"),
+            apollo("pineapple is on the shopping list<internal>pineapple noted quietly</internal>"),
+        ])
+        run("search", "pineapple")
+        out = capsys.readouterr().out.replace("«", "").replace("»", "")  # drop match highlighting
+        assert "pineapple is on the shopping list" in out
+        assert "between me and the log" not in out
+        assert "noted quietly" not in out
+
     def test_voice_transcript_is_searchable(self, db, capsys):
         insert([user("🎤 remember to buy milk on the way home")])
         run("search", "milk")

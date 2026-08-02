@@ -15,7 +15,7 @@ It reports `Backed up and pushed (commit <sha>).`, `Nothing to back up.`, or a f
 
 ## Replying
 
-**The script delivers its result to the user itself - do not relay it.** It triggers the backup and posts the outcome straight to the user on WhatsApp (as a "via backup" message), then prints `[backup: delivered to the user ✓ - do not relay]`. When you see that line, **stay silent**: don't repeat, summarize, or rephrase it - the user already got it verbatim, and restating it double-sends.
+**The script delivers its result to the user itself - do not relay it.** It triggers the backup and posts the outcome straight to the user on WhatsApp (as a "via backup" message), then prints `[backup: delivered to the user ✓ ...]`. When you see that line, **stay silent**: don't repeat, summarize, or rephrase it - the user already got it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet.
 
 If the script prints `[backup: delivery FAILED ...]` instead, the send didn't happen: relay that output yourself, just this once (the backup still ran - don't re-run it).
 
