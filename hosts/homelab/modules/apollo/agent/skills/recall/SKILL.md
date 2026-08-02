@@ -9,11 +9,12 @@ Searches the WhatsApp chat history - and only what actually appeared in the chat
 
 Results are for **you** to read and act on; they are **not** sent to the user, so answer in your own words. Searching is free and fast (a throwaway in-memory index over the local SQLite archive, rebuilt each call), so search whenever you're unsure rather than guessing or saying you don't remember.
 
-Three ways in, one for each kind of question:
+Four ways in, one for each kind of question:
 
 - **By content** - `search` - _which_ messages mention this? Trimmed, so a wide net stays cheap.
 - **By time** - `history` - what was said at this end of the conversation, or in this stretch of days? Trimmed too.
 - **By identity** - `show` - what did these exact messages say? Whole, because a clipped quote is worse than none.
+- **By the numbers** - `stats` - how many, how often, since when?
 
 Every call is capped as a whole (~20k characters). If a query is too broad the output stops on a message boundary and says so - narrow it rather than working around it.
 
@@ -31,12 +32,13 @@ Every call is capped as a whole (~20k characters). If a query is too broad the o
 {baseDir}/scripts/recall.py search "bologn*" --since 2026-06-01 --until 2026-06-30
 ```
 
-**Build the query yourself - don't forward the user's sentence verbatim.** Pull out the substantive keywords (names, nouns, specifics) and drop filler ("what did I", "discuss", "again", "yesterday"). It's keyword search with stemming (so `run` matches `running`), so:
+Keyword search with stemming, so `run` matches `running`. **Nothing you can type is a syntax error**: punctuation belongs to the word, so `col d'Iseran`, `e-mail` and `50%` search for themselves, and filler words are ignored, so pasting the gist of a question still lands on the message it is about. Sharp, few words still beat a whole sentence.
 
 - OR together synonyms and variants: `car OR vehicle OR automobile`.
 - Use a trailing `*` for partial words: `dent*`.
 - `"quoted phrase"` matches an exact phrase; `AND` / `NOT` combine terms.
-- If the hits are thin, just retry with broader or different terms - it costs nothing.
+- When no message holds _all_ your words, the search widens to any of them and says so. Read those hits as the closest thing, not as the answer.
+- If they're still thin, retry with different terms - it costs nothing.
 
 Each hit prints `[#id] date · who: …snippet…` and flags any images. `--since`/`--until` (YYYY-MM-DD) bound the range.
 
@@ -69,6 +71,16 @@ Ids are shared with entries that never reached WhatsApp (thinking, tool calls), 
 ```
 
 A window on the timeline, always printed in the order things happened. **Say which end you want**: `--last N` counts back from the newest message (the default), `--first N` forward from the oldest. `--since`/`--until` (YYYY-MM-DD) bound the window, and the count applies to whichever end you anchored - so "what was my first message" is `history --first 1`, and a single day is `--since`/`--until` on the same date with `--first`. Trimmed like `search`; add `--full` when you need the wording.
+
+## Counting
+
+```bash
+{baseDir}/scripts/recall.py stats                       # the whole archive
+{baseDir}/scripts/recall.py stats --since 2026-07-01
+{baseDir}/scripts/recall.py stats "dentist"             # how often it comes up, and when it last did
+```
+
+For "how many photos have I sent", "how long have we been talking", "how often do I bring this up", "when did I last mention it". It counts exactly the messages the other commands can find, so the numbers always agree with what a search would show you - which is why this is the way to answer a counting question, never a hand-written query against the database.
 
 ## View an image
 

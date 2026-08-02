@@ -203,6 +203,133 @@ class TestSearch:
         assert "No WhatsApp messages match" in capsys.readouterr().out
 
 
+class TestQueries:
+    """A query is written by paraphrasing a human sentence, so punctuation and filler are certain."""
+
+    def test_punctuation_is_part_of_the_word_not_grammar(self, db, capsys):
+        # Every one of these used to be an fts5 syntax error and a wasted round trip.
+        insert([user("we rode col d'Iseran"), user("send me an e-mail"), user("it was 50% off"),
+                user("reread the backup, macros and reminders skill")])
+        for query in ["col d'Iseran", "e-mail", "50%", "reread the backup, macros",
+                      "what did I say about the bike?", "kcal (estimated)", "20:30"]:
+            run("search", query, "--limit", "2")
+            assert "syntax error" not in capsys.readouterr().out
+
+    def test_a_word_with_an_apostrophe_finds_itself(self, db, capsys):
+        insert([user("we rode col d'Iseran today"), user("unrelated")])
+        run("search", "d'Iseran")
+        assert "col d" in capsys.readouterr().out.replace("«", "").replace("»", "")
+
+    def test_the_operators_the_skill_documents_still_work(self, db, capsys):
+        insert([user("the bike is fine"), user("the motorcycle is fine"), user("the car is fine")])
+        run("search", "bike OR motorcycle", "--limit", "5")
+        out = capsys.readouterr().out
+        assert "bike" in out and "motorcycle" in out and "car" not in out
+
+    def test_a_quoted_phrase_stays_a_phrase(self, db, capsys):
+        insert([user("a leaking fork seal"), user("seal the fork later")])
+        run("search", '"fork seal"', "--limit", "5")
+        out = capsys.readouterr().out
+        assert "leaking" in out
+        assert "later" not in out
+
+    def test_a_prefix_still_matches_partial_words(self, db, capsys):
+        insert([user("the dentist called")])
+        run("search", "dent*")
+        assert "dentist" in capsys.readouterr().out.replace("«", "").replace("»", "")
+
+    def test_filler_does_not_have_to_match(self, db, capsys):
+        # "what did I say about the fork seal?" must find the message about the fork seal, even
+        # though no message contains all eight of those words.
+        insert([user("my fork seal is leaking"), user("what a day")])
+        run("search", "what did I say about the fork seal?", "--limit", "3")
+        out = capsys.readouterr().out.replace("«", "").replace("»", "")
+        assert "fork seal is leaking" in out
+
+    def test_a_query_of_pure_filler_searches_for_those_words(self, db, capsys):
+        insert([user("how are you?"), user("something else")])
+        run("search", "how are you")
+        out = capsys.readouterr().out.replace("«", "").replace("»", "")
+        assert "how are you" in out
+
+    def test_a_query_with_no_words_at_all_says_so(self, db):
+        insert([user("x")])
+        with pytest.raises(SystemExit):
+            run("search", "?!...")
+
+
+class TestWidening:
+    def test_it_widens_rather_than_dead_ending(self, db, capsys):
+        insert([user("the fork seal is leaking"), user("unrelated chatter")])
+        run("search", "fork seal gasket bearing", "--limit", "3")
+        out = capsys.readouterr().out
+        assert "match at least one" in out
+        assert "fork" in out.replace("«", "").replace("»", "")
+
+    def test_a_precise_hit_is_never_labelled_as_loose(self, db, capsys):
+        insert([user("the fork seal is leaking")])
+        run("search", "fork seal")
+        assert "match at least one" not in capsys.readouterr().out
+
+    def test_an_exclusion_is_left_alone(self, db, capsys):
+        # NOT means the caller wants something kept out; widening would put it back.
+        insert([user("the bike is fine")])
+        run("search", "gasket NOT bike")
+        assert "match at least one" not in capsys.readouterr().out
+
+    def test_a_genuinely_absent_topic_still_reports_nothing(self, db, capsys):
+        insert([user("the bike is fine")])
+        run("search", "parliament")
+        assert "No WhatsApp messages match" in capsys.readouterr().out
+
+
+class TestStats:
+    def test_it_answers_how_many_images_in_one_call(self, db, capsys):
+        insert([user(images=2, caption="two labels"), user(images=1), user("no picture")])
+        run("stats")
+        out = capsys.readouterr().out
+        assert "Images 3 in 2 message(s)" in out
+
+    def test_it_counts_the_sides_of_the_conversation_apart(self, db, capsys):
+        insert([user("hi"), apollo("hello"), apollo("and again"), skill("macros", "day summary")])
+        out_lines = (run("stats"), capsys.readouterr().out)[1]
+        assert "Messages 4" in out_lines
+        assert "1 you" in out_lines
+        assert "2 Apollo" in out_lines
+        assert "1 via skills" in out_lines
+
+    def test_it_counts_voice_notes(self, db, capsys):
+        insert([user("🎤 remember the milk"), user("typed")])
+        assert "voice notes 1" in (run("stats"), capsys.readouterr().out)[1]
+
+    def test_it_reports_the_span_it_covers(self, db, capsys):
+        insert([user("first"), user("second")])
+        assert "Chat archive" in (run("stats"), capsys.readouterr().out)[1]
+
+    def test_it_counts_only_what_the_rest_of_the_skill_can_find(self, db, capsys):
+        # The same definition of "a message" as search and history: no thinking, no tool output.
+        insert([user("real"), tool_result("internal"), compaction("gist"), apollo(thinking="hmm")])
+        assert "Messages 1" in (run("stats"), capsys.readouterr().out)[1]
+
+    def test_a_topic_gets_a_count_and_its_first_and_last(self, db, capsys):
+        insert([user("the dentist called"), user("nothing"), apollo("about that dentist")])
+        run("stats", "dentist")
+        out = capsys.readouterr().out
+        assert "2 message(s)" in out
+        assert "1 you" in out and "1 Apollo" in out
+        assert "First" in out and "last" in out
+
+    def test_a_topic_never_mentioned_says_so(self, db, capsys):
+        insert([user("the bike is fine")])
+        run("stats", "parliament")
+        assert "No WhatsApp messages match" in capsys.readouterr().out
+
+    def test_an_empty_range_says_so(self, db, capsys):
+        insert([user("today")])
+        run("stats", "--since", "2099-01-01")
+        assert "No WhatsApp history in that range." in capsys.readouterr().out
+
+
 class TestHistory:
     def test_oldest_to_newest_and_skips_internal(self, db, capsys):
         insert([user("first"), tool_result("dropme"), apollo("second"), compaction("gist"), user("third")])

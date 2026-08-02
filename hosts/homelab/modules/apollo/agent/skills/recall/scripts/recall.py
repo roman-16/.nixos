@@ -152,6 +152,80 @@ def images_of(data: str):
 
 # --- formatting ------------------------------------------------------------------
 
+# --- queries -------------------------------------------------------------------
+
+# FTS5 reads punctuation as grammar, so an apostrophe, comma, hyphen or colon in an ordinary
+# sentence is a syntax error - and a word containing one cannot be searched for at all. The caller
+# writes words, having paraphrased a human sentence, so words are what this takes: the operators the
+# skill documents survive, everything else is quoted into a literal term where its punctuation is
+# data. Nothing a caller can type is a syntax error.
+OPERATORS = {"AND", "NOT", "OR"}
+TOKEN = re.compile(r'"[^"]*"|\S+')
+
+# Words that carry no signal in a keyword search. A caller paraphrasing a human question will
+# include them, and every one of them is a term the whole query then has to match - which is how
+# "what did I say about the fork seal?" finds nothing while "fork seal" finds it. Dropped only when
+# something else survives, so searching for "how are you" still searches for those words.
+FILLER = {
+    "a", "about", "again", "all", "an", "and", "any", "anything", "are", "as", "at", "be", "been",
+    "but", "by", "can", "did", "die", "do", "does", "der", "das", "for", "from", "get", "had",
+    "has", "have", "he", "her", "him", "his", "how", "i", "ich", "if", "in", "is", "ist", "it",
+    "its", "just", "me", "mein", "mir", "my", "no", "not", "of", "on", "or", "our", "say", "said",
+    "she", "should", "so", "some", "tell", "that", "the", "their", "them", "then", "there",
+    "these", "they", "this", "to", "und", "up", "us", "was", "we", "were", "what", "when",
+    "where", "which", "who", "why", "will", "with", "would", "you", "your",
+}
+
+
+def quote_term(term: str) -> str:
+    """One word as an FTS5 literal, keeping a trailing * as the prefix search it means."""
+    prefix = term.endswith("*")
+    body = (term[:-1] if prefix else term).replace('"', "")
+    if not any(ch.isalnum() for ch in body):
+        return ""
+    return f'"{body}"' + ("*" if prefix else "")
+
+
+def build_query(raw: str) -> tuple:
+    """(FTS5 expression, its literal terms) for whatever the caller typed."""
+    tokens: list = []  # (is_operator, text, is_filler)
+    for token in TOKEN.findall(raw):
+        if len(token) >= 2 and token.startswith('"') and token.endswith('"'):
+            inner = token[1:-1].strip()
+            if any(ch.isalnum() for ch in inner):
+                tokens.append((False, f'"{inner}"', False))  # a phrase is never filler
+        elif token in OPERATORS:
+            tokens.append((True, token, False))
+        else:
+            quoted = quote_term(token)
+            if quoted:
+                word = quoted.strip('"*').lower()
+                tokens.append((False, quoted, word in FILLER))
+    if any(not op and not filler for op, _, filler in tokens):
+        tokens = [t for t in tokens if t[0] or not t[2]]
+
+    parts: list = []
+    terms: list = []
+    for is_operator, text, _ in tokens:
+        if is_operator:
+            if parts and parts[-1] not in OPERATORS:
+                parts.append(text)
+        else:
+            parts.append(text)
+            terms.append(text)
+    while parts and parts[-1] in OPERATORS:
+        parts.pop()
+    return " ".join(parts), terms
+
+
+def widened(query: str, terms: list) -> str:
+    """The same search asking for any term instead of all of them, or "" when that changes nothing.
+    An explicit NOT is left alone: the caller meant to exclude something."""
+    if len(terms) < 2 or "NOT" in query.split():
+        return ""
+    return " OR ".join(terms)
+
+
 def parse_day(value: str) -> datetime:
     try:
         return datetime.strptime(value.strip(), "%Y-%m-%d")
@@ -208,8 +282,9 @@ def time_clause(args):
 
 # --- commands --------------------------------------------------------------------
 
-def cmd_search(args):
-    con = connect()
+def build_index(con, args):
+    """The chat as a throwaway FTS index. Rebuilt per call (80ms over a month of history), so there
+    is never a second copy of the archive to keep in step with this one."""
     where, params = time_clause(args)
     mem = sqlite3.connect(":memory:")
     mem.execute(
@@ -230,22 +305,39 @@ def cmd_search(args):
             batch = []
     if batch:
         mem.executemany("INSERT INTO fts(txt,cid,t,who,img) VALUES (?,?,?,?,?)", batch)
+    return mem
 
-    try:
+
+def cmd_search(args):
+    mem = build_index(connect(), args)
+    query, terms = build_query(args.query)
+    if not query:
+        die(f'nothing to search for in "{args.query}" - give it some words.')
+
+    def run(expression):
         # Relevance always decides *which* messages come back, so --limit keeps meaning "the best N";
         # --sort only decides the order they are read in.
-        hits = mem.execute(
+        return mem.execute(
             "SELECT cid, t, who, img, snippet(fts, 0, '«', '»', '…', 14), txt "
             "FROM fts WHERE fts MATCH ? ORDER BY bm25(fts) LIMIT ?",
-            (args.query, args.limit),
+            (expression, args.limit),
         ).fetchall()
-    except sqlite3.OperationalError as error:
-        die(f'bad search "{args.query}" ({error}). Use plain words, OR, "a phrase", or prefix*.')
+
+    hits = run(query)
+    # Asking for every word and getting nothing is the quiet failure: it reads as "this was never
+    # discussed" when it usually means one word too many. Widen once, and say so.
+    loose = ""
+    if not hits:
+        loose = widened(query, terms)
+        if loose:
+            hits = run(loose)
 
     if not hits:
         print(f'No WhatsApp messages match "{args.query}". Try broader or different keywords '
               "(synonyms, OR, a prefix*).")
         return
+    if loose:
+        print(f'No message matches all of "{args.query}" - these match at least one of its words:')
     chronological = args.sort == "time"
     if chronological:
         hits = sorted(hits, key=lambda h: h[1])
@@ -256,6 +348,79 @@ def cmd_search(args):
         for cid, tm, who, img, snip, text in hits
     ]
     emit(lines, "→ `show --ids <#>` for the full message and its context; `image --id <#>` to view an image.")
+
+
+def speaker(who: str) -> str:
+    """Which side of the chat a line came from, skills counted apart from Apollo's own words."""
+    if who == "You":
+        return "you"
+    return "via skills" if who.startswith("Apollo (via") else "Apollo"
+
+
+def cmd_stats(args):
+    """How much there is, rather than what is in it.
+
+    "How many photos have I sent", "how often do I bring this up", "when did I last mention it" are
+    ordinary questions about a conversation, and without a verb for them the caller ends up querying
+    the database by hand - writing a second, private definition of what counts as a message. This
+    counts exactly what the rest of the skill can find: same messages, same time bounds.
+    """
+    con = connect()
+    if args.query:
+        mem = build_index(con, args)
+        query, _ = build_query(args.query)
+        if not query:
+            die(f'nothing to search for in "{args.query}" - give it some words.')
+        hits = mem.execute(
+            "SELECT cid, t, who FROM fts WHERE fts MATCH ? ORDER BY t", (query,)
+        ).fetchall()
+        if not hits:
+            print(f'No WhatsApp messages match "{args.query}".')
+            return
+        sides: dict = {}
+        for _, _, who in hits:
+            sides[speaker(who)] = sides.get(speaker(who), 0) + 1
+        split = ", ".join(f"{n} {side}" for side, n in sorted(sides.items()))
+        print(f'"{args.query}" · {len(hits)} message(s) — {split}')
+        print(f"First {when(hits[0][1])} [#{hits[0][0]}] · last {when(hits[-1][1])} [#{hits[-1][0]}]")
+        return
+
+    where, params = time_clause(args)
+    sides: dict = {"Apollo": 0, "via skills": 0, "you": 0}
+    months: dict = {}
+    total = images = image_messages = voice = 0
+    first = last = None
+    for _, tm, data in rows(con, "ASC", where, params):
+        seen = visible(data)
+        if not seen:
+            continue
+        who, text, imgs = seen
+        if not text and not imgs:
+            continue
+        total += 1
+        sides[speaker(who)] += 1
+        if imgs:
+            images += imgs
+            image_messages += 1
+        if text.startswith("\U0001f3a4"):
+            voice += 1
+        if tm:
+            first = first if first else tm
+            last = tm
+            key = datetime.fromtimestamp(tm / 1000).strftime("%Y-%m")
+            months[key] = months.get(key, 0) + 1
+    if total == 0:
+        print("No WhatsApp history in that range.")
+        return
+    span = f"{when(first)} to {when(last)}" if first and last else ""
+    days = int((last - first) / 86_400_000) + 1 if first and last else 0
+    print(f"Chat archive · {span} · {days} day(s)")
+    print(f"Messages {total:,} — " + ", ".join(f"{n:,} {side}" for side, n in sorted(sides.items())))
+    print(f"Images {images:,} in {image_messages:,} message(s) · voice notes {voice:,}")
+    if len(months) > 1:
+        print("By month:")
+        for key in sorted(months):
+            print(f"  {key}  {months[key]:,}")
 
 
 def cmd_history(args):
@@ -398,6 +563,12 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--ids", required=True, help="one or more message ids: 254,260,791")
     a.add_argument("--context", type=int, default=0,
                    help="also show this many messages either side of each id")
+
+    st = sub.add_parser("stats")
+    st.set_defaults(func=cmd_stats)
+    st.add_argument("query", nargs="?", help="count only the messages matching this")
+    st.add_argument("--since")
+    st.add_argument("--until")
 
     i = sub.add_parser("image")
     i.set_defaults(func=cmd_image)
