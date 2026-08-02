@@ -21,6 +21,7 @@ describe("loadConfig", () => {
     expect(config.remindersDir).toBe("/tmp/apollo/workspace/reminders");
     expect(config.dbPath).toBe("/tmp/apollo/apollo.sqlite");
     expect(config.dayStartHour).toBe(4);
+    expect(config.keepRecentTokens).toBe(16_000);
     expect(config.logRetentionDays).toBe(30);
     expect(config.notifyLevel).toBe("warn");
     expect(config.notifyThrottleMs).toBe(60000);

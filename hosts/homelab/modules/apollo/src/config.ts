@@ -21,6 +21,7 @@ export interface Config {
   dayStartHour: number;
   dbPath: string;
   inboxRetentionDays: number;
+  keepRecentTokens: number;
   linkGraceMs: number;
   logLevel: string;
   logRetentionDays: number;
@@ -72,6 +73,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     dayStartHour: Number(env.APOLLO_DAY_START_HOUR ?? 4),
     dbPath: env.APOLLO_DB_PATH ?? join(home, "apollo.sqlite"),
     inboxRetentionDays: Number(env.APOLLO_INBOX_RETENTION_DAYS ?? 30),
+    // The tail compaction leaves verbatim. Everything older is what the summary has to carry, so
+    // this is the line between what Apollo still has in its own words and what it has as a note.
+    keepRecentTokens: Number(env.APOLLO_KEEP_RECENT_TOKENS ?? 16_000),
     // How long the WhatsApp link may be down before /health reports the service unhealthy (so the
     // status page goes red) and the user is told about the gap on reconnect.
     linkGraceMs: Number(env.APOLLO_LINK_GRACE_MS ?? 10 * 60_000),

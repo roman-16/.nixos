@@ -27,10 +27,12 @@ This applies hardest to what you inherit. Anything in `<previous-summary>` that 
 
 Tool output in `<conversation>` is shortened, so it shows the beginning and the end of a long result with the middle removed. `<delivered>` lists what Apollo's skills actually sent the user, which is often the better evidence of what really happened.
 
-If you cannot tell from that evidence whether something finished, **write it as a check, never as a task**: "confirm 30.07 is fully logged (`macros.py show --date 2026-07-30 --quiet`)", not "log the 30.07 items". A wrong task gets done twice; a check costs one command.
+`<conversation>` is only the older half. The conversation carries on past its last line, and `<continues>` shows you where: the first messages after the cut, then the most recent ones. **It is not yours to summarize** - Apollo keeps all of it, word for word, right beside your note. Read it for two things only. Anything already answered or settled there is not an open loop, however unfinished it looks at the end of `<conversation>`. And where things stand means where `<continues>` leaves off, not where `<conversation>` ends; those can be hours apart.
+
+If you still cannot tell whether something finished, **write it as a check, never as a task**: "confirm 30.07 is fully logged (`macros.py show --date 2026-07-30 --quiet`)", not "log the 30.07 items". A wrong task gets done twice; a check costs one command.
 
 ## Form
 
-Merge `<previous-summary>`, when present, into a single current note. Do not append to it and do not preserve its wording: re-derive it, drop everything that has since been resolved, superseded or gone stale, and keep it the same length or shorter. Anything that has survived several summaries without being acted on is finished, and should be dropped.
+Merge `<previous-summary>`, when present, into a single current note. Do not append to it and do not preserve its wording: re-derive it, drop everything that has since been resolved, superseded or gone stale, and keep it the same length or shorter. Anything that has survived several summaries without being acted on is finished, and should be dropped. When the previous note called something open and it has since been done, simply leave it out - never keep a record that it was resolved, which only trades one permanent line for another.
 
 Short prose or bullets under a few headings of your choosing. **Aim for 2000 characters and never exceed 4000.** No preamble, no closing remarks: output only the note.

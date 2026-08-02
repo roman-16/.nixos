@@ -103,6 +103,11 @@
         apollo = ./hosts/homelab/modules/apollo;
         pkgs = inputs.nixpkgs.legacyPackages.x86_64-linux;
         traderBot = ./hosts/homelab/modules/trader/bot;
+        traderNeh = import ./hosts/homelab/modules/trader/neh.nix {
+          inherit pkgs;
+          inherit (inputs.nixpkgs) lib;
+          inherit (inputs) pyproject-build-systems pyproject-nix uv2nix;
+        };
       in
       {
         # Unit tests for the Apollo skills (pytest). The skill scripts are
@@ -139,17 +144,15 @@
           touch $out
         '';
 
-        # Unit tests, hermetic (temp dirs, no network). Daemon + recorder tests
-        # need only pytest + requests (the neh modules they import pull in requests).
+        # Unit tests, hermetic (temp dirs, no network). Runs in the uv2nix venv,
+        # so the tests import the exact dependency closure from bot/uv.lock.
         trader-pytest =
           pkgs.runCommand "trader-pytest"
             {
-              nativeBuildInputs = [
-                (pkgs.python3.withPackages (ps: [
-                  ps.pytest
-                  ps.requests
-                ]))
-              ];
+              nativeBuildInputs = [ traderNeh.testEnv ];
+              # py-clob-client-v2 builds an httpx client at import time, which reads
+              # SSL_CERT_FILE; the sandbox default points at a file that does not exist.
+              SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
             }
             ''
               cp -r ${traderBot} bot

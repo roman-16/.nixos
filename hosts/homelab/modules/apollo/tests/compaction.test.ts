@@ -1,6 +1,12 @@
 import { describe, expect, it } from "bun:test";
 
-import { buildCompactionPrompt, condenseToolResults, deliveredLedger } from "../src/compaction";
+import {
+  buildCompactionPrompt,
+  condenseToolResults,
+  continuesBlock,
+  deliveredLedger,
+  keptMessages,
+} from "../src/compaction";
 
 describe("buildCompactionPrompt", () => {
   it("places instructions before the wrapped conversation", () => {
@@ -49,6 +55,84 @@ describe("buildCompactionPrompt", () => {
     expect(
       buildCompactionPrompt({ conversation: "c", delivered: "", instructions: "i" }),
     ).not.toContain("delivered");
+  });
+
+  it("puts what continues after the conversation, where it happened", () => {
+    const prompt = buildCompactionPrompt({
+      continues: "<continues>\n[Assistant]: answered it\n</continues>",
+      conversation: "c",
+      instructions: "i",
+    });
+    expect(prompt.indexOf("<conversation>")).toBeLessThan(prompt.indexOf("<continues>"));
+  });
+});
+
+describe("keptMessages", () => {
+  const entry = (id: string, text: string) => ({
+    id,
+    message: { content: [{ text, type: "text" }], role: "user", timestamp: 1 },
+    type: "message",
+  });
+
+  it("takes everything from the cut point onwards", () => {
+    const entries = [entry("a", "old"), entry("b", "cut"), entry("c", "newer")] as never[];
+    const kept = keptMessages(entries, "b") as { content: { text: string }[] }[];
+    expect(kept.map((m) => m.content[0]!.text)).toEqual(["cut", "newer"]);
+  });
+
+  it("skips entries that are not messages", () => {
+    const entries = [
+      entry("a", "kept"),
+      { id: "b", summary: "s", type: "compaction" },
+      entry("c", "also kept"),
+    ] as never[];
+    expect(keptMessages(entries, "a")).toHaveLength(2);
+  });
+
+  it("returns nothing when the cut point is not on this branch", () => {
+    expect(keptMessages([entry("a", "x")] as never[], "missing")).toEqual([]);
+  });
+});
+
+describe("continuesBlock", () => {
+  const msg = (role: string, text: string) => ({
+    content: [{ text, type: "text" }],
+    role,
+    timestamp: 1,
+  });
+
+  it("shows the messages right after the cut, which close the seam", () => {
+    // The failure this exists for: the summarized half ended on a question whose answer is the
+    // very next message - kept, and until now invisible to the summarizer.
+    const block = continuesBlock([msg("assistant", "The Austrian School is...")]);
+    expect(block).toContain("<continues>");
+    expect(block).toContain("The Austrian School is...");
+  });
+
+  it("shows both ends and says how much it left out", () => {
+    const kept = Array.from({ length: 30 }, (_, i) => msg("user", `m${i}`));
+    const block = continuesBlock(kept, 2, 2);
+    expect(block).toContain("m0");
+    expect(block).toContain("m29");
+    expect(block).toContain("26 more messages");
+    expect(block).not.toContain("m14");
+  });
+
+  it("does not repeat itself when the two ends meet", () => {
+    const block = continuesBlock([msg("user", "only")], 6, 4);
+    expect(block.match(/only/g)).toHaveLength(1);
+    expect(block).not.toContain("more messages");
+  });
+
+  it("is empty when nothing is kept", () => {
+    expect(continuesBlock([])).toBe("");
+  });
+
+  it("condenses kept tool output like everything else", () => {
+    const kept = [
+      { content: [{ text: "x".repeat(5000), type: "text" }], role: "toolResult", timestamp: 1 },
+    ];
+    expect(continuesBlock(kept).length).toBeLessThan(2500);
   });
 });
 

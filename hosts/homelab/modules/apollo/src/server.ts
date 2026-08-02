@@ -1,6 +1,7 @@
 import type { AgentSession, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { Logger } from "pino";
 
+import { compactionSettings } from "./agent";
 import { type AnthropicLogin, createAnthropicLogin } from "./anthropic-login";
 import { assetsVersion, htmlHeaders, serveAsset } from "./assets";
 import { parseTranscript, renderChat } from "./chat";
@@ -325,8 +326,8 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
         try {
           await session.reload();
           // reload() rebuilds settings from disk, dropping in-memory overrides; re-assert the
-          // auto-compaction override the startup applies (getCompactionEnabled reads it live).
-          session.settingsManager.applyOverrides({ compaction: { enabled: true } });
+          // compaction policy the startup applies (it is read live, on the next compaction).
+          session.settingsManager.applyOverrides({ compaction: compactionSettings(config) });
           session.sessionManager.appendCustomEntry("apollo_reload", {
             at: new Date().toISOString(),
           });

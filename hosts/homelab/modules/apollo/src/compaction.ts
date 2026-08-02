@@ -5,6 +5,7 @@ import {
   type ExtensionFactory,
   type ModelRuntime,
   serializeConversation,
+  type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import type { Logger } from "pino";
 
@@ -19,6 +20,11 @@ const MAX_SUMMARY_TOKENS = 8192;
 // Condensing to just under pi's limit keeps both ends and leaves its truncation nothing to do.
 const TOOL_HEAD_CHARS = 700;
 const TOOL_TAIL_CHARS = 1100;
+
+// How much of the kept half to show: enough of its start to see how the summarized half ended,
+// enough of its end to know what is happening now.
+const KEPT_HEAD = 6;
+const KEPT_TAIL = 4;
 
 /** A message Apollo's skills delivered to the user themselves, outside the model's own turns. */
 export interface DeliveredMessage {
@@ -73,8 +79,46 @@ export function deliveredLedger(delivered: DeliveredMessage[]): string {
   return `<delivered>\n${lines.join("\n")}\n</delivered>`;
 }
 
+/**
+ * What the summarizer would otherwise be blind to: the half of the conversation Apollo keeps.
+ *
+ * A compaction cuts the conversation in two and hands over only the older half, so the last thing
+ * in that half is whatever happened to fall before the cut. A question whose answer is the very
+ * next message reads as unanswered, and "where things stand" describes the cut rather than the
+ * present, which can be hours and a hundred messages ago.
+ *
+ * Both ends are needed and neither is large: the opening messages close the seam, the closing ones
+ * are the present. Everything between is left out, because Apollo can already see all of it.
+ */
+export function continuesBlock(kept: unknown[], head = KEPT_HEAD, tail = KEPT_TAIL): string {
+  if (kept.length === 0) return "";
+  const front = kept.slice(0, head);
+  const back =
+    kept.length > head + tail ? kept.slice(kept.length - tail) : kept.slice(front.length);
+  const omitted = kept.length - front.length - back.length;
+  const render = (part: unknown[]) =>
+    serializeConversation(condenseToolResults(convertToLlm(part as never))).trim();
+  const parts = [render(front)];
+  if (omitted > 0) parts.push(`\u2026 [${omitted} more messages Apollo can see] \u2026`);
+  if (back.length > 0) parts.push(render(back));
+  return `<continues>\n${parts.filter(Boolean).join("\n")}\n</continues>`;
+}
+
+/** The messages Apollo keeps in front of it: everything from the cut point onwards. */
+export function keptMessages(branchEntries: SessionEntry[], firstKeptEntryId: string): unknown[] {
+  const at = branchEntries.findIndex((entry) => entry.id === firstKeptEntryId);
+  if (at < 0) return [];
+  return branchEntries
+    .slice(at)
+    .filter(
+      (entry): entry is Extract<SessionEntry, { type: "message" }> => entry.type === "message",
+    )
+    .map((entry) => entry.message);
+}
+
 /** Assemble the summarization prompt: instructions, the previous summary, what was delivered, then the conversation. */
 export function buildCompactionPrompt(args: {
+  continues?: string;
   conversation: string;
   delivered?: string;
   instructions: string;
@@ -84,7 +128,8 @@ export function buildCompactionPrompt(args: {
     ? `\n\n<previous-summary>\n${args.previousSummary.trim()}\n</previous-summary>`
     : "";
   const delivered = args.delivered?.trim() ? `\n\n${args.delivered.trim()}` : "";
-  return `${args.instructions.trim()}${previous}${delivered}\n\n<conversation>\n${args.conversation}\n</conversation>`;
+  const continues = args.continues?.trim() ? `\n\n${args.continues.trim()}` : "";
+  return `${args.instructions.trim()}${previous}${delivered}\n\n<conversation>\n${args.conversation}\n</conversation>${continues}`;
 }
 
 /** The span the messages cover, for looking up what was delivered alongside them. */
@@ -112,6 +157,9 @@ export function createCompactionExtension(options: CompactionExtensionOptions): 
       try {
         const { from, to } = span(messages);
         const prompt = buildCompactionPrompt({
+          continues: continuesBlock(
+            keptMessages(event.branchEntries, preparation.firstKeptEntryId),
+          ),
           conversation: serializeConversation(condenseToolResults(convertToLlm(messages))),
           delivered:
             delivered && Number.isFinite(from) ? deliveredLedger(delivered(from, to)) : undefined,

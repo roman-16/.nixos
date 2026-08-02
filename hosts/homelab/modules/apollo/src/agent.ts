@@ -31,6 +31,15 @@ export interface ApolloSession {
   session: AgentSession;
 }
 
+/**
+ * How Apollo compacts, asserted over whatever is on disk. It has to be re-applied after a reload,
+ * which rebuilds settings from disk and drops in-memory overrides, so it lives here rather than at
+ * either call site: two copies of a policy are one drift away from disagreeing.
+ */
+export function compactionSettings(config: Config): { enabled: boolean; keepRecentTokens: number } {
+  return { enabled: true, keepRecentTokens: config.keepRecentTokens };
+}
+
 export interface ApolloSessionOptions {
   /** What the skills delivered to the user in a span, for the summarizer's evidence. */
   delivered?: (fromMs: number, toMs: number) => DeliveredMessage[];
@@ -56,7 +65,7 @@ export async function createApolloSession(
   if (resolved.warning) console.warn(resolved.warning);
 
   const settingsManager = SettingsManager.create(config.workspace, config.agentDir);
-  settingsManager.applyOverrides({ compaction: { enabled: true } });
+  settingsManager.applyOverrides({ compaction: compactionSettings(config) });
 
   const compactionInstructions = readTextIfExists(config.compactionPromptFile);
   const extensionFactories = [
