@@ -14,8 +14,10 @@ import {
 import type { ImageContent } from "@earendil-works/pi-ai";
 import type { Logger } from "pino";
 
-import { createCompactionExtension } from "./compaction";
+import { createCompactionExtension, type DeliveredMessage } from "./compaction";
 import type { Config } from "./config";
+import { createContextClearingExtension } from "./context-clearing";
+import { createMemoryExtension } from "./memory";
 import { createToolTimeoutExtension } from "./tool-timeout";
 
 /** Read a prompt-override file if it exists (used for the system prompt and the compaction prompt). */
@@ -29,8 +31,17 @@ export interface ApolloSession {
   session: AgentSession;
 }
 
+export interface ApolloSessionOptions {
+  /** What the skills delivered to the user in a span, for the summarizer's evidence. */
+  delivered?: (fromMs: number, toMs: number) => DeliveredMessage[];
+}
+
 /** Build the single, persistent, auto-compacting pi session Apollo talks to. */
-export async function createApolloSession(config: Config, logger: Logger): Promise<ApolloSession> {
+export async function createApolloSession(
+  config: Config,
+  logger: Logger,
+  options: ApolloSessionOptions = {},
+): Promise<ApolloSession> {
   const modelRuntime = await ModelRuntime.create({
     authPath: join(config.agentDir, "auth.json"),
     modelsPath: join(config.agentDir, "models.json"),
@@ -50,10 +61,19 @@ export async function createApolloSession(config: Config, logger: Logger): Promi
   const compactionInstructions = readTextIfExists(config.compactionPromptFile);
   const extensionFactories = [
     { factory: createToolTimeoutExtension(), name: "apollo-tool-timeout" },
+    { factory: createMemoryExtension(config.memoryFile), name: "apollo-memory" },
+    {
+      factory: createContextClearingExtension({
+        gapMs: config.clearGapMs,
+        minChars: config.clearMinChars,
+      }),
+      name: "apollo-context-clearing",
+    },
     ...(compactionInstructions && resolved.model
       ? [
           {
             factory: createCompactionExtension({
+              delivered: options.delivered,
               instructions: compactionInstructions,
               logger,
               model: resolved.model,

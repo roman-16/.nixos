@@ -27,7 +27,7 @@ function ymd(date: Date): string {
 }
 
 /** The practical-day key: the calendar date `dayStartHour` hours earlier. */
-function macroDay(date: Date, dayStartHour: number): string {
+export function practicalDay(date: Date, dayStartHour: number): string {
   return ymd(new Date(date.getTime() - dayStartHour * HOUR_MS));
 }
 
@@ -87,10 +87,10 @@ export function timeContext(args: TimeContextArgs): ContextNote {
         `A new calendar day started since the previous message; that day is ${ymd(sent)}.`,
       );
     }
-    if (macroDay(sent, dayStartHour) !== macroDay(before, dayStartHour)) {
+    if (practicalDay(sent, dayStartHour) !== practicalDay(before, dayStartHour)) {
       lines.push(
         `It is past ${pad(dayStartHour)}:00, so a new day had practically begun; "today" for daily ` +
-          `tracking (macros, etc.) is ${macroDay(sent, dayStartHour)}.`,
+          `tracking (macros, etc.) is ${practicalDay(sent, dayStartHour)}.`,
       );
     }
   }

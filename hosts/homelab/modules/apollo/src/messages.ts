@@ -1,4 +1,4 @@
-import { humanTokens, truncate } from "./format";
+import { truncate } from "./format";
 
 import type { LogRecord } from "./logs";
 import { type ContextNote, describeDelay, stamp } from "./temporal";
@@ -39,12 +39,6 @@ export function splitInternal(text: string): SplitText {
     })
     .trim();
   return { delivered, internal };
-}
-
-/** Build the brief WhatsApp notice sent when the session context is compacted. */
-export function compactionNotice(tokensBefore?: number): string {
-  const count = tokensBefore && tokensBefore > 0 ? ` (~${humanTokens(tokensBefore)} tokens)` : "";
-  return `🗜️ Context compacted${count}. Full summary on the dashboard.`;
 }
 
 /**

@@ -22,10 +22,18 @@ export interface ChatTail {
   version: string;
 }
 
+export interface SkillMessage {
+  at: number;
+  source: string;
+  text: string;
+}
+
 export interface ChatStore {
   /** Record an out-of-band skill message (a fired reminder, a macros reply) as a chat entry. */
   appendSkillMessage(sessionId: string, source: string, text: string): void;
   image(sessionId: string, entryId: string, index: number): ImageBytes | undefined;
+  /** Skill messages delivered in a time span: what the user saw that the session never recorded. */
+  skillMessagesBetween(sessionId: string, fromMs: number, toMs: number): SkillMessage[];
   sync(sessionId: string, entries: SessionEntry[]): void;
   tail(sessionId: string, count: number): ChatTail;
 }
@@ -39,6 +47,9 @@ export function createChatStore(db: Database): ChatStore {
   );
   const olderExists = db.query("SELECT 1 FROM chat WHERE session_id = ? AND id < ? LIMIT 1");
   const selectData = db.query("SELECT data FROM chat WHERE session_id = ? AND entry_id = ?");
+  const selectSkillMessages = db.query(
+    "SELECT time, data FROM chat WHERE session_id = ? AND type = 'custom' AND time >= ? AND time <= ? ORDER BY id",
+  );
 
   // How many entries have already been mirrored per session, so a sync only walks the
   // growing tail. INSERT OR IGNORE on (session_id, entry_id) keeps it correct even when
@@ -62,6 +73,30 @@ export function createChatStore(db: Database): ChatStore {
     image(sessionId, entryId, index) {
       const row = selectData.get(sessionId, entryId) as { data: string } | null;
       return row ? imageFromLine(row.data, index) : undefined;
+    },
+    skillMessagesBetween(sessionId, fromMs, toMs) {
+      const rows = selectSkillMessages.all(sessionId, fromMs, toMs) as {
+        data: string;
+        time: number;
+      }[];
+      const out: SkillMessage[] = [];
+      for (const row of rows) {
+        try {
+          const entry = JSON.parse(row.data) as {
+            customType?: string;
+            data?: { source?: string; text?: string };
+          };
+          if (entry.customType !== "skill_message") continue;
+          out.push({
+            at: row.time,
+            source: entry.data?.source ?? "skill",
+            text: entry.data?.text ?? "",
+          });
+        } catch {
+          // a corrupt row is not worth failing a compaction over
+        }
+      }
+      return out;
     },
     sync(sessionId, entries) {
       const from = cursors.get(sessionId) ?? 0;

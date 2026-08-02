@@ -12,6 +12,11 @@ export interface Config {
   allowFrom: string[];
   backlogMax: number;
   baileysLogLevel: string;
+  clearGapMs: number;
+  clearMinChars: number;
+  compactAtTokens: number;
+  compactIdleMs: number;
+  compactNightlyTokens: number;
   compactionPromptFile: string;
   dayStartHour: number;
   dbPath: string;
@@ -20,6 +25,7 @@ export interface Config {
   logLevel: string;
   logRetentionDays: number;
   maxMessageChars: number;
+  memoryFile: string;
   mistralApiKey: string;
   model: string;
   notifyLevel: LogLevel;
@@ -51,6 +57,17 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     // How many owed messages one catch-up turn carries; the rest follow in the next turn.
     backlogMax: Number(env.APOLLO_BACKLOG_MAX ?? 60),
     baileysLogLevel: env.APOLLO_BAILEYS_LOG_LEVEL ?? "silent",
+    // Silence that ends a burst, after which its tool output and images are cleared from the view
+    // sent to the model. At or above the prompt cache's TTL, so the view only changes once the
+    // cache it would invalidate has expired anyway.
+    clearGapMs: Number(env.APOLLO_CLEAR_GAP_MS ?? 60 * 60_000),
+    clearMinChars: Number(env.APOLLO_CLEAR_MIN_CHARS ?? 500),
+    // Context size that is no longer worth carrying into the next burst.
+    compactAtTokens: Number(env.APOLLO_COMPACT_AT_TOKENS ?? 128_000),
+    // Quiet before compacting, so it never lands mid-conversation.
+    compactIdleMs: Number(env.APOLLO_COMPACT_IDLE_MS ?? 30 * 60_000),
+    // Floor below which starting a new day isn't worth a summarization call.
+    compactNightlyTokens: Number(env.APOLLO_COMPACT_NIGHTLY_TOKENS ?? 32_000),
     compactionPromptFile: join(agentDir, "COMPACTION_PROMPT.md"),
     dayStartHour: Number(env.APOLLO_DAY_START_HOUR ?? 4),
     dbPath: env.APOLLO_DB_PATH ?? join(home, "apollo.sqlite"),
@@ -61,6 +78,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     logLevel: env.APOLLO_LOG_LEVEL ?? "info",
     logRetentionDays: Number(env.APOLLO_LOG_RETENTION_DAYS ?? 30),
     maxMessageChars: Number(env.APOLLO_MAX_MESSAGE_CHARS ?? 4000),
+    memoryFile: env.APOLLO_MEMORY_FILE ?? join(workspace, "MEMORY.md"),
     mistralApiKey: env.MISTRAL_API_KEY ?? "",
     model: env.APOLLO_MODEL ?? "anthropic/claude-sonnet-5",
     notifyLevel: parseLevel(env.APOLLO_NOTIFY_LEVEL ?? "warn"),

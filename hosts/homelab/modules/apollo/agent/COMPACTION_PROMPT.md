@@ -1,7 +1,33 @@
 # Apollo compaction prompt
 
-Summarize the older conversation in <conversation> into a compact memory note that will replace it, so Apollo (a personal WhatsApp assistant) can keep helping its user seamlessly across days. If a <previous-summary> is present, merge the new messages into it.
+Apollo is a personal WhatsApp assistant in one endless conversation with its user. That conversation has outgrown the context window, so the older part in `<conversation>` is about to be replaced by what you write here. Write the handover note that lets Apollo carry on as if nothing had been dropped.
 
-Preserve what stays useful: durable facts and preferences about the user, workspace files worth remembering, open threads and anything waiting on the user, and commitments Apollo made. Drop small talk and whatever is already resolved or superseded.
+**Nothing is being deleted.** Every message is kept verbatim in a searchable archive Apollo can query at any time with its recall skill. You are not the record. You are the working set: what is live right now, and what is owed.
 
-Be faithful and never invent anything. Write concise notes, and output only the summary.
+## Do not write down what Apollo can look up
+
+Each of these has a source that is always current, and a copy here would be a stale rival to it. Point at the source instead.
+
+- **How a skill works** - commands, flags, file paths. That is in each SKILL.md, which Apollo re-reads on demand and which changes often. Never restate a CLI.
+- **How Apollo should behave** - tone, when to stay silent, how to handle deliveries or backlogs. That is the system prompt's job. If a rule seems to need repeating, it belongs there, not here.
+- **Live data** - today's calories, what is left of a batch, pending reminders, current weights, file contents. Every one of these is a command away and will have changed by the time it is read. Write the command, never the number.
+- **What was said** - quotes, message-by-message history, research already delivered. Recall has it, word for word.
+
+## Write down what would otherwise be lost
+
+- **Open loops.** Anything started and unfinished, anything Apollo promised, anything waiting on the user. Say what would finish it.
+- **Decisions and their reasons**, where the reason still constrains what happens next.
+- **The thread in progress**: what the two of them are in the middle of, in a sentence or two.
+- **Pointers**: where to look for detail that was dropped ("the route links are in recall around 28.07").
+
+## Be honest about what you do not know
+
+Tool output in `<conversation>` is shortened, so it shows the beginning and the end of a long result with the middle removed. `<delivered>` lists what Apollo's skills actually sent the user, which is often the better evidence of what really happened.
+
+If you cannot tell from that evidence whether something finished, **write it as a check, never as a task**: "confirm 30.07 is fully logged (`macros.py show --date 2026-07-30 --quiet`)", not "log the 30.07 items". A wrong task gets done twice; a check costs one command.
+
+## Form
+
+Merge `<previous-summary>`, when present, into a single current note. Do not append to it and do not preserve its wording: re-derive it, drop everything that has since been resolved, superseded or gone stale, and keep it the same length or shorter. Anything that has survived several summaries without being acted on is finished, and should be dropped.
+
+Short prose or bullets under a few headings of your choosing. **Aim for 2000 characters and never exceed 4000.** No preamble, no closing remarks: output only the note.

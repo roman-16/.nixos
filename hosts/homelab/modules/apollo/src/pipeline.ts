@@ -8,6 +8,7 @@ import type { Logger } from "pino";
 import { deliver, onAssistantText, onRunError } from "./agent";
 import { buildBacklog } from "./backlog";
 import type { ChatStore } from "./chat-store";
+import { type CompactionReason, compactionReason } from "./compaction-schedule";
 import type { Config } from "./config";
 import { droppedImageNote, fitImages } from "./images";
 import type { Inbox, InboxEntry } from "./inbox";
@@ -15,7 +16,6 @@ import type { Kv } from "./kv";
 import { createThrottle, type LogStore, shouldNotify } from "./logs";
 import {
   claudeErrorNotice,
-  compactionNotice,
   formatLogNotice,
   isAllowed,
   jidForNumber,
@@ -43,8 +43,15 @@ const DELIVERY_RETRY_MS = 5 * 60_000;
 /** Sweep for anything still owed - covers rows placed in the inbox out of band. */
 const DRAIN_TICK_MS = 60_000;
 
+/** How often Apollo asks itself whether the conversation is quiet enough to compact. */
+const COMPACT_TICK_MS = 60_000;
+
+/** Pause after a compaction attempt, so a failing one cannot spin on the tick. */
+const COMPACT_RETRY_MS = 10 * 60_000;
+
 const LINK_ALIVE_KEY = "linkAliveAt";
 const LAST_SENT_KEY = "lastInboundSentAt";
+const LAST_COMPACTED_KEY = "lastCompactedAt";
 
 export interface PipelineDeps {
   chatStore: ChatStore;
@@ -98,6 +105,10 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   // Only one drain runs at a time, and a failed delivery pauses the next one until `retryAfter`.
   let draining = false;
   let retryAfter = 0;
+
+  // When the conversation last moved, so compaction can wait for a gap rather than for a full window.
+  let lastActivityAt = startedAt;
+  let lastCompactAttemptAt = 0;
 
   // Hold the "typing…" indicator up from the moment a message arrives until the session settles.
   // WhatsApp drops it on every outbound message and auto-expires it after a few seconds, so it is
@@ -235,11 +246,54 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   });
 
   session.subscribe((event) => {
-    if (event.type === "agent_settled") stopTyping();
+    if (event.type === "agent_settled") {
+      stopTyping();
+      lastActivityAt = Date.now();
+    }
+    // Compaction is maintenance, not news: it is recorded on the dashboard and never messaged to
+    // the user, who would otherwise be woken by the nightly one.
     if (event.type === "compaction_end" && event.result && !event.aborted) {
-      void notify(compactionNotice(event.result.tokensBefore));
+      kv.set(LAST_COMPACTED_KEY, String(Date.now()));
+      logger.info({ tokensBefore: event.result.tokensBefore }, "compacted");
     }
   });
+
+  /**
+   * Compact when the conversation has gone quiet, not when the window is full. A full window is the
+   * most expensive and least accurate moment there is, and it always arrives mid-task; a gap costs
+   * nothing, since nobody is waiting and the prompt cache is expiring regardless.
+   */
+  async function maybeCompact(): Promise<void> {
+    if (!session.isIdle || session.isCompacting || session.isStreaming) return;
+    if (inbox.pending(1).length > 0) return;
+    if (Date.now() - lastCompactAttemptAt < COMPACT_RETRY_MS) return;
+    const usage = session.getContextUsage();
+    const stored = Number(kv.get(LAST_COMPACTED_KEY) ?? 0);
+    const reason: CompactionReason | undefined = compactionReason(
+      {
+        contextTokens: usage?.tokens,
+        idleMs: Date.now() - lastActivityAt,
+        lastCompactedAt: stored > 0 ? stored : undefined,
+        now: Date.now(),
+      },
+      {
+        atTokens: config.compactAtTokens,
+        dayStartHour: config.dayStartHour,
+        idleMs: config.compactIdleMs,
+        nightlyFloorTokens: config.compactNightlyTokens,
+      },
+    );
+    if (!reason) return;
+    lastCompactAttemptAt = Date.now();
+    logger.info({ reason, tokens: usage?.tokens }, "compacting");
+    try {
+      await session.compact();
+    } catch (error) {
+      logger.warn({ error }, "compaction failed");
+    }
+  }
+
+  setInterval(() => void maybeCompact(), COMPACT_TICK_MS);
 
   // A run that ends in a terminal LLM error produces no text block, so log it at error - the
   // notifier above delivers the friendly notice from notifyText.
@@ -356,7 +410,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
    * instead of spinning.
    */
   async function drain(): Promise<void> {
-    if (draining || !connected() || session.isStreaming || Date.now() < retryAfter) return;
+    if (draining || !connected() || session.isStreaming || session.isCompacting) return;
+    if (Date.now() < retryAfter) return;
     draining = true;
     try {
       for (;;) {
@@ -426,6 +481,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         else logger.warn({ from: message.number }, "ignored message from non-allowlisted number");
       }
       if (allowed.length === 0) return;
+      lastActivityAt = Date.now();
       target = allowed[allowed.length - 1]!.from;
       for (const message of allowed) void socket?.read(message.key); // blue checkmarks
       startTyping();

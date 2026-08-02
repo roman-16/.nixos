@@ -43,7 +43,9 @@ export async function main(): Promise<void> {
     logger.warn("APOLLO_ALLOW_FROM is empty; every inbound message will be ignored");
   }
 
-  const { modelRuntime, session } = await createApolloSession(config, logger);
+  const { modelRuntime, session } = await createApolloSession(config, logger, {
+    delivered: (fromMs, toMs) => chatStore.skillMessagesBetween(session.sessionId, fromMs, toMs),
+  });
   logger.info({ model: config.model, workspace: config.workspace }, "pi session ready");
 
   const pipeline = createPipeline({ chatStore, config, inbox, kv, logStore, logger, session });
