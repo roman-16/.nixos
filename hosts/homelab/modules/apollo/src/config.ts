@@ -64,11 +64,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     clearGapMs: Number(env.APOLLO_CLEAR_GAP_MS ?? 60 * 60_000),
     clearMinChars: Number(env.APOLLO_CLEAR_MIN_CHARS ?? 500),
     // Context size that is no longer worth carrying into the next burst.
-    compactAtTokens: Number(env.APOLLO_COMPACT_AT_TOKENS ?? 128_000),
+    compactAtTokens: Number(env.APOLLO_COMPACT_AT_TOKENS ?? 256_000),
     // Quiet before compacting, so it never lands mid-conversation.
-    compactIdleMs: Number(env.APOLLO_COMPACT_IDLE_MS ?? 30 * 60_000),
+    compactIdleMs: Number(env.APOLLO_COMPACT_IDLE_MS ?? 8 * 60_000),
     // Floor below which starting a new day isn't worth a summarization call.
-    compactNightlyTokens: Number(env.APOLLO_COMPACT_NIGHTLY_TOKENS ?? 32_000),
+    compactNightlyTokens: Number(env.APOLLO_COMPACT_NIGHTLY_TOKENS ?? 64_000),
     compactionPromptFile: join(agentDir, "COMPACTION_PROMPT.md"),
     dayStartHour: Number(env.APOLLO_DAY_START_HOUR ?? 4),
     dbPath: env.APOLLO_DB_PATH ?? join(home, "apollo.sqlite"),
