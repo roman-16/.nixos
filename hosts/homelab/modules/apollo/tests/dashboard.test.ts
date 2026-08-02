@@ -59,6 +59,18 @@ describe("renderPage", () => {
     expect(html).not.toContain("Load older"); // loading is scroll-driven, not a manual button
   });
 
+  it("holds the view still across a swap and never loads off its own completion", () => {
+    const html = renderPage("v");
+    // The distance from the newest end is captured before a swap and restored after it, so
+    // prepended history lands above the viewport instead of re-pinning to the oldest edge.
+    expect(html).toContain(`chat.addEventListener("htmx:beforeSwap"`);
+    expect(html).toContain(`chat.addEventListener("htmx:afterSwap"`);
+    expect(html).toContain("keep = chat.scrollTop");
+    expect(html).toContain("chat.scrollTop = keep");
+    // A load that triggers the next load is a loop; growth follows a scroll gesture only.
+    expect(html).not.toContain(`chat.addEventListener("htmx:afterSettle"`);
+  });
+
   it("wires up WhatsApp-style chat copy", () => {
     const html = renderPage("v");
     expect(html).toContain('addEventListener("copy"');

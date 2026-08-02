@@ -24,8 +24,11 @@ function entry(over: Partial<InboxEntry> = {}): InboxEntry {
 describe("createInbox", () => {
   it("admits a message and holds it as pending", () => {
     const { inbox } = freshInbox();
-    expect(inbox.admit(entry())).toBe(true);
-    expect(inbox.pending(10)).toEqual([entry()]);
+    // One message, built once: entry() stamps Date.now(), so building it twice compares two
+    // different milliseconds whenever the clock ticks between the calls.
+    const message = entry();
+    expect(inbox.admit(message)).toBe(true);
+    expect(inbox.pending(10)).toEqual([message]);
   });
 
   it("round-trips images and per-message context notes", () => {

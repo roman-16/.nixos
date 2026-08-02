@@ -180,9 +180,16 @@ export function renderPage(version: string): string {
         });
       })();
       // Infinite scroll upward: widen the transcript window (via the #chat-window count the
-      // poll includes) whenever the user nears the oldest end, and shrink it back once they
+      // poll includes) whenever the user scrolls near the oldest end, and shrink it back once they
       // return to the newest end so the live poll stays cheap. #chat-more, rendered by the
       // server only while older lines remain, is the stop signal.
+      //
+      // The page owns the scroll position across a swap: the distance from the newest end is what
+      // stays constant. That is the right answer in all three cases - parked at the bottom you keep
+      // following the tail, mid-history an arriving message leaves your place alone, and sixty
+      // older messages land above the viewport where they belong. Left to the browser it is not:
+      // a reversed scroller sitting at its oldest edge gets re-pinned to that edge, so growing the
+      // window would leave the position unchanged and immediately ask to grow again.
       (function () {
         var chat = document.getElementById("chat");
         var log = document.getElementById("chat-log");
@@ -218,11 +225,14 @@ export function renderPage(version: string): string {
           },
           { passive: true },
         );
-        // Once older messages land, keep going if still parked at the top.
-        chat.addEventListener("htmx:afterSettle", function () {
-          inFlight = false;
-          growIfNearTop();
+        var keep = 0;
+        chat.addEventListener("htmx:beforeSwap", function (e) {
+          if (e.target && e.target.id === "chat-log") keep = chat.scrollTop;
         });
+        chat.addEventListener("htmx:afterSwap", function (e) {
+          if (e.target && e.target.id === "chat-log") chat.scrollTop = keep;
+        });
+        // Growing is a response to scrolling, never to its own completion: one gesture, one load.
         chat.addEventListener("htmx:afterRequest", function () {
           inFlight = false;
         });
