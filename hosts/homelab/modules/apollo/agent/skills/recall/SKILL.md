@@ -5,14 +5,15 @@ description: Search past WhatsApp conversation with the user - what they sent (t
 
 # Recall
 
-Searches the WhatsApp chat history - and only what actually appeared in the chat: the user's messages (typed text, transcribed voice notes, image captions), your past text replies, and the "via <skill>" messages that were delivered. Your internal machinery - thinking, tool calls and their output, compaction summaries - is never searched.
+Searches the WhatsApp chat history - and only what actually appeared in the chat: the user's messages (typed text, transcribed voice notes, image captions), your past text replies, and the "via <skill>" messages that were delivered. Your internal machinery - thinking, tool calls and their output, compaction summaries - is never searched, and neither is anything the app wrapped around a message: the `<context>` elements on the user's turns and your own `<internal>` notes are stripped, so a message reads exactly as it did on the phone.
 
 Results are for **you** to read and act on; they are **not** sent to the user, so answer in your own words. Searching is free and fast (a throwaway in-memory index over the local SQLite archive, rebuilt each call), so search whenever you're unsure rather than guessing or saying you don't remember.
 
-Two modes, and picking the right one is most of using this well:
+Three ways in, one for each kind of question:
 
-- **Scanning** - `search` and `recent` - answers _which_ messages matter. Output is trimmed to keep a wide net cheap.
-- **Reading** - `show` - answers _what was actually said_. Messages come back whole, because a clipped quote is worse than none.
+- **By content** - `search` - _which_ messages mention this? Trimmed, so a wide net stays cheap.
+- **By time** - `history` - what was said at this end of the conversation, or in this stretch of days? Trimmed too.
+- **By identity** - `show` - what did these exact messages say? Whole, because a clipped quote is worse than none.
 
 Every call is capped as a whole (~20k characters). If a query is too broad the output stops on a message boundary and says so - narrow it rather than working around it.
 
@@ -56,15 +57,18 @@ Each hit prints `[#id] date · who: …snippet…` and flags any images. `--sinc
 
 This is how you quote or reconstruct anything: text is never truncated here. Targets are marked with `→`, `…` marks a jump between separate stretches of chat, and `--context` (default 0) widens each id into its surroundings when you need to see what was being discussed.
 
-## Recent messages
+Ids are shared with entries that never reached WhatsApp (thinking, tool calls), so a stretch of ids will sometimes include one that isn't a message. That is not an error: you get every id that resolved, plus a line naming the ones skipped. Only a request where nothing resolved fails.
+
+## Browsing by time
 
 ```bash
-{baseDir}/scripts/recall.py recent --limit 20
-{baseDir}/scripts/recall.py recent --since 2026-07-01
-{baseDir}/scripts/recall.py recent --limit 10 --full
+{baseDir}/scripts/recall.py history                                    # the last 20 messages
+{baseDir}/scripts/recall.py history --last 10 --full
+{baseDir}/scripts/recall.py history --first 5                          # the oldest messages there are
+{baseDir}/scripts/recall.py history --since 2026-07-13 --until 2026-07-13 --first 50   # one whole day
 ```
 
-The most recent WhatsApp messages, oldest-to-newest - for "what were we just doing" or scanning a date range. Trimmed like `search`; add `--full` (with a small `--limit`) when you actually need the wording.
+A window on the timeline, always printed in the order things happened. **Say which end you want**: `--last N` counts back from the newest message (the default), `--first N` forward from the oldest. `--since`/`--until` (YYYY-MM-DD) bound the window, and the count applies to whichever end you anchored - so "what was my first message" is `history --first 1`, and a single day is `--since`/`--until` on the same date with `--first`. Trimmed like `search`; add `--full` when you need the wording.
 
 ## View an image
 
@@ -77,9 +81,9 @@ Writes the stored image to a temp file and prints its path; open that path with 
 
 ## Notes
 
-- Only the WhatsApp-visible transcript is searched; nothing you did internally is.
-- An image with no caption has no text to match on, so find it via `recent` / `show` or a date range, then `image` to view it.
-- The `[#id]` in results is the handle for `show` and `image`.
+- Only the WhatsApp-visible transcript is searched; nothing you did internally is, and nothing the app added around a message.
+- An image with no caption has no text to match on, so find it via `history` / `show` or a date range, then `image` to view it.
+- The `[#id]` in results is the handle for `show` and `image`. Ids are not consecutive - the gaps are internal entries.
 - Search to find, `show` to read: don't try to reconstruct a quote from snippets - collect the ids and open them.
 - Never paste raw results at the user - they're your notes; use them to answer naturally.
 

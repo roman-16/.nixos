@@ -5,7 +5,9 @@ Builds a throwaway in-memory FTS5 index over the messages that actually appeared
 WhatsApp chat - what the user sent (typed text, voice-note transcripts, image captions),
 Apollo's text replies, and the "via <skill>" messages that were delivered - and answers
 keyword searches over it. Apollo's internal machinery (thinking blocks, tool calls and
-their output, compaction summaries) is never indexed.
+their output, compaction summaries) is never indexed, and neither is what the app wraps
+around a message on either side: the <context> elements prepended to a user's turn, or the
+<internal> notes Apollo keeps to itself. Both are metadata; neither reached anyone's phone.
 
 The chat archive is the app's SQLite database (read-only, $APOLLO_DB_PATH). This script
 never writes to it and keeps no index of its own: the index is rebuilt for each query and
@@ -38,6 +40,14 @@ SCAN_CHARS = 200
 # Spans Apollo addressed to itself. They live in the transcript but were never sent, so they are
 # not part of the chat and are never searched. An unterminated span runs to the end of the block.
 INTERNAL_SPAN = re.compile(r"<internal>.*?(?:</internal>|\Z)", re.DOTALL)
+
+# Elements the app prepends to a user's turn: the send time, the reply being answered, a skill
+# message already delivered, a backlog header. The user typed none of it. Indexing it would credit
+# them with the app's words - and because a skill note quotes that skill's entire output, every
+# delivery would land in the index twice: once as itself, once inside the next thing the user said.
+CONTEXT_ELEMENT = re.compile(
+    r'<context source="[^"]*" info="[^"]*"(?:\s*/>|>.*?</context>)\s*', re.DOTALL
+)
 
 
 def die(msg: str):
@@ -86,6 +96,11 @@ def strip_internal(text: str) -> str:
     return INTERNAL_SPAN.sub("", text).strip()
 
 
+def strip_context(text: str) -> str:
+    """A user message as WhatsApp saw it: without the context the app prepended for Apollo."""
+    return CONTEXT_ELEMENT.sub("", text).strip()
+
+
 def image_count(content) -> int:
     if isinstance(content, list):
         return sum(1 for b in content if isinstance(b, dict) and b.get("type") == "image")
@@ -96,7 +111,8 @@ def visible(data: str):
     """(who, text, images) for a message that appeared in WhatsApp, else None. Internal
     entries - assistant thinking, tool results, bash, compaction, reload markers - return
     None, an assistant turn's thinking blocks are dropped by only reading text blocks, and
-    what Apollo wrote inside <internal> is dropped because it was never delivered."""
+    the app's own additions are dropped from both sides: <internal> from Apollo's replies,
+    <context> from the user's messages."""
     try:
         entry = json.loads(data)
     except (json.JSONDecodeError, TypeError):
@@ -107,7 +123,7 @@ def visible(data: str):
         role = message.get("role")
         content = message.get("content")
         if role == "user":
-            return "You", text_of(content), image_count(content)
+            return "You", strip_context(text_of(content)), image_count(content)
         if role == "assistant":
             text = strip_internal(text_of(content))
             return ("Apollo", text, 0) if text else None
@@ -207,7 +223,7 @@ def cmd_search(args):
             continue
         who, text, images = seen
         if not text:
-            continue  # e.g. an uncaptioned image: reachable via recent/show, not keyword search
+            continue  # e.g. an uncaptioned image: reachable via history/show, not keyword search
         batch.append((text, cid, tm or 0, who, images))
         if len(batch) >= 5000:
             mem.executemany("INSERT INTO fts(txt,cid,t,who,img) VALUES (?,?,?,?,?)", batch)
@@ -242,11 +258,22 @@ def cmd_search(args):
     emit(lines, "→ `show --ids <#>` for the full message and its context; `image --id <#>` to view an image.")
 
 
-def cmd_recent(args):
+def cmd_history(args):
+    """Read a stretch of the timeline from either end of it.
+
+    A conversation has two ends and questions are asked from both - "what were we just doing"
+    and "how did this start". The anchor is always explicit, so a window never has to be
+    guessed at: --last counts back from the newest message, --first forward from the oldest,
+    and either way the messages are printed in the order they happened.
+    """
+    oldest_first = args.first is not None
+    limit = args.first if oldest_first else (args.last if args.last is not None else 20)
+    if limit < 1:
+        die("ask for at least one message")
     con = connect()
     where, params = time_clause(args)
     out = []
-    for cid, tm, data in rows(con, "DESC", where, params):
+    for cid, tm, data in rows(con, "ASC" if oldest_first else "DESC", where, params):
         seen = visible(data)
         if not seen:
             continue
@@ -254,14 +281,15 @@ def cmd_recent(args):
         if not text and not images:
             continue
         out.append((cid, tm, who, text, images))
-        if len(out) >= args.limit:
+        if len(out) >= limit:
             break
     if not out:
-        print("No WhatsApp history yet.")
+        print("No WhatsApp history in that range.")
         return
+    ordered = out if oldest_first else list(reversed(out))
     emit([
         f"[#{cid}] {when(tm)} · {who}: {body(text, args.full) or '(no text)'}{marker(images)}"
-        for cid, tm, who, text, images in reversed(out)
+        for cid, tm, who, text, images in ordered
     ])
 
 
@@ -289,17 +317,24 @@ def cmd_show(args):
     positions = {row[0]: i for i, row in enumerate(seq)}
 
     ids = parse_ids(args.ids)
+    # ids are shared with entries that never reached WhatsApp, so a caller reading a stretch will
+    # land on one sooner or later. Show whatever resolved and name the rest: discarding six good
+    # ids over two internal ones only buys a second call.
+    found = [i for i in ids if i in positions]
     missing = [i for i in ids if i not in positions]
+    if not found:
+        die(f"no WhatsApp message {', '.join('#' + str(i) for i in ids)} "
+            "(internal entries - thinking, tool calls, compaction - share the same numbering)")
     if missing:
-        die(f"no WhatsApp message {', '.join('#' + str(i) for i in missing)} "
-            "(it may be an internal, non-chat entry)")
+        print(f"(no chat message for {', '.join('#' + str(i) for i in missing)} - "
+              "internal entries, skipped)")
 
     wanted = set()
-    for i in ids:
+    for i in found:
         pos = positions[i]
         wanted.update(range(max(0, pos - args.context), min(len(seq), pos + args.context + 1)))
 
-    targets = set(ids)
+    targets = set(found)
     lines = []
     previous = None
     for i in sorted(wanted):
@@ -336,23 +371,29 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="recall.py", description="search Apollo's WhatsApp history")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("search")
+    # Every reading command takes --full: asking for everything should never be the thing that
+    # fails, even where the answer is already whole.
+    reading = argparse.ArgumentParser(add_help=False)
+    reading.add_argument("--full", action="store_true",
+                         help="whole messages instead of trimmed ones (show is always whole)")
+
+    s = sub.add_parser("search", parents=[reading])
     s.set_defaults(func=cmd_search)
     s.add_argument("query")
     s.add_argument("--limit", type=int, default=10)
     s.add_argument("--since")
     s.add_argument("--until")
-    s.add_argument("--full", action="store_true", help="whole messages instead of match snippets")
     s.add_argument("--sort", choices=["relevance", "time"], default="relevance")
 
-    r = sub.add_parser("recent")
-    r.set_defaults(func=cmd_recent)
-    r.add_argument("--limit", type=int, default=20)
-    r.add_argument("--since")
-    r.add_argument("--until")
-    r.add_argument("--full", action="store_true", help="whole messages instead of trimmed ones")
+    h = sub.add_parser("history", parents=[reading])
+    h.set_defaults(func=cmd_history)
+    end = h.add_mutually_exclusive_group()
+    end.add_argument("--last", type=int, metavar="N", help="the newest N messages (the default)")
+    end.add_argument("--first", type=int, metavar="N", help="the oldest N messages")
+    h.add_argument("--since")
+    h.add_argument("--until")
 
-    a = sub.add_parser("show")
+    a = sub.add_parser("show", parents=[reading])
     a.set_defaults(func=cmd_show)
     a.add_argument("--ids", required=True, help="one or more message ids: 254,260,791")
     a.add_argument("--context", type=int, default=0,

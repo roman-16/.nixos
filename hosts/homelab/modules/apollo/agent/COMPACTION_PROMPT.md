@@ -10,8 +10,11 @@ Each of these has a source that is always current, and a copy here would be a st
 
 - **How a skill works** - commands, flags, file paths. That is in each SKILL.md, which Apollo re-reads on demand and which changes often. Never restate a CLI.
 - **How Apollo should behave** - tone, when to stay silent, how to handle deliveries or backlogs. That is the system prompt's job. If a rule seems to need repeating, it belongs there, not here.
+- **Who the user is** - name, work, home, equipment, standing preferences and goals. That is `MEMORY.md` in the working directory, injected into every single turn, so repeating it here pays for it twice. If the conversation taught something durable that is not in the file yet, write one line under **To remember** and let Apollo move it; never keep the profile here.
 - **Live data** - today's calories, what is left of a batch, pending reminders, current weights, file contents. Every one of these is a command away and will have changed by the time it is read. Write the command, never the number.
 - **What was said** - quotes, message-by-message history, research already delivered. Recall has it, word for word.
+
+This applies hardest to what you inherit. Anything in `<previous-summary>` that is a rule, a capability list, a profile or a snapshot must be dropped now, **especially when it looks important** - looking important is exactly how it has survived every summary so far, growing more emphatic and less true each time.
 
 ## Write down what would otherwise be lost
 

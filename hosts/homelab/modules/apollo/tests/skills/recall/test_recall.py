@@ -105,6 +105,38 @@ class TestSearch:
         for hidden in ("hidden pineapple thoughts", "only in thinking", "from a tool", "bash output", "compaction gist"):
             assert hidden not in out
 
+    def test_the_context_the_app_prepends_is_not_the_users_words(self, db, capsys):
+        # A skill note quotes the skill's whole output, so indexing it would both credit the user
+        # with those words and index the delivery a second time.
+        insert([
+            user('<context source="macros" info="The macros skill sent the user a message '
+                 'directly.">Today (02.08): grapefruit 90 kcal</context>\n\nthanks'),
+            skill("macros", "Today (02.08): grapefruit 90 kcal"),
+        ])
+        run("search", "grapefruit")
+        out = capsys.readouterr().out.replace("«", "").replace("»", "")
+        assert "via macros" in out
+        assert "You:" not in out  # the user never said "grapefruit"
+
+    def test_a_message_reads_as_it_did_on_the_phone(self, db, capsys):
+        insert([user('<context source="time" info="Sent Sunday 02.08.2026 14:47." />\n\n'
+                     "what was my first message?")])
+        run("history", "--first", "1")
+        out = capsys.readouterr().out
+        assert "what was my first message?" in out
+        assert "<context" not in out and "Sent Sunday" not in out
+
+    def test_the_send_time_metadata_is_not_searchable(self, db, capsys):
+        insert([user('<context source="time" info="Sent Sunday 02.08.2026 14:47." />\n\nlog 100g')])
+        run("search", "sunday")
+        assert "No WhatsApp messages match" in capsys.readouterr().out
+
+    def test_a_reply_quote_is_not_attributed_to_the_quoter(self, db, capsys):
+        insert([user('<context source="reply" info="The user is replying to a message you sent '
+                     'earlier.">the bolognese is 40% left</context>\n\nfinish it')])
+        run("search", "bolognese")
+        assert "No WhatsApp messages match" in capsys.readouterr().out
+
     def test_notes_apollo_kept_to_itself_are_not_searchable(self, db, capsys):
         insert([
             apollo("<internal>pineapple stays between me and the log</internal>"),
@@ -171,30 +203,66 @@ class TestSearch:
         assert "No WhatsApp messages match" in capsys.readouterr().out
 
 
-class TestRecent:
+class TestHistory:
     def test_oldest_to_newest_and_skips_internal(self, db, capsys):
         insert([user("first"), tool_result("dropme"), apollo("second"), compaction("gist"), user("third")])
-        run("recent", "--limit", "10")
+        run("history", "--last", "10")
         out = capsys.readouterr().out
         assert out.index("first") < out.index("second") < out.index("third")
         assert "dropme" not in out and "gist" not in out
 
-    def test_limit(self, db, capsys):
+    def test_last_takes_the_newest(self, db, capsys):
         insert([user(f"msg {n}") for n in range(5)])
-        run("recent", "--limit", "2")
+        run("history", "--last", "2")
         out = capsys.readouterr().out
         assert "msg 3" in out and "msg 4" in out
         assert "msg 0" not in out
 
+    def test_first_takes_the_oldest(self, db, capsys):
+        insert([user(f"msg {n}") for n in range(5)])
+        run("history", "--first", "2")
+        out = capsys.readouterr().out
+        assert "msg 0" in out and "msg 1" in out
+        assert "msg 4" not in out
+
+    def test_first_answers_what_was_my_first_message_in_one_call(self, db, capsys):
+        insert([user("you there?"), apollo("yep"), user("do you have a workspace?")])
+        run("history", "--first", "1")
+        out = capsys.readouterr().out
+        assert "you there?" in out
+        assert "workspace" not in out
+
+    def test_first_reads_chronologically_too(self, db, capsys):
+        insert([user("one"), user("two"), user("three")])
+        run("history", "--first", "3")
+        out = capsys.readouterr().out
+        assert out.index("one") < out.index("two") < out.index("three")
+
+    def test_defaults_to_the_newest_end(self, db, capsys):
+        insert([user(f"msg {n}") for n in range(25)])
+        run("history")
+        out = capsys.readouterr().out
+        assert "msg 24" in out
+        assert "msg 0" not in out
+
+    def test_a_day_is_both_bounds_read_from_its_start(self, db, capsys):
+        insert([user("in range")])
+        run("history", "--since", "2099-01-01", "--until", "2099-01-01", "--first", "50")
+        assert "No WhatsApp history in that range." in capsys.readouterr().out
+
+    def test_the_two_ends_are_mutually_exclusive(self, db):
+        with pytest.raises(SystemExit):
+            run("history", "--first", "2", "--last", "2")
+
     def test_empty(self, db, capsys):
-        run("recent")
-        assert "No WhatsApp history yet." in capsys.readouterr().out
+        run("history")
+        assert "No WhatsApp history in that range." in capsys.readouterr().out
 
     def test_trimmed_by_default_and_whole_with_full(self, db, capsys):
         insert([user(LONG)])
-        run("recent")
+        run("history")
         assert LONG not in capsys.readouterr().out
-        run("recent", "--full")
+        run("history", "--full")
         assert LONG in capsys.readouterr().out
 
 
@@ -244,6 +312,21 @@ class TestShow:
         run("show", "--ids", "1,2")
         assert "…" not in capsys.readouterr().out
 
+    def test_a_batch_survives_ids_that_are_internal_entries(self, db, capsys):
+        # ids 2 and 4 are internal: a caller reading a stretch of ids will land on them, and
+        # discarding the whole call over one of them only buys a second call.
+        insert([user("keep me"), tool_result("internal"), user("me too"), compaction("gist")])
+        run("show", "--ids", "1,2,3,4")
+        out = capsys.readouterr().out
+        assert "keep me" in out and "me too" in out
+        assert "#2" in out and "#4" in out  # named as skipped
+        assert "internal" in out and "gist" not in out
+
+    def test_only_a_wholly_unresolvable_request_fails(self, db):
+        insert([user("x"), tool_result("internal")])
+        with pytest.raises(SystemExit):
+            run("show", "--ids", "2,999")
+
     def test_unknown_id_errors(self, db):
         insert([user("x")])
         with pytest.raises(SystemExit):
@@ -254,11 +337,16 @@ class TestShow:
         with pytest.raises(SystemExit):
             run("show", "--ids", "abc")
 
+    def test_full_is_accepted_even_though_reading_is_always_whole(self, db, capsys):
+        insert([user(LONG)])
+        run("show", "--ids", "1", "--full")
+        assert LONG in capsys.readouterr().out
+
 
 class TestBudget:
     def test_a_too_wide_call_stops_on_a_whole_message_and_says_so(self, db, capsys):
         insert([user(f"message {n} " + "x" * 600) for n in range(60)])
-        run("recent", "--limit", "60", "--full")
+        run("history", "--last", "60", "--full")
         out = capsys.readouterr().out
         assert "capped at" in out
         assert "narrow it" in out
@@ -266,7 +354,7 @@ class TestBudget:
 
     def test_output_within_budget_is_never_capped(self, db, capsys):
         insert([user("short one"), user("short two")])
-        run("recent", "--full")
+        run("history", "--full")
         assert "capped at" not in capsys.readouterr().out
 
 
