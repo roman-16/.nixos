@@ -43,6 +43,12 @@ function filterChip(name: string, value: string, label: string, checked = false)
  * (#summary, side by side on desktop), the conversation with its context footer, and
  * the logs - one flowing column that scrolls as a page. Each region polls its fragment
  * endpoint and swaps its own contents.
+ *
+ * The conversation splits those two jobs across two elements. #chat is only the scroll
+ * viewport: reversing it puts the scroll origin at the newest end, so the view is
+ * bottom-anchored and stays put both when a message arrives and when older ones load, with
+ * no scroll bookkeeping. Its single child #chat-log holds the transcript in reading order,
+ * so selection, copy and screen readers follow the conversation as it appears.
  */
 export function renderPage(version: string): string {
   return `<!doctype html>
@@ -74,9 +80,11 @@ export function renderPage(version: string): string {
         </div>`,
       )}
       <div class="${SURFACE} flex flex-col overflow-hidden">
-        <div id="chat" class="flex h-[70dvh] flex-col-reverse gap-3 [&>*]:shrink-0 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:h-[75dvh]"
-          hx-get="/chat" hx-include="#chat-window" hx-trigger="load, every 2s, chatReload" hx-swap="innerHTML">
-          <p class="text-sm text-neutral-500">Loading…</p>
+        <div id="chat" class="flex h-[70dvh] flex-col-reverse [&>*]:shrink-0 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:h-[75dvh]">
+          <div id="chat-log" class="flex min-h-full flex-col justify-end gap-3 [&>*]:shrink-0"
+            hx-get="/chat" hx-include="#chat-window, #chat-version" hx-trigger="load, every 2s, chatReload" hx-swap="innerHTML">
+            <p class="m-auto text-sm text-neutral-500">Loading…</p>
+          </div>
         </div>
         <footer class="flex items-center gap-3 border-t border-white/5 px-4 py-3 sm:px-5">
           <div id="context" class="min-w-0 flex-1" hx-get="/context" hx-trigger="load, every 5s" hx-swap="innerHTML">
@@ -135,14 +143,12 @@ export function renderPage(version: string): string {
     <script>
       (function () {
         function chatRows() {
-          var box = document.getElementById("chat");
-          return box ? box.querySelectorAll("[data-copy]") : [];
+          var log = document.getElementById("chat-log");
+          return log ? log.querySelectorAll("[data-copy]") : [];
         }
         function transcript(rows) {
-          // #chat is flex-col-reverse: DOM order is newest-first, so reverse to read top-down.
           return Array.prototype.slice
             .call(rows)
-            .reverse()
             .map(function (row) {
               return row.getAttribute("data-copy");
             })
@@ -165,9 +171,10 @@ export function renderPage(version: string): string {
           e.clipboardData.setData("text/plain", transcript(rows));
           e.preventDefault();
         });
-        // Keep the 2s poll from wiping an in-progress selection.
+        // Keep the 2s poll from wiping an in-progress selection. The dropped render is not lost:
+        // the version input still on the page tells the next poll to send it again.
         document.body.addEventListener("htmx:beforeSwap", function (e) {
-          if (e.target && e.target.id === "chat" && selectedRows().length > 0) {
+          if (e.target && e.target.id === "chat-log" && selectedRows().length > 0) {
             e.detail.shouldSwap = false;
           }
         });
@@ -178,14 +185,15 @@ export function renderPage(version: string): string {
       // server only while older lines remain, is the stop signal.
       (function () {
         var chat = document.getElementById("chat");
+        var log = document.getElementById("chat-log");
         var win = document.getElementById("chat-window");
-        if (!chat || !win) return;
+        if (!chat || !log || !win) return;
         var start = ${CHAT_WINDOW_START};
         var step = ${CHAT_WINDOW_STEP};
         var max = ${CHAT_WINDOW_MAX};
         var inFlight = false;
-        // column-reverse: |scrollTop| is the distance from the newest end in every browser,
-        // so (scrollable span - that) is the distance left to the oldest end.
+        // #chat is reversed, so |scrollTop| is the distance from the newest end in every
+        // browser, and (scrollable span - that) is the distance left to the oldest end.
         function distanceToOldest() {
           return chat.scrollHeight - chat.clientHeight - Math.abs(chat.scrollTop);
         }
@@ -195,7 +203,7 @@ export function renderPage(version: string): string {
           if (chat.scrollHeight <= chat.clientHeight || distanceToOldest() > 300) return;
           inFlight = true;
           win.value = String(Math.min(Number(win.value) + step, max));
-          htmx.trigger(chat, "chatReload");
+          htmx.trigger(log, "chatReload");
         }
         function shrinkIfAtBottom() {
           if (Math.abs(chat.scrollTop) < 40 && Number(win.value) !== start) win.value = String(start);

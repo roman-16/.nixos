@@ -52,7 +52,7 @@ describe("renderPage", () => {
     const html = renderPage("v");
     expect(html).toContain(`id="chat-window"`);
     expect(html).toContain(`name="count"`);
-    expect(html).toContain(`hx-include="#chat-window"`);
+    expect(html).toContain(`hx-include="#chat-window, #chat-version"`);
     expect(html).toContain("chatReload");
     expect(html).toContain("chat-more"); // server-rendered "more history" marker the script watches
     expect(html).toContain("distanceToOldest"); // the near-top scroll handler
@@ -65,9 +65,12 @@ describe("renderPage", () => {
     expect(html).toContain("shouldSwap");
   });
 
-  it("anchors the chat to the bottom with a column-reverse container, no manual stick management", () => {
+  it("splits the chat into a reversed viewport and a transcript in reading order", () => {
     const html = renderPage("v");
+    // #chat is reversed for bottom-anchoring; its single child holds the rows in DOM order, so
+    // selection and copy follow what is on screen.
     expect(html).toContain("flex-col-reverse");
+    expect(html).toContain(`id="chat-log"`);
     // Rows must not flex-shrink, or overflow-hidden disclosures collapse to their border.
     expect(html).toContain("[&>*]:shrink-0");
     // Bottom-anchoring is the container's job, not hand-rolled scroll-to-bottom on each swap.

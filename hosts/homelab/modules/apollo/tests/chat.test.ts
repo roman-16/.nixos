@@ -445,7 +445,7 @@ describe("renderChat", () => {
     expect(unsafe).not.toContain("<script>");
   });
 
-  it("emits newest-first so the column-reverse container shows the latest at the bottom", () => {
+  it("emits rows in reading order, so DOM order matches what is on screen", () => {
     const html = renderChat(
       [
         { images: [], kind: "user", text: "older", time: "2026-07-14T09:00:00.000Z" },
@@ -453,7 +453,15 @@ describe("renderChat", () => {
       ],
       new Date("2026-07-14T12:00:00.000Z"),
     );
-    expect(html.indexOf("newer")).toBeLessThan(html.indexOf("older"));
+    expect(html.indexOf("older")).toBeLessThan(html.indexOf("newer"));
+  });
+
+  it("puts a day divider before the day it labels", () => {
+    const html = renderChat(
+      [{ images: [], kind: "user", text: "morning", time: "2026-07-14T09:00:00.000Z" }],
+      new Date("2026-07-14T12:00:00.000Z"),
+    );
+    expect(html.indexOf("Today")).toBeLessThan(html.indexOf("morning"));
   });
 });
 

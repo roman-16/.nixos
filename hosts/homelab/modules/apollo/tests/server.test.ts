@@ -267,6 +267,16 @@ describe("startServer routing", () => {
     expect(await (await get(base, "/chat?count=50")).text()).not.toContain('id="chat-more"');
   });
 
+  it("204s a chat poll that already shows the rendered version, and re-sends a stale one", async () => {
+    const base = boot();
+    const html = await (await get(base, "/chat")).text();
+    const version = /id="chat-version"[^>]*value="([^"]*)"/.exec(html)?.[1] ?? "";
+    expect(version).not.toBe("");
+    expect((await get(base, `/chat?have=${encodeURIComponent(version)}`)).status).toBe(204);
+    // A render the page dropped (a swap cancelled to protect a selection) is asked for again.
+    expect((await get(base, "/chat?have=stale")).status).toBe(200);
+  });
+
   it("notifies on the backup-alert hook and returns 204", async () => {
     let notified: string | undefined;
     const base = boot({

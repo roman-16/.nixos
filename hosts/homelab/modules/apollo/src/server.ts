@@ -15,6 +15,7 @@ import {
   renderSummary,
   sessionStatus,
 } from "./dashboard";
+import { escapeHtml } from "./format";
 import { type LogStore, parseLevel } from "./logs";
 import { deliveredMarker, failedMarker } from "./messages";
 import type { Pipeline } from "./pipeline";
@@ -36,6 +37,11 @@ const IMMUTABLE_CACHE = "public, max-age=31536000, immutable";
 
 /** Zero-height marker at the oldest end; its presence tells the chat more history remains. */
 const CHAT_MORE_MARKER = `<div id="chat-more" hidden></div>`;
+
+/** The version of the rendered window, echoed back by the next poll as `have`. */
+function chatVersionInput(version: string): string {
+  return `<input id="chat-version" type="hidden" name="have" value="${escapeHtml(version)}" />`;
+}
 
 /** Textual content types worth gzipping; binary (images) is left untouched. */
 const GZIPPABLE = /^(?:text\/|application\/(?:json|javascript)|image\/svg)/;
@@ -125,7 +131,6 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
   } = deps;
 
   const caches = {
-    chat: fragmentCache(),
     logs: fragmentCache(),
     skills: fragmentCache(),
     // /stop-button (poll) and /stop (action) share one dedup slot, as they render the same button.
@@ -137,23 +142,27 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
   const anthropicLogin: AnthropicLogin = createAnthropicLogin(modelRuntime);
   let linking = false;
 
-  let chatCache: { body: string; key: string } | undefined;
+  let chatCache: { body: string; version: string } | undefined;
   let usage: { data: UsageData | null; fetchedAt: number } | undefined;
 
-  /** Render the chat window from SQLite (the source of truth), memoized by a cheap version tag. */
-  function renderChatBody(count: number): string {
+  /**
+   * Render the chat window from SQLite (the source of truth), memoized by a cheap version tag.
+   * The fragment carries that tag, so the next poll can say what it is already showing.
+   */
+  function renderChatBody(count: number): { body: string; version: string } {
     const { entries, more, version } = chatStore.tail(session.sessionId, count);
     const live = session.isStreaming;
-    const key = `${version}:${live}`;
-    if (!chatCache || chatCache.key !== key) {
+    const tag = `${version}:${live}`;
+    if (!chatCache || chatCache.version !== tag) {
       chatCache = {
         body:
-          renderChat(parseTranscript(entries.join("\n")), new Date(), live) +
-          (more ? CHAT_MORE_MARKER : ""),
-        key,
+          (more ? CHAT_MORE_MARKER : "") +
+          chatVersionInput(tag) +
+          renderChat(parseTranscript(entries.join("\n")), new Date(), live),
+        version: tag,
       };
     }
-    return chatCache.body;
+    return chatCache;
   }
 
   /** Serve one chat image (`/media/<entryId>/<n>`) from SQLite with a long immutable cache. */
@@ -235,11 +244,16 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
         return new Response(renderPage(assetsVersion), { headers: htmlHeaders });
       },
     ],
+    // Dedup belongs to the side that knows what it displays: the fragment carries its version, the
+    // poll echoes it back as `have`, and an unchanged window is a 204. A render the page drops (it
+    // cancels a swap to protect a selection) leaves the old version in the DOM, so the next poll
+    // asks for it again instead of going stale.
     [
       "GET /chat",
       (_req, url) => {
-        const body = renderChatBody(chatLines(url.searchParams.get("count")));
-        return caches.chat.serve(body, () => body);
+        const { body, version } = renderChatBody(chatLines(url.searchParams.get("count")));
+        if (url.searchParams.get("have") === version) return new Response(null, { status: 204 });
+        return new Response(body, { headers: htmlHeaders });
       },
     ],
     [
