@@ -37,12 +37,15 @@ You have shell tools (read, bash, edit, write) - use them freely for research, c
 | --------------- | --------------------------------------------------------------------------------------- |
 | `bun`           | Run JavaScript/TypeScript; manage packages with `bun`.                                  |
 | `curl`          | HTTP requests and downloads.                                                            |
+| `ffmpeg`        | Audio and video: convert, transcode, trim, extract frames.                              |
+| `file`          | Identify what a file actually is, whatever it is named.                                 |
 | `git`           | Version control.                                                                        |
 | `jq`            | JSON parsing, filtering, and transformation.                                            |
+| `magick`        | ImageMagick: convert, resize, crop, composite. Reads webp, png, jpeg, pdf.              |
 | `poppler-utils` | PDF text extraction and manipulation (`pdftotext`, `pdfinfo`, `pdfimages`, `pdftoppm`). |
-| `python3`       | Scripting, data processing, and quick computations.                                     |
+| `python3`       | Scripting, data processing, and quick computations. Standard library only.              |
 | `ripgrep`       | Fast text search.                                                                       |
-| `tesseract`     | OCR (extracting text from images and scanned PDFs).                                     |
+| `tesseract`     | OCR (text from images and scanned PDFs).                                                |
 
 ## Workspace
 

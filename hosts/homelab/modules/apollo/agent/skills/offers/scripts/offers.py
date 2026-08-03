@@ -44,8 +44,18 @@ TZ = ZoneInfo("Europe/Vienna")
 # How many deals per watch are worth reading, per section (running now, and upcoming).
 CAP = 4
 
+# The trade the provider files wholesalers under. Their prices exclude VAT.
+WHOLESALE_INDUSTRY = 6
+
+# Conditions attached to a price, marked on the line rather than explained in it.
+NET_MARK = "\U0001f9fe"  # net of VAT, the till adds it
+CARD_MARK = "\U0001f4b3"  # needs the shop's loyalty card
+
 # Score below which difflib stops proposing a fuzzy name match (0..1).
 FUZZY_CUTOFF = 0.6
+
+# How many brands a query may match before the watch counts as too broad to be useful.
+BROAD_BRANDS = 4
 
 
 def die(msg: str):
@@ -171,7 +181,8 @@ class Provider:
         with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
             return response.read()
 
-    def api(self, path: str, **params) -> dict:
+    def api(self, path: str, *, missing_ok: bool = False, **params):
+        """The parsed response, or None when `missing_ok` and no such record exists."""
         url = f"{API}/{path}"
         if params:
             url += "?" + urllib.parse.urlencode(params)
@@ -182,37 +193,54 @@ class Provider:
             except urllib.error.HTTPError as error:
                 if error.code == 401 and attempt == 0:
                     continue  # the key rotated; re-read it and retry once
+                if error.code == 404 and missing_ok:
+                    return None
                 die(f"offer provider returned {error.code} for {path}")
             except urllib.error.URLError as error:
                 die(f"could not reach the offer provider: {error.reason}")
         return {}
 
-    def search(self, watch: dict, code: str) -> list:
-        """Offers currently listed for a watch. Expired ones are already excluded upstream;
-        upcoming ones are included on purpose, so a deal is known before it starts."""
-        params = {"as": "web", "q": watch["query"], "zipCode": code, "limit": SEARCH_LIMIT}
+    def _query(self, watch: dict, code: str, limit: int) -> dict:
+        params = {"as": "web", "q": watch["query"], "zipCode": code, "limit": limit}
         if watch.get("brands"):
             params["brands"] = ",".join(map(str, watch["brands"]))
         if watch.get("retailers"):
             params["retailers"] = ",".join(map(str, watch["retailers"]))
-        return self.api("offers/search", **params).get("results") or []
+        return self.api("offers/search", **params) or {}
+
+    def search(self, watch: dict, code: str) -> list:
+        """Offers currently listed for a watch. Expired ones are already excluded upstream;
+        upcoming ones are included on purpose, so a deal is known before it starts."""
+        return self._query(watch, code, SEARCH_LIMIT).get("results") or []
 
     def facets(self, watch: dict, code: str) -> dict:
-        params = {"as": "web", "q": watch["query"], "zipCode": code, "limit": 1}
-        return self.api("offers/search", **params).get("filters") or {}
+        return self._query(watch, code, 1).get("filters") or {}
+
+    def survey(self, watch: dict, code: str) -> tuple:
+        """(offers, facets) from a single call - what a watch has now, and what else its query
+        matches, which is how a too-broad watch is spotted at the moment it is created."""
+        data = self._query(watch, code, SEARCH_LIMIT)
+        return (data.get("results") or [], data.get("filters") or {})
+
+    def name_of(self, kind: str, ident) -> str | None:
+        """The name behind a brand or retailer id, or None when the id does not exist. Checking a
+        pin when it is set is what keeps silence trustworthy: a mistyped id would otherwise look
+        exactly like a product that simply never goes on offer."""
+        record = self.api(f"{kind}/{ident}", missing_ok=True)
+        return (record or {}).get("name")
 
     # An offer names the leaflet *flight* it came from, not the leaflet, and the page it sits on
     # is recorded on the leaflet. So a deep link is two lookups: flight -> main leaflet, then
     # that leaflet's children -> page index. Both are cached for the run.
     def _leaflet_of(self, flight_id, code: str):
         if self._main_leaflet is None:
-            flights = self.api("leafletFlights", zipCode=code, limit=FLIGHT_LIMIT).get("results") or []
+            flights = (self.api("leafletFlights", zipCode=code, limit=FLIGHT_LIMIT) or {}).get("results") or []
             self._main_leaflet = {f["id"]: f["mainLeafletId"] for f in flights if f.get("mainLeafletId")}
         return self._main_leaflet.get(flight_id)
 
     def _page_of(self, leaflet_id, offer_id):
         if leaflet_id not in self._pages:
-            children = self.api(f"leaflets/{leaflet_id}").get("children") or []
+            children = (self.api(f"leaflets/{leaflet_id}") or {}).get("children") or []
             self._pages[leaflet_id] = {
                 child["id"].split("/")[-1]: child.get("pageIndex")
                 for child in children
@@ -254,6 +282,15 @@ def shops_of(offers: list) -> list:
     return sorted({o["advertisers"][0]["name"] for o in offers if o.get("advertisers")})
 
 
+def is_trade(offer: dict) -> bool:
+    """Whether an offer's price excludes VAT. Wholesalers quote net, so their prices are not what
+    you hand over at the till. The trade is named in the offer itself, which is why this needs no
+    list of retailers to maintain - and why it must not be one: SPAR-Gourmet is an ordinary
+    supermarket, Transgourmet is a wholesaler, and no amount of name matching tells them apart.
+    An offer that names no trade at all is taken at face value."""
+    return any(industry.get("id") == WHOLESALE_INDUSTRY for industry in offer.get("industries") or [])
+
+
 class Deal(NamedTuple):
     """One price running at one time, however many shops carry it."""
 
@@ -262,13 +299,15 @@ class Deal(NamedTuple):
     ends: datetime
     reference: float
     unit: str
+    trade: bool
     offers: list
 
 
 def group_offers(offers: list) -> list:
     """Collapse offers that are the same deal into one Deal. A price running at the same time
     across a retail group is one thing the user needs to know, not six; the shops are listed
-    instead. Cheapest first."""
+    instead. A net price and a gross price are never the same deal even at the same number, so
+    the tax basis is part of what makes a deal itself."""
     groups: dict = {}
     for offer in offers:
         windows = offer.get("validityDates") or []
@@ -276,25 +315,61 @@ def group_offers(offers: list) -> list:
             continue
         starts, ends = local(windows[0]["from"]), local(windows[0]["to"])
         key = (offer["price"], starts.date(), ends.date(),
-               round(offer.get("referencePrice") or 0, 2), unit_of(offer))
+               round(offer.get("referencePrice") or 0, 2), unit_of(offer), is_trade(offer))
         groups.setdefault(key, (starts, ends, []))[2].append(offer)
-    deals = [
-        Deal(price, starts, ends, reference, unit, items)
-        for (price, _sd, _ed, reference, unit), (starts, ends, items) in groups.items()
+    return [
+        Deal(price, starts, ends, reference, unit, trade, items)
+        for (price, _sd, _ed, reference, unit, trade), (starts, ends, items) in groups.items()
     ]
-    return sorted(deals, key=lambda d: (d.price, d.starts, d.ends))
+
+
+def unit_order(deals: list) -> dict:
+    """Rank of each unit for a watch, commonest first. A price per unit only means something
+    against the same unit - 0.22/Stk is not dearer than 0.99/l, it is a different measurement -
+    so deals are ordered by unit before they are ordered by value. A watch pinned to one brand
+    has a single unit, which is why this is invisible in the common case."""
+    counts: dict = {}
+    for deal in deals:
+        counts[deal.unit] = counts.get(deal.unit, 0) + 1
+    ranked = sorted((unit for unit in counts if unit), key=lambda unit: (-counts[unit], unit))
+    order = {unit: rank for rank, unit in enumerate(ranked)}
+    if "" in counts:
+        order[""] = len(ranked)  # no unit means no value to rank by, so it goes last
+    return order
+
+
+def by_value(order: dict):
+    """Best value first: cheapest per unit within a unit group. A deal whose per-unit price is
+    unknown sorts last rather than pretending to be free."""
+    return lambda deal: (
+        order.get(deal.unit, len(order)),
+        deal.reference if deal.reference else float("inf"),
+        deal.price,
+    )
+
+
+def flags_of(deal: Deal) -> str:
+    """The conditions attached to a price: net of VAT, and needing the shop's loyalty card."""
+    marks = []
+    if deal.trade:
+        marks.append(NET_MARK)
+    if any(o.get("requiresLoyalityMembership") for o in deal.offers):
+        marks.append(CARD_MARK)
+    return "".join(f"  {mark}" for mark in marks)
 
 
 def render_watch(label: str, offers: list, link_for, now: datetime, cap: int = CAP) -> str | None:
     """One watch's block, or None when it has no offers - a watch with nothing running is not
     worth a line, so it is left out entirely rather than reported as empty."""
+    deals = group_offers(offers)
+    order = unit_order(deals)
     running, upcoming = [], []
-    for deal in group_offers(offers):
+    for deal in sorted(deals, key=by_value(order)):
         per = f" ({money(deal.reference)}/{deal.unit})" if deal.reference and deal.unit else ""
-        card = " 💳" if any(o.get("requiresLoyalityMembership") for o in deal.offers) else ""
         upcoming_deal = deal.starts > now
         when = f"from {day(deal.starts)}" if upcoming_deal else f"until {day(deal.ends)}"
-        line = f"  €{money(deal.price)}{per} · {', '.join(shops_of(deal.offers)) or '?'} · {when}{card}"
+        line = (f"  €{money(deal.price)}{per} · {', '.join(shops_of(deal.offers)) or '?'} "
+                f"· {when}{flags_of(deal)}")
         link = link_for(deal.offers[0])
         if link:
             line += f"\n    {link}"
@@ -372,20 +447,48 @@ def cmd_retailers(args):
         print(f"  {retailer['id']}\t{retailer['name']}\t({retailer['resultsCount']} offer(s))")
 
 
+def verify_pins(provider: Provider, watch: dict):
+    """Reject a pin that names nothing. Silence is this skill's way of saying "no offers", so an
+    id that matches no brand must fail here - left in place it would look identical, forever."""
+    for kind, noun in (("brands", "brand"), ("retailers", "retailer")):
+        for ident in watch.get(kind) or []:
+            if provider.name_of(kind, ident) is None:
+                die(f"no {noun} has id {ident} - look it up with {kind} --query \"{watch['query']}\"")
+
+
+def report_watch(provider: Provider, watch: dict, code: str, lead: str):
+    """Announce a change to a watch together with where it stands. Setting a watch up and asking
+    what it has are the same question asked once, and answering both proves the watch works."""
+    offers, facets = provider.survey(watch, code)
+    print(lead)
+    block = render_watch(watch["label"], offers, lambda o: provider.leaflet_url(o, code),
+                         datetime.now(TZ))
+    print(block if block else "Nothing on offer right now - you'll hear at 09:00 when there is.")
+    if not watch.get("brands"):
+        brands = facets.get("brands") or []
+        if len(brands) >= BROAD_BRANDS:
+            names = ", ".join(f"{b['name']} ({b['id']})" for b in brands[:4])
+            hint(f"[offers] \"{watch['query']}\" matches {len(brands)} brands, so this watch is "
+                 f"broad and will report unrelated products. Pin it if the user meant one: {names}")
+
+
 def cmd_watch_add(args):
     watchlist = load(WATCH_FILE, {})
     key = args.label.lower()
     if key in watchlist:
         die(f'already watching "{watchlist[key]["label"]}" - change it with watch-edit')
-    watchlist[key] = {
+    code = zip_code()
+    provider = Provider()
+    watch = {
         "label": args.label,
         "query": args.query or args.label,
         "brands": args.brands,
         "retailers": args.retailers,
     }
+    verify_pins(provider, watch)
+    watchlist[key] = watch
     save(WATCH_FILE, watchlist)
-    print(f"now watching {args.label}")
-    print(watch_line(watchlist[key]))
+    report_watch(provider, watch, code, f"👀 Now watching *{watch['label']}*.")
 
 
 def cmd_watch_list(args):
@@ -419,11 +522,13 @@ def cmd_watch_edit(args):
     new_key = watch["label"].lower()
     if new_key != key and new_key in watchlist:
         die(f'a different watch is already called "{watch["label"]}"')
+    code = zip_code()
+    provider = Provider()
+    verify_pins(provider, watch)
     del watchlist[key]
     watchlist[new_key] = watch
     save(WATCH_FILE, watchlist)
-    print(f"updated {watch['label']}")
-    print(watch_line(watch))
+    report_watch(provider, watch, code, f"✏️ Updated *{watch['label']}*.")
 
 
 def cmd_watch_rm(args):
@@ -431,7 +536,7 @@ def cmd_watch_rm(args):
     key, watch, _ = find_watch(watchlist, args.label)
     del watchlist[key]
     save(WATCH_FILE, watchlist)
-    print(f"stopped watching {watch['label']}")
+    print(f"🚫 Stopped watching *{watch['label']}*.")
 
 
 def cmd_search(args):
@@ -501,7 +606,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     # Every command takes --quiet so asking for a private read is never the thing that fails;
-    # `delivers` marks the ones whose output is written for the user in the first place.
+    # `delivers` marks the ones whose output is written for the user in the first place - anything
+    # that describes their watches or the offers on them, as against the ids and settings behind it.
     shared = argparse.ArgumentParser(add_help=False)
     shared.add_argument("--quiet", action="store_true",
                         help="print the result here instead of sending it to the user")
@@ -525,7 +631,7 @@ def build_parser() -> argparse.ArgumentParser:
     rt.set_defaults(func=cmd_retailers)
     rt.add_argument("--query", required=True)
 
-    wa = command("watch-add")
+    wa = command("watch-add", delivers=True)
     wa.set_defaults(func=cmd_watch_add)
     wa.add_argument("--label", required=True)
     wa.add_argument("--query")
@@ -534,7 +640,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     command("watch-list", delivers=True).set_defaults(func=cmd_watch_list)
 
-    we = command("watch-edit")
+    we = command("watch-edit", delivers=True)
     we.set_defaults(func=cmd_watch_edit)
     we.add_argument("--label", required=True)
     we.add_argument("--query")
@@ -542,7 +648,7 @@ def build_parser() -> argparse.ArgumentParser:
     we.add_argument("--retailers", type=id_list)
     we.add_argument("--rename")
 
-    wr = command("watch-rm")
+    wr = command("watch-rm", delivers=True)
     wr.set_defaults(func=cmd_watch_rm)
     wr.add_argument("--label", required=True)
 

@@ -15,15 +15,13 @@ The user gets a digest every morning at 09:00 without you being involved: a syst
 {baseDir}/scripts/offers.py <command> [flags]
 ```
 
-Never say where the offers come from. To the user this is just "offers" - the provider behind it is an implementation detail that may change.
+To the user this is just "offers" - never name the platform the data comes from, since it is an implementation detail that may change. Leaflet links are the one exception: they are worth sending and unavoidably carry the provider's domain.
 
 ## Replying
 
-Some commands are written for the user, some are machinery for you.
+**Anything describing the user's watches or the offers on them is written for the user** - `digest`, `search`, `watch-list`, `watch-add`, `watch-edit`, `watch-rm`. The script posts the output straight to them on WhatsApp (as a "via offers" message) and prints `[offers: delivered to the user ✓ ...]`. When you see that line, **stay silent** - they already have it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet. Add `--quiet` when you need the numbers in order to answer something yourself; the output is then printed here, nothing is sent, and the last line is `[offers: quiet - not sent to the user]`.
 
-**Written for the user - `digest`, `search`, `watch-list`.** The script posts the output straight to them on WhatsApp (as an "via offers" message) and prints `[offers: delivered to the user ✓ ...]`. When you see that line, **stay silent** - they already have it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet. Add `--quiet` when you need the numbers in order to answer something yourself; the output is then printed here, nothing is sent, and the last line is `[offers: quiet - not sent to the user]`.
-
-**Machinery for you - everything else** (`config`, `config-set`, `brands`, `retailers`, `watch-add`, `watch-edit`, `watch-rm`). Nothing is ever sent, so the news is yours to deliver: after adding or removing a watch, tell the user in your own words.
+**The ids and settings behind them are machinery for you** - `config`, `config-set`, `brands`, `retailers`. Nothing is sent, because a brand id is not something the user should receive. Say whatever needs saying in your own words.
 
 If the script prints `[offers: delivery FAILED ...]`, the send didn't happen: relay that output yourself, just this once (the data was still saved - don't re-run the command). It also exits non-zero in that case, because the morning digest runs with nobody watching and a send that silently never happened would be worse than a loud one - so treat the failure as already explained, not as something to investigate.
 
@@ -66,7 +64,9 @@ Then pin it:
 {baseDir}/scripts/offers.py watch-add --label "Milka" --retailers 12769,12747
 ```
 
-If `brands` returns several plausible matches, ask the user which they meant rather than guessing. If it returns nothing useful, a watch with just a query is fine.
+**`watch-add` answers "is anything on right now?" as part of adding**, so you never need a follow-up `search`, and it is sent to the user. It also rejects a brand or retailer id that names nothing, so a mistyped pin fails immediately instead of turning into a watch that is silent forever.
+
+If `brands` returns several plausible matches, ask the user which they meant rather than guessing. If it returns nothing useful, a watch with just a query is fine - but the script will tell you when a query is broad enough to report unrelated products, and pinning it is then worth suggesting.
 
 ## Answering "is X on offer?"
 
@@ -109,7 +109,16 @@ The timer runs this; you only need it if the user asks "what's on offer right no
     https://www.marktguru.at/leaflets/78886/page/11
 ```
 
-`(3.96/l)` is the price per unit, the only fair way to compare a can against a multipack. `💳` means the price needs the shop's loyalty card. The link opens the leaflet page the deal is printed on.
+`(3.96/l)` is the price per unit, and deals are ordered by it - best value first, not lowest sticker price - because a small bottle is often dearer per litre than a multipack. The link opens the leaflet page the deal is printed on.
+
+Two marks can appear at the end of a line:
+
+| Mark | Meaning |
+| --- | --- |
+| `💳` | needs the shop's loyalty card |
+| `🧾` | **price excludes VAT** - a wholesaler, so the till adds tax on top |
+
+`🧾` matters when comparing: a €0.62 net price can end up dearer than a €0.67 shelf price. The exact rate depends on the product (10-20%), so the script never guesses a gross figure - but the linked leaflet page usually prints it. Wholesalers also normally require a trade card.
 
 ## Notes
 
@@ -119,7 +128,8 @@ The timer runs this; you only need it if the user asks "what's on offer right no
 - Identical deals are collapsed: one price running at one time across a retail group is a single line listing the shops.
 - Expired offers never appear; the provider drops them before the script sees them.
 - All dates are the user's local dates. Never re-derive a date from a timestamp yourself - the stored times are UTC and a window opening at 22:00Z is the *next* day here.
-- Prices, dates, grouping, and caps are all the script's job. Read its output; never recompute it.
+- Deals are ordered by price per unit, and only ever against the same unit - a price per piece is not comparable with a price per litre, so each unit is ranked within itself. A brand-pinned watch has one unit and this never shows.
+- Prices, dates, ordering, marks, and caps are all the script's job. Read its output; never recompute it. In particular, whether a price is net is recorded in the data - never work it out from a retailer's name, and never go reading a leaflet to find out.
 - The script delivers its own replies for `digest`, `search` and `watch-list` (see [Replying](#replying)); don't relay or restate them - that double-sends.
 
 `{baseDir}` = this skill's directory. Always resolve to the absolute path before executing.

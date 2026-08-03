@@ -1373,3 +1373,106 @@ class TestRepeatDetection:
         macros.NOTES.clear()
         self.eat("Kinder")
         assert "3x as a one-off" in self.notes()
+
+
+class TestSavedFoodNamed:
+    def test_exact_alias_matches(self, store):
+        add_skyr()
+        assert macros.saved_food_named("skyr")["name"] == "Skyr, plain"
+
+    def test_substring_of_the_saved_name_matches(self, store):
+        add_skyr()
+        assert macros.saved_food_named("Skyr")["name"] == "Skyr, plain"
+
+    def test_a_typo_does_not(self, store):
+        add_skyr()
+        assert macros.saved_food_named("skyer sauce") is None
+
+    def test_an_unrelated_name_does_not(self, store):
+        add_skyr()
+        assert macros.saved_food_named("Bratwurst") is None
+
+    def test_an_empty_catalog_does_not(self, store):
+        assert macros.saved_food_named("Sriracha") is None
+
+
+class TestGuessedOverSavedFood:
+    """A one-off typed under the name of a saved food. The rate check cannot catch this: it is the
+    guess being wrong that makes the numbers differ, which is exactly when the saved food mattered."""
+
+    def save_sriracha(self):
+        run("food-add", "--name", "Sriracha", "--kcal100", "137", "--protein100", "1.9",
+            "--fat100", "0.9", "--carbs100", "28", "--serving", "30")
+
+    def guess(self, kcal="93", item="Sriracha"):
+        run("eat", "--item", item, "--kcal100", kcal, "--amount", "10")
+
+    def notes(self):
+        return "\n".join(macros.NOTES)
+
+    def test_names_the_saved_food_and_both_numbers(self, store):
+        set_goal()
+        self.save_sriracha()
+        self.guess()
+        notes = self.notes()
+        assert '"Sriracha" already exists' in notes
+        assert "137" in notes
+        assert "93" in notes
+
+    def test_offers_the_command_that_uses_the_real_numbers(self, store):
+        set_goal()
+        self.save_sriracha()
+        self.guess()
+        assert 'food-eat --name "Sriracha" --amount 10' in self.notes()
+
+    def test_the_entry_is_still_logged(self, store):
+        set_goal()
+        self.save_sriracha()
+        self.guess()
+        assert day_entries()[-1]["item"] == "Sriracha (10g)"
+
+    def test_a_matching_rate_reports_itself_instead(self, store):
+        # A rate match needs all four values to agree, which is why the name check exists at all.
+        set_goal()
+        self.save_sriracha()
+        run("eat", "--item", "Sriracha", "--kcal100", "137", "--protein100", "1.9",
+            "--fat100", "0.9", "--carbs100", "28", "--amount", "10")
+        notes = self.notes()
+        assert "this rate is already saved" in notes
+        assert "already exists at" not in notes
+
+    def test_one_matching_macro_is_not_a_matching_rate(self, store):
+        set_goal()
+        self.save_sriracha()
+        self.guess(kcal="137")  # kcal agrees, the rest do not
+        assert "already exists at" in self.notes()
+
+    def test_an_unrelated_food_says_nothing(self, store):
+        set_goal()
+        self.save_sriracha()
+        self.guess(item="Bratwurst")
+        assert self.notes() == ""
+
+    def test_a_typo_is_not_confident_enough_to_nag(self, store):
+        set_goal()
+        self.save_sriracha()
+        self.guess(item="Srirachaa sauce hot")
+        assert self.notes() == ""
+
+    def test_it_pre_empts_the_save_nudge_that_would_overwrite(self, store):
+        # food-add on a name already in the catalog replaces that food, so "save it" must never
+        # be the advice when a food of this name already exists.
+        set_goal()
+        self.save_sriracha()
+        for _ in range(macros.REPEAT_NUDGE_AT):
+            macros.NOTES.clear()
+            self.guess()
+        notes = self.notes()
+        assert "food-add" not in notes
+        assert "already exists at" in notes
+
+    def test_a_preview_never_nags(self, store):
+        set_goal()
+        self.save_sriracha()
+        run("eat", "--item", "Sriracha", "--kcal100", "93", "--amount", "10", "--dry-run")
+        assert self.notes() == ""

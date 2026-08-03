@@ -14,6 +14,11 @@ RUNNING = {"from": "2026-07-29T22:00:00Z", "to": "2026-08-05T21:59:00Z"}
 UPCOMING = {"from": "2026-08-05T22:00:00Z", "to": "2026-08-08T21:59:00Z"}
 
 
+# The trades the provider files retailers under; only wholesale quotes prices net of VAT.
+RETAIL = [{"id": 14, "name": "Supermarkt"}]
+WHOLESALE = [{"id": 6, "name": "Großhandel"}]
+
+
 def offer(**over):
     base = {
         "id": 1,
@@ -24,8 +29,27 @@ def offer(**over):
         "validityDates": [RUNNING],
         "requiresLoyalityMembership": False,
         "leafletFlightId": 43822,
+        "industries": RETAIL,
     }
     return {**base, **over}
+
+
+class FakeProvider:
+    """Stands in for the offer API: `known` are the ids that exist, `found` what a watch turns up."""
+
+    def __init__(self, known=(4517, 5693, 12747, 12769), found=(), brands=()):
+        self.known = set(known)
+        self.found = list(found)
+        self.brands = list(brands)
+
+    def name_of(self, kind, ident):
+        return f"{kind}-{ident}" if ident in self.known else None
+
+    def survey(self, _watch, _code):
+        return (self.found, {"brands": self.brands})
+
+    def leaflet_url(self, _offer, _code):
+        return None
 
 
 def nolink(_offer):
@@ -49,6 +73,15 @@ def store(tmp_path, monkeypatch):
     monkeypatch.setattr(offers, "CONFIG_FILE", root / "config.json")
     monkeypatch.setattr(offers, "WATCH_FILE", root / "watchlist.json")
     return root
+
+
+@pytest.fixture
+def wired(store, monkeypatch):
+    """A configured store with the offer API stubbed out, for the commands that reach for it."""
+    provider = FakeProvider()
+    monkeypatch.setattr(offers, "Provider", lambda: provider)
+    run("config-set", "--zip", "8010")
+    return provider
 
 
 class TestLocal:
@@ -82,6 +115,26 @@ class TestMoney:
         assert offers.money(7.6) == "7.60"
 
 
+class TestIsTrade:
+    def test_wholesale_is_trade(self):
+        assert offers.is_trade(offer(industries=WHOLESALE)) is True
+
+    def test_supermarket_is_not(self):
+        assert offers.is_trade(offer(industries=RETAIL)) is False
+
+    def test_an_offer_naming_no_trade_is_taken_at_face_value(self):
+        assert offers.is_trade(offer(industries=[])) is False
+        assert offers.is_trade({}) is False
+
+    def test_it_is_the_trade_that_decides_never_the_name(self):
+        # SPAR-Gourmet is an ordinary supermarket and Transgourmet is a wholesaler; matching
+        # "gourmet" by name would mark the wrong one as net.
+        spar = offer(advertisers=[{"name": "SPAR-Gourmet"}], industries=RETAIL)
+        trans = offer(advertisers=[{"name": "Transgourmet"}], industries=WHOLESALE)
+        assert offers.is_trade(spar) is False
+        assert offers.is_trade(trans) is True
+
+
 class TestGroupOffers:
     def test_collapses_the_same_deal_across_shops(self):
         deals = offers.group_offers([
@@ -93,7 +146,7 @@ class TestGroupOffers:
 
     def test_keeps_different_prices_apart(self):
         deals = offers.group_offers([offer(id=1, price=0.99), offer(id=2, price=1.29)])
-        assert [d.price for d in deals] == [0.99, 1.29]
+        assert sorted(d.price for d in deals) == [0.99, 1.29]
 
     def test_keeps_different_windows_apart(self):
         deals = offers.group_offers([offer(id=1), offer(id=2, validityDates=[UPCOMING])])
@@ -103,9 +156,14 @@ class TestGroupOffers:
         deals = offers.group_offers([offer(id=1, referencePrice=3.96), offer(id=2, referencePrice=2.88)])
         assert len(deals) == 2
 
-    def test_sorts_cheapest_first(self):
-        deals = offers.group_offers([offer(id=1, price=7.6), offer(id=2, price=0.95)])
-        assert [d.price for d in deals] == [0.95, 7.6]
+    def test_never_merges_a_net_price_with_a_gross_one(self):
+        # Same number, different meaning: one has VAT in it and the other does not.
+        deals = offers.group_offers([
+            offer(id=1, industries=RETAIL, advertisers=[{"name": "BILLA"}]),
+            offer(id=2, industries=WHOLESALE, advertisers=[{"name": "METRO"}]),
+        ])
+        assert len(deals) == 2
+        assert sorted(d.trade for d in deals) == [False, True]
 
     def test_carries_the_local_window(self):
         deal = offers.group_offers([offer(validityDates=[UPCOMING])])[0]
@@ -118,6 +176,96 @@ class TestGroupOffers:
 
     def test_handles_no_offers(self):
         assert offers.group_offers([]) == []
+
+
+class TestValueOrder:
+    """Best value first, but only ever comparing like with like."""
+
+    def sorted_refs(self, raw):
+        deals = offers.group_offers(raw)
+        order = offers.unit_order(deals)
+        return [(d.unit, d.reference) for d in sorted(deals, key=offers.by_value(order))]
+
+    def test_cheapest_per_unit_first_not_cheapest_sticker(self):
+        # A small bottle at 2.03/l is worse value than a multipack at 0.83/l, however much less
+        # it costs to pick up.
+        got = self.sorted_refs([
+            offer(id=1, price=0.67, referencePrice=2.03),
+            offer(id=2, price=1.24, referencePrice=0.83),
+        ])
+        assert [ref for _u, ref in got] == [0.83, 2.03]
+
+    def test_units_are_never_compared_against_each_other(self):
+        # 0.22/Stk is not cheaper than 0.99/l - it is a different measurement. The commonest
+        # unit for the watch leads, and each unit is ranked within itself.
+        got = self.sorted_refs([
+            offer(id=1, referencePrice=0.22, unit={"shortName": "Stk"}),
+            offer(id=2, referencePrice=7.17, unit={"shortName": "kg"}),
+            offer(id=3, referencePrice=9.58, unit={"shortName": "kg"}),
+        ])
+        assert [u for u, _r in got] == ["kg", "kg", "Stk"]
+        assert [ref for _u, ref in got] == [7.17, 9.58, 0.22]
+
+    def test_a_pinned_watch_has_one_unit_so_grouping_is_invisible(self):
+        got = self.sorted_refs([
+            offer(id=1, price=7.60, referencePrice=3.80),
+            offer(id=2, price=0.99, referencePrice=3.96),
+        ])
+        assert [ref for _u, ref in got] == [3.80, 3.96]
+
+    def test_an_unknown_per_unit_price_sorts_last(self):
+        got = self.sorted_refs([
+            offer(id=1, referencePrice=0, unit={}),
+            offer(id=2, referencePrice=3.96),
+        ])
+        assert got[0][1] == 3.96
+
+    def test_equal_value_falls_back_to_the_cheaper_sticker(self):
+        got = offers.group_offers([
+            offer(id=1, price=7.60, referencePrice=3.80),
+            offer(id=2, price=0.95, referencePrice=3.80),
+        ])
+        order = offers.unit_order(got)
+        assert [d.price for d in sorted(got, key=offers.by_value(order))] == [0.95, 7.60]
+
+
+class TestFlags:
+    def one(self, **over):
+        return offers.group_offers([offer(**over)])[0]
+
+    def test_no_flags_on_an_ordinary_price(self):
+        assert offers.flags_of(self.one()) == ""
+
+    def test_net_price_is_flagged(self):
+        assert offers.NET_MARK in offers.flags_of(self.one(industries=WHOLESALE))
+
+    def test_loyalty_price_is_flagged(self):
+        assert offers.CARD_MARK in offers.flags_of(self.one(requiresLoyalityMembership=True))
+
+    def test_both_can_apply_at_once(self):
+        flags = offers.flags_of(self.one(industries=WHOLESALE, requiresLoyalityMembership=True))
+        assert offers.NET_MARK in flags and offers.CARD_MARK in flags
+
+    def test_the_two_marks_are_distinct(self):
+        assert offers.NET_MARK != offers.CARD_MARK
+
+
+class TestVerifyPins:
+    def test_accepts_ids_that_exist(self):
+        offers.verify_pins(FakeProvider(known=(4517,)), {"query": "x", "brands": [4517]})
+
+    def test_rejects_a_brand_id_that_names_nothing(self):
+        # Left in place, a typo would be indistinguishable from a product that never goes on
+        # offer - which is exactly what this skill's silence is supposed to mean.
+        with pytest.raises(SystemExit):
+            offers.verify_pins(FakeProvider(known=(4517,)), {"query": "x", "brands": [9999]})
+
+    def test_rejects_a_retailer_id_that_names_nothing(self):
+        with pytest.raises(SystemExit):
+            offers.verify_pins(FakeProvider(known=()), {"query": "x", "retailers": [1]})
+
+    def test_a_watch_with_no_pins_needs_no_checking(self):
+        offers.verify_pins(FakeProvider(known=()), {"query": "x"})
 
 
 class TestRenderWatch:
@@ -157,8 +305,26 @@ class TestRenderWatch:
     def test_marks_a_loyalty_price(self):
         plain = offers.render_watch("X", [offer()], nolink, NOW)
         carded = offers.render_watch("X", [offer(requiresLoyalityMembership=True)], nolink, NOW)
-        assert "💳" not in plain
-        assert "💳" in carded
+        assert offers.CARD_MARK not in plain
+        assert offers.CARD_MARK in carded
+
+    def test_marks_a_net_price_on_the_line(self):
+        # Wholesale prices stay in the one list, flagged, rather than being split off.
+        out = offers.render_watch("X", [
+            offer(id=1, price=0.99, referencePrice=3.96, industries=RETAIL),
+            offer(id=2, price=0.95, referencePrice=2.88, industries=WHOLESALE,
+                  advertisers=[{"name": "METRO"}]),
+        ], nolink, NOW)
+        assert out.count(offers.NET_MARK) == 1
+        metro = next(line for line in out.splitlines() if "METRO" in line)
+        assert offers.NET_MARK in metro
+
+    def test_orders_by_value_so_the_best_deal_leads(self):
+        out = offers.render_watch("X", [
+            offer(id=1, price=0.67, referencePrice=2.03, advertisers=[{"name": "PENNY"}]),
+            offer(id=2, price=1.24, referencePrice=0.83, advertisers=[{"name": "BILLA"}]),
+        ], nolink, NOW)
+        assert out.index("BILLA") < out.index("PENNY")
 
     def test_appends_the_leaflet_link_on_its_own_line(self):
         out = offers.render_watch("X", [offer()], link, NOW)
@@ -168,11 +334,21 @@ class TestRenderWatch:
         assert "http" not in offers.render_watch("X", [offer()], nolink, NOW)
 
     def test_caps_each_section_independently(self):
-        many = [offer(id=i, price=1.0 + i / 100) for i in range(6)]
-        many += [offer(id=100 + i, price=2.0 + i / 100, validityDates=[UPCOMING]) for i in range(6)]
+        many = [offer(id=i, price=1.0 + i / 100, referencePrice=1.0 + i / 100) for i in range(6)]
+        many += [
+            offer(id=100 + i, price=2.0 + i / 100, referencePrice=2.0 + i / 100,
+                  validityDates=[UPCOMING])
+            for i in range(6)
+        ]
         out = offers.render_watch("X", many, nolink, NOW, cap=4)
         assert out.count("until") == 4
         assert out.count("from") == 4
+
+    def test_the_cap_keeps_the_best_value_not_the_cheapest_sticker(self):
+        deals = [offer(id=i, price=10.0 - i, referencePrice=1.0 + i) for i in range(6)]
+        out = offers.render_watch("X", deals, nolink, NOW, cap=2)
+        assert "(1.00/l)" in out and "(2.00/l)" in out
+        assert "(6.00/l)" not in out
 
     def test_falls_back_when_an_offer_names_no_shop(self):
         assert "?" in offers.render_watch("X", [offer(advertisers=[])], nolink, NOW)
@@ -239,30 +415,30 @@ class TestWatches:
     def add(self, label="Monster Energy", *extra):
         run("watch-add", "--label", label, *extra)
 
-    def test_add_defaults_the_query_to_the_label(self, store):
+    def test_add_defaults_the_query_to_the_label(self, wired):
         self.add()
         assert offers.load(offers.WATCH_FILE, {})["monster energy"]["query"] == "Monster Energy"
 
-    def test_add_pins_brands_and_retailers(self, store):
+    def test_add_pins_brands_and_retailers(self, wired):
         self.add("Red Bull", "--brands", "5693", "--retailers", "12747,12769")
         watch = offers.load(offers.WATCH_FILE, {})["red bull"]
         assert watch["brands"] == [5693]
         assert watch["retailers"] == [12747, 12769]
 
-    def test_add_takes_a_separate_query(self, store):
+    def test_add_takes_a_separate_query(self, wired):
         self.add("Monster", "--query", "monster energy")
         assert offers.load(offers.WATCH_FILE, {})["monster"]["query"] == "monster energy"
 
-    def test_add_refuses_a_duplicate(self, store):
+    def test_add_refuses_a_duplicate(self, wired):
         self.add()
         with pytest.raises(SystemExit):
             self.add()
 
-    def test_list_reports_emptiness(self, store, capsys):
+    def test_list_reports_emptiness(self, wired, capsys):
         run("watch-list")
         assert "No watches yet" in capsys.readouterr().out
 
-    def test_list_shows_each_watch(self, store, capsys):
+    def test_list_shows_each_watch(self, wired, capsys):
         self.add("Red Bull", "--brands", "5693")
         capsys.readouterr()
         run("watch-list")
@@ -270,39 +446,82 @@ class TestWatches:
         assert "1 watch(es)" in out
         assert "brands 5693" in out
 
-    def test_edit_changes_only_what_is_passed(self, store):
+    def test_edit_changes_only_what_is_passed(self, wired):
         self.add("Red Bull", "--brands", "5693")
         run("watch-edit", "--label", "red bull", "--retailers", "12769")
         watch = offers.load(offers.WATCH_FILE, {})["red bull"]
         assert watch["retailers"] == [12769]
         assert watch["brands"] == [5693]
 
-    def test_edit_requires_a_change(self, store):
+    def test_edit_requires_a_change(self, wired):
         self.add()
         with pytest.raises(SystemExit):
             run("watch-edit", "--label", "monster energy")
 
-    def test_edit_renames_and_rekeys(self, store):
+    def test_edit_renames_and_rekeys(self, wired):
         self.add("Monster")
         run("watch-edit", "--label", "monster", "--rename", "Monster Energy")
         watchlist = offers.load(offers.WATCH_FILE, {})
         assert "monster energy" in watchlist
         assert "monster" not in watchlist
 
-    def test_edit_refuses_a_rename_onto_another_watch(self, store):
+    def test_edit_refuses_a_rename_onto_another_watch(self, wired):
         self.add("Monster")
         self.add("Red Bull")
         with pytest.raises(SystemExit):
             run("watch-edit", "--label", "monster", "--rename", "Red Bull")
 
-    def test_rm_removes(self, store):
+    def test_rm_removes(self, wired):
         self.add()
         run("watch-rm", "--label", "monster energy")
         assert offers.load(offers.WATCH_FILE, {}) == {}
 
-    def test_rm_of_an_unknown_watch_fails(self, store):
+    def test_rm_of_an_unknown_watch_fails(self, wired):
         with pytest.raises(SystemExit):
             run("watch-rm", "--label", "beer")
+
+
+class TestWatchReport:
+    """Setting a watch up answers where it stands, which is also how a useless watch is noticed
+    at the moment it is created rather than after weeks of silence."""
+
+    def test_says_so_when_nothing_is_on_offer(self, wired, capsys):
+        run("watch-add", "--label", "Monster Energy", "--brands", "4517")
+        out = capsys.readouterr().out
+        assert "Now watching" in out
+        assert "Nothing on offer right now" in out
+
+    def test_shows_the_offers_when_there_are_some(self, wired, capsys):
+        wired.found = [offer(advertisers=[{"name": "BILLA"}])]
+        run("watch-add", "--label", "Red Bull", "--brands", "5693")
+        out = capsys.readouterr().out
+        assert "€0.99" in out
+        assert "BILLA" in out
+
+    def test_editing_a_watch_reports_it_too(self, wired, capsys):
+        run("watch-add", "--label", "Red Bull", "--brands", "5693")
+        capsys.readouterr()
+        wired.found = [offer(advertisers=[{"name": "HOFER"}])]
+        run("watch-edit", "--label", "red bull", "--retailers", "12747")
+        out = capsys.readouterr().out
+        assert "Updated" in out
+        assert "HOFER" in out
+
+    def test_warns_that_an_unpinned_watch_is_broad(self, wired):
+        wired.brands = [{"id": i, "name": f"B{i}", "resultsCount": 1} for i in range(6)]
+        run("watch-add", "--label", "Kaffee")
+        assert any("broad" in note for note in offers.NOTES)
+
+    def test_a_pinned_watch_is_never_called_broad(self, wired):
+        wired.brands = [{"id": i, "name": f"B{i}", "resultsCount": 1} for i in range(6)]
+        run("watch-add", "--label", "Monster Energy", "--brands", "4517")
+        assert not any("broad" in note for note in offers.NOTES)
+
+    def test_removing_a_watch_says_so(self, wired, capsys):
+        run("watch-add", "--label", "Monster Energy", "--brands", "4517")
+        capsys.readouterr()
+        run("watch-rm", "--label", "monster")
+        assert "Stopped watching" in capsys.readouterr().out
 
 
 class TestFindWatch:
@@ -360,17 +579,17 @@ class TestWatchLine:
 
 
 class TestAudience:
-    def test_the_digest_and_searches_are_written_for_the_user(self):
+    def test_everything_describing_watches_or_offers_is_written_for_the_user(self):
         parser = offers.build_parser()
-        for name in ("digest", "watch-list"):
-            assert parser.parse_args([name]).delivers is True
-        assert parser.parse_args(["search", "--query", "x"]).delivers is True
+        for argv in (["digest"], ["watch-list"], ["search", "--query", "x"],
+                     ["watch-add", "--label", "x"], ["watch-edit", "--label", "x", "--query", "y"],
+                     ["watch-rm", "--label", "x"]):
+            assert parser.parse_args(argv).delivers is True, argv
 
-    def test_machinery_and_mutations_are_not_sent(self):
+    def test_the_ids_and_settings_behind_them_are_not_sent(self):
         parser = offers.build_parser()
         for argv in (["config"], ["config-set", "--zip", "1010"], ["brands", "--query", "x"],
-                     ["retailers", "--query", "x"], ["watch-add", "--label", "x"],
-                     ["watch-rm", "--label", "x"]):
+                     ["retailers", "--query", "x"]):
             assert parser.parse_args(argv).delivers is False, argv
 
     def test_every_command_accepts_quiet(self):
@@ -407,7 +626,7 @@ class TestDelivery:
         monkeypatch.setattr(offers, "deliver_to_user", fake)
         return sent
 
-    def test_a_delivered_watch_list_sends_and_succeeds(self, store, monkeypatch, capsys):
+    def test_a_delivered_watch_list_sends_and_succeeds(self, wired, monkeypatch, capsys):
         run("watch-add", "--label", "Red Bull")
         sent = self.spy(monkeypatch)
         self.invoke(monkeypatch, "watch-list")
@@ -415,7 +634,7 @@ class TestDelivery:
         assert "Red Bull" in sent[0]
         assert "delivered to the user" in capsys.readouterr().out
 
-    def test_quiet_sends_nothing_and_says_so(self, store, monkeypatch, capsys):
+    def test_quiet_sends_nothing_and_says_so(self, wired, monkeypatch, capsys):
         run("watch-add", "--label", "Red Bull")
         sent = self.spy(monkeypatch)
         self.invoke(monkeypatch, "watch-list", "--quiet")
@@ -424,7 +643,7 @@ class TestDelivery:
         assert "Red Bull" in out
         assert "quiet - not sent to the user" in out
 
-    def test_an_undeliverable_send_fails_loudly(self, store, monkeypatch, capsys):
+    def test_an_undeliverable_send_fails_loudly(self, wired, monkeypatch, capsys):
         run("watch-add", "--label", "Red Bull")
         self.spy(monkeypatch, reachable=False)
         with pytest.raises(SystemExit) as exit_info:
@@ -432,7 +651,7 @@ class TestDelivery:
         assert exit_info.value.code == 1
         assert "delivery FAILED" in capsys.readouterr().out
 
-    def test_machinery_never_sends_and_still_succeeds(self, store, monkeypatch, capsys):
+    def test_machinery_never_sends_and_still_succeeds(self, wired, monkeypatch, capsys):
         sent = self.spy(monkeypatch, reachable=False)
         self.invoke(monkeypatch, "config-set", "--zip", "4020")
         out = capsys.readouterr().out
@@ -440,7 +659,7 @@ class TestDelivery:
         assert "4020" in out
         assert "FAILED" not in out
 
-    def test_a_digest_with_nothing_to_say_sends_nothing_and_succeeds(self, store, monkeypatch, capsys):
+    def test_a_digest_with_nothing_to_say_sends_nothing_and_succeeds(self, wired, monkeypatch, capsys):
         sent = self.spy(monkeypatch, reachable=False)
         run("config-set", "--zip", "4020")
         capsys.readouterr()

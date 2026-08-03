@@ -72,7 +72,13 @@ In place of `--amount` it accepts the same `--fit-*`/`--target-*` sizing as `foo
 {baseDir}/scripts/macros.py eat --item "Granola" --kcal100 450 --protein100 10 --fat100 20 --carbs100 55 --fit-protein --dry-run
 ```
 
-`eat` never saves, but the script watches for repeats so you don't have to. If the rate you pass is already a saved food it says so on stderr (use `food-eat` next time - same numbers, no transcribing), and once the same rate has been typed in three times it prints a ready-to-run `food-add`. Saving is the user's call: ask them first, then run it.
+`eat` never saves, but the script checks what you typed against the catalog so you don't have to. Three things it may tell you, in order:
+
+- **The rate is already saved** - use `food-eat` next time; same numbers, no transcribing.
+- **A saved food already has that name, with different numbers** - you estimated over real label data. It names both values so you can see how far off the guess was; the entry is still logged, so switch to `food-eat` (and remove the estimate) unless it genuinely is a different food.
+- **The same rate has been typed in three times** - it prints a ready-to-run `food-add`.
+
+Saving or switching is the user's call: ask them first, then run it.
 
 ## Viewing a day
 

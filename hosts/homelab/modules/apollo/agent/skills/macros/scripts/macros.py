@@ -381,13 +381,33 @@ def eat_repeats(per100: dict, unit: str, upto: str) -> int:
     return seen
 
 
+def saved_food_named(item: str):
+    """A saved food that this label refers to, or None. Only a confident match counts - an exact
+    alias or a single substring hit - because the nudge it feeds is unsolicited and a fuzzy read of
+    "chicken breast" as "chicken thigh" would be worse than saying nothing."""
+    match = find(load(FOOD_FILE, {}), item)
+    return match.value if match.kind in ("exact", "substring") else None
+
+
 def suggest_saving(item: str, per100: dict, unit: str, amount, date: str):
-    """Point out that a hand-typed label is already saved, or has now been typed often enough to be
-    worth saving. Saving stays the user's call, so this asks the agent to ask rather than acting."""
+    """Point out that a hand-typed label is already saved - by its rate, or failing that by its
+    name - or that it has now been typed often enough to be worth saving. Saving and substituting
+    both stay the user's call, so this asks the agent to ask rather than acting."""
     saved = saved_food_matching(per100, unit)
     if saved:
         hint(f'[macros] this rate is already saved as "{saved["name"]}" - next time: '
              f'food-eat --name "{saved["name"]}" --amount {amount}')
+        return
+    # The rate check above only fires when the numbers agree, so a guess wide of the saved food
+    # slips past it - which is exactly when the saved food was worth having. The gap between the
+    # two is the point: it says the typed numbers are wrong, not merely redundant.
+    named = saved_food_named(item)
+    if named:
+        saved_unit = named.get("unit", "g")
+        hint(f'[macros] a saved food "{named["name"]}" already exists at '
+             f'{named["per100"]["kcal"]} kcal/100{saved_unit}, but this was logged at '
+             f'{per100["kcal"]}. Its numbers come off the label, so prefer it unless this really '
+             f'is a different food:\n  food-eat --name "{named["name"]}" --amount {amount}')
         return
     if eat_repeats(per100, unit, date) != REPEAT_NUDGE_AT:
         return

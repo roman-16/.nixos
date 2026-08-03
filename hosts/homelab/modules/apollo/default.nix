@@ -18,9 +18,11 @@ let
       coreutils
       curl
       ffmpeg-headless
+      file
       git
       gnugrep
       gnused
+      imagemagick
       jq
       openssh
       poppler-utils
