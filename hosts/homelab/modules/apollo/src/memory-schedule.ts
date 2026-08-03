@@ -8,9 +8,13 @@ import { practicalDay } from "./temporal";
  * the file by then. And a new day, because a profile that is only maintained when the conversation
  * grows large enough to compact would never be maintained at all in a quiet week.
  *
+ * A compaction is owed a fold at once, whatever triggered it: by the time one has happened the
+ * evidence is already out of sight, so there is nothing left to wait for. Only the daily pass waits
+ * for quiet, because there the wait buys something - a burst that has ended is a burst whose
+ * evidence is complete, and one call instead of one per lull.
+ *
  * Both are safe to fire on: the fold reads from a cursor over what it has already read, so it is
- * idempotent and a missed one only makes the next span longer. Like compaction, it waits for quiet -
- * nobody is kept waiting for maintenance.
+ * idempotent and a missed one only makes the next span longer.
  *
  * The schedule is kept in wall-clock time and the evidence cursor in message time, because they
  * answer different questions. A compaction runs after the conversation has gone quiet, so it is
@@ -38,9 +42,11 @@ export type FoldReason = "compaction" | "nightly";
 /** Why Apollo should fold memory right now, or undefined to leave the file alone. */
 export function foldReason(state: FoldState, policy: FoldPolicy): FoldReason | undefined {
   const { foldedAt, idleMs, lastCompactedAt, now } = state;
+  if (lastCompactedAt !== undefined && (foldedAt === undefined || lastCompactedAt > foldedAt)) {
+    return "compaction";
+  }
   if (idleMs < policy.idleMs) return undefined;
   if (foldedAt === undefined) return "nightly";
-  if (lastCompactedAt !== undefined && lastCompactedAt > foldedAt) return "compaction";
   const turned =
     practicalDay(new Date(foldedAt), policy.dayStartHour) !==
     practicalDay(new Date(now), policy.dayStartHour);

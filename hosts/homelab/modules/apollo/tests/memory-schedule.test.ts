@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import { type FoldPolicy, foldReason, type FoldState } from "../src/memory-schedule";
 
+const SECOND = 1000;
 const MINUTE = 60_000;
 
 const policy: FoldPolicy = { dayStartHour: 4, idleMs: 8 * MINUTE };
@@ -30,16 +31,39 @@ describe("foldReason", () => {
     expect(foldReason(state(), policy)).toBeUndefined();
   });
 
-  it("never interrupts a live conversation", () => {
-    expect(
-      foldReason(state({ idleMs: 2 * MINUTE, lastCompactedAt: at(2026, 8, 2, 19) }), policy),
-    ).toBeUndefined();
+  it("folds for a compaction at once, without waiting for quiet", () => {
+    // Whatever triggered the compaction judged the moment, and by now the evidence is out of sight.
+    expect(foldReason(state({ idleMs: 0, lastCompactedAt: at(2026, 8, 2, 19) }), policy)).toBe(
+      "compaction",
+    );
   });
 
-  it("waits out the full idle window", () => {
-    const busy = { lastCompactedAt: at(2026, 8, 2, 19) };
-    expect(foldReason(state({ ...busy, idleMs: 7 * MINUTE }), policy)).toBeUndefined();
-    expect(foldReason(state({ ...busy, idleMs: 8 * MINUTE }), policy)).toBe("compaction");
+  it("folds for a compaction on a session that has never folded", () => {
+    expect(
+      foldReason(
+        state({ foldedAt: undefined, idleMs: 30 * SECOND, lastCompactedAt: at(2026, 8, 2, 19) }),
+        policy,
+      ),
+    ).toBe("compaction");
+  });
+
+  it("never interrupts a live conversation for the daily pass", () => {
+    const overnight = {
+      foldedAt: at(2026, 8, 1, 21),
+      lastCompactedAt: undefined,
+      now: at(2026, 8, 2, 9),
+    };
+    expect(foldReason(state({ ...overnight, idleMs: 2 * MINUTE }), policy)).toBeUndefined();
+  });
+
+  it("waits out the full idle window for the daily pass", () => {
+    const overnight = {
+      foldedAt: at(2026, 8, 1, 21),
+      lastCompactedAt: undefined,
+      now: at(2026, 8, 2, 9),
+    };
+    expect(foldReason(state({ ...overnight, idleMs: 7 * MINUTE }), policy)).toBeUndefined();
+    expect(foldReason(state({ ...overnight, idleMs: 8 * MINUTE }), policy)).toBe("nightly");
   });
 
   it("folds once a day even when the conversation never grew enough to compact", () => {
