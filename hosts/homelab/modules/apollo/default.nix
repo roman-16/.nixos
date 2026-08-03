@@ -121,6 +121,7 @@ in
           ln -sfn ${../../../../shared/modules/pi/skills/exa} "$agentDir/skills/exa"
           ln -sfn ${./agent/skills/backup} "$agentDir/skills/backup"
           ln -sfn ${./agent/skills/macros} "$agentDir/skills/macros"
+          ln -sfn ${./agent/skills/offers} "$agentDir/skills/offers"
           ln -sfn ${./agent/skills/proton} "$agentDir/skills/proton"
           ln -sfn ${./agent/skills/recall} "$agentDir/skills/recall"
           ln -sfn ${./agent/skills/reminders} "$agentDir/skills/reminders"
@@ -285,6 +286,68 @@ in
               --request POST "http://127.0.0.1:${toString port}/internal/backup-alert"
           '';
         };
+
+        # Scheduled jobs: a command run as the apollo user on a calendar schedule, with the
+        # workspace and the app's localhost hook in reach. A schedule is infrastructure, so it
+        # belongs here; what a job acts on (the watched products, the postcode) is user data and
+        # lives in the workspace, where the agent can change it without a redeploy. Adding another
+        # job is one attribute below - its service and timer are derived from it.
+        #
+        # A job speaks to the user by POSTing to /internal/skill-message, exactly as the skills do
+        # when the agent runs them, and stays silent by printing nothing. A non-zero exit is logged
+        # at error by systemd and surfaces on WhatsApp through the app's own warn+ forwarding.
+        scheduledJobs = {
+          offers = {
+            description = "Report the offers running on the watched products";
+            environment.OFFERS_DIR = "%S/apollo/workspace/offers";
+            exec = "${./agent/skills/offers/scripts/offers.py} digest";
+            onCalendar = "*-*-* 09:00:00";
+            packages = [ pkgs.python3 ];
+          };
+        };
+
+        jobService = _name: job: {
+          inherit (job) description;
+
+          after = [ "network-online.target" ];
+          wants = [ "network-online.target" ];
+
+          environment = {
+            HOME = "%S/apollo";
+            PORT = toString port;
+            SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
+          }
+          // (job.environment or { });
+
+          path = job.packages or [ ];
+
+          serviceConfig = {
+            ExecStart = job.exec;
+            Group = "apollo";
+            NoNewPrivileges = true;
+            PrivateTmp = true;
+            StateDirectory = "apollo";
+            Type = "oneshot";
+            User = "apollo";
+            WorkingDirectory = "%S/apollo";
+          };
+        };
+
+        # Persistent, so a schedule missed while the VM was down runs once on the next boot
+        # rather than being skipped for the day.
+        jobTimer = name: job: {
+          description = "Schedule for apollo-${name}";
+
+          timerConfig = {
+            OnCalendar = job.onCalendar;
+            Persistent = true;
+          };
+
+          wantedBy = [ "timers.target" ];
+        };
+
+        jobUnits =
+          make: lib.mapAttrs' (name: job: lib.nameValuePair "apollo-${name}" (make name job)) scheduledJobs;
 
       in
       {
@@ -510,29 +573,33 @@ in
                 ];
               };
             };
-          };
+          }
+          // jobUnits jobService;
 
-          timers.apollo-backup = {
-            description = "Back up the Apollo workspace every 3 hours";
+          timers = {
+            apollo-backup = {
+              description = "Back up the Apollo workspace every 3 hours";
 
-            timerConfig = {
-              OnCalendar = "*-*-* 00/03:00:00";
-              Persistent = true;
+              timerConfig = {
+                OnCalendar = "*-*-* 00/03:00:00";
+                Persistent = true;
+              };
+
+              wantedBy = [ "timers.target" ];
             };
 
-            wantedBy = [ "timers.target" ];
-          };
+            apollo-db-backup = {
+              description = "Back up the Apollo SQLite database daily at 03:30";
 
-          timers.apollo-db-backup = {
-            description = "Back up the Apollo SQLite database daily at 03:30";
+              timerConfig = {
+                OnCalendar = "*-*-* 03:30:00";
+                Persistent = true;
+              };
 
-            timerConfig = {
-              OnCalendar = "*-*-* 03:30:00";
-              Persistent = true;
+              wantedBy = [ "timers.target" ];
             };
-
-            wantedBy = [ "timers.target" ];
-          };
+          }
+          // jobUnits jobTimer;
         };
 
         time.timeZone = "Europe/Vienna";
