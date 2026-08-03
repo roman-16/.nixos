@@ -75,6 +75,8 @@ in
 
         secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
 
+        protonCli = inputs.proton-cli.packages.${pkgs.stdenv.hostPlatform.system}.default;
+
         # Chromium for the browser skill's managed-local sessions. chrome-launcher (inside
         # `browse`) picks it up via CHROME_PATH; the flags are the standard headless-in-a-VM
         # pair - no user-namespace sandbox, and no reliance on a large /dev/shm.
@@ -125,11 +127,13 @@ in
           ln -sfn ${../../../../shared/modules/pi/skills/context7} "$agentDir/skills/context7"
           ln -sfn ${../../../../shared/modules/pi/skills/exa} "$agentDir/skills/exa"
           ln -sfn ${./agent/skills/backup} "$agentDir/skills/backup"
+          ln -sfn ${./agent/skills/briefing} "$agentDir/skills/briefing"
           ln -sfn ${./agent/skills/macros} "$agentDir/skills/macros"
           ln -sfn ${./agent/skills/offers} "$agentDir/skills/offers"
           ln -sfn ${./agent/skills/proton} "$agentDir/skills/proton"
           ln -sfn ${./agent/skills/recall} "$agentDir/skills/recall"
           ln -sfn ${./agent/skills/reminders} "$agentDir/skills/reminders"
+          ln -sfn ${./agent/skills/weather} "$agentDir/skills/weather"
 
           # Extensions pi discovers from $agentDir/extensions. directory-agents-md
           # injects each vault folder's AGENTS.md on read/write/edit.
@@ -229,7 +233,7 @@ in
         dbBackupScript = pkgs.writeShellApplication {
           name = "apollo-db-backup";
           runtimeInputs = [
-            inputs.proton-cli.packages.${pkgs.stdenv.hostPlatform.system}.default
+            protonCli
           ]
           ++ (with pkgs; [
             coreutils
@@ -294,20 +298,34 @@ in
 
         # Scheduled jobs: a command run as the apollo user on a calendar schedule, with the
         # workspace and the app's localhost hook in reach. A schedule is infrastructure, so it
-        # belongs here; what a job acts on (the watched products, the postcode) is user data and
-        # lives in the workspace, where the agent can change it without a redeploy. Adding another
-        # job is one attribute below - its service and timer are derived from it.
+        # belongs here; what a job acts on (the watched products, the postcode, the coordinates) is
+        # user data and lives in the workspace, where the agent can change it without a redeploy.
+        # Adding another job is one attribute below - its service and timer are derived from it.
         #
         # A job speaks to the user by POSTing to /internal/skill-message, exactly as the skills do
         # when the agent runs them, and stays silent by printing nothing. A non-zero exit is logged
         # at error by systemd and surfaces on WhatsApp through the app's own warn+ forwarding.
         scheduledJobs = {
-          offers = {
-            description = "Report the offers running on the watched products";
-            environment.OFFERS_DIR = "%S/apollo/workspace/offers";
-            exec = "${./agent/skills/offers/scripts/offers.py} digest";
-            onCalendar = "*-*-* 09:00:00";
-            packages = [ pkgs.python3 ];
+          briefing = {
+            description = "Send the day's briefing: sky, calendar and offers";
+            # The composer owns no data: it asks the weather and offers skills for their text, so it
+            # needs their scripts by path (siblings do not exist between store paths) and their
+            # directories in the workspace.
+            environment = {
+              APOLLO_OFFERS_SCRIPT = "${./agent/skills/offers/scripts/offers.py}";
+              APOLLO_WEATHER_SCRIPT = "${./agent/skills/weather/scripts/weather.py}";
+              OFFERS_DIR = "%S/apollo/workspace/offers";
+              WEATHER_DIR = "%S/apollo/workspace/weather";
+            };
+            # Proton credentials for the calendar; HOME is already the app's state directory, so the
+            # cached proton-cli session is shared with the agent rather than re-established here.
+            environmentFile = protonEnv;
+            exec = "${./agent/skills/briefing/scripts/briefing.py} show";
+            onCalendar = "*-*-* 08:00:00";
+            packages = [
+              pkgs.python3
+              protonCli
+            ];
           };
         };
 
@@ -335,7 +353,8 @@ in
             Type = "oneshot";
             User = "apollo";
             WorkingDirectory = "%S/apollo";
-          };
+          }
+          // lib.optionalAttrs (job ? environmentFile) { EnvironmentFile = job.environmentFile; };
         };
 
         # Persistent, so a schedule missed while the VM was down runs once on the next boot

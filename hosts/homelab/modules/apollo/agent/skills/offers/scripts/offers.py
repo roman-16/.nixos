@@ -5,9 +5,9 @@ Owns storage, the provider calls, all date arithmetic, and output rendering, so 
 is ever done in-model. JSON lives under $OFFERS_DIR (default ./offers, relative to the
 working directory) and must only ever be changed through this script.
 
-The daily digest runs from a systemd timer with no agent in the loop, which is why the
-postcode lives in config.json here rather than in the agent's MEMORY.md: the script that
-needs it can read this file, and cannot read that one.
+The digest goes out inside the daily briefing, sent by a timer with no agent in the loop,
+which is why the postcode lives in config.json here rather than in the agent's MEMORY.md: the
+script that needs it can read this file, and cannot read that one.
 
 Offers come from marktguru. That is an implementation detail of the provider section below
 and never appears in what the user reads; everything outside that section deals in plain
@@ -463,7 +463,7 @@ def report_watch(provider: Provider, watch: dict, code: str, lead: str):
     print(lead)
     block = render_watch(watch["label"], offers, lambda o: provider.leaflet_url(o, code),
                          datetime.now(TZ))
-    print(block if block else "Nothing on offer right now - you'll hear at 09:00 when there is.")
+    print(block if block else "Nothing on offer right now - you'll hear when there is.")
     if not watch.get("brands"):
         brands = facets.get("brands") or []
         if len(brands) >= BROAD_BRANDS:
@@ -558,7 +558,16 @@ def cmd_search(args):
 
 def cmd_digest(args):
     """The scheduled report: every watch, every day, whatever is running or coming up. No record
-    of what was sent before is kept, so this always describes the present rather than a diff."""
+    of what was sent before is kept, so this always describes the present rather than a diff.
+
+    Nothing set up yet is not a failure, so it prints nothing and says why to the caller alone:
+    this runs unattended inside the daily briefing, where an error would become a daily false
+    alarm, while the agent still gets told to ask for a postcode."""
+    config = load(CONFIG_FILE, {})
+    if not config.get("zipCode"):
+        hint("[offers] no postcode set yet - ask the user for theirs once, then: "
+             "offers.py config-set --zip 4020")
+        return
     code = zip_code()
     watchlist = load(WATCH_FILE, {})
     if not watchlist:

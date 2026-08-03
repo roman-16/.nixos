@@ -7,7 +7,7 @@ description: Watch supermarket products and report the offers running on them. U
 
 Follows products the user cares about and reports what is on offer, including deals that have not started yet. Every read and write goes through the CLI; never edit the JSON by hand and never work out prices or dates yourself - the script owns all of it.
 
-The user gets a digest every morning at 09:00 without you being involved: a systemd timer runs `digest` directly. Your job is everything conversational - setting a watch up precisely, answering questions on demand, and keeping the list tidy.
+Your job is everything conversational - setting a watch up precisely, answering questions on demand, and keeping the list tidy.
 
 `{baseDir}` is this skill's directory. Resolve it to an absolute path before running the script.
 
@@ -23,13 +23,13 @@ To the user this is just "offers" - never name the platform the data comes from,
 
 **The ids and settings behind them are machinery for you** - `config`, `config-set`, `brands`, `retailers`. Nothing is sent, because a brand id is not something the user should receive. Say whatever needs saying in your own words.
 
-If the script prints `[offers: delivery FAILED ...]`, the send didn't happen: relay that output yourself, just this once (the data was still saved - don't re-run the command). It also exits non-zero in that case, because the morning digest runs with nobody watching and a send that silently never happened would be worse than a loud one - so treat the failure as already explained, not as something to investigate.
+If the script prints `[offers: delivery FAILED ...]`, the send didn't happen: relay that output yourself, just this once (the data was still saved - don't re-run the command). It also exits non-zero in that case, because a send that silently never happened would be worse than a loud one - so treat the failure as already explained, not as something to investigate.
 
 Lines starting `[offers]` are notes for you alone and are never part of what the user receives. Act on them; never paste them.
 
 ## Setup (once)
 
-Offers are regional, so the script needs a postcode. **Ask the user for theirs the first time it comes up, then never again** - it is stored and the morning digest reads it directly.
+Offers are regional, so the script needs a postcode. **Ask the user for theirs the first time it comes up, then never again** - it is stored.
 
 ```bash
 {baseDir}/scripts/offers.py config-set --zip 4020
@@ -90,13 +90,13 @@ Use `--quiet` and answer in your own words when the user asked a question ("is i
 
 `watch-edit` and `watch-rm` resolve names forgivingly: an exact label wins, else a unique substring, else the closest spelling. When several watches match it asks you to be specific rather than acting on a guess.
 
-## The morning digest
+## Everything at once
 
 ```bash
 {baseDir}/scripts/offers.py digest
 ```
 
-The timer runs this; you only need it if the user asks "what's on offer right now?" across everything they follow. It reports the present state, not what changed - the same deal appears every morning until it expires, which is intended.
+Use this when the user asks "what's on offer right now?" across everything they follow. It reports the present state, not what changed - the same deal keeps appearing until it expires, which is intended.
 
 ```
 🏷️ Offers Mon 03.08
@@ -122,7 +122,8 @@ Two marks can appear at the end of a line:
 
 ## Notes
 
-- **Watches with nothing on offer are left out entirely**, and when no watch has anything the digest sends nothing at all. Silence means nothing is on offer, never that something failed.
+- **Watches with nothing on offer are left out entirely**, and when no watch has anything the digest prints nothing at all. Silence means nothing is on offer, never that something failed.
+- Without a postcode the digest prints nothing rather than failing; it tells you to ask for one, so ask.
 - Deals that have not started yet are listed under `upcoming:` with the date they begin - that is the useful half, since the user learns about a price before it applies.
 - Each section shows at most 4 deals, cheapest first, so a popular product cannot flood the message.
 - Identical deals are collapsed: one price running at one time across a retail group is a single line listing the shops.
