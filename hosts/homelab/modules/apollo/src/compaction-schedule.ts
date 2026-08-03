@@ -25,8 +25,8 @@ export interface CompactionPolicy {
 }
 
 export interface CompactionState {
-  /** Null right after a compaction, before the next response re-establishes the count. */
-  contextTokens: number | null | undefined;
+  /** Estimated size of the carried conversation, prefix excluded. */
+  conversationTokens: number;
   idleMs: number;
   lastCompactedAt: number | undefined;
   now: number;
@@ -52,12 +52,11 @@ export function compactionReason(
   state: CompactionState,
   policy: CompactionPolicy,
 ): CompactionReason | undefined {
-  const { contextTokens, idleMs, lastCompactedAt, now } = state;
-  if (contextTokens == null) return undefined;
+  const { conversationTokens, idleMs, lastCompactedAt, now } = state;
   if (idleMs < policy.idleMs) return undefined;
-  if (contextTokens >= policy.atTokens) return "size";
+  if (conversationTokens >= policy.atTokens) return "size";
   if (
-    contextTokens >= policy.nightlyFloorTokens &&
+    conversationTokens >= policy.nightlyFloorTokens &&
     dayTurned(lastCompactedAt, now, policy.dayStartHour)
   ) {
     return "nightly";

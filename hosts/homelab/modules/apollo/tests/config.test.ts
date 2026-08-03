@@ -22,6 +22,9 @@ describe("loadConfig", () => {
     expect(config.dbPath).toBe("/tmp/apollo/apollo.sqlite");
     expect(config.dayStartHour).toBe(4);
     expect(config.keepRecentTokens).toBe(16_000);
+    expect(config.memoryFile).toBe("/tmp/apollo/workspace/MEMORY.md");
+    expect(config.memoryEvidenceMaxChars).toBe(60_000);
+    expect(config.memoryPromptFile.endsWith("MEMORY_PROMPT.md")).toBe(true);
     expect(config.logRetentionDays).toBe(30);
     expect(config.notifyLevel).toBe("warn");
     expect(config.notifyThrottleMs).toBe(60000);

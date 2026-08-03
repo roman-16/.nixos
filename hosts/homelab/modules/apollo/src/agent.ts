@@ -6,12 +6,14 @@ import {
   type AgentSessionEvent,
   createAgentSession,
   DefaultResourceLoader,
+  estimateTokens,
   ModelRuntime,
   resolveCliModel,
+  sessionEntryToContextMessages,
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import type { ImageContent } from "@earendil-works/pi-ai";
+import type { ImageContent, Usage } from "@earendil-works/pi-ai";
 import type { Logger } from "pino";
 
 import { createCompactionExtension, type DeliveredMessage } from "./compaction";
@@ -43,6 +45,8 @@ export function compactionSettings(config: Config): { enabled: boolean; keepRece
 export interface ApolloSessionOptions {
   /** What the skills delivered to the user in a span, for the summarizer's evidence. */
   delivered?: (fromMs: number, toMs: number) => DeliveredMessage[];
+  /** Book the summarization call's tokens, so maintenance is not spent off the books. */
+  recordUsage?: (usage: Usage, model: string) => void;
 }
 
 /** Build the single, persistent, auto-compacting pi session Apollo talks to. */
@@ -87,6 +91,7 @@ export async function createApolloSession(
               logger,
               model: resolved.model,
               modelRuntime,
+              recordUsage: options.recordUsage,
             }),
             name: "apollo-compaction",
           },
@@ -113,6 +118,21 @@ export async function createApolloSession(
     thinkingLevel: resolved.thinkingLevel ?? config.thinkingLevel,
   });
   return { modelRuntime, session };
+}
+
+/**
+ * Size of the conversation Apollo is carrying, in the same estimated tokens pi uses to place its cut
+ * point. It measures the entries that will actually be sent - the summary and the tail kept after the
+ * last compaction - so the system prompt, MEMORY.md and the tool schemas are excluded by
+ * construction. Those are the same on every turn and compaction cannot shrink them by a token, so
+ * counting them would inflate the decision with what it cannot affect, and would leave an empty
+ * conversation reading as several thousand tokens.
+ */
+export function conversationTokens(session: Pick<AgentSession, "sessionManager">): number {
+  return session.sessionManager
+    .buildContextEntries()
+    .flatMap((entry) => sessionEntryToContextMessages(entry))
+    .reduce((total, message) => total + estimateTokens(message), 0);
 }
 
 /** Fire `onText` the instant a normal assistant text block completes (skips thinking/tool output). */

@@ -117,6 +117,9 @@ in
           # COMPACTION_PROMPT.md overrides how the session is summarized on compaction
           ln -sfn ${./agent/COMPACTION_PROMPT.md} "$agentDir/COMPACTION_PROMPT.md"
 
+          # MEMORY_PROMPT.md governs how MEMORY.md is folded forward when the conversation is quiet
+          ln -sfn ${./agent/MEMORY_PROMPT.md} "$agentDir/MEMORY_PROMPT.md"
+
           # Skills pi discovers from $agentDir/skills (read-only)
           ln -sfn ${../../../../shared/modules/pi/skills/browser} "$agentDir/skills/browser"
           ln -sfn ${../../../../shared/modules/pi/skills/context7} "$agentDir/skills/context7"
@@ -204,7 +207,7 @@ in
             else
               git commit -q -m "$(date '+%Y-%m-%d %H:%M:%S')"
               git push -q -u origin main
-              echo "Backed up and pushed (commit $(git rev-parse --short HEAD))."
+              echo "Backed up and pushed."
             fi
           '';
         };

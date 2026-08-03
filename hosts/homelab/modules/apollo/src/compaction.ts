@@ -1,4 +1,4 @@
-import type { Api, Model } from "@earendil-works/pi-ai";
+import type { Api, Model, Usage } from "@earendil-works/pi-ai";
 import {
   convertToLlm,
   type ExtensionAPI,
@@ -40,6 +40,8 @@ export interface CompactionExtensionOptions {
   logger: Logger;
   model: Model<Api>;
   modelRuntime: ModelRuntime;
+  /** Book the summarization call, so maintenance is not spent off the books. */
+  recordUsage?: (usage: Usage, model: string) => void;
 }
 
 function clock(at: number): string {
@@ -147,7 +149,7 @@ function span(messages: { timestamp?: number }[]): { from: number; to: number } 
  * uncompacted.
  */
 export function createCompactionExtension(options: CompactionExtensionOptions): ExtensionFactory {
-  const { delivered, instructions, logger, model, modelRuntime } = options;
+  const { delivered, instructions, logger, model, modelRuntime, recordUsage } = options;
   return (pi: ExtensionAPI) => {
     pi.on("session_before_compact", async (event) => {
       const { preparation, signal } = event;
@@ -173,6 +175,7 @@ export function createCompactionExtension(options: CompactionExtensionOptions): 
           { messages: [{ content: prompt, role: "user", timestamp: Date.now() }] },
           { maxTokens: MAX_SUMMARY_TOKENS, signal },
         );
+        if (response.usage) recordUsage?.(response.usage, model.id);
         const summary = response.content
           .filter((block): block is { text: string; type: "text" } => block.type === "text")
           .map((block) => block.text)

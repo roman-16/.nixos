@@ -26,7 +26,9 @@ export interface Config {
   logLevel: string;
   logRetentionDays: number;
   maxMessageChars: number;
+  memoryEvidenceMaxChars: number;
   memoryFile: string;
+  memoryPromptFile: string;
   mistralApiKey: string;
   model: string;
   notifyLevel: LogLevel;
@@ -82,7 +84,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     logLevel: env.APOLLO_LOG_LEVEL ?? "info",
     logRetentionDays: Number(env.APOLLO_LOG_RETENTION_DAYS ?? 30),
     maxMessageChars: Number(env.APOLLO_MAX_MESSAGE_CHARS ?? 4000),
+    // How much of the conversation one memory fold reads. What was actually said is a low
+    // single-digit share of the context, so this covers a couple of busy days.
+    memoryEvidenceMaxChars: Number(env.APOLLO_MEMORY_EVIDENCE_MAX_CHARS ?? 60_000),
     memoryFile: env.APOLLO_MEMORY_FILE ?? join(workspace, "MEMORY.md"),
+    memoryPromptFile: join(agentDir, "MEMORY_PROMPT.md"),
     mistralApiKey: env.MISTRAL_API_KEY ?? "",
     model: env.APOLLO_MODEL ?? "anthropic/claude-sonnet-5",
     notifyLevel: parseLevel(env.APOLLO_NOTIFY_LEVEL ?? "warn"),

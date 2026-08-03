@@ -1,3 +1,4 @@
+import type { Usage } from "@earendil-works/pi-ai";
 import { pino } from "pino";
 
 import { createApolloSession } from "./agent";
@@ -8,6 +9,7 @@ import { openDatabase } from "./db";
 import { createInbox } from "./inbox";
 import { createKv } from "./kv";
 import { createLogStore } from "./logs";
+import { createMemoryFolder } from "./memory";
 import { createPipeline } from "./pipeline";
 import { createReminderWatcher, formatReminder } from "./reminders";
 import { startServer } from "./server";
@@ -15,6 +17,9 @@ import { createTokenStore } from "./tokens";
 import { startWhatsApp } from "./whatsapp";
 
 const HOUR_MS = 60 * 60 * 1000;
+
+/** How far the memory fold has read the conversation, in message time. */
+const MEMORY_CURSOR_KEY = "memoryFoldedUpTo";
 
 /** Wire the whole app together: config, storage, the pi session, the WhatsApp pipeline, and the dashboard. */
 export async function main(): Promise<void> {
@@ -43,12 +48,45 @@ export async function main(): Promise<void> {
     logger.warn("APOLLO_ALLOW_FROM is empty; every inbound message will be ignored");
   }
 
+  // Every call the app makes is booked here: the turns, and the maintenance work (summarizing and
+  // memory folding) that would otherwise be spent without ever showing up on the dashboard.
+  const recordUsage = (usage: Usage, model: string) => {
+    try {
+      tokenStore.record(usage, model, Date.now());
+    } catch (error) {
+      logger.error({ error }, "token usage record failed");
+    }
+  };
+
   const { modelRuntime, session } = await createApolloSession(config, logger, {
     delivered: (fromMs, toMs) => chatStore.skillMessagesBetween(session.sessionId, fromMs, toMs),
+    recordUsage,
   });
   logger.info({ model: config.model, workspace: config.workspace }, "pi session ready");
 
-  const pipeline = createPipeline({ chatStore, config, inbox, kv, logStore, logger, session });
+  const memory = createMemoryFolder({
+    entries: () => session.sessionManager.getBranch(),
+    evidenceMaxChars: config.memoryEvidenceMaxChars,
+    logger,
+    model: () => session.model,
+    modelRuntime,
+    path: config.memoryFile,
+    promptFile: config.memoryPromptFile,
+    readCursor: () => Number(kv.get(MEMORY_CURSOR_KEY) ?? 0),
+    recordUsage,
+    writeCursor: (at) => kv.set(MEMORY_CURSOR_KEY, String(at)),
+  });
+
+  const pipeline = createPipeline({
+    chatStore,
+    config,
+    inbox,
+    kv,
+    logStore,
+    logger,
+    memory,
+    session,
+  });
 
   // Mirror the pi session's entries into SQLite - the dashboard's source of truth. Seed from
   // the resumed session, then keep it current by diffing getEntries() after pi persists.
@@ -72,11 +110,7 @@ export async function main(): Promise<void> {
     }, 150);
     // Record every assistant turn's token usage for the dashboard's token accounting.
     if (event.type === "turn_end" && event.message.role === "assistant") {
-      try {
-        tokenStore.record(event.message.usage, event.message.model, event.message.timestamp);
-      } catch (error) {
-        logger.error({ error }, "token usage record failed");
-      }
+      recordUsage(event.message.usage, event.message.model);
     }
   });
 

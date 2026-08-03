@@ -331,9 +331,9 @@ describe("startServer routing", () => {
   });
 
   it("runs the backup via the loopback hook and returns the outcome", async () => {
-    const base = boot({ runBackup: async () => "Backed up and pushed (commit abc1234)." });
+    const base = boot({ runBackup: async () => "Backed up and pushed." });
     const res = await fetch(`${base}/internal/backup`, { method: "POST" });
     expect(res.status).toBe(200);
-    expect(await res.text()).toBe("Backed up and pushed (commit abc1234).");
+    expect(await res.text()).toBe("Backed up and pushed.");
   });
 });

@@ -22,7 +22,7 @@ function at(year: number, month: number, day: number, hour: number, minute = 0):
 
 function state(over: Partial<CompactionState> = {}): CompactionState {
   return {
-    contextTokens: 10_000,
+    conversationTokens: 10_000,
     idleMs: 60 * MINUTE,
     lastCompactedAt: at(2026, 8, 2, 10),
     now: at(2026, 8, 2, 20),
@@ -31,37 +31,46 @@ function state(over: Partial<CompactionState> = {}): CompactionState {
 }
 
 describe("compactionReason", () => {
-  it("compacts a context that has grown past what is worth carrying", () => {
-    expect(compactionReason(state({ contextTokens: 128_000 }), policy)).toBe("size");
+  it("compacts a conversation that has grown past what is worth carrying", () => {
+    expect(compactionReason(state({ conversationTokens: 128_000 }), policy)).toBe("size");
   });
 
-  it("leaves a small context alone", () => {
-    expect(compactionReason(state({ contextTokens: 40_000 }), policy)).toBeUndefined();
+  it("leaves a small conversation alone", () => {
+    expect(compactionReason(state({ conversationTokens: 40_000 }), policy)).toBeUndefined();
   });
 
-  it("never interrupts a live conversation, however big the context", () => {
+  it("never interrupts a live conversation, however big it is", () => {
     expect(
-      compactionReason(state({ contextTokens: 900_000, idleMs: 5 * MINUTE }), policy),
+      compactionReason(state({ conversationTokens: 900_000, idleMs: 5 * MINUTE }), policy),
     ).toBeUndefined();
   });
 
   it("waits out the full idle window", () => {
     expect(
-      compactionReason(state({ contextTokens: 900_000, idleMs: 29 * MINUTE }), policy),
+      compactionReason(state({ conversationTokens: 900_000, idleMs: 29 * MINUTE }), policy),
     ).toBeUndefined();
-    expect(compactionReason(state({ contextTokens: 900_000, idleMs: 30 * MINUTE }), policy)).toBe(
-      "size",
-    );
+    expect(
+      compactionReason(state({ conversationTokens: 900_000, idleMs: 30 * MINUTE }), policy),
+    ).toBe("size");
   });
 
-  it("holds off when the context size is not yet known", () => {
-    expect(compactionReason(state({ contextTokens: null }), policy)).toBeUndefined();
-    expect(compactionReason(state({ contextTokens: undefined }), policy)).toBeUndefined();
+  it("never fires on an empty conversation, whatever the prompt around it costs", () => {
+    expect(compactionReason(state({ conversationTokens: 0 }), policy)).toBeUndefined();
+    expect(
+      compactionReason(
+        state({
+          conversationTokens: 0,
+          lastCompactedAt: at(2026, 8, 1, 21),
+          now: at(2026, 8, 2, 5),
+        }),
+        policy,
+      ),
+    ).toBeUndefined();
   });
 
   it("starts a new day on a clean context", () => {
     const overnight = state({
-      contextTokens: 60_000,
+      conversationTokens: 60_000,
       lastCompactedAt: at(2026, 8, 1, 21),
       now: at(2026, 8, 2, 5),
     });
@@ -71,7 +80,7 @@ describe("compactionReason", () => {
   it("treats the small hours as still yesterday, like the rest of Apollo", () => {
     // 02:00 is before the 04:00 rollover, so no new day has begun yet.
     const smallHours = state({
-      contextTokens: 60_000,
+      conversationTokens: 60_000,
       lastCompactedAt: at(2026, 8, 1, 21),
       now: at(2026, 8, 2, 2),
     });
@@ -80,7 +89,7 @@ describe("compactionReason", () => {
 
   it("does not spend a summarization call on an already-small day", () => {
     const tiny = state({
-      contextTokens: 20_000,
+      conversationTokens: 20_000,
       lastCompactedAt: at(2026, 8, 1, 21),
       now: at(2026, 8, 2, 5),
     });
@@ -89,7 +98,7 @@ describe("compactionReason", () => {
 
   it("compacts once per day, not once per minute", () => {
     const alreadyDone = state({
-      contextTokens: 60_000,
+      conversationTokens: 60_000,
       lastCompactedAt: at(2026, 8, 2, 5),
       now: at(2026, 8, 2, 9),
     });
@@ -98,13 +107,13 @@ describe("compactionReason", () => {
 
   it("treats a session that has never compacted as owing a nightly one", () => {
     expect(
-      compactionReason(state({ contextTokens: 60_000, lastCompactedAt: undefined }), policy),
+      compactionReason(state({ conversationTokens: 60_000, lastCompactedAt: undefined }), policy),
     ).toBe("nightly");
   });
 
   it("prefers size over nightly when both apply", () => {
     const both = state({
-      contextTokens: 200_000,
+      conversationTokens: 200_000,
       lastCompactedAt: at(2026, 8, 1, 21),
       now: at(2026, 8, 2, 5),
     });

@@ -15,6 +15,11 @@ const SKILL_NOTE_MAX_CHARS = 4000;
 const INTERNAL_SPAN = /<internal>[\s\S]*?(?:<\/internal>|$)/g;
 const INTERNAL_BODY = /^<internal>([\s\S]*?)(?:<\/internal>|$)$/;
 
+// One `<context ...>` element at the start of a user turn: its source + info attributes and an
+// optional body (self-closing when there is none).
+const CONTEXT_ELEMENT =
+  /^<context source="([^"]*)" info="([^"]*)"(?:\s*\/>|>([\s\S]*?)<\/context>)/;
+
 export interface SplitText {
   /** What reaches the user: the block with every internal span removed. */
   delivered: string;
@@ -39,6 +44,41 @@ export function splitInternal(text: string): SplitText {
     })
     .trim();
   return { delivered, internal };
+}
+
+export interface SplitContext {
+  /** The notes the app injected, in the order they were prepended. */
+  contexts: ContextNote[];
+  /** What the user actually sent. */
+  message: string;
+}
+
+function unescapeAttribute(value: string): string {
+  return value.replaceAll("&quot;", '"');
+}
+
+/**
+ * Split a user turn into the leading `<context>` notes the app injected and the user's own message -
+ * the exact inverse of `withContext`. Text that doesn't open with a `<context>` element is returned
+ * untouched as the message. This is the other half of `splitInternal`: between them they recover the
+ * conversation as WhatsApp saw it from the conversation as the model saw it.
+ */
+export function splitUserContext(text: string): SplitContext {
+  if (!text.startsWith("<context ")) return { contexts: [], message: text };
+  const contexts: ContextNote[] = [];
+  let rest = text;
+  for (;;) {
+    const match = CONTEXT_ELEMENT.exec(rest);
+    if (!match) break;
+    contexts.push({
+      body: match[3] ?? "",
+      info: unescapeAttribute(match[2] ?? ""),
+      source: unescapeAttribute(match[1] ?? ""),
+    });
+    rest = rest.slice(match[0].length);
+    if (rest.startsWith("\n")) rest = rest.slice(1);
+  }
+  return { contexts, message: rest.startsWith("\n") ? rest.slice(1) : rest };
 }
 
 /**

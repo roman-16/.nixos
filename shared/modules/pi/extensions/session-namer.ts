@@ -11,17 +11,32 @@ const MAX_PROMPT_CHARS = 4000;
 const INSTRUCTIONS = [
 	"Generate a concise title for a coding assistant session based on the user's first message.",
 	"Rules:",
-	"- 3 to 6 words.",
+	"- 3 to 8 words.",
 	"- Title Case.",
+	"- Plain text only: no markdown, no backticks, asterisks, underscores, brackets or other formatting.",
 	'- No surrounding quotes, no trailing punctuation, no leading label such as "Title:".',
 	"- Capture the concrete task or topic.",
 	"Respond with ONLY the title.",
 ].join("\n");
 
+function stripMarkdown(text: string): string {
+	let result = text
+		.replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+		.replace(/^\s*(?:#{1,6}|>+|[-*+])\s+/, "");
+
+	for (;;) {
+		const unwrapped = result.replace(/(\*{1,3}|_{1,3}|~{2}|`+)(\S(?:[\s\S]*?\S)?)\1/g, "$2");
+		if (unwrapped === result) break;
+		result = unwrapped;
+	}
+
+	return result.replace(/[*`~]/g, "");
+}
+
 function cleanName(raw: string): string {
 	const firstLine = raw.trim().split(/\r?\n/)[0] ?? "";
-	return firstLine
-		.replace(/^["'`]+|["'`]+$/g, "")
+	return stripMarkdown(firstLine)
+		.replace(/^["'“”‘’]+|["'“”‘’]+$/g, "")
 		.replace(/^\s*title\s*[:-]\s*/i, "")
 		.replace(/\.+$/, "")
 		.replace(/\s+/g, " ")

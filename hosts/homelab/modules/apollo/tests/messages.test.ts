@@ -11,6 +11,7 @@ import {
   skillContextNote,
   splitInternal,
   splitMessage,
+  splitUserContext,
   voiceText,
 } from "../src/messages";
 
@@ -63,6 +64,52 @@ describe("splitInternal", () => {
   it("delivers a block that only mentions the word internal", () => {
     const text = "that is an internal detail";
     expect(splitInternal(text).delivered).toBe(text);
+  });
+});
+
+describe("splitUserContext", () => {
+  it("leaves an ordinary message untouched", () => {
+    expect(splitUserContext("just a message")).toEqual({
+      contexts: [],
+      message: "just a message",
+    });
+  });
+
+  it("separates the app's notes from what the user sent", () => {
+    const text =
+      '<context source="reply" info="The user is replying to an earlier message.">ty</context>\n\nyo';
+    expect(splitUserContext(text)).toEqual({
+      contexts: [
+        { body: "ty", info: "The user is replying to an earlier message.", source: "reply" },
+      ],
+      message: "yo",
+    });
+  });
+
+  it("reads a self-closing note as an empty body and splits several notes", () => {
+    const text =
+      '<context source="time" info="Sent now." />\n<context source="macros" info="sent">Today: 400 kcal</context>\n\nthanks';
+    const { contexts, message } = splitUserContext(text);
+    expect(contexts).toEqual([
+      { body: "", info: "Sent now.", source: "time" },
+      { body: "Today: 400 kcal", info: "sent", source: "macros" },
+    ]);
+    expect(message).toBe("thanks");
+  });
+
+  it("preserves a multi-line body", () => {
+    const text = '<context source="macros" info="summary">line1\n\nline2</context>\n\nhi';
+    expect(splitUserContext(text).contexts[0]?.body).toBe("line1\n\nline2");
+  });
+
+  it("unescapes a quoted attribute value", () => {
+    const text = '<context source="time" info="say &quot;hi&quot;" />\n\nyo';
+    expect(splitUserContext(text).contexts[0]?.info).toBe('say "hi"');
+  });
+
+  it("reverses withContext, so a turn splits back into what it was made of", () => {
+    const text = '<context source="time" info="Sent now." />\n\nlog 100g';
+    expect(splitUserContext(text).message).toBe("log 100g");
   });
 });
 

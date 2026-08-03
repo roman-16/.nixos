@@ -4,12 +4,12 @@
     let
       murmur = pkgs.stdenv.mkDerivation {
         pname = "gnome-shell-extension-murmur";
-        version = "1.0.4";
+        version = "1.1.0";
         src = pkgs.fetchFromGitHub {
           owner = "roman-16";
           repo = "murmur";
-          rev = "d96ca19b234f9fd0903c4489c825def99a44b3ea";
-          hash = "sha256-UjxWomaSCpBwRzegzqJSXYfRXEme7naoXiyq4xHUwWc=";
+          rev = "780da71187ac4d5868469c7f3a4ffecd40b8ac93";
+          hash = "sha256-m8v8KYxasNYPqoDMsjUV/olXE/WA6nRAUqUxMt/vLas=";
         };
         nativeBuildInputs = [ pkgs.glib ];
         dontConfigure = true;

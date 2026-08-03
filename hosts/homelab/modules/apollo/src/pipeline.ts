@@ -5,7 +5,7 @@ import type { ImageContent } from "@earendil-works/pi-ai";
 import { type AgentSession, resizeImage } from "@earendil-works/pi-coding-agent";
 import type { Logger } from "pino";
 
-import { deliver, onAssistantText, onRunError } from "./agent";
+import { conversationTokens, deliver, onAssistantText, onRunError } from "./agent";
 import { buildBacklog } from "./backlog";
 import type { ChatStore } from "./chat-store";
 import { type CompactionReason, compactionReason } from "./compaction-schedule";
@@ -13,6 +13,8 @@ import type { Config } from "./config";
 import { droppedImageNote, fitImages } from "./images";
 import type { Inbox, InboxEntry } from "./inbox";
 import type { Kv } from "./kv";
+import type { MemoryFolder } from "./memory";
+import { foldReason } from "./memory-schedule";
 import { createThrottle, type LogStore, shouldNotify } from "./logs";
 import {
   claudeErrorNotice,
@@ -43,15 +45,16 @@ const DELIVERY_RETRY_MS = 5 * 60_000;
 /** Sweep for anything still owed - covers rows placed in the inbox out of band. */
 const DRAIN_TICK_MS = 60_000;
 
-/** How often Apollo asks itself whether the conversation is quiet enough to compact. */
-const COMPACT_TICK_MS = 60_000;
+/** How often Apollo asks itself whether the conversation is quiet enough for maintenance. */
+const MAINTENANCE_TICK_MS = 60_000;
 
-/** Pause after a compaction attempt, so a failing one cannot spin on the tick. */
-const COMPACT_RETRY_MS = 10 * 60_000;
+/** Pause after a failed compaction or fold, so a failing one cannot spin on the tick. */
+const MAINTENANCE_RETRY_MS = 10 * 60_000;
 
 const LINK_ALIVE_KEY = "linkAliveAt";
 const LAST_SENT_KEY = "lastInboundSentAt";
 const LAST_COMPACTED_KEY = "lastCompactedAt";
+const MEMORY_FOLDED_AT_KEY = "memoryFoldedAt";
 
 export interface PipelineDeps {
   chatStore: ChatStore;
@@ -60,6 +63,7 @@ export interface PipelineDeps {
   kv: Kv;
   logStore: LogStore;
   logger: Logger;
+  memory: MemoryFolder;
   session: AgentSession;
 }
 
@@ -84,7 +88,7 @@ export interface Pipeline {
 }
 
 export function createPipeline(deps: PipelineDeps): Pipeline {
-  const { chatStore, config, inbox, kv, logStore, logger, session } = deps;
+  const { chatStore, config, inbox, kv, logStore, logger, memory, session } = deps;
 
   const startedAt = Date.now();
   const disconnected: WhatsAppState = {
@@ -106,9 +110,11 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   let draining = false;
   let retryAfter = 0;
 
-  // When the conversation last moved, so compaction can wait for a gap rather than for a full window.
+  // When the conversation last moved, so maintenance can wait for a gap rather than for a full window.
   let lastActivityAt = startedAt;
   let lastCompactAttemptAt = 0;
+  let lastFoldFailureAt = 0;
+  let maintaining = false;
 
   // Hold the "typing…" indicator up from the moment a message arrives until the session settles.
   // WhatsApp drops it on every outbound message and auto-expires it after a few seconds, so it is
@@ -258,22 +264,33 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     }
   });
 
+  /** Whether the session is free for maintenance work right now. */
+  function quiet(): boolean {
+    if (!session.isIdle || session.isCompacting || session.isStreaming) return false;
+    return inbox.pending(1).length === 0;
+  }
+
+  /** A timestamp kept in kv, or undefined when it has never been set. */
+  function kvTime(key: string): number | undefined {
+    const value = Number(kv.get(key) ?? 0);
+    return value > 0 ? value : undefined;
+  }
+
   /**
    * Compact when the conversation has gone quiet, not when the window is full. A full window is the
    * most expensive and least accurate moment there is, and it always arrives mid-task; a gap costs
    * nothing, since nobody is waiting and the prompt cache is expiring regardless.
    */
   async function maybeCompact(): Promise<void> {
-    if (!session.isIdle || session.isCompacting || session.isStreaming) return;
-    if (inbox.pending(1).length > 0) return;
-    if (Date.now() - lastCompactAttemptAt < COMPACT_RETRY_MS) return;
-    const usage = session.getContextUsage();
-    const stored = Number(kv.get(LAST_COMPACTED_KEY) ?? 0);
+    // Stamped per attempt, not per failure: a single turn too large to cut leaves the conversation
+    // over the threshold, and without this it would be summarized again every tick.
+    if (Date.now() - lastCompactAttemptAt < MAINTENANCE_RETRY_MS) return;
+    const tokens = conversationTokens(session);
     const reason: CompactionReason | undefined = compactionReason(
       {
-        contextTokens: usage?.tokens,
+        conversationTokens: tokens,
         idleMs: Date.now() - lastActivityAt,
-        lastCompactedAt: stored > 0 ? stored : undefined,
+        lastCompactedAt: kvTime(LAST_COMPACTED_KEY),
         now: Date.now(),
       },
       {
@@ -285,7 +302,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     );
     if (!reason) return;
     lastCompactAttemptAt = Date.now();
-    logger.info({ reason, tokens: usage?.tokens }, "compacting");
+    logger.info({ reason, tokens }, "compacting");
     try {
       await session.compact();
     } catch (error) {
@@ -293,7 +310,43 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     }
   }
 
-  setInterval(() => void maybeCompact(), COMPACT_TICK_MS);
+  /**
+   * Fold what has been said since the last fold into MEMORY.md. A compaction asks for it (the raw
+   * conversation is about to stop being visible, and the summary never carries the profile), and so
+   * does a new day (a quiet week never compacts, and the profile would never be maintained).
+   */
+  async function maybeFoldMemory(): Promise<void> {
+    if (Date.now() - lastFoldFailureAt < MAINTENANCE_RETRY_MS) return;
+    const reason = foldReason(
+      {
+        foldedAt: kvTime(MEMORY_FOLDED_AT_KEY),
+        idleMs: Date.now() - lastActivityAt,
+        lastCompactedAt: kvTime(LAST_COMPACTED_KEY),
+        now: Date.now(),
+      },
+      { dayStartHour: config.dayStartHour, idleMs: config.compactIdleMs },
+    );
+    if (!reason) return;
+    if (await memory.fold(reason)) kv.set(MEMORY_FOLDED_AT_KEY, String(Date.now()));
+    else lastFoldFailureAt = Date.now();
+  }
+
+  // One tick for both, in order and never overlapping: a fold reads the branch a compaction is
+  // rewriting, and it wants the compaction's own timestamp to fold against. Either can outlast the
+  // tick, so a pass in flight owns the next ones until it is done.
+  setInterval(() => {
+    if (maintaining) return;
+    maintaining = true;
+    void (async () => {
+      try {
+        if (!quiet()) return;
+        await maybeCompact();
+        if (quiet()) await maybeFoldMemory();
+      } finally {
+        maintaining = false;
+      }
+    })();
+  }, MAINTENANCE_TICK_MS);
 
   // A run that ends in a terminal LLM error produces no text block, so log it at error - the
   // notifier above delivers the friendly notice from notifyText.

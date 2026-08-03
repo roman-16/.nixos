@@ -11,7 +11,7 @@ Backs up the working directory to its private git backup repo - the same action 
 {baseDir}/scripts/backup.sh
 ```
 
-It reports `Backed up and pushed (commit <sha>).`, `Nothing to back up.`, or a failure line - nothing else is needed.
+It reports `Backed up and pushed.`, `Nothing to back up.`, or a failure line - nothing else is needed.
 
 ## Replying
 

@@ -6,7 +6,7 @@
  */
 
 import { escapeHtml, humanTokens, truncate } from "./format";
-import { splitInternal } from "./messages";
+import { splitInternal, splitUserContext } from "./messages";
 
 import { type ContextNote, withContext } from "./temporal";
 
@@ -72,39 +72,6 @@ function splitContent(content: unknown, id: string): { images: ChatImage[]; text
     }
   }
   return { images, text: texts.join("\n").trim() };
-}
-
-/** One `<context ...>` element at the start of a user turn: its source + info attributes and an
- * optional body (self-closing when there is none). */
-const CONTEXT_ELEMENT =
-  /^<context source="([^"]*)" info="([^"]*)"(?:\s*\/>|>([\s\S]*?)<\/context>)/;
-
-function unescapeAttribute(value: string): string {
-  return value.replaceAll("&quot;", '"');
-}
-
-/**
- * Split a user turn's raw text into the leading `<context>` notes the app injected and the user's
- * actual message. `withContext` emits a self-delimiting block, so this reverses it exactly; text that
- * doesn't open with a `<context>` element (an ordinary message, or the older `[context]` line format)
- * is returned untouched as the message.
- */
-function splitUserContext(text: string): { contexts: ContextNote[]; message: string } {
-  if (!text.startsWith("<context ")) return { contexts: [], message: text };
-  const contexts: ContextNote[] = [];
-  let rest = text;
-  for (;;) {
-    const match = CONTEXT_ELEMENT.exec(rest);
-    if (!match) break;
-    contexts.push({
-      body: match[3] ?? "",
-      info: unescapeAttribute(match[2] ?? ""),
-      source: unescapeAttribute(match[1] ?? ""),
-    });
-    rest = rest.slice(match[0].length);
-    if (rest.startsWith("\n")) rest = rest.slice(1);
-  }
-  return { contexts, message: rest.startsWith("\n") ? rest.slice(1) : rest };
 }
 
 function toolResult(message: Record<string, any>): ToolResult {
