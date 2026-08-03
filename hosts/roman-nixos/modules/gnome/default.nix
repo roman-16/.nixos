@@ -320,7 +320,10 @@
         };
 
         "org/gnome/shell/extensions/murmur" = {
+          max-recording-seconds = 300;
           mistral-api-key = secrets.mistralApiKey;
+          transcription-delay-ms = 2400;
+          typing-speed = 1000;
         };
 
         "org/gnome/shell/extensions/vitals" = {
