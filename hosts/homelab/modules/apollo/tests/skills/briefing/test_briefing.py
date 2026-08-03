@@ -6,7 +6,7 @@ import pytest
 
 DAY = date(2026, 8, 3)
 SKY = "⛅ Graz: 31° now, up to 36°, partly cloudy, 0% rain\n🌅 05:40 → 20:28 · 14h 48m of daylight"
-OFFERS = "🏷️ Offers Mon 03.08\n\n*Red Bull*\n  €0.99 · BILLA · until Wed 05.08"
+OFFERS = "🏷️ Offers\n\n*Red Bull*\n  €0.99 · BILLA · until Wed 05.08"
 
 
 def event(**over):

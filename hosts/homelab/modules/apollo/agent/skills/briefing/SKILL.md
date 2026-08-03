@@ -45,7 +45,7 @@ If the script prints `[briefing: delivery FAILED ...]`, the send didn't happen: 
   09:30-10:00  Dentist · Annenstraße 12
   19:00-22:00  Book club
 
-🏷️ Offers Mon 03.08
+🏷️ Offers
   …
 ```
 

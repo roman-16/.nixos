@@ -99,7 +99,7 @@ Use `--quiet` and answer in your own words when the user asked a question ("is i
 Use this when the user asks "what's on offer right now?" across everything they follow. It reports the present state, not what changed - the same deal keeps appearing until it expires, which is intended.
 
 ```
-🏷️ Offers Mon 03.08
+🏷️ Offers
 
 *Red Bull*
   €0.99 (3.96/l) · BILLA, BILLA PLUS · until Wed 05.08

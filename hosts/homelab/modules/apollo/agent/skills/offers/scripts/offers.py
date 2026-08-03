@@ -383,12 +383,15 @@ def render_watch(label: str, offers: list, link_for, now: datetime, cap: int = C
     return "\n".join(lines)
 
 
-def render_digest(blocks: list, now: datetime) -> str | None:
-    """The whole digest, or None when no watch has anything - in which case nothing is sent."""
+def render_digest(blocks: list) -> str | None:
+    """The whole digest, or None when no watch has anything - in which case nothing is sent.
+
+    Undated on purpose: every line already carries the window its price runs in, so a date on the
+    title would only repeat what is under it."""
     kept = [b for b in blocks if b]
     if not kept:
         return None
-    return f"🏷️ Offers {day(now)}\n\n" + "\n\n".join(kept)
+    return "🏷️ Offers\n\n" + "\n\n".join(kept)
 
 
 def watch_line(watch: dict) -> str:
@@ -580,7 +583,7 @@ def cmd_digest(args):
                      lambda o: provider.leaflet_url(o, code), now)
         for watch in watchlist.values()
     ]
-    digest = render_digest(blocks, now)
+    digest = render_digest(blocks)
     if digest:
         print(digest)
     else:

@@ -356,21 +356,22 @@ class TestRenderWatch:
 
 class TestRenderDigest:
     def test_sends_nothing_when_every_watch_is_empty(self):
-        assert offers.render_digest([None, None], NOW) is None
+        assert offers.render_digest([None, None]) is None
 
     def test_sends_nothing_when_there_are_no_watches(self):
-        assert offers.render_digest([], NOW) is None
+        assert offers.render_digest([]) is None
 
-    def test_heads_the_digest_with_the_day(self):
-        assert offers.render_digest(["*X*\n  line"], NOW).startswith("🏷️ Offers Mon 03.08")
+    def test_heads_the_digest_with_a_title_and_no_date(self):
+        # Every line states the window its price runs in, so a date here would only repeat it.
+        assert offers.render_digest(["*X*\n  line"]).startswith("🏷️ Offers\n")
 
     def test_drops_the_empty_watches_and_keeps_the_rest(self):
-        out = offers.render_digest([None, "*Red Bull*\n  a", None, "*Nutella*\n  b"], NOW)
+        out = offers.render_digest([None, "*Red Bull*\n  a", None, "*Nutella*\n  b"])
         assert "Red Bull" in out and "Nutella" in out
         assert "None" not in out
 
     def test_separates_blocks_by_a_blank_line(self):
-        assert "\n\n*Nutella*" in offers.render_digest(["*Red Bull*\n  a", "*Nutella*\n  b"], NOW)
+        assert "\n\n*Nutella*" in offers.render_digest(["*Red Bull*\n  a", "*Nutella*\n  b"])
 
 
 class TestIdList:

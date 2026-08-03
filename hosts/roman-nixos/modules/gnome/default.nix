@@ -2,27 +2,36 @@
   nixos =
     { pkgs, ... }:
     let
-      murmur = pkgs.stdenv.mkDerivation {
-        pname = "gnome-shell-extension-murmur";
-        version = "1.2.0";
-        src = pkgs.fetchFromGitHub {
-          owner = "roman-16";
-          repo = "murmur";
-          rev = "db45381c5a960f4f563f3d892923d7bcedccf282";
-          hash = "sha256-m8v8KYxasNYPqoDMsjUV/olXE/WA6nRAUqUxMt/vLas=";
+      murmur =
+        let
+          uuid = "murmur@roman-16.github.io";
+          version = "1.2.0";
+        in
+        # Murmur is written in TypeScript, so take the built extension from the
+        # release asset rather than compiling the checkout.
+        pkgs.stdenvNoCC.mkDerivation {
+          pname = "gnome-shell-extension-murmur";
+          inherit version;
+          src = pkgs.fetchurl {
+            url = "https://github.com/roman-16/murmur/releases/download/v${version}/${uuid}.shell-extension.zip";
+            hash = "sha256-DFsd47/7gkS9ZMS4+ziaGa8gMCUBsQyj8IReD1tbG8w=";
+          };
+          nativeBuildInputs = [
+            pkgs.glib
+            pkgs.unzip
+          ];
+          dontUnpack = true;
+          dontConfigure = true;
+          dontBuild = true;
+          installPhase = ''
+            runHook preInstall
+            dir="$out/share/gnome-shell/extensions/${uuid}"
+            mkdir -p "$dir"
+            unzip -q "$src" -d "$dir"
+            glib-compile-schemas "$dir/schemas"
+            runHook postInstall
+          '';
         };
-        nativeBuildInputs = [ pkgs.glib ];
-        dontConfigure = true;
-        dontBuild = true;
-        installPhase = ''
-          runHook preInstall
-          dir="$out/share/gnome-shell/extensions/murmur@roman-16.github.io"
-          mkdir -p "$dir"
-          cp -r extension.js prefs.js metadata.json stylesheet.css lib schemas LICENSE "$dir/"
-          glib-compile-schemas "$dir/schemas"
-          runHook postInstall
-        '';
-      };
     in
     {
       environment = {
