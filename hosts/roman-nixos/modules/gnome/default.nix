@@ -14,7 +14,7 @@
           inherit version;
           src = pkgs.fetchurl {
             url = "https://github.com/roman-16/murmur/releases/download/v${version}/${uuid}.shell-extension.zip";
-            hash = "sha256-DFsd47/7gkS9ZMS4+ziaGa8gMCUBsQyj8IReD1tbG8w=";
+            hash = "sha256-fmIzdXnT3IYEB9v57wCpnGF2ym9fjbwfD5sBmHZFxys=";
           };
           nativeBuildInputs = [
             pkgs.glib
