@@ -5,7 +5,7 @@
       murmur =
         let
           uuid = "murmur@roman-16.github.io";
-          version = "1.2.0";
+          version = "1.2.1";
         in
         # Murmur is written in TypeScript, so take the built extension from the
         # release asset rather than compiling the checkout.
