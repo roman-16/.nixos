@@ -24,6 +24,14 @@ def frozen(monkeypatch):
     return 1_000_000
 
 
+def fired(spool, rid: str, text: str, at: int = 5000):
+    """An archived reminder, as Apollo leaves it once it has gone out."""
+    archive = spool / "archive"
+    archive.mkdir(exist_ok=True)
+    (archive / f"{rid}.json").write_text(json.dumps(
+        {"id": rid, "text": text, "at": at, "createdAt": 0, "firedAt": at}))
+
+
 class TestParseDuration:
     def test_single_units(self):
         assert reminders.parse_duration("90m") == 90 * 60 * 1000
@@ -124,6 +132,48 @@ class TestList:
         assert "2 reminder(s):" in out
         assert out.index("[soon]") < out.index("[late]")
 
+    def test_hides_fired_reminders(self, spool, capsys):
+        fired(spool, "a1", "buy milk")
+        run("list")
+        out = capsys.readouterr().out
+        assert "No reminders." in out
+        assert "buy milk" not in out
+
+    def test_all_shows_them_with_the_time_they_went_out(self, spool, capsys):
+        fired(spool, "a1", "buy milk")
+        run("list", "--all")
+        out = capsys.readouterr().out
+        assert "Fired (1)" in out
+        assert "buy milk" in out
+
+    def test_all_says_so_when_nothing_has_fired(self, spool, capsys):
+        run("list", "--all")
+        assert "Nothing has fired yet." in capsys.readouterr().out
+
+    def test_all_reads_newest_first(self, spool, capsys):
+        fired(spool, "older", "older", at=1000)
+        fired(spool, "newer", "newer", at=9000)
+        run("list", "--all")
+        out = capsys.readouterr().out
+        assert out.index("[newer]") < out.index("[older]")
+
+    def test_all_caps_the_history_and_counts_the_rest(self, spool, capsys):
+        for n in range(reminders.ARCHIVE_LIMIT + 3):
+            fired(spool, f"r{n}", f"reminder {n}", at=1000 + n)
+        run("list", "--all")
+        out = capsys.readouterr().out
+        assert f"Fired ({reminders.ARCHIVE_LIMIT + 3})" in out
+        assert "and 3 older" in out
+        assert out.count("- [r") == reminders.ARCHIVE_LIMIT
+
+    def test_all_tolerates_a_record_that_never_got_its_fire_time(self, spool, capsys):
+        archive = spool / "archive"
+        archive.mkdir(exist_ok=True)
+        (archive / "a1.json").write_text(json.dumps(
+            {"id": "a1", "text": "half-written", "at": 5000, "createdAt": 0}))
+        run("list", "--all")
+        assert "half-written" in capsys.readouterr().out
+
 
 class TestUpdate:
     def test_changes_text_only_keeps_time(self, spool):
@@ -160,6 +210,11 @@ class TestRemove:
         run("remove", "a1")
         assert not reminders.path_for("a1").exists()
 
+    def test_a_reminder_that_never_fired_leaves_no_record(self, spool):
+        reminders.write_reminder({"id": "a1", "text": "x", "at": 5000, "createdAt": 0})
+        run("remove", "a1")
+        assert not (spool / "archive" / "a1.json").exists()
+
     def test_targets_by_text_substring(self, spool):
         reminders.write_reminder({"id": "a1", "text": "buy milk", "at": 5000, "createdAt": 0})
         run("remove", "milk")
@@ -172,6 +227,12 @@ class TestRemove:
         assert list(spool.glob("*.json")) == []
         assert "Removed 2 reminder(s)" in capsys.readouterr().out
 
+    def test_all_leaves_the_archive_alone(self, spool):
+        fired(spool, "kept", "already went out")
+        reminders.write_reminder({"id": "a1", "text": "x", "at": 1, "createdAt": 0})
+        run("remove", "--all")
+        assert (spool / "archive" / "kept.json").exists()
+
     def test_missing_reminder_errors(self, spool):
         with pytest.raises(SystemExit):
             run("remove", "nope")
@@ -180,6 +241,12 @@ class TestRemove:
         with pytest.raises(SystemExit):
             run("remove")
 
+    def test_a_fired_reminder_cannot_be_removed(self, spool):
+        fired(spool, "a1", "buy milk")
+        with pytest.raises(SystemExit):
+            run("remove", "milk")
+        assert (spool / "archive" / "a1.json").exists()
+
 
 class TestLoadAll:
     def test_skips_malformed_files(self, spool):
@@ -187,6 +254,26 @@ class TestLoadAll:
         (spool / "broken.json").write_text("{not json")
         loaded = reminders.load_all()
         assert [r["id"] for r in loaded] == ["ok"]
+
+
+class TestArchive:
+    def test_archive_dir_follows_the_spool(self, spool):
+        assert reminders.archive_dir() == spool / "archive"
+
+    def test_load_archived_skips_malformed_files(self, spool):
+        fired(spool, "ok", "x")
+        (spool / "archive" / "broken.json").write_text("{not json")
+        assert [r["id"] for r in reminders.load_archived()] == ["ok"]
+
+    def test_fired_at_falls_back_to_the_due_time(self):
+        assert reminders.fired_at({"at": 500}) == 500
+        assert reminders.fired_at({"at": 500, "firedAt": 900}) == 900
+
+    def test_a_new_id_avoids_one_a_fired_reminder_used(self, spool, monkeypatch):
+        fired(spool, "aaaaaa", "x")
+        ids = iter(["aaaaaa", "bbbbbb"])
+        monkeypatch.setattr(reminders.secrets, "token_hex", lambda n: next(ids))
+        assert reminders.new_id() == "bbbbbb"
 
 
 class TestFindReminder:
@@ -213,6 +300,14 @@ class TestFindReminder:
         reminders.write_reminder({"id": "a1", "text": "x", "at": 1, "createdAt": 0})
         with pytest.raises(SystemExit):
             reminders.find_reminder("zzz")
+
+    def test_a_fired_reminder_is_named_as_fired(self, spool, capsys):
+        fired(spool, "a1", "call the dentist")
+        with pytest.raises(SystemExit):
+            reminders.find_reminder("dentist")
+        err = capsys.readouterr().err
+        assert "already fired" in err
+        assert "list --all" in err
 
     def test_blank_query_errors(self, spool):
         with pytest.raises(SystemExit):
@@ -298,6 +393,6 @@ class TestAudience:
 
     def test_every_command_accepts_quiet(self):
         parser = reminders.build_parser()
-        for argv in (["add", "--text", "x", "--in", "1h"], ["list"], ["update", "x", "--text", "y"],
-                     ["remove", "--all"]):
+        for argv in (["add", "--text", "x", "--in", "1h"], ["list"], ["list", "--all"],
+                     ["update", "x", "--text", "y"], ["remove", "--all"]):
             assert hasattr(parser.parse_args([*argv, "--quiet"]), "quiet"), argv

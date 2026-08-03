@@ -1,5 +1,4 @@
-import { mkdirSync, readdirSync, readFileSync, watch } from "node:fs";
-import { rm } from "node:fs/promises";
+import { mkdirSync, readdirSync, readFileSync, renameSync, watch, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { Logger } from "pino";
@@ -14,6 +13,10 @@ export interface Reminder {
   createdAt: number;
   id: string;
   text: string;
+}
+
+export interface ArchivedReminder extends Reminder {
+  firedAt: number;
 }
 
 /** Validate a parsed reminder file, returning undefined when malformed. */
@@ -36,6 +39,38 @@ export function clampDelay(at: number, now: number): number {
   return Math.min(Math.max(at - now, 0), MAX_TIMEOUT);
 }
 
+/** Where a reminder goes once it has fired. Outside the spool, so the queue holds only live work. */
+export function archiveDir(dir: string): string {
+  return join(dir, "archive");
+}
+
+/**
+ * Keep a reminder that has been delivered. A reminder that never fired can simply be removed, but
+ * one that fired happened: when it was set, when it was due and when it actually went out are the
+ * record of it, and only the last of those is recoverable from anywhere else.
+ *
+ * It leaves the queue and enters the archive in one `rename`, so there is no instant where it is in
+ * neither place and none where it is in both - a leftover spool file would be armed again and
+ * delivered twice. The record is then completed in place, which is the only step that can be lost,
+ * and losing it costs a timestamp on a record nobody has read yet.
+ *
+ * Returns false when the spool file has already gone, which is what a reminder removed during a
+ * delivery retry looks like: nothing left to archive, and nothing left to fire.
+ */
+export function archiveFired(dir: string, reminder: Reminder, firedAt: number): boolean {
+  mkdirSync(archiveDir(dir), { recursive: true });
+  const target = join(archiveDir(dir), `${reminder.id}.json`);
+  try {
+    renameSync(join(dir, `${reminder.id}.json`), target);
+  } catch (error) {
+    if ((error as { code?: string }).code === "ENOENT") return false;
+    throw error;
+  }
+  const archived: ArchivedReminder = { ...reminder, firedAt };
+  writeFileSync(target, JSON.stringify(archived));
+  return true;
+}
+
 export interface ReminderWatcherOptions {
   dir: string;
   logger: Logger;
@@ -51,12 +86,15 @@ export interface ReminderWatcher {
  * Event-driven reminder firing: watch the spool directory and arm one timer per
  * pending reminder so each fires exactly at its time - no polling. Reconciles on
  * every filesystem event and at startup, so added, rescheduled, removed, and overdue
- * reminders are all handled. A fired reminder's file is deleted; a failed delivery is
- * retried.
+ * reminders are all handled. A delivered reminder is archived out of the queue; a failed
+ * delivery is retried.
  */
 export function createReminderWatcher(options: ReminderWatcherOptions): ReminderWatcher {
   const { dir, logger, onFire } = options;
   const timers = new Map<string, { at: number; timer: ReturnType<typeof setTimeout> }>();
+  // Reminders already delivered whose spool file could not be filed away. Their file is still in the
+  // queue, so without this a reconcile would arm it again and the user would be told twice.
+  const delivered = new Set<string>();
   let watcher: ReturnType<typeof watch> | undefined;
   let debounce: ReturnType<typeof setTimeout> | undefined;
 
@@ -103,9 +141,6 @@ export function createReminderWatcher(options: ReminderWatcherOptions): Reminder
   async function fire(reminder: Reminder): Promise<void> {
     try {
       await onFire(reminder);
-      await rm(join(dir, `${reminder.id}.json`), { force: true });
-      timers.delete(reminder.id);
-      logger.info({ id: reminder.id }, "reminder fired");
     } catch (error) {
       logger.error({ err: error, id: reminder.id }, "reminder delivery failed; retrying");
       cancel(reminder.id);
@@ -113,6 +148,17 @@ export function createReminderWatcher(options: ReminderWatcherOptions): Reminder
         at: reminder.at,
         timer: setTimeout(() => void fire(reminder), RETRY_MS),
       });
+      return;
+    }
+    // It has been said. Bookkeeping from here on can fail, but it must never cost a second delivery,
+    // which is why archiving is not inside the retry above.
+    timers.delete(reminder.id);
+    try {
+      archiveFired(dir, reminder, Date.now());
+      logger.info({ id: reminder.id }, "reminder fired");
+    } catch (error) {
+      delivered.add(reminder.id);
+      logger.warn({ err: error, id: reminder.id }, "reminder fired but could not be archived");
     }
   }
 
@@ -123,7 +169,7 @@ export function createReminderWatcher(options: ReminderWatcherOptions): Reminder
       if (!reminder || reminder.at !== armed.at) cancel(id);
     }
     for (const reminder of current.values()) {
-      if (!timers.has(reminder.id)) arm(reminder);
+      if (!timers.has(reminder.id) && !delivered.has(reminder.id)) arm(reminder);
     }
   }
 

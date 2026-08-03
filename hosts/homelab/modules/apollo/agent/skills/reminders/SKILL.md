@@ -5,7 +5,7 @@ description: Create, list, update, and delete reminders. Use whenever the user a
 
 # Reminders
 
-Sets real reminders that fire even when the conversation is idle: at the chosen time Apollo sends the reminder text to the user on WhatsApp. Each reminder is one file in a spool directory that Apollo watches; a fired reminder is deleted automatically, an unfired one stays until it fires or is removed.
+Sets real reminders that fire even when the conversation is idle: at the chosen time Apollo sends the reminder text to the user on WhatsApp. Each pending reminder is one file in a spool directory that Apollo watches, and it stays there until it fires or is removed. A reminder that fires is archived with the time it went out, so `list --all` can still show it; one that never fired is gone when removed.
 
 `{baseDir}` is this skill's directory. Resolve it to an absolute path before running the script.
 
@@ -38,14 +38,15 @@ Give the reminder text plus when. Use `--in` for a delay (you don't know the cur
 
 ```bash
 {baseDir}/scripts/reminders.py list
-{baseDir}/scripts/reminders.py list --quiet   # for your eyes only
+{baseDir}/scripts/reminders.py list --all      # plus the ones that have fired
+{baseDir}/scripts/reminders.py list --quiet    # for your eyes only
 ```
 
-Shows each pending reminder with its id, when it fires (absolute + relative), and text. Without `--quiet` it goes to the user, so run it plain when they actually want to see their reminders. You never need it just to find an id - `update`/`remove` resolve reminders themselves.
+Shows each pending reminder with its id, when it fires (absolute + relative), and text. `--all` adds the reminders that have already fired, newest first with the time each went out - the 10 most recent, since older ones are in the chat and the recall skill searches it. Without `--quiet` it goes to the user, so run it plain when they actually want to see their reminders. You never need it just to find an id - `update`/`remove` resolve reminders themselves.
 
 ## Update
 
-Reschedule and/or change the text. Target the reminder by a word from its text or by the id `list` shows (an id prefix is fine) - the script resolves it, so no lookup `list` first. Pass only what changes; a time flag reschedules, otherwise the time is kept.
+Reschedule and/or change the text of a **pending** reminder. Target it by a word from its text or by the id `list` shows (an id prefix is fine) - the script resolves it, so no lookup `list` first. Pass only what changes; a time flag reschedules, otherwise the time is kept.
 
 ```bash
 {baseDir}/scripts/reminders.py update dentist --in 30m
@@ -55,7 +56,7 @@ Reschedule and/or change the text. Target the reminder by a word from its text o
 
 ## Delete
 
-Target by text or id, exactly like `update`, or clear them all.
+Drops a pending reminder so it never fires. Target it by text or id, exactly like `update`, or clear them all.
 
 ```bash
 {baseDir}/scripts/reminders.py remove dentist
@@ -63,12 +64,13 @@ Target by text or id, exactly like `update`, or clear them all.
 {baseDir}/scripts/reminders.py remove --all
 ```
 
-If the reference matches several reminders (or none), the script says so on stderr and does nothing - it is not sent to the user, so relay it yourself and narrow it down (or ask which one).
+If the reference matches several reminders (or none), the script says so on stderr and does nothing - it is not sent to the user, so relay it yourself and narrow it down (or ask which one). A reference that names a reminder which has already fired says so too, with the time it went out; a fired reminder is finished, so set a new one with `add` rather than trying to revive it.
 
 ## Notes
 
 - `--in` is computed against the real clock at the moment you run it, so it is always accurate.
 - The script delivers every command's output to the user (see [Replying](#replying)); don't relay or restate it - that double-sends.
 - When a reminder fires it is sent to the user directly and shown in the dashboard chat; on the user's next message you get a `[context]` line noting it went out - it's already delivered, so don't resend it.
+- A fired reminder is kept: it moves to the archive with the time it went out and stays readable through `list --all`. `remove` only ever drops a reminder that has not fired.
 
 `{baseDir}` = this skill's directory. Always resolve to the absolute path before executing.
