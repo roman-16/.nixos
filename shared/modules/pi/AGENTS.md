@@ -19,6 +19,7 @@ Available on the system:
 | Tool | Use |
 | --- | --- |
 | `bun` | Run JavaScript/TypeScript; manage packages with `bun`. |
+| `file` | Identify a file's type and format from its content, independent of its extension. |
 | `jq` | JSON parsing, filtering, and transformation. |
 | `magick` | ImageMagick: image conversion, resizing, cropping, format changes, compositing. |
 | `poppler-utils` | PDF text extraction and manipulation (`pdftotext`, `pdfinfo`, `pdfimages`, `pdftoppm`, etc.). |
