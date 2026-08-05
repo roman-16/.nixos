@@ -129,6 +129,7 @@ in
           ln -sfn ${./agent/skills/backup} "$agentDir/skills/backup"
           ln -sfn ${./agent/skills/briefing} "$agentDir/skills/briefing"
           ln -sfn ${./agent/skills/macros} "$agentDir/skills/macros"
+          ln -sfn ${./agent/skills/obsidian} "$agentDir/skills/obsidian"
           ln -sfn ${./agent/skills/offers} "$agentDir/skills/offers"
           ln -sfn ${./agent/skills/proton} "$agentDir/skills/proton"
           ln -sfn ${./agent/skills/recall} "$agentDir/skills/recall"
@@ -172,10 +173,11 @@ in
             || echo "obsidian/" >> "$APOLLO_WORKSPACE/.git/info/exclude"
 
           # Obsidian vault: a separate repo, cloned here so it always exists and kept
-          # out of the workspace backup (above). Configured with the deploy key and
-          # the user's identity so the agent syncs it with plain `git -C .../obsidian ...`
-          # commands (documented in the vault's own AGENTS.md). Best-effort: a clone
-          # failure (e.g. no network at boot) must not block startup.
+          # out of the workspace backup (above). Configured with the deploy key and the
+          # user's identity, which is what lets the obsidian skill commit, pull and push
+          # it (that skill owns every git command against the vault; the agent runs none
+          # itself). Best-effort: a clone failure (e.g. no network at boot) must not
+          # block startup.
           obsidianSsh="ssh -i $HOME/.ssh/id_obsidian -o IdentitiesOnly=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes"
           if [ ! -e "$APOLLO_WORKSPACE/obsidian/.git" ]; then
             GIT_SSH_COMMAND="$obsidianSsh" git clone "${secrets.git.obsidian.remote}" "$APOLLO_WORKSPACE/obsidian" || true

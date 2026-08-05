@@ -111,13 +111,17 @@
       in
       {
         # Unit tests for the Apollo skills (pytest). The skill scripts are
-        # stdlib-only, so the test closure is just python3 + pytest; the tests
-        # live under tests/skills and import each skill's script via its conftest,
-        # so the whole module is copied to preserve that relative layout.
+        # stdlib-only, so the test closure is python3 + pytest plus git, which the
+        # obsidian tests drive over throwaway repos in temp dirs (no network); the
+        # tests live under tests/skills and import each skill's script via its
+        # conftest, so the whole module is copied to preserve that relative layout.
         apollo-pytest =
           pkgs.runCommand "apollo-pytest"
             {
-              nativeBuildInputs = [ (pkgs.python3.withPackages (ps: [ ps.pytest ])) ];
+              nativeBuildInputs = [
+                pkgs.git
+                (pkgs.python3.withPackages (ps: [ ps.pytest ]))
+              ];
             }
             ''
               cp -r ${apollo} app

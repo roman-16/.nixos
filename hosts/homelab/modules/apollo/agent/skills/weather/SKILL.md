@@ -19,7 +19,7 @@ To the user this is just "the weather" - never name the provider the data comes 
 
 **`show` is written for the user**: the script posts its output straight to them on WhatsApp (as a "via weather" message) and prints `[weather: delivered to the user ✓ ...]`. When you see that line, **stay silent** - they already have it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet.
 
-Add `--quiet` when you need the numbers in order to answer something in your own words ("should I cycle to work?", "is it jacket weather?"). The output is then printed here, nothing is sent, and the last line is `[weather: quiet - not sent to the user]`. Run it plain only when they asked to *see* the weather, and then say nothing after.
+Add `--quiet` when you need the numbers in order to answer something in your own words ("should I cycle to work?", "is it jacket weather?"). The output is then printed here, nothing is sent, and the last line is `[weather: quiet - not sent to the user]`. Run it plain only when they asked to _see_ the weather, and then say nothing after.
 
 **`config` and `config-set` are machinery for you** - nothing is sent, so say whatever needs saying in your own words.
 

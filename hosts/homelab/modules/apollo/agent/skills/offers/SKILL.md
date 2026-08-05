@@ -77,7 +77,7 @@ If `brands` returns several plausible matches, ask the user which they meant rat
 
 `--watch` reuses a stored watch's pinning (names match forgivingly); `--query` is a one-off and takes `--brands`/`--retailers` too. `--limit` changes how many deals per section (default 4).
 
-Use `--quiet` and answer in your own words when the user asked a question ("is it cheaper at Lidl?", "should I wait?") - that is one message instead of a raw block plus your commentary. Run it plain only when they asked to *see* the offers, and then say nothing after.
+Use `--quiet` and answer in your own words when the user asked a question ("is it cheaper at Lidl?", "should I wait?") - that is one message instead of a raw block plus your commentary. Run it plain only when they asked to _see_ the offers, and then say nothing after.
 
 ## Viewing and changing watches
 
@@ -113,9 +113,9 @@ Use this when the user asks "what's on offer right now?" across everything they 
 
 Two marks can appear at the end of a line:
 
-| Mark | Meaning |
-| --- | --- |
-| `💳` | needs the shop's loyalty card |
+| Mark | Meaning                                                            |
+| ---- | ------------------------------------------------------------------ |
+| `💳` | needs the shop's loyalty card                                      |
 | `🧾` | **price excludes VAT** - a wholesaler, so the till adds tax on top |
 
 `🧾` matters when comparing: a €0.62 net price can end up dearer than a €0.67 shelf price. The exact rate depends on the product (10-20%), so the script never guesses a gross figure - but the linked leaflet page usually prints it. Wholesalers also normally require a trade card.
@@ -128,7 +128,7 @@ Two marks can appear at the end of a line:
 - Each section shows at most 4 deals, cheapest first, so a popular product cannot flood the message.
 - Identical deals are collapsed: one price running at one time across a retail group is a single line listing the shops.
 - Expired offers never appear; the provider drops them before the script sees them.
-- All dates are the user's local dates. Never re-derive a date from a timestamp yourself - the stored times are UTC and a window opening at 22:00Z is the *next* day here.
+- All dates are the user's local dates. Never re-derive a date from a timestamp yourself - the stored times are UTC and a window opening at 22:00Z is the _next_ day here.
 - Deals are ordered by price per unit, and only ever against the same unit - a price per piece is not comparable with a price per litre, so each unit is ranked within itself. A brand-pinned watch has one unit and this never shows.
 - Prices, dates, ordering, marks, and caps are all the script's job. Read its output; never recompute it. In particular, whether a price is net is recorded in the data - never work it out from a retailer's name, and never go reading a leaflet to find out.
 - The script delivers its own replies for `digest`, `search` and `watch-list` (see [Replying](#replying)); don't relay or restate them - that double-sends.
