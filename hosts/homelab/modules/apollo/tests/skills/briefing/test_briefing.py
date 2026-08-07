@@ -31,6 +31,30 @@ class TestCalendarWindow:
         assert start != end
 
 
+class TestReadEvents:
+    def test_it_reads_the_events_out_of_the_envelope(self):
+        assert briefing.read_events('{"events": [{"title": "Book club"}], "count": 1}') == [
+            {"title": "Book club"}
+        ]
+
+    def test_an_empty_day_is_no_events_rather_than_no_calendar(self):
+        # [] leaves the calendar block out; None would claim the calendar was unavailable.
+        assert briefing.read_events('{"events": [], "count": 0}') == []
+
+    def test_a_reply_that_is_not_an_envelope_is_not_a_day(self):
+        assert briefing.read_events('[{"title": "Book club"}]') is None
+
+    def test_an_envelope_of_something_else_is_not_a_day(self):
+        assert briefing.read_events('{"items": [], "count": 0}') is None
+
+    def test_unreadable_json_says_so_and_reads_as_unavailable(self, capsys):
+        assert briefing.read_events("not json") is None
+        assert "unreadable json" in capsys.readouterr().err
+
+    def test_nothing_at_all_reads_as_unavailable(self):
+        assert briefing.read_events("") is None
+
+
 class TestEventWhen:
     def test_a_timed_event_shows_its_span(self):
         assert briefing.event_when(event(), DAY) == "19:00-22:00"

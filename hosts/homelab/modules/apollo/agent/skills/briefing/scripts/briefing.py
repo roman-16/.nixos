@@ -83,20 +83,24 @@ def calendar_window(day: date) -> tuple:
     return day.isoformat(), (day + timedelta(days=1)).isoformat()
 
 
-def fetch_events(day: date) -> list | None:
-    start, end = calendar_window(day)
-    out = run(["proton-cli", "calendar", "events", "list", "--start", start, "--end", end,
-               "--output", "json", "--quiet"], CALENDAR_TIMEOUT)
-    if out is None:
-        return None
+def read_events(out: str) -> list | None:
+    """The events in a listing, or None when the reply is not one. Every proton-cli collection comes
+    back as an envelope keyed by its plural name, so an empty day is [] and None means the calendar
+    could not be read - a distinction the briefing reports differently."""
     try:
         payload = json.loads(out or "{}")
     except json.JSONDecodeError as error:
         print(f"proton-cli returned unreadable json: {error}", file=sys.stderr)
         return None
-    # Every proton-cli collection is an envelope keyed by its plural name.
     events = payload.get("events") if isinstance(payload, dict) else None
     return events if isinstance(events, list) else None
+
+
+def fetch_events(day: date) -> list | None:
+    start, end = calendar_window(day)
+    out = run(["proton-cli", "calendar", "events", "list", "--start", start, "--end", end,
+               "--output", "json", "--quiet"], CALENDAR_TIMEOUT)
+    return None if out is None else read_events(out)
 
 
 def moment(value) -> datetime | None:
