@@ -1,6 +1,6 @@
 ---
 name: diagram
-description: Draw something and send it to the user as a picture on WhatsApp - a flowchart, a sequence, a state machine, a timeline, an entity relationship, a mind map. Use when the answer is a shape rather than a sentence: how something flows, what talks to what, what happens in which order, how a set of things relate.
+description: Draw something and send it to the user as a picture on WhatsApp - a flowchart, a sequence, a state machine, a timeline, an entity relationship, a mind map. Use when the answer is a shape rather than a sentence - how something flows, what talks to what, what happens in which order, how a set of things relate.
 ---
 
 # Diagram
