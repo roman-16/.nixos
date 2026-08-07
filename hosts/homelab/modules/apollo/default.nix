@@ -218,12 +218,16 @@ in
           '';
         };
 
-        # Proton credentials, consumed as the unit EnvironmentFile by both the app
-        # (so the agent's proton-cli is authenticated) and the SQLite backup job (same
-        # world-readable /nix/store trade-off as the git deploy keys above).
+        # Proton credentials, consumed as the unit EnvironmentFile by the app (so the
+        # agent's proton-cli is authenticated), the scheduled jobs, and the SQLite
+        # backup job (same world-readable /nix/store trade-off as the git deploy keys
+        # above). PROTON_NO_INPUT turns a missing credential into an error instead of
+        # a question, so an unattended run fails loudly rather than hanging on a
+        # prompt nobody is there to see.
         protonEnv = pkgs.writeText "apollo-proton-env" ''
           PROTON_USER=${secrets.proton.user or ""}
           PROTON_PASSWORD=${secrets.proton.password or ""}
+          PROTON_NO_INPUT=1
         '';
 
         # Nightly off-box backup of Apollo's SQLite DB to Proton Drive (mirrors the
@@ -253,10 +257,17 @@ in
             work="$(mktemp --directory "$HOME/backup.XXXXXX")"
             trap 'rm --recursive --force "$work"' EXIT
 
+            # Exit 3 is "no such path". Anything else (network, auth) is a real
+            # failure, and answering it by creating a folder that already exists
+            # would only trade it for a confusing one.
             ensure_folder() {
-              local path="$1"
-              proton-cli drive items info "$path" >/dev/null 2>&1 && return 0
-              proton-cli drive folders create "$path" >/dev/null
+              local path="$1" status=0
+              proton-cli drive items get "$path" >/dev/null 2>&1 || status=$?
+              case "$status" in
+                0) ;;
+                3) proton-cli drive folders create "$path" >/dev/null ;;
+                *) echo "cannot reach Drive ($path, exit $status)" >&2; exit "$status" ;;
+              esac
             }
 
             snap="$work/apollo.sqlite"
@@ -274,14 +285,21 @@ in
             proton-cli drive items upload "$comp" "$remote"
 
             # Newest-first by name (UTC timestamps sort lexicographically); keep the
-            # newest $keep, delete the rest. Runs only after the upload succeeds.
-            proton-cli drive items list "$remote" --output json \
-              | jq --raw-output '[.[] | select(.name | startswith("apollo-")) | .name] | sort | reverse | .[]' \
-              | tail --lines=+$((keep + 1)) \
-              | while IFS= read -r name; do
-                  echo "pruning $name"
-                  proton-cli drive items delete "$remote/$name"
-                done
+            # newest $keep, delete the rest in one call. Runs only after the upload
+            # succeeds.
+            stale="$(
+              proton-cli drive items list "$remote" --output json \
+                | jq --raw-output '[.items[].name | select(startswith("apollo-"))] | sort | reverse | .[]' \
+                | tail --lines=+$((keep + 1))
+            )"
+            if [ -n "$stale" ]; then
+              paths=()
+              while IFS= read -r name; do
+                echo "pruning $name"
+                paths+=("$remote/$name")
+              done <<<"$stale"
+              proton-cli drive items delete "''${paths[@]}"
+            fi
             echo "backup complete"
           '';
         };

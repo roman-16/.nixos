@@ -90,10 +90,12 @@ def fetch_events(day: date) -> list | None:
     if out is None:
         return None
     try:
-        events = json.loads(out or "[]")
+        payload = json.loads(out or "{}")
     except json.JSONDecodeError as error:
         print(f"proton-cli returned unreadable json: {error}", file=sys.stderr)
         return None
+    # Every proton-cli collection is an envelope keyed by its plural name.
+    events = payload.get("events") if isinstance(payload, dict) else None
     return events if isinstance(events, list) else None
 
 
