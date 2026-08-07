@@ -89,7 +89,7 @@ For "how many photos have I sent", "how long have we been talking", "how often d
 {baseDir}/scripts/recall.py image --id 1234 --index 1  # the 2nd image, if several
 ```
 
-Writes the stored image to a temp file and prints its path; open that path with your `read` tool to actually see it. Use this to pull up a photo the user sent earlier - find the message first (by caption, date, or `show`), then view the image.
+Writes the stored image to a temp file and prints its path; open that path with your `read` tool to actually see it. Use this to pull up a photo the user sent earlier, or a picture you sent them - find the message first (by caption, date, or `show`), then view the image. The path it prints is also what you hand to the image skill to send that picture again.
 
 ## Notes
 

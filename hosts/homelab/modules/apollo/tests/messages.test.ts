@@ -245,6 +245,18 @@ describe("skillContextNote", () => {
     expect(skillContextNote("macros", "hi").info).not.toContain("resend");
   });
 
+  it("names an image as an image, with its caption as the body", () => {
+    const note = skillContextNote("diagram", "how a message reaches you", true);
+    expect(note.info).toBe("The diagram skill sent the user an image directly.");
+    expect(note.body).toBe("how a message reaches you");
+  });
+
+  it("still describes an uncaptioned image as an image", () => {
+    const note = skillContextNote("diagram", "", true);
+    expect(note.info).toContain("an image");
+    expect(note.body).toBe("");
+  });
+
   it("keeps a long (under-cap) message intact in the body", () => {
     const text = "x".repeat(1000);
     const note = skillContextNote("reminders", text);

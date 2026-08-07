@@ -187,6 +187,12 @@ describe("deliveredLedger", () => {
     expect(ledger.length).toBeLessThan(400);
   });
 
+  it("records a picture that went out with no words as a delivery all the same", () => {
+    expect(deliveredLedger([{ at, source: "diagram", text: "" }])).toContain(
+      "via diagram: (image)",
+    );
+  });
+
   it("flattens newlines so one delivery stays one line", () => {
     expect(deliveredLedger([{ at, source: "reminders", text: "a\n\nb" }])).toContain(
       "via reminders: a b",

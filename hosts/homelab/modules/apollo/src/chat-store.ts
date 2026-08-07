@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import type { ImageContent } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { Database } from "bun:sqlite";
 
@@ -29,8 +30,13 @@ export interface SkillMessage {
 }
 
 export interface ChatStore {
-  /** Record an out-of-band skill message (a fired reminder, a macros reply) as a chat entry. */
-  appendSkillMessage(sessionId: string, source: string, text: string): void;
+  /** Record an out-of-band skill message (a fired reminder, a macros reply, a rendered diagram) as a chat entry, with any image it delivered. */
+  appendSkillMessage(
+    sessionId: string,
+    source: string,
+    text: string,
+    images?: ImageContent[],
+  ): void;
   image(sessionId: string, entryId: string, index: number): ImageBytes | undefined;
   /** Skill messages delivered in a time span: what the user saw that the session never recorded. */
   skillMessagesBetween(sessionId: string, fromMs: number, toMs: number): SkillMessage[];
@@ -57,12 +63,12 @@ export function createChatStore(db: Database): ChatStore {
   const cursors = new Map<string, number>();
 
   return {
-    appendSkillMessage(sessionId, source, text) {
+    appendSkillMessage(sessionId, source, text, images = []) {
       const timestamp = new Date().toISOString();
       const id = `skill-${randomUUID()}`;
       const entry = {
         customType: "skill_message",
-        data: { source, text },
+        data: images.length > 0 ? { images, source, text } : { source, text },
         id,
         parentId: null,
         timestamp,

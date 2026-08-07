@@ -75,8 +75,10 @@ export function condenseToolResults<T extends { content?: unknown; role?: string
 export function deliveredLedger(delivered: DeliveredMessage[]): string {
   if (delivered.length === 0) return "";
   const lines = delivered.map(
+    // A delivery with no words is still a delivery: a picture went out, and the summarizer needs to
+    // know that as much as it needs to know about a sentence.
     ({ at, source, text }) =>
-      `[${clock(at)}] via ${source}: ${condense(text.replace(/\s+/g, " ").trim(), 90, 40)}`,
+      `[${clock(at)}] via ${source}: ${condense(text.replace(/\s+/g, " ").trim() || "(image)", 90, 40)}`,
   );
   return `<delivered>\n${lines.join("\n")}\n</delivered>`;
 }

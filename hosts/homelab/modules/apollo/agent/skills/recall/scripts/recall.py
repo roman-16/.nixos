@@ -130,17 +130,28 @@ def visible(data: str):
         return None  # toolResult / bashExecution never reached WhatsApp
     if kind == "custom" and entry.get("customType") == "skill_message":
         data_field = entry.get("data") or {}
-        return f"Apollo (via {data_field.get('source') or 'skill'})", (data_field.get("text") or "").strip(), 0
+        return (
+            f"Apollo (via {data_field.get('source') or 'skill'})",
+            (data_field.get("text") or "").strip(),
+            image_count(data_field.get("images")),
+        )
     return None  # compaction / branch_summary / apollo_reload
 
 
 def images_of(data: str):
-    """The (mimeType, base64) of every image block on a message row."""
+    """The (mimeType, base64) of every image block on a row - one the user sent, or one Apollo sent
+    them through a skill. Both keep their images in the same block shape, in the place their own
+    kind of entry keeps things."""
     try:
         entry = json.loads(data)
     except (json.JSONDecodeError, TypeError):
         return []
-    content = (entry.get("message") or {}).get("content") if entry.get("type") == "message" else None
+    if entry.get("type") == "message":
+        content = (entry.get("message") or {}).get("content")
+    elif entry.get("customType") == "skill_message":
+        content = (entry.get("data") or {}).get("images")
+    else:
+        content = None
     if not isinstance(content, list):
         return []
     return [

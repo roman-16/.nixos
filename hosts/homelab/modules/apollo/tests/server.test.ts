@@ -8,6 +8,12 @@ type Server = ReturnType<typeof startServer>;
 
 const AUTH_URL = "https://claude.ai/oauth/authorize?code=true";
 
+/** The smallest real PNG there is, so the image hook can be exercised against actual bytes. */
+const PNG_1X1 = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
 describe("fragmentCache", () => {
   it("serves a body on the first key and 204s on a repeat", () => {
     const cache = fragmentCache();
@@ -328,6 +334,90 @@ describe("startServer routing", () => {
     });
     expect(res.status).toBe(503);
     expect(await res.text()).toContain("[reminders: delivery FAILED");
+  });
+
+  it("delivers an image via the loopback hook and returns the marker", async () => {
+    let got: { attachment?: unknown; source: string; text: string } | undefined;
+    const file = `/tmp/apollo-test-${Bun.hash(String(Math.random()))}.png`;
+    await Bun.write(file, PNG_1X1);
+    const base = boot({
+      pipeline: {
+        emitSkillMessage: async (text: string, source: string, attachment: unknown) => {
+          got = { attachment, source, text };
+        },
+        notify: async () => {},
+        state: () => ({ qr: undefined, status: "connected", user: undefined }),
+      } as unknown as Pipeline,
+    });
+    const res = await fetch(
+      `${base}/internal/skill-image?source=diagram&path=${encodeURIComponent(file)}`,
+      { body: "how it flows", method: "POST" },
+    );
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("[diagram: delivered to the user");
+    expect(got?.text).toBe("how it flows");
+    expect(got?.source).toBe("diagram");
+    const attachment = got?.attachment as { height?: number; mimeType?: string } | undefined;
+    expect(attachment?.mimeType).toBe("image/png");
+    expect(attachment?.height).toBe(1);
+  });
+
+  it("sends a picture with no words when the body is empty", async () => {
+    let got: { text: string } | undefined;
+    const file = `/tmp/apollo-test-${Bun.hash(String(Math.random()))}.png`;
+    await Bun.write(file, PNG_1X1);
+    const base = boot({
+      pipeline: {
+        emitSkillMessage: async (text: string) => {
+          got = { text };
+        },
+        notify: async () => {},
+        state: () => ({ qr: undefined, status: "connected", user: undefined }),
+      } as unknown as Pipeline,
+    });
+    const res = await fetch(`${base}/internal/skill-image?path=${encodeURIComponent(file)}`, {
+      method: "POST",
+    });
+    expect(res.status).toBe(200);
+    expect(got?.text).toBe("");
+  });
+
+  it("refuses a file it cannot send as the caller's mistake, not a failed delivery", async () => {
+    const base = boot();
+    const res = await fetch(`${base}/internal/skill-image?source=diagram&path=/tmp/nope.png`, {
+      method: "POST",
+    });
+    expect(res.status).toBe(400);
+    const body = await res.text();
+    expect(body).toContain("cannot send");
+    expect(body).not.toContain("relay");
+  });
+
+  it("asks for a path when none is named", async () => {
+    const base = boot();
+    const res = await fetch(`${base}/internal/skill-image?source=diagram`, { method: "POST" });
+    expect(res.status).toBe(400);
+    expect(await res.text()).toContain("path");
+  });
+
+  it("returns the failed marker when the image cannot be delivered", async () => {
+    const file = `/tmp/apollo-test-${Bun.hash(String(Math.random()))}.png`;
+    await Bun.write(file, PNG_1X1);
+    const base = boot({
+      pipeline: {
+        emitSkillMessage: async () => {
+          throw new Error("whatsapp down");
+        },
+        notify: async () => {},
+        state: () => ({ qr: undefined, status: "connecting", user: undefined }),
+      } as unknown as Pipeline,
+    });
+    const res = await fetch(
+      `${base}/internal/skill-image?source=diagram&path=${encodeURIComponent(file)}`,
+      { method: "POST" },
+    );
+    expect(res.status).toBe(503);
+    expect(await res.text()).toContain("[diagram: delivery FAILED");
   });
 
   it("runs the backup via the loopback hook and returns the outcome", async () => {

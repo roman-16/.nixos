@@ -34,7 +34,7 @@ export type LogItem =
   | { kind: "compaction"; summary: string; time?: string; tokensBefore: number | undefined }
   | { kind: "divider"; label: string; time?: string }
   | { kind: "internal"; text: string; time?: string }
-  | { kind: "skill"; source: string; text: string; time?: string }
+  | { images: ChatImage[]; kind: "skill"; source: string; text: string; time?: string }
   | { kind: "thinking"; text: string; time?: string }
   | {
       args: Record<string, unknown>;
@@ -160,8 +160,13 @@ export function parseTranscript(jsonl: string): LogItem[] {
       continue;
     }
     if (entry.type === "custom" && entry.customType === "skill_message") {
-      const data = (entry.data ?? {}) as { source?: unknown; text?: unknown };
+      const data = (entry.data ?? {}) as { images?: unknown; source?: unknown; text?: unknown };
+      const { images } = splitContent(
+        Array.isArray(data.images) ? data.images : [],
+        String(entry.id ?? ""),
+      );
       items.push({
+        images,
         kind: "skill",
         source: typeof data.source === "string" ? data.source : "skill",
         text: typeof data.text === "string" ? data.text : "",
@@ -206,17 +211,28 @@ export interface ImageBytes {
   mimeType: string;
 }
 
+/**
+ * The image blocks an entry carries. A message keeps them in its content; a skill message keeps
+ * the image it delivered alongside its text, in the same block shape.
+ */
+function imageBlocks(entry: Record<string, any>): any[] {
+  const blocks =
+    entry?.type === "custom" && entry.customType === "skill_message"
+      ? entry.data?.images
+      : entry?.message?.content;
+  return Array.isArray(blocks) ? blocks : [];
+}
+
 /** The Nth image block of a transcript entry (a stored JSONL line) as raw bytes, or undefined. */
 export function imageFromLine(line: string, index: number): ImageBytes | undefined {
-  let content: unknown;
+  let blocks: any[];
   try {
-    content = (JSON.parse(line) as { message?: { content?: unknown } }).message?.content;
+    blocks = imageBlocks(JSON.parse(line));
   } catch {
     return undefined;
   }
-  if (!Array.isArray(content)) return undefined;
   let seen = 0;
-  for (const block of content) {
+  for (const block of blocks) {
     if (block?.type === "image" && typeof block.data === "string") {
       if (seen === index) {
         return {
@@ -407,8 +423,13 @@ export function copyText(item: LogItem): string {
       return `${lead}${item.label}`;
     case "internal":
       return `${lead}Apollo (internal, not sent): ${item.text}`;
-    case "skill":
-      return `${lead}Apollo (via ${item.source}): ${item.text}`;
+    case "skill": {
+      const note =
+        item.images.length > 0
+          ? `${item.text ? " " : ""}[${item.images.length} image${item.images.length > 1 ? "s" : ""}]`
+          : "";
+      return `${lead}Apollo (via ${item.source}): ${item.text}${note}`;
+    }
     case "thinking":
       return `${lead}Apollo (thinking): ${truncate(item.text, MAX_OUTPUT_CHARS)}`;
     case "tool": {
@@ -479,7 +500,7 @@ function renderItem(item: LogItem, running = false): string {
         "rounded-2xl rounded-bl-sm border border-indigo-400/30 bg-neutral-800/80 text-neutral-100",
         `<div class="mb-1"><span class="rounded bg-indigo-500/20 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-indigo-200">via ${escapeHtml(
           item.source,
-        )}</span></div>${textBlock(item.text)}`,
+        )}</span></div>${item.text ? textBlock(item.text) : ""}${images(item.images)}`,
         item.time,
         copy,
       );

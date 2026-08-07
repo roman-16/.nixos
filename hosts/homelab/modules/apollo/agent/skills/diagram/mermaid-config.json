@@ -1,0 +1,8 @@
+{
+  "fontFamily": "Liberation Sans, DejaVu Sans, sans-serif",
+  "securityLevel": "strict",
+  "theme": "default",
+  "themeVariables": {
+    "fontSize": "18px"
+  }
+}

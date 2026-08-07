@@ -157,7 +157,30 @@ describe("parseTranscript", () => {
       type: "custom",
     });
     expect(parseTranscript(jsonl)).toEqual([
-      { kind: "skill", source: "reminders", text: "⏰ get my food" },
+      { images: [], kind: "skill", source: "reminders", text: "⏰ get my food" },
+    ]);
+  });
+
+  it("reads the image a skill message delivered", () => {
+    const jsonl = JSON.stringify({
+      customType: "skill_message",
+      data: {
+        images: [{ data: "AAAA", mimeType: "image/png", type: "image" }],
+        source: "diagram",
+        text: "how a message reaches you",
+      },
+      id: "sk",
+      parentId: null,
+      timestamp: "t",
+      type: "custom",
+    });
+    expect(parseTranscript(jsonl)).toEqual([
+      {
+        images: [{ id: "sk", index: 0, mimeType: "image/png" }],
+        kind: "skill",
+        source: "diagram",
+        text: "how a message reaches you",
+      },
     ]);
   });
 
@@ -297,6 +320,23 @@ describe("imageFromLine", () => {
   it("defaults a missing mime type to image/jpeg", () => {
     const line = message("a", { content: [{ data: b64("x"), type: "image" }], role: "user" });
     expect(imageFromLine(line, 0)?.mimeType).toBe("image/jpeg");
+  });
+
+  it("extracts an image a skill message delivered", () => {
+    const line = JSON.stringify({
+      customType: "skill_message",
+      data: {
+        images: [{ data: b64("diagram"), mimeType: "image/png", type: "image" }],
+        source: "diagram",
+        text: "",
+      },
+      id: "sk",
+      type: "custom",
+    });
+    expect(imageFromLine(line, 0)).toEqual({
+      bytes: Buffer.from("diagram"),
+      mimeType: "image/png",
+    });
   });
 
   it("returns undefined for an out-of-range index, no images, or bad JSON", () => {
@@ -459,16 +499,32 @@ describe("renderChat", () => {
   });
 
   it("renders a skill message as a badged left bubble, escaping content", () => {
-    const html = renderChat([{ kind: "skill", source: "reminders", text: "⏰ get my food" }]);
+    const html = renderChat([
+      { images: [], kind: "skill", source: "reminders", text: "⏰ get my food" },
+    ]);
     expect(html).toContain("via reminders");
     expect(html).toContain("get my food");
 
     const unsafe = renderChat([
-      { kind: "skill", source: "<x>", text: "<script>alert(1)</script>" },
+      { images: [], kind: "skill", source: "<x>", text: "<script>alert(1)</script>" },
     ]);
     expect(unsafe).toContain("&lt;x&gt;");
     expect(unsafe).toContain("&lt;script&gt;");
     expect(unsafe).not.toContain("<script>");
+  });
+
+  it("shows a skill message's image, and no empty paragraph when it has no caption", () => {
+    const html = renderChat([
+      {
+        images: [{ id: "sk", index: 0, mimeType: "image/png" }],
+        kind: "skill",
+        source: "diagram",
+        text: "",
+      },
+    ]);
+    expect(html).toContain('src="/media/sk/0"');
+    expect(html).toContain("via diagram");
+    expect(html).not.toContain('<p class="whitespace-pre-wrap break-words"></p>');
   });
 
   it("emits rows in reading order, so DOM order matches what is on screen", () => {
@@ -571,8 +627,18 @@ describe("copyText", () => {
   });
 
   it("formats a skill message with its source", () => {
-    expect(copyText({ kind: "skill", source: "macros", text: "Today: 400 kcal" })).toBe(
+    expect(copyText({ images: [], kind: "skill", source: "macros", text: "Today: 400 kcal" })).toBe(
       "Apollo (via macros): Today: 400 kcal",
+    );
+  });
+
+  it("notes an image a skill message delivered, captioned or not", () => {
+    const image = { id: "sk", index: 0, mimeType: "image/png" };
+    expect(copyText({ images: [image], kind: "skill", source: "diagram", text: "the flow" })).toBe(
+      "Apollo (via diagram): the flow [1 image]",
+    );
+    expect(copyText({ images: [image], kind: "skill", source: "diagram", text: "" })).toBe(
+      "Apollo (via diagram): [1 image]",
     );
   });
 

@@ -133,13 +133,17 @@ export function formatLogNotice(record: LogRecord): string {
 }
 
 /**
- * Context note telling the agent a skill delivered a message to the user out of band: a coherent
- * description in `info`, the delivered message itself in `body`.
+ * Context note telling the agent a skill delivered something to the user out of band: a coherent
+ * description in `info`, and what was delivered in `body` - the message itself, or the caption an
+ * image went out with. An image is named as one, so the agent knows the picture has landed and
+ * does not describe it back.
  */
-export function skillContextNote(source: string, text: string): ContextNote {
+export function skillContextNote(source: string, text: string, hasImage = false): ContextNote {
   return {
     body: truncate(text, SKILL_NOTE_MAX_CHARS),
-    info: `The ${source} skill sent the user a message directly.`,
+    info: hasImage
+      ? `The ${source} skill sent the user an image directly.`
+      : `The ${source} skill sent the user a message directly.`,
     source,
   };
 }

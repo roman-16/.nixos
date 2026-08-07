@@ -6,6 +6,8 @@ import { type AgentSession, resizeImage } from "@earendil-works/pi-coding-agent"
 import type { Logger } from "pino";
 
 import { conversationTokens, deliver, onAssistantText, onRunError } from "./agent";
+import type { Attachment } from "./attachments";
+import { imageBlock } from "./attachments";
 import { buildBacklog } from "./backlog";
 import type { ChatStore } from "./chat-store";
 import { type CompactionReason, compactionReason } from "./compaction-schedule";
@@ -71,8 +73,8 @@ export interface PipelineDeps {
 export interface Pipeline {
   /** Bind the live socket once WhatsApp has connected. */
   attach(socket: WhatsApp): void;
-  /** Deliver a skill-originated message to the user out of band: send it, record it in the chat DB, and queue a context note for the agent's next turn. */
-  emitSkillMessage(text: string, source: string): Promise<void>;
+  /** Deliver a skill-originated message to the user out of band: send it, record it in the chat DB, and queue a context note for the agent's next turn. Text alone, or an image with `text` as its caption. */
+  emitSkillMessage(text: string, source: string, attachment?: Attachment): Promise<void>;
   /** Handle a (re)connect: report any gap, apply the profile picture, and deliver what is owed. */
   handleConnect(): void;
   /** Take a delivery from WhatsApp into the durable inbox, then hand over whatever is owed. */
@@ -82,7 +84,7 @@ export interface Pipeline {
   /** Drop the current session and re-issue a QR. */
   relink(): void;
   /** Deliver to the user, rejecting when not connected so the caller can retry (reminders). */
-  sendToUser(text: string): Promise<void>;
+  sendToUser(text: string, attachment?: Attachment): Promise<void>;
   /** The current WhatsApp link state, or a disconnected placeholder before the socket attaches. */
   state(): WhatsAppState;
 }
@@ -147,10 +149,11 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     }, TYPING_REFRESH_MS);
   }
 
-  async function sendToUser(text: string): Promise<void> {
+  async function sendToUser(text: string, attachment?: Attachment): Promise<void> {
     const to = recipient();
     if (!socket || !to || !connected()) throw new Error("whatsapp not connected");
-    await socket.send(to, text);
+    if (attachment) await socket.sendImage(to, attachment, text);
+    else await socket.send(to, text);
   }
 
   async function notify(text: string): Promise<void> {
@@ -197,20 +200,33 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     kv.set("skillNotes", "[]");
   }
 
-  // Deliver a message a skill produced (a fired reminder, a macros reply) directly to the user,
-  // record it in the chat DB as a "via <source>" bubble, and queue a context note so the agent
-  // learns about it next turn. Send first, so a failed send (the reminder watcher retries) never
-  // logs or contexts a message the user never received.
-  async function emitSkillMessage(text: string, source: string): Promise<void> {
-    await sendToUser(text);
+  // Deliver a message a skill produced (a fired reminder, a macros reply, a rendered diagram)
+  // directly to the user, record it in the chat DB as a "via <source>" bubble, and queue a context
+  // note so the agent learns about it next turn. Send first, so a failed send (the reminder watcher
+  // retries) never logs or contexts a message the user never received.
+  async function emitSkillMessage(
+    text: string,
+    source: string,
+    attachment?: Attachment,
+  ): Promise<void> {
+    await sendToUser(text, attachment);
     try {
-      chatStore.appendSkillMessage(session.sessionId, source, text);
+      chatStore.appendSkillMessage(
+        session.sessionId,
+        source,
+        text,
+        attachment ? [imageBlock(attachment)] : [],
+      );
     } catch (error) {
       logger.error({ error }, "skill message chat-log append failed");
     }
     kv.set(
       "skillNotes",
-      JSON.stringify([...readSkillNotes(), skillContextNote(source, text)].slice(-SKILL_NOTES_MAX)),
+      JSON.stringify(
+        [...readSkillNotes(), skillContextNote(source, text, Boolean(attachment))].slice(
+          -SKILL_NOTES_MAX,
+        ),
+      ),
     );
     if (typingTimer) sendComposing(); // a send clears the recipient's indicator; re-assert if mid-turn
   }

@@ -4,6 +4,7 @@ import type { Logger } from "pino";
 import { compactionSettings } from "./agent";
 import { type AnthropicLogin, createAnthropicLogin } from "./anthropic-login";
 import { assetsVersion, htmlHeaders, serveAsset } from "./assets";
+import { type Attachment, loadAttachment } from "./attachments";
 import { parseTranscript, renderChat } from "./chat";
 import type { ChatStore } from "./chat-store";
 import type { Config } from "./config";
@@ -410,6 +411,41 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
         new Response(await runBackup(), {
           headers: { "content-type": "text/plain; charset=utf-8" },
         }),
+    ],
+    // Localhost-only hook for putting an image in front of the user, shaped exactly like
+    // /internal/skill-image's text sibling below: what the user reads is the body, everything about
+    // the delivery is the query. The picture stays a path, because whatever drew it wrote it to this
+    // same machine and there is nothing to gain by encoding it over a loopback hop.
+    [
+      "POST /internal/skill-image",
+      async (req, url) => {
+        const source = url.searchParams.get("source") ?? "image";
+        const path = url.searchParams.get("path") ?? "";
+        const headers = { "content-type": "text/plain; charset=utf-8" };
+        if (!path) {
+          return new Response("name the image with ?path=/tmp/x.png; the caption is the body\n", {
+            headers,
+            status: 400,
+          });
+        }
+        // An empty caption is a picture sent without words, which is a thing people do.
+        const caption = (await req.text()).trim();
+        // A file that cannot be sent is the caller's to fix, not a delivery that failed, so it is
+        // reported as itself rather than as something to relay to the user.
+        let attachment: Attachment;
+        try {
+          attachment = await loadAttachment(path);
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error);
+          return new Response(`cannot send ${path}: ${reason}\n`, { headers, status: 400 });
+        }
+        try {
+          await pipeline.emitSkillMessage(caption, source, attachment);
+          return new Response(deliveredMarker(source), { headers, status: 200 });
+        } catch {
+          return new Response(failedMarker(source), { headers, status: 503 });
+        }
+      },
     ],
     // Localhost-only hook skills curl to push a message straight to the user (macros, reminders,
     // backup). Delivers it, then returns the marker for the skill to echo - one source of truth for

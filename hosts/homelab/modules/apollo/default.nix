@@ -24,6 +24,7 @@ let
       gnused
       imagemagick
       jq
+      mermaid-cli
       openssh
       poppler-utils
       python3
@@ -31,6 +32,7 @@ let
       tesseract
     ])
     ++ [ inputs.proton-cli.packages.${system}.default ];
+
   gitPkgs = with pkgs; [
     bash
     coreutils
@@ -128,6 +130,8 @@ in
           ln -sfn ${../../../../shared/modules/pi/skills/exa} "$agentDir/skills/exa"
           ln -sfn ${./agent/skills/backup} "$agentDir/skills/backup"
           ln -sfn ${./agent/skills/briefing} "$agentDir/skills/briefing"
+          ln -sfn ${./agent/skills/diagram} "$agentDir/skills/diagram"
+          ln -sfn ${./agent/skills/image} "$agentDir/skills/image"
           ln -sfn ${./agent/skills/macros} "$agentDir/skills/macros"
           ln -sfn ${./agent/skills/obsidian} "$agentDir/skills/obsidian"
           ln -sfn ${./agent/skills/offers} "$agentDir/skills/offers"
@@ -432,6 +436,15 @@ in
           git
           jq
           ripgrep
+        ];
+
+        # Chromium carries no fonts of its own and NixOS installs none by default, so without these
+        # every label in a rendered diagram (and every screenshot the browser skill takes) comes out
+        # as a row of empty boxes.
+        fonts.packages = with pkgs; [
+          dejavu_fonts
+          liberation_ttf
+          noto-fonts-color-emoji
         ];
 
         networking = {

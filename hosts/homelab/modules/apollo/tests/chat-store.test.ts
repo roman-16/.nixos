@@ -110,6 +110,28 @@ describe("createChatStore", () => {
     expect(stored.data).toEqual({ source: "reminders", text: "⏰ get my food" });
   });
 
+  it("records the image a skill message delivered, and serves it back", () => {
+    const store = createChatStore(openDatabase(":memory:"));
+    store.appendSkillMessage("s1", "diagram", "how it flows", [
+      { data: b64("png-bytes"), mimeType: "image/png", type: "image" },
+    ]);
+    const stored = JSON.parse(store.tail("s1", 10).entries[0]!);
+    expect(stored.data.images).toHaveLength(1);
+    expect(store.image("s1", stored.id, 0)).toEqual({
+      bytes: Buffer.from("png-bytes"),
+      mimeType: "image/png",
+    });
+  });
+
+  it("leaves the images key off a skill message that delivered none", () => {
+    const store = createChatStore(openDatabase(":memory:"));
+    store.appendSkillMessage("s1", "macros", "summary");
+    expect(JSON.parse(store.tail("s1", 10).entries[0]!).data).toEqual({
+      source: "macros",
+      text: "summary",
+    });
+  });
+
   it("interleaves skill messages with mirrored entries in insertion order", () => {
     const store = createChatStore(openDatabase(":memory:"));
     store.sync("s1", [entry({ id: "a" })]);

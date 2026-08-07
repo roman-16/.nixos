@@ -18,6 +18,7 @@ import makeWASocket, {
 } from "@whiskeysockets/baileys";
 import type { Logger } from "pino";
 
+import type { Attachment } from "./attachments";
 import { numberFromJid, splitMessage } from "./messages";
 import { describeQuotedMessage, type QuotedContext } from "./quoted";
 
@@ -31,6 +32,12 @@ const RECONNECT_MAX_MS = 60_000;
 
 /** Consecutive failed reconnects before a disconnect is logged at warn instead of info. */
 const WARN_AFTER_ATTEMPTS = 3;
+
+/**
+ * How much text rides along under a photo. WhatsApp takes far less in a caption than in a message,
+ * so anything longer follows as ordinary messages rather than being silently dropped.
+ */
+const MAX_CAPTION_CHARS = 900;
 
 /** How long a successfully resolved WhatsApp Web version is reused before it is looked up again. */
 const VERSION_TTL_MS = 6 * 60 * 60 * 1000;
@@ -79,6 +86,7 @@ export interface WhatsApp {
   read: (key: WAMessage["key"]) => Promise<void>;
   relink: () => void;
   send: (to: string, text: string) => Promise<void>;
+  sendImage: (to: string, image: Attachment, caption: string) => Promise<void>;
   setProfilePicture: (image: Buffer) => Promise<void>;
   stop: () => Promise<void>;
 }
@@ -423,6 +431,20 @@ export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp>
       for (const chunk of splitMessage(text, options.maxChars)) {
         await sock?.sendMessage(to, { text: chunk });
       }
+    },
+    sendImage: async (to, image, caption) => {
+      const [head, ...rest] = splitMessage(caption, MAX_CAPTION_CHARS);
+      // Dimensions and the preview are supplied, so baileys never reaches for the image library it
+      // does not have here (see attachments.ts).
+      await sock?.sendMessage(to, {
+        caption: head,
+        height: image.height,
+        image: image.bytes,
+        jpegThumbnail: image.thumbnail,
+        mimetype: image.mimeType,
+        width: image.width,
+      });
+      for (const chunk of rest) await sock?.sendMessage(to, { text: chunk });
     },
     setProfilePicture: async (image) => {
       const jid = sock?.user?.id;
