@@ -142,41 +142,6 @@ describe("daily", () => {
   });
 });
 
-describe("peak", () => {
-  const noon = (iso: string) => new Date(`${iso}T12:00:00`).getTime();
-
-  it("is zero with nothing recorded", () => {
-    expect(createTokenStore(freshDb()).peak()).toBe(0);
-  });
-
-  it("is the busiest day's total across every category", () => {
-    const store = createTokenStore(freshDb());
-    store.record(
-      usage({ cacheRead: 700, cacheWrite: 100, input: 150, output: 50 }),
-      "m",
-      noon("2026-07-10"),
-    );
-    store.record(usage({ input: 400 }), "m", noon("2026-07-11"));
-    expect(store.peak()).toBe(1000);
-  });
-
-  it("sums a day's turns before comparing days", () => {
-    const store = createTokenStore(freshDb());
-    store.record(usage({ input: 300 }), "m", noon("2026-07-10"));
-    store.record(usage({ input: 300 }), "m", noon("2026-07-10"));
-    store.record(usage({ input: 500 }), "m", noon("2026-07-11"));
-    expect(store.peak()).toBe(600);
-  });
-
-  it("looks past whatever range is being viewed, so the scale never moves", () => {
-    const store = createTokenStore(freshDb());
-    const now = Date.now();
-    store.record(usage({ input: 10 }), "m", now);
-    store.record(usage({ input: 9999 }), "m", now - 300 * DAY);
-    expect(store.peak()).toBe(9999);
-  });
-});
-
 describe("calendar-aligned ranges", () => {
   const midnightToday = () => {
     const d = new Date();
@@ -254,80 +219,64 @@ describe("renderTokensDaily", () => {
   });
 
   it("shows a placeholder when there are no days", () => {
-    expect(renderTokensDaily([], 1000)).toContain("No daily token usage");
+    expect(renderTokensDaily([])).toContain("No daily token usage");
   });
 
   it("renders a column per day with the date, total tokens, and per-segment tooltip", () => {
-    const html = renderTokensDaily(
-      [
-        day({
-          cost: map({ input: 0.2, output: 0.9 }),
-          day: "2026-07-14",
-          tokens: map({ input: 300, output: 100 }),
-        }),
-      ],
-      400,
-    );
+    const html = renderTokensDaily([
+      day({
+        cost: map({ input: 0.2, output: 0.9 }),
+        day: "2026-07-14",
+        tokens: map({ input: 300, output: 100 }),
+      }),
+    ]);
     expect(html).toContain("14.07");
     expect(html).toContain(">400<");
     expect(html).toContain('title="$1.10"');
     expect(html).toContain("Read: 300 tokens (75.0%) · $0.20");
-    expect(html).toContain("flex-grow:300");
   });
 
-  it("sizes each bar against the busiest day on record", () => {
-    const html = renderTokensDaily(
-      [
-        day({ day: "2026-07-13", tokens: map({ input: 1000 }) }),
-        day({ day: "2026-07-14", tokens: map({ input: 250 }) }),
-      ],
-      1000,
-    );
-    expect(html).toContain("height:100.0%");
-    expect(html).toContain("height:25.0%");
+  it("gives every column the same full height, whatever the day's size", () => {
+    const html = renderTokensDaily([
+      day({ day: "2026-07-13", tokens: map({ input: 1000 }) }),
+      day({ day: "2026-07-14", tokens: map({ input: 250 }) }),
+    ]);
+    expect(html.match(/h-32/g)).toHaveLength(2);
+    expect(html).not.toContain("height:");
   });
 
-  it("gives a day the same height whatever range it is shown in", () => {
-    const quiet = day({ day: "2026-07-14", tokens: map({ input: 250 }) });
-    const alone = renderTokensDaily([quiet], 1000);
-    const beside = renderTokensDaily(
-      [day({ day: "2026-07-13", tokens: map({ input: 1000 }) }), quiet],
-      1000,
-    );
-    expect(alone).toContain("height:25.0%");
-    expect(beside).toContain("height:25.0%");
-    expect(alone).not.toContain("height:100.0%");
-  });
-
-  it("never overflows the box, since every day drawn is on record", () => {
-    const html = renderTokensDaily([day({ tokens: map({ input: 1000 }) })], 1000);
-    expect(html).toContain("height:100.0%");
+  it("stacks the segments in proportion to their share of that day", () => {
+    const html = renderTokensDaily([
+      day({ tokens: map({ cacheRead: 750, input: 250 }) }),
+      day({ day: "2026-07-15", tokens: map({ cacheRead: 3, input: 1 }) }),
+    ]);
+    expect(html).toContain("flex-grow:750");
+    expect(html).toContain("flex-grow:250");
+    // The same mix a thousandth the size reads the same, which is the point of the shape.
+    expect(html).toContain("Cache read: 750 tokens (75.0%)");
+    expect(html).toContain("Cache read: 3 tokens (75.0%)");
   });
 
   it("omits categories with no tokens for the day", () => {
-    const html = renderTokensDaily([day({ tokens: map({ input: 5 }) })], 100);
+    const html = renderTokensDaily([day({ tokens: map({ input: 5 }) })]);
     expect(html).toContain("Read: 5 tokens");
     expect(html).not.toContain("Cache read:");
   });
 
   it("spreads multiple days across the full width, flush to the edges", () => {
-    const html = renderTokensDaily(
-      [
-        day({ day: "2026-07-14", tokens: map({ input: 5 }) }),
-        day({ day: "2026-07-15", tokens: map({ input: 3 }) }),
-      ],
-      100,
-    );
+    const html = renderTokensDaily([
+      day({ day: "2026-07-14", tokens: map({ input: 5 }) }),
+      day({ day: "2026-07-15", tokens: map({ input: 3 }) }),
+    ]);
     expect(html).toContain("justify-between");
     expect(html).toContain("min-w-full");
   });
 
   it("grows past that width when a range holds more days than fit, so the row scrolls", () => {
-    expect(renderTokensDaily([day({ tokens: map({ input: 5 }) })], 100)).toContain("w-max");
+    expect(renderTokensDaily([day({ tokens: map({ input: 5 }) })])).toContain("w-max");
   });
 
-  it("centers a lone bar instead of stranding it at the left edge", () => {
-    const html = renderTokensDaily([day({ tokens: map({ input: 5 }) })], 100);
-    expect(html).toContain("justify-center");
+  it("centers a lone column instead of stranding it at the left edge", () => {
+    expect(renderTokensDaily([day({ tokens: map({ input: 5 }) })])).toContain("justify-center");
   });
 });

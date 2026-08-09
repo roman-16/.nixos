@@ -175,7 +175,7 @@ describe("renderEvidence", () => {
 });
 
 describe("buildFoldPrompt", () => {
-  const instructions = "Maintain it. It currently stands at {size} characters.";
+  const instructions = "Maintain it.";
 
   it("hands over the doctrine, the file, then what was said", () => {
     const prompt = buildFoldPrompt({
@@ -190,16 +190,15 @@ describe("buildFoldPrompt", () => {
     expect(prompt).toContain("sold the Ducati");
   });
 
-  it("states the file's size, so the cost is data rather than doctrine", () => {
+  it("hands the doctrine over verbatim, with no size or budget attached to it", () => {
     const prompt = buildFoldPrompt({ current: "abcde", evidence: "x", instructions, path: PATH });
-    expect(prompt).toContain("stands at 5 characters");
-    expect(prompt).not.toContain("{size}");
+    expect(prompt.startsWith("Maintain it.\n\n")).toBe(true);
+    expect(prompt).not.toMatch(/\d+ characters/);
   });
 
   it("says so plainly when there is no file yet", () => {
     const prompt = buildFoldPrompt({ current: "", evidence: "x", instructions, path: PATH });
     expect(prompt).toContain(`<memory path="${PATH}" state="empty" />`);
-    expect(prompt).toContain("stands at 0 characters");
   });
 });
 

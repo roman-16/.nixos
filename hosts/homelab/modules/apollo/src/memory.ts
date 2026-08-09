@@ -40,8 +40,12 @@ const MAX_MEMORY_CHARS = 12000;
 const MESSAGE_HEAD_CHARS = 1500;
 const MESSAGE_TAIL_CHARS = 500;
 
-/** Ceiling on the fold's own reply. The file is short; the headroom is for a thinking model. */
-const MAX_FOLD_TOKENS = 4096;
+/**
+ * Ceiling on the fold's own reply. The reply is the whole file, so this has to clear the largest
+ * portrait worth keeping with room to spare - a ceiling is not an allocation, and the cost of
+ * setting it high is nothing, while the cost of hitting it is a truncated file.
+ */
+const MAX_FOLD_TOKENS = 16384;
 
 /** A fold must not hang the maintenance tick, however unresponsive the provider is. */
 const FOLD_TIMEOUT_MS = 60_000;
@@ -154,11 +158,7 @@ export function buildFoldPrompt(args: {
   const file = current
     ? `<memory path="${args.path}">\n${current}\n</memory>`
     : `<memory path="${args.path}" state="empty" />`;
-  const instructions = args.instructions
-    .trim()
-    .replaceAll("{size}", String(current.length))
-    .replaceAll("{path}", args.path);
-  return `${instructions}\n\n${file}\n\n<conversation>\n${args.evidence.trim()}\n</conversation>`;
+  return `${args.instructions.trim()}\n\n${file}\n\n<conversation>\n${args.evidence.trim()}\n</conversation>`;
 }
 
 export type FoldOutput =
@@ -261,6 +261,15 @@ export function createMemoryFolder(options: MemoryFolderOptions): MemoryFolder {
         logger.warn({ detail: reply.errorMessage, reason }, "memory fold failed");
         return false;
       }
+      // The reply is the entire file, so one cut short is half a file - and writing half a file
+      // would destroy the other half. Refuse it rather than trusting that it looks well-formed.
+      if (reply.stopReason === "length") {
+        logger.warn(
+          { reason },
+          "memory fold hit the reply ceiling; refusing to write a partial file",
+        );
+        return false;
+      }
 
       const output = readFoldOutput(
         reply.content
@@ -274,8 +283,15 @@ export function createMemoryFolder(options: MemoryFolderOptions): MemoryFolder {
       }
       if (output.kind === "unchanged" || output.content === current) {
         options.writeCursor(evidence.newestMs);
+        // Declining to engage and engaging to conclude nothing moved look identical in the file and
+        // mean opposite things about the doctrine, so the verdict says which one this was.
         logger.info(
-          { chars: current.length, messages: evidence.messages, reason },
+          {
+            chars: current.length,
+            messages: evidence.messages,
+            reason,
+            verdict: output.kind === "unchanged" ? "declined" : "identical",
+          },
           "memory unchanged",
         );
         return true;

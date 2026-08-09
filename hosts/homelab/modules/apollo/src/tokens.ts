@@ -67,8 +67,6 @@ export interface TokenUsageInput {
 
 export interface TokenStore {
   daily(range: TokenRange): DayTokens[];
-  /** The busiest day on record, in tokens: the scale every daily bar is drawn against. */
-  peak(): number;
   record(usage: TokenUsageInput, model: string, time: number): void;
   totals(range: TokenRange): TokenTotals;
 }
@@ -162,21 +160,10 @@ export function createTokenStore(db: Database): TokenStore {
       GROUP BY day
       ORDER BY day`,
   );
-  // Deliberately unbounded by range: the daily chart's vertical scale is a property of the data,
-  // not of whatever window is being looked at.
-  const selectPeak = db.query(
-    `SELECT COALESCE(MAX(total), 0) AS peak
-       FROM (SELECT SUM(input + output + cache_read + cache_write) AS total
-               FROM tokens
-              GROUP BY date(time / 1000, 'unixepoch', 'localtime'))`,
-  );
   return {
     daily(range) {
       const rows = selectDaily.all(sinceFor(range)) as DailyRow[];
       return rows.map((row) => ({ ...rowMaps(row), day: row.day }));
-    },
-    peak() {
-      return Number((selectPeak.get() as { peak: number }).peak);
     },
     record(usage, model, time) {
       insert.run(
@@ -277,23 +264,22 @@ function dayLabel(iso: string): string {
  * the day's total tokens (hover for the day's cost). Colors match the legend above, so no
  * separate legend is needed.
  *
- * `peak` is the busiest day on record, and it alone sets the height, so a bar of a given size
- * means the same number of tokens in every range: switching from 3m to 7d shrinks the bars
- * rather than re-normalizing them, and a quiet week reads as a quiet week instead of redrawing
- * itself to fill the box. Every day shown is on record, so nothing can outgrow the scale.
+ * Every column is the same full height, so what it shows is the day's mix rather than its size:
+ * the same 100% stacked bar as the summary above, one per day, which is what makes the shape of a
+ * quiet day as readable as a busy one. Magnitude is the label's job, not the column's - the total
+ * sits under each one, and each segment names its own tokens, share and cost on hover.
  *
- * Fixed-width bars spread across the full width (flush to both edges, even space between; a lone
- * bar is centered) and grow past it once a range holds more days than fit, which is what makes
- * the row scroll - and what lets the reversed scroller around it open on the newest day.
+ * Fixed-width columns spread across the full width (flush to both edges, even space between; a
+ * lone one is centered) and grow past it once a range holds more days than fit, which is what
+ * makes the row scroll - and what lets the reversed scroller around it open on the newest day.
  */
-export function renderTokensDaily(days: DayTokens[], peak: number): string {
+export function renderTokensDaily(days: DayTokens[]): string {
   if (days.length === 0) {
     return `<p class="text-sm text-neutral-500">No daily token usage for this range yet.</p>`;
   }
   const columns = days
     .map((d) => {
       const dayTokens = sum(d.tokens);
-      const fillPct = peak > 0 ? (dayTokens / peak) * 100 : 0;
       const segments = CATEGORIES.filter((cat) => d.tokens[cat.key] > 0)
         .map((cat) => {
           const tokens = d.tokens[cat.key];
@@ -307,9 +293,7 @@ export function renderTokensDaily(days: DayTokens[], peak: number): string {
         })
         .join("");
       return `<div class="flex w-16 shrink-0 flex-col items-center gap-1">
-      <div class="flex h-32 w-full items-end">
-        <div class="flex w-full flex-col-reverse overflow-hidden rounded-sm" style="height:${fillPct.toFixed(1)}%">${segments}</div>
-      </div>
+      <div class="flex h-32 w-full flex-col-reverse overflow-hidden rounded-sm">${segments}</div>
       <span class="tabular-nums text-[10px] text-neutral-300" title="${escapeHtml(formatUsd(sum(d.cost)))}">${humanTokens(dayTokens)}</span>
       <span class="tabular-nums text-[10px] text-neutral-600">${dayLabel(d.day)}</span>
     </div>`;
