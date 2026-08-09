@@ -264,22 +264,24 @@ function dayLabel(iso: string): string {
  * the day's total tokens (hover for the day's cost). Colors match the legend above, so no
  * separate legend is needed.
  *
- * Every column is the same full height, so what it shows is the day's mix rather than its size:
- * the same 100% stacked bar as the summary above, one per day, which is what makes the shape of a
- * quiet day as readable as a busy one. Magnitude is the label's job, not the column's - the total
- * sits under each one, and each segment names its own tokens, share and cost on hover.
+ * Heights are relative to the busiest day currently shown, so every range is drawn on its own
+ * terms and a quiet week still fills the box instead of arriving as a row of slivers. The price
+ * is that a height means nothing from one range to the next; the label under each bar is what
+ * carries the actual size.
  *
- * Fixed-width columns spread across the full width (flush to both edges, even space between; a
- * lone one is centered) and grow past it once a range holds more days than fit, which is what
- * makes the row scroll - and what lets the reversed scroller around it open on the newest day.
+ * Fixed-width bars spread across the full width (flush to both edges, even space between; a lone
+ * bar is centered) and grow past it once a range holds more days than fit, which is what makes
+ * the row scroll - and what lets the reversed scroller around it open on the newest day.
  */
 export function renderTokensDaily(days: DayTokens[]): string {
   if (days.length === 0) {
     return `<p class="text-sm text-neutral-500">No daily token usage for this range yet.</p>`;
   }
+  const maxTotal = Math.max(...days.map((d) => sum(d.tokens)));
   const columns = days
     .map((d) => {
       const dayTokens = sum(d.tokens);
+      const fillPct = maxTotal > 0 ? (dayTokens / maxTotal) * 100 : 0;
       const segments = CATEGORIES.filter((cat) => d.tokens[cat.key] > 0)
         .map((cat) => {
           const tokens = d.tokens[cat.key];
@@ -293,7 +295,9 @@ export function renderTokensDaily(days: DayTokens[]): string {
         })
         .join("");
       return `<div class="flex w-16 shrink-0 flex-col items-center gap-1">
-      <div class="flex h-32 w-full flex-col-reverse overflow-hidden rounded-sm">${segments}</div>
+      <div class="flex h-32 w-full items-end">
+        <div class="flex w-full flex-col-reverse overflow-hidden rounded-sm" style="height:${fillPct.toFixed(1)}%">${segments}</div>
+      </div>
       <span class="tabular-nums text-[10px] text-neutral-300" title="${escapeHtml(formatUsd(sum(d.cost)))}">${humanTokens(dayTokens)}</span>
       <span class="tabular-nums text-[10px] text-neutral-600">${dayLabel(d.day)}</span>
     </div>`;

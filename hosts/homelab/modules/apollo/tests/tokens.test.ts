@@ -236,25 +236,28 @@ describe("renderTokensDaily", () => {
     expect(html).toContain("Read: 300 tokens (75.0%) · $0.20");
   });
 
-  it("gives every column the same full height, whatever the day's size", () => {
+  it("scales each bar's fill height by the busiest day shown", () => {
     const html = renderTokensDaily([
       day({ day: "2026-07-13", tokens: map({ input: 1000 }) }),
       day({ day: "2026-07-14", tokens: map({ input: 250 }) }),
     ]);
-    expect(html.match(/h-32/g)).toHaveLength(2);
-    expect(html).not.toContain("height:");
+    expect(html).toContain("height:100.0%");
+    expect(html).toContain("height:25.0%");
+  });
+
+  it("draws each range on its own terms, so a quiet stretch still fills the box", () => {
+    const quiet = day({ day: "2026-07-14", tokens: map({ input: 250 }) });
+    expect(renderTokensDaily([quiet])).toContain("height:100.0%");
+    expect(
+      renderTokensDaily([day({ day: "2026-07-13", tokens: map({ input: 1000 }) }), quiet]),
+    ).toContain("height:25.0%");
   });
 
   it("stacks the segments in proportion to their share of that day", () => {
-    const html = renderTokensDaily([
-      day({ tokens: map({ cacheRead: 750, input: 250 }) }),
-      day({ day: "2026-07-15", tokens: map({ cacheRead: 3, input: 1 }) }),
-    ]);
+    const html = renderTokensDaily([day({ tokens: map({ cacheRead: 750, input: 250 }) })]);
     expect(html).toContain("flex-grow:750");
     expect(html).toContain("flex-grow:250");
-    // The same mix a thousandth the size reads the same, which is the point of the shape.
     expect(html).toContain("Cache read: 750 tokens (75.0%)");
-    expect(html).toContain("Cache read: 3 tokens (75.0%)");
   });
 
   it("omits categories with no tokens for the day", () => {
