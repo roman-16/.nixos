@@ -5,7 +5,7 @@ description: Use whenever ANY Proton action is taken - reading or changing Proto
 
 # Proton
 
-`proton-cli` drives the user's Proton account (Mail, Drive, Calendar, Contacts, Pass, settings). It is already authenticated from the environment and handles SRP login plus end-to-end encryption itself - there is nothing to set up, and the session is cached across restarts. Add `--output json` (or `yaml`) when you want to parse a result rather than just read it.
+`proton-cli` drives the user's Proton account (Mail, Drive, Calendar, Contacts, Pass, settings). It is already signed in as that account and handles SRP login plus end-to-end encryption itself - there is nothing to set up, and the session is saved across restarts. Add `--output json` (or `yaml`) when you want to parse a result rather than just read it.
 
 Every command reads the same way: `proton-cli <app> <collection> <verb>`, one word per idea. `get` is the only way to look one thing up, `update` the only way to change a field, and anywhere a command wants an ID a subject, name, title or URL works too.
 
@@ -38,7 +38,8 @@ When unsure, a command's `--help` makes clear whether it changes anything; if it
 - **Create prints the new ID** to stdout (and `✓` to stderr), so you can capture it: `id=$(proton-cli ... create ...)`.
 - **Streaming:** `-` means stdin or stdout, e.g. `mail messages send --body -`, `drive items upload - /path`, `drive items download /path --output -`.
 - **Exit codes:** `0` ok, `1` user error, `2` auth, `3` not-found, `4` ambiguous/conflict, `5` network/server, `130` cancelled. A mistyped command is an error, never a silent success.
-- **Batch mutations:** many mutating commands accept filters (`--older-than`, `--unread`, `--pattern`, `--all`, `--recursive`), so a single command can change many items at once - all the more reason to preview with `--dry-run` and confirm. `--all` with nothing narrowing it wants a confirmation, and nothing here can answer a prompt, so such a command needs `--yes` and deserves particular care before you propose it.
+- **Batch mutations:** many mutating commands accept filters (`--older-than`, `--unread`, `--pattern`, `--all`, `--recursive`), so a single command can change many items at once - all the more reason to preview with `--dry-run` and confirm.
+- **Removals ask first:** `delete` and `empty` always ask, and `trash` asks whenever a filter rather than a name chose what to remove. Nothing here can answer a prompt, so such a command fails unless it carries `--yes` - which makes it exactly the kind of command to preview with `--dry-run` and put in front of the user before proposing it.
 - **Nothing ever waits for input:** this environment runs with `PROTON_NO_INPUT`, so a missing credential or an unanswerable question fails immediately instead of hanging. Report the failure rather than retrying.
 - **Eventual consistency:** search/list read a server-side index that lags a few seconds, so a just-changed item may still show (or not yet); confirm a change by reading the specific item by ID rather than re-searching.
 - **Headless login:** if Proton demands a CAPTCHA at login it cannot be solved here (no display) and the command fails - report that instead of retrying.

@@ -24,7 +24,7 @@ Available on the system:
 | `jq` | JSON parsing, filtering, and transformation. |
 | `magick` | ImageMagick: image conversion, resizing, cropping, format changes, compositing. |
 | `poppler-utils` | PDF text extraction and manipulation (`pdftotext`, `pdfinfo`, `pdfimages`, `pdftoppm`, etc.). |
-| `proton-cli` | Unofficial CLI for Proton services (Mail, Drive, Calendar, Pass, Contacts); SRP auth + E2E encryption. Commands read `<app> <collection> <verb>`; `--output json/yaml` returns each list as an envelope keyed by its plural name, with a `count`. |
+| `proton-cli` | Unofficial CLI for Proton services (Mail, Drive, Calendar, Pass, Contacts); SRP auth + E2E encryption, acting as the profile signed in with `proton-cli account login`. |
 | `python3` | Scripting, data processing, and quick computations. |
 | `tesseract` | OCR (extracting text from images and scanned PDFs). |
 | `zellij` | Terminal multiplexer; every terminal runs inside a session. Use the CLI to list, attach, or interact with other sessions/panes. |

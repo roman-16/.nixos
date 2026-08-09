@@ -222,24 +222,27 @@ in
           '';
         };
 
-        # Proton credentials, consumed as the unit EnvironmentFile by the app (so the
-        # agent's proton-cli is authenticated), the scheduled jobs, and the SQLite
-        # backup job (same world-readable /nix/store trade-off as the git deploy keys
-        # above). PROTON_NO_INPUT turns a missing credential into an error instead of
-        # a question, so an unattended run fails loudly rather than hanging on a
-        # prompt nobody is there to see.
-        protonEnv = pkgs.writeText "apollo-proton-env" ''
-          PROTON_USER=${secrets.proton.user or ""}
-          PROTON_PASSWORD=${secrets.proton.password or ""}
-          PROTON_NO_INPUT=1
-        '';
+        # The Proton account password, handed to `account login` as a file rather
+        # than through argv or the environment, neither of which can hold a secret
+        # (same world-readable /nix/store trade-off as the git deploy keys above).
+        protonPassword = pkgs.writeText "apollo-proton-password" (secrets.proton.password or "");
+
+        # An account reaches proton-cli through `account login`, which saves a session
+        # under $HOME. Signing in again with a live session only resumes it, so a unit
+        # can do this before its real work and recover on its own from a session that
+        # expired or was revoked.
+        protonLogin = ''
+          ${protonCli}/bin/proton-cli account login --quiet \
+            --user ${secrets.proton.user or ""} --password-file %d/proton-password'';
+
+        protonCredential = "proton-password:${protonPassword}";
 
         # Nightly off-box backup of Apollo's SQLite DB to Proton Drive (mirrors the
         # trader VM): online-snapshot the live DB, zstd-compress, upload, keep the
-        # newest N. Runs as root to read the apollo-owned DB; Proton creds come from
-        # the unit EnvironmentFile. Restore: download a *.sqlite.zst, `zstd -d` it,
-        # stop apollo.service, drop it in as /var/lib/apollo/apollo.sqlite (chown
-        # apollo:apollo, delete any -wal/-shm), start.
+        # newest N. Runs as root to read the apollo-owned DB. Restore: download a
+        # *.sqlite.zst, `zstd -d` it, stop apollo.service, drop it in as
+        # /var/lib/apollo/apollo.sqlite (chown apollo:apollo, delete any -wal/-shm),
+        # start.
         dbBackupScript = pkgs.writeShellApplication {
           name = "apollo-db-backup";
           runtimeInputs = [
@@ -302,7 +305,7 @@ in
                 echo "pruning $name"
                 paths+=("$remote/$name")
               done <<<"$stale"
-              proton-cli drive items delete "''${paths[@]}"
+              proton-cli drive items delete --yes "''${paths[@]}"
             fi
             echo "backup complete"
           '';
@@ -341,15 +344,15 @@ in
               OFFERS_DIR = "%S/apollo/workspace/offers";
               WEATHER_DIR = "%S/apollo/workspace/weather";
             };
-            # Proton credentials for the calendar; HOME is already the app's state directory, so the
-            # cached proton-cli session is shared with the agent rather than re-established here.
-            environmentFile = protonEnv;
             exec = "${./agent/skills/briefing/scripts/briefing.py} show";
             onCalendar = "*-*-* 08:00:00";
             packages = [
               pkgs.python3
               protonCli
             ];
+            # HOME is the app's state directory, so this keeps the session the agent
+            # uses alive as much as it serves the briefing's own calendar read.
+            proton = true;
           };
         };
 
@@ -364,6 +367,7 @@ in
             PORT = toString port;
             SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
           }
+          // lib.optionalAttrs (job.proton or false) { PROTON_NO_INPUT = "1"; }
           // (job.environment or { });
 
           path = job.packages or [ ];
@@ -378,7 +382,12 @@ in
             User = "apollo";
             WorkingDirectory = "%S/apollo";
           }
-          // lib.optionalAttrs (job ? environmentFile) { EnvironmentFile = job.environmentFile; };
+          // lib.optionalAttrs (job.proton or false) {
+            # Leading "-": a job does more than talk to Proton, so an unreachable
+            # Proton costs it that part of its work rather than the whole run.
+            ExecStartPre = "-${protonLogin}";
+            LoadCredential = protonCredential;
+          };
         };
 
         # Persistent, so a schedule missed while the VM was down runs once on the next boot
@@ -527,6 +536,9 @@ in
                 # (expensive cache writes) as a 5min cache would after every gap.
                 PI_CACHE_RETENTION = "long";
                 PORT = toString port;
+                # A missing credential or an unanswerable question becomes an error
+                # instead of a prompt nobody is there to see.
+                PROTON_NO_INPUT = "1";
                 SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
               };
 
@@ -536,13 +548,17 @@ in
               path = agentPkgs;
 
               serviceConfig = {
-                EnvironmentFile = protonEnv;
                 ExecStart = "${apolloApp}/bin/apollo";
+                # Leading "-": Proton is one of the agent's capabilities, not its
+                # reason to exist, so an unreachable Proton must not keep the
+                # assistant off WhatsApp.
                 ExecStartPre = [
                   setup
                   gitBootstrap
+                  "-${protonLogin}"
                 ];
                 Group = "apollo";
+                LoadCredential = protonCredential;
                 PrivateTmp = true;
                 RemoveIPC = true;
                 Restart = "on-failure";
@@ -591,11 +607,17 @@ in
               onFailure = [ "apollo-db-backup-alert.service" ];
               wants = [ "network-online.target" ];
 
-              environment.HOME = "%S/apollo-db-backup";
+              environment = {
+                HOME = "%S/apollo-db-backup";
+                PROTON_NO_INPUT = "1";
+              };
 
               serviceConfig = {
-                EnvironmentFile = protonEnv;
                 ExecStart = lib.getExe dbBackupScript;
+                # This unit exists to talk to Proton, so a sign-in it cannot complete
+                # ends the run here rather than at the first Drive call.
+                ExecStartPre = protonLogin;
+                LoadCredential = protonCredential;
                 StateDirectory = "apollo-db-backup";
                 StateDirectoryMode = "0700";
                 TimeoutStartSec = "1800s";
