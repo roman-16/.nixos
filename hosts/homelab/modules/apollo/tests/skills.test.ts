@@ -5,12 +5,15 @@ import { parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "bun:test";
 
 /**
- * Every skill Apollo ships has to actually load.
+ * Every skill Apollo ships has to actually load, and every command its SKILL.md documents has to
+ * actually run.
  *
- * pi reads each SKILL.md's frontmatter with a real YAML parser and drops the skill when that throws,
- * saying nothing about it. So a skill can be written, symlinked into place, deployed and simply not
- * be there - with the service healthy, the file present and every other check green. Nothing else in
- * this suite looks at a SKILL.md, which is exactly how that gets missed.
+ * Both fail quietly. pi reads each SKILL.md's frontmatter with a real YAML parser and drops the
+ * skill when that throws, saying nothing about it; a script that ships without its executable bit
+ * lands in the read-only store as a file nothing downstream can repair. Either way the skill can be
+ * written, symlinked into place, deployed and simply not work - with the service healthy, the files
+ * present and every other check green. Nothing else in this suite looks at what is under
+ * agent/skills, which is exactly how that gets missed.
  */
 
 const SKILLS_DIR = join(import.meta.dir, "../agent/skills");
@@ -18,6 +21,16 @@ const SKILLS_DIR = join(import.meta.dir, "../agent/skills");
 const skills = readdirSync(SKILLS_DIR).filter((name) =>
   statSync(join(SKILLS_DIR, name)).isDirectory(),
 );
+
+/** The scripts a skill ships. Some skills have none, and scripts/ also collects stray bytecode. */
+function scriptsOf(skill: string): string[] {
+  const dir = join(SKILLS_DIR, skill, "scripts");
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .sort();
+}
 
 interface SkillFrontmatter extends Record<string, unknown> {
   description?: unknown;
@@ -60,6 +73,22 @@ describe("shipped skills", () => {
         expect(typeof description).toBe("string");
         expect((description as string).trim().length).toBeGreaterThan(20);
       });
+
+      for (const script of scriptsOf(name)) {
+        describe(script, () => {
+          const file = join(SKILLS_DIR, name, "scripts", script);
+
+          it("is executable, so the command its SKILL.md documents runs as written", () => {
+            // Nix carries exactly this bit through to the store and no further, so a 644 here is a
+            // script that can never be executed - on the VM, on every machine, for good.
+            expect(statSync(file).mode & 0o111).not.toBe(0);
+          });
+
+          it("names its interpreter", () => {
+            expect(readFileSync(file, "utf8").startsWith("#!")).toBe(true);
+          });
+        });
+      }
     });
   }
 });
