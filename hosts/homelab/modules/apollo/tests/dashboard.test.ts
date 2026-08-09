@@ -77,6 +77,12 @@ describe("renderPage", () => {
     expect(html).toContain("shouldSwap");
   });
 
+  it("opens the daily token breakdown on the most recent day", () => {
+    const tag = /<div id="tokens-daily"[^>]*>/.exec(renderPage("v"))?.[0] ?? "";
+    expect(tag).toContain("overflow-x-auto");
+    expect(tag).toContain("flex-row-reverse");
+  });
+
   it("splits the chat into a reversed viewport and a transcript in reading order", () => {
     const html = renderPage("v");
     // #chat is reversed for bottom-anchoring; its single child holds the rows in DOM order, so

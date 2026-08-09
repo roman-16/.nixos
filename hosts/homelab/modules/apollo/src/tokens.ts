@@ -67,6 +67,8 @@ export interface TokenUsageInput {
 
 export interface TokenStore {
   daily(range: TokenRange): DayTokens[];
+  /** The busiest day on record, in tokens: the scale every daily bar is drawn against. */
+  peak(): number;
   record(usage: TokenUsageInput, model: string, time: number): void;
   totals(range: TokenRange): TokenTotals;
 }
@@ -160,10 +162,21 @@ export function createTokenStore(db: Database): TokenStore {
       GROUP BY day
       ORDER BY day`,
   );
+  // Deliberately unbounded by range: the daily chart's vertical scale is a property of the data,
+  // not of whatever window is being looked at.
+  const selectPeak = db.query(
+    `SELECT COALESCE(MAX(total), 0) AS peak
+       FROM (SELECT SUM(input + output + cache_read + cache_write) AS total
+               FROM tokens
+              GROUP BY date(time / 1000, 'unixepoch', 'localtime'))`,
+  );
   return {
     daily(range) {
       const rows = selectDaily.all(sinceFor(range)) as DailyRow[];
       return rows.map((row) => ({ ...rowMaps(row), day: row.day }));
+    },
+    peak() {
+      return Number((selectPeak.get() as { peak: number }).peak);
     },
     record(usage, model, time) {
       insert.run(
@@ -262,19 +275,25 @@ function dayLabel(iso: string): string {
  * Render the #tokens-daily fragment: one vertical stacked bar per active day in the range
  * (hover a segment for its tokens + cost, exactly like the summary bar), each labelled with
  * the day's total tokens (hover for the day's cost). Colors match the legend above, so no
- * separate legend is needed. Fixed-width bars spread across the full width (flush to both
- * edges, even space between; a lone bar is centered), scrolling horizontally only when a
- * range has more days than comfortably fit.
+ * separate legend is needed.
+ *
+ * `peak` is the busiest day on record, and it alone sets the height, so a bar of a given size
+ * means the same number of tokens in every range: switching from 3m to 7d shrinks the bars
+ * rather than re-normalizing them, and a quiet week reads as a quiet week instead of redrawing
+ * itself to fill the box. Every day shown is on record, so nothing can outgrow the scale.
+ *
+ * Fixed-width bars spread across the full width (flush to both edges, even space between; a lone
+ * bar is centered) and grow past it once a range holds more days than fit, which is what makes
+ * the row scroll - and what lets the reversed scroller around it open on the newest day.
  */
-export function renderTokensDaily(days: DayTokens[]): string {
+export function renderTokensDaily(days: DayTokens[], peak: number): string {
   if (days.length === 0) {
     return `<p class="text-sm text-neutral-500">No daily token usage for this range yet.</p>`;
   }
-  const maxTotal = Math.max(...days.map((d) => sum(d.tokens)));
   const columns = days
     .map((d) => {
       const dayTokens = sum(d.tokens);
-      const fillPct = maxTotal > 0 ? (dayTokens / maxTotal) * 100 : 0;
+      const fillPct = peak > 0 ? (dayTokens / peak) * 100 : 0;
       const segments = CATEGORIES.filter((cat) => d.tokens[cat.key] > 0)
         .map((cat) => {
           const tokens = d.tokens[cat.key];
@@ -297,5 +316,5 @@ export function renderTokensDaily(days: DayTokens[]): string {
     })
     .join("");
   const justify = days.length === 1 ? "justify-center" : "justify-between";
-  return `<div class="flex w-full ${justify} gap-2 pb-1">${columns}</div>`;
+  return `<div class="flex w-max min-w-full shrink-0 ${justify} gap-2 pb-1">${columns}</div>`;
 }

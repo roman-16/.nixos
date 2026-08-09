@@ -281,10 +281,11 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
       "GET /tokens/daily",
       (_req, url) =>
         new Response(
-          renderTokensDaily(tokenStore.daily(parseRange(url.searchParams.get("range")))),
-          {
-            headers: htmlHeaders,
-          },
+          renderTokensDaily(
+            tokenStore.daily(parseRange(url.searchParams.get("range"))),
+            tokenStore.peak(),
+          ),
+          { headers: htmlHeaders },
         ),
     ],
     [

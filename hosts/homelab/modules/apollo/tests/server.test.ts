@@ -108,6 +108,7 @@ function stubDeps(over: Partial<ServerDeps> = {}): ServerDeps {
     } as unknown as ServerDeps["session"],
     tokenStore: {
       daily: () => [],
+      peak: () => 0,
       totals: () => ({
         cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
         tokens: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },

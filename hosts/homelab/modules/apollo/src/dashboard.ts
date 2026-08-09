@@ -49,6 +49,10 @@ function filterChip(name: string, value: string, label: string, checked = false)
  * bottom-anchored and stays put both when a message arrives and when older ones load, with
  * no scroll bookkeeping. Its single child #chat-log holds the transcript in reading order,
  * so selection, copy and screen readers follow the conversation as it appears.
+ *
+ * #tokens-daily is the same arrangement turned on its side: the scroller is reversed so a range
+ * too wide to fit opens on the most recent day, while its single child keeps the days in
+ * chronological order, oldest to newest, left to right.
  */
 export function renderPage(version: string): string {
   return `<!doctype html>
@@ -109,7 +113,7 @@ export function renderPage(version: string): string {
             <span class="text-[10px] text-neutral-500 transition group-open:rotate-90">▶</span>
             Daily breakdown
           </summary>
-          <div id="tokens-daily" class="mt-3 overflow-x-auto"
+          <div id="tokens-daily" class="mt-3 flex flex-row-reverse overflow-x-auto"
             hx-get="/tokens/daily" hx-include="#tokens-range" hx-trigger="load, change from:#tokens-range, every 15s" hx-swap="innerHTML">
             <p class="text-sm text-neutral-500">Loading…</p>
           </div>
