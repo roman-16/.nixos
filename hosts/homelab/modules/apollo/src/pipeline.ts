@@ -14,7 +14,7 @@ import type { ChatStore } from "./chat-store";
 import { type CompactionReason, compactionReason } from "./compaction-schedule";
 import type { Config } from "./config";
 import { droppedImageNote, fitImages } from "./images";
-import type { Inbox, InboxEntry } from "./inbox";
+import type { Admission, Inbox, InboxEntry } from "./inbox";
 import type { Kv } from "./kv";
 import type { MemoryFolder } from "./memory";
 import { foldReason } from "./memory-schedule";
@@ -25,7 +25,7 @@ import {
   formatLogNotice,
   isAllowed,
   jidForNumber,
-  outageNotice,
+  linkGapNote,
   skillContextNote,
   splitInternal,
   voiceFailure,
@@ -56,9 +56,33 @@ const MAINTENANCE_TICK_MS = 60_000;
 const MAINTENANCE_RETRY_MS = 10 * 60_000;
 
 const LINK_ALIVE_KEY = "linkAliveAt";
+const LINK_GAP_KEY = "linkGap";
 const LAST_SENT_KEY = "lastInboundSentAt";
 const LAST_COMPACTED_KEY = "lastCompactedAt";
 const MEMORY_FOLDED_AT_KEY = "memoryFoldedAt";
+
+/** How each verdict on an inbound message reads in the log. */
+const ADMISSION_LOG: Record<Admission, string> = {
+  admitted: "message admitted",
+  duplicate: "message already seen",
+  expired: "a message older than the inbox horizon was dropped unanswered",
+};
+
+/** A window in which Apollo was off WhatsApp, owed to its next turn. */
+interface LinkGap {
+  from: number;
+  to: number;
+}
+
+function isContextNote(value: unknown): value is ContextNote {
+  if (typeof value !== "object" || value === null) return false;
+  const note = value as Record<string, unknown>;
+  return (
+    typeof note.body === "string" &&
+    typeof note.info === "string" &&
+    typeof note.source === "string"
+  );
+}
 
 export interface PipelineDeps {
   anthropic: Anthropic;
@@ -78,7 +102,7 @@ export interface Pipeline {
   attach(socket: WhatsApp): void;
   /** Deliver a skill-originated message to the user out of band: send it, record it in the chat DB, and queue a context note for the agent's next turn. Text alone, or an image with `text` as its caption. */
   emitSkillMessage(text: string, source: string, attachment?: Attachment): Promise<void>;
-  /** Handle a (re)connect: report any gap, apply the profile picture, and deliver what is owed. */
+  /** Handle a (re)connect: note any gap, apply the profile picture, and deliver what is owed. */
   handleConnect(): void;
   /** Take a delivery from WhatsApp into the durable inbox, then hand over whatever is owed. */
   handleInbound(messages: InboundMessage[]): Promise<void>;
@@ -174,26 +198,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   function readSkillNotes(): ContextNote[] {
     try {
       const parsed: unknown = JSON.parse(kv.get("skillNotes") ?? "[]");
-      if (!Array.isArray(parsed)) return [];
-      return parsed.flatMap((entry): ContextNote[] => {
-        // Tolerate the older shape where a note was persisted as a single pre-formatted string.
-        if (typeof entry === "string") return [{ body: "", info: entry, source: "skill" }];
-        if (
-          entry &&
-          typeof entry === "object" &&
-          typeof (entry as { info?: unknown }).info === "string"
-        ) {
-          const note = entry as { body?: unknown; info: string; source?: unknown };
-          return [
-            {
-              body: typeof note.body === "string" ? note.body : "",
-              info: note.info,
-              source: typeof note.source === "string" ? note.source : "skill",
-            },
-          ];
-        }
-        return [];
-      });
+      return Array.isArray(parsed) ? parsed.filter(isContextNote) : [];
     } catch {
       return [];
     }
@@ -201,6 +206,34 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
   function clearSkillNotes(): void {
     kv.set("skillNotes", "[]");
+  }
+
+  // The gap since Apollo was last reachable on WhatsApp, kept until a turn carries it. Persisted like
+  // the skill notes, so a restart straight after the reconnect does not lose it.
+  function readLinkGap(): LinkGap | undefined {
+    try {
+      const parsed: unknown = JSON.parse(kv.get(LINK_GAP_KEY) ?? "null");
+      if (typeof parsed !== "object" || parsed === null) return undefined;
+      const { from, to } = parsed as Record<string, unknown>;
+      return typeof from === "number" && typeof to === "number" ? { from, to } : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Record a gap, merged with one still owed: a flapping link is one window, not ten notes. */
+  function noteLinkGap(gap: LinkGap): void {
+    const owed = readLinkGap();
+    kv.set(
+      LINK_GAP_KEY,
+      JSON.stringify(
+        owed ? { from: Math.min(owed.from, gap.from), to: Math.max(owed.to, gap.to) } : gap,
+      ),
+    );
+  }
+
+  function clearLinkGap(): void {
+    kv.remove(LINK_GAP_KEY);
   }
 
   // Deliver a message a skill produced (a fired reminder, a macros reply, a rendered diagram)
@@ -493,6 +526,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     const previous = stored > 0 ? stored : undefined;
     const images = batch.flatMap((entry) => entry.images);
     const carried = batch.flatMap((entry) => entry.contexts);
+    // The clock first, then any hole in it, then what was delivered while the agent was away.
+    const gap = readLinkGap();
+    const owed = [...(gap ? [linkGapNote(gap.from, gap.to)] : []), ...readSkillNotes()];
     const single = batch.length === 1 ? batch[0] : undefined;
     if (single) {
       const note = timeContext({
@@ -502,8 +538,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         sentAt: single.sentAt,
         staleMs: config.staleMs,
       });
-      const notes = [note, ...readSkillNotes(), ...carried];
-      return { images, prompt: withContext(notes, single.text || "(image)") };
+      return { images, prompt: withContext([note, ...owed, ...carried], single.text || "(image)") };
     }
     const { note, text } = buildBacklog(
       batch.map((entry) => ({
@@ -513,7 +548,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       })),
       now,
     );
-    return { images, prompt: withContext([note, ...readSkillNotes(), ...carried], text) };
+    return { images, prompt: withContext([note, ...owed, ...carried], text) };
   }
 
   /**
@@ -558,6 +593,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         }
         inbox.markHandled(batch.map((entry) => entry.waId));
         clearSkillNotes();
+        clearLinkGap();
         kv.set(LAST_SENT_KEY, String(batch[batch.length - 1]!.sentAt));
       }
     } finally {
@@ -590,11 +626,11 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       kv.set(LINK_ALIVE_KEY, String(now));
       if (aliveAt > 0 && now - aliveAt > config.linkGraceMs) {
         logger.info({ ms: now - aliveAt, since: new Date(aliveAt).toISOString() }, "link gap");
-        // Whatever WhatsApp queued arrives as its own catch-up turn; this covers the rest, since a
-        // long enough gap can outlive that queue and only the user knows what is missing.
-        void emitSkillMessage(outageNotice(aliveAt, now), "status").catch((error) =>
-          logger.warn({ error }, "outage notice failed"),
-        );
+        // Nothing is sent about it: whatever WhatsApp queued arrives as its own catch-up turn, which
+        // says for itself that it was late, and a gap that queued nothing is indistinguishable from
+        // one nobody wrote into. So the gap is only handed to the next turn, where it can answer for
+        // the silence rather than interrupt to ask about it.
+        noteLinkGap({ from: aliveAt, to: now });
       }
       void drain();
     },
@@ -625,15 +661,18 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         const { dropped, images, resized } = await fitImages(raw, resizeImage);
         if (dropped > 0) logger.warn({ dropped }, "images could not be fitted for the model");
         const text = [spoken, droppedImageNote(dropped)].filter(Boolean).join("\n").trim();
-        const stored = inbox.admit({
+        const admission = inbox.admit({
           contexts,
           images,
           sentAt: message.sentAt,
           text,
           waId: message.waId,
         });
-        if (stored) admitted += 1;
-        logger.info(
+        if (admission === "admitted") admitted += 1;
+        // A message too old to answer is the one case where something the user sent is knowably
+        // lost, so it warns like any other dropped content; the rest is bookkeeping.
+        const level = admission === "expired" ? "warn" : "info";
+        logger[level](
           {
             chars: text.length,
             from: message.number,
@@ -644,7 +683,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
             sentAt: new Date(message.sentAt).toISOString(),
             voice: Boolean(message.audio),
           },
-          stored ? "message admitted" : "message already seen",
+          ADMISSION_LOG[admission],
         );
       }
       if (admitted === 0) {

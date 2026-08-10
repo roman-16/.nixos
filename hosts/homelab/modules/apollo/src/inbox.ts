@@ -30,9 +30,15 @@ export interface InboxEntry {
   waId: string;
 }
 
+/**
+ * What became of a message offered to the inbox. The two refusals mean opposite things - a duplicate
+ * was already answered, an expired one never will be - so they are never reported as one.
+ */
+export type Admission = "admitted" | "duplicate" | "expired";
+
 export interface Inbox {
-  /** Store a message, unless it was already seen or is older than the memory horizon. */
-  admit(entry: InboxEntry): boolean;
+  /** Take a message in, unless it was already seen or is older than the memory horizon. */
+  admit(entry: InboxEntry): Admission;
   /** Mark messages as delivered to the agent, dropping their stored payload. */
   markHandled(waIds: string[]): void;
   /** The oldest undelivered messages, in send order. */
@@ -64,7 +70,7 @@ export function createInbox(db: Database, horizonMs: number): Inbox {
 
   return {
     admit(entry) {
-      if (entry.sentAt < Date.now() - horizonMs) return false;
+      if (entry.sentAt < Date.now() - horizonMs) return "expired";
       const payload = JSON.stringify({
         contexts: entry.contexts,
         images: entry.images,
@@ -73,7 +79,7 @@ export function createInbox(db: Database, horizonMs: number): Inbox {
       // The unique message id is the whole of the dedup: a redelivery, a reconnect, or a sync
       // offering the same message again changes nothing.
       const { changes } = insert.run(entry.waId, entry.sentAt, Date.now(), payload);
-      return changes > 0;
+      return changes > 0 ? "admitted" : "duplicate";
     },
     markHandled(waIds) {
       const at = Date.now();

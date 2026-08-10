@@ -82,15 +82,23 @@ export function splitUserContext(text: string): SplitContext {
 }
 
 /**
- * What the user is told after the WhatsApp link was gone long enough to have missed something.
- * WhatsApp replays what it queued, but a long enough gap outlives that queue, and only the user
- * knows what they sent - so the gap is stated plainly rather than hidden.
+ * A window in which Apollo was off WhatsApp, as a note for its next turn.
+ *
+ * Nothing is sent about it. WhatsApp replays what it queued, so anything the user wrote arrives as
+ * its own late turn that already says so - and a gap that queued nothing looks exactly like a gap
+ * nobody wrote into, which makes "forward anything that's missing" a guess priced at an interruption
+ * on every restart. Handed to the next turn instead, where it can account for the silence if the
+ * silence ever comes up.
  */
-export function outageNotice(from: number, to: number): string {
-  return (
-    `⚠️ I was offline for ${describeDelay(to - from)}, from ${stamp(new Date(from))} until ${stamp(new Date(to))}. ` +
-    `I'll catch up on whatever WhatsApp kept for me - forward anything that's missing.`
-  );
+export function linkGapNote(from: number, to: number): ContextNote {
+  return {
+    body:
+      "Anything the user sent in that window may never have reached me. Don't raise it unprompted: " +
+      "it only matters if something from around then turns out to be missing, or if they ask why I " +
+      "went quiet.",
+    info: `My WhatsApp link was down for ${describeDelay(to - from)}, from ${stamp(new Date(from))} until ${stamp(new Date(to))}.`,
+    source: "link",
+  };
 }
 
 /** Stand-in for a voice note that could not be transcribed, so the message still reaches the agent. */

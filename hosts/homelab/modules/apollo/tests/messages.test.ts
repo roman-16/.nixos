@@ -8,6 +8,7 @@ import {
   formatLogNotice,
   isAllowed,
   jidForNumber,
+  linkGapNote,
   numberFromJid,
   skillContextNote,
   splitInternal,
@@ -298,5 +299,37 @@ describe("skillContextNote", () => {
 
   it("truncates only a very long body", () => {
     expect(skillContextNote("macros", "x".repeat(5000)).body).toContain("more chars");
+  });
+});
+
+describe("linkGapNote", () => {
+  const from = new Date(2026, 7, 10, 22, 40).getTime();
+  const to = new Date(2026, 7, 10, 22, 52).getTime();
+
+  it("tags itself as the link and names the window and how long it lasted", () => {
+    const note = linkGapNote(from, to);
+    expect(note.source).toBe("link");
+    expect(note.info).toContain("12 minutes");
+    expect(note.info).toContain("Monday 10.08.2026 22:40");
+    expect(note.info).toContain("Monday 10.08.2026 22:52");
+  });
+
+  it("says what the gap may have cost, so the silence can be accounted for", () => {
+    expect(linkGapNote(from, to).body).toContain("may never have reached me");
+  });
+
+  it("tells the agent not to volunteer it", () => {
+    expect(linkGapNote(from, to).body).toContain("Don't raise it unprompted");
+  });
+
+  it("is metadata, so it never asks the user for anything", () => {
+    const note = linkGapNote(from, to);
+    const whole = `${note.info} ${note.body}`.toLowerCase();
+    expect(whole).not.toContain("\u26a0");
+    expect(whole).not.toContain("forward anything");
+  });
+
+  it("describes a long gap in the largest unit that fits", () => {
+    expect(linkGapNote(from, from + 3 * 86_400_000).info).toContain("3 days");
   });
 });

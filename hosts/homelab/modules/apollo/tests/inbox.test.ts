@@ -27,7 +27,7 @@ describe("createInbox", () => {
     // One message, built once: entry() stamps Date.now(), so building it twice compares two
     // different milliseconds whenever the clock ticks between the calls.
     const message = entry();
-    expect(inbox.admit(message)).toBe(true);
+    expect(inbox.admit(message)).toBe("admitted");
     expect(inbox.pending(10)).toEqual([message]);
   });
 
@@ -43,24 +43,34 @@ describe("createInbox", () => {
 
   it("ignores a message it has already seen, whatever offered it", () => {
     const { inbox } = freshInbox();
-    expect(inbox.admit(entry())).toBe(true);
-    expect(inbox.admit(entry())).toBe(false);
+    expect(inbox.admit(entry())).toBe("admitted");
+    expect(inbox.admit(entry())).toBe("duplicate");
     expect(inbox.pending(10)).toHaveLength(1);
   });
 
   it("rejects a message from beyond the horizon, where it can't prove it hasn't seen it", () => {
     const { inbox } = freshInbox();
     expect(inbox.admit(entry({ sentAt: Date.now() - HORIZON_MS - 1000, waId: "ancient" }))).toBe(
-      false,
+      "expired",
     );
     expect(inbox.pending(10)).toEqual([]);
+  });
+
+  it("tells a message it has answered apart from one it never will", () => {
+    // Both are refusals and neither is pending, but one was dealt with and the other is lost.
+    const { inbox } = freshInbox();
+    inbox.admit(entry({ waId: "seen" }));
+    expect(inbox.admit(entry({ waId: "seen" }))).toBe("duplicate");
+    expect(inbox.admit(entry({ sentAt: 0, waId: "ancient" }))).toBe("expired");
   });
 
   it("admits a days-late message that arrives after newer ones", () => {
     const { inbox } = freshInbox();
     inbox.admit(entry({ sentAt: Date.now(), waId: "live" }));
     // The offline queue can hand over a message from days ago long after newer ones were answered.
-    expect(inbox.admit(entry({ sentAt: Date.now() - 3 * 86_400_000, waId: "queued" }))).toBe(true);
+    expect(inbox.admit(entry({ sentAt: Date.now() - 3 * 86_400_000, waId: "queued" }))).toBe(
+      "admitted",
+    );
   });
 
   it("serves pending messages oldest first, however they arrived", () => {
@@ -94,7 +104,7 @@ describe("createInbox", () => {
     const { inbox } = freshInbox();
     inbox.admit(entry());
     inbox.markHandled(["A1"]);
-    expect(inbox.admit(entry())).toBe(false);
+    expect(inbox.admit(entry())).toBe("duplicate");
   });
 
   it("drops the stored payload once handled", () => {
