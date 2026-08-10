@@ -36,12 +36,6 @@ VAULT = Path(
     or Path(os.environ.get("APOLLO_WORKSPACE") or os.getcwd()) / "obsidian"
 )
 
-# Apollo signs its own commits: the vault's configured identity is the user's, and in a vault two
-# parties write to, attribution is the only thing that says later which change came from a
-# conversation and which from the app.
-AUTHOR_NAME = "Apollo"
-AUTHOR_EMAIL = "apollo@halerc.xyz"
-
 # Every commit in this vault is a timestamp, because that is what the Obsidian plugin on the user's
 # devices writes and a history reads better uniform than half-annotated. What changed is in the diff.
 MESSAGE_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -177,8 +171,9 @@ def commit_local() -> list:
         git("reset", "--quiet")  # the notes stay exactly as they are, just unstaged
         die("not committing: these notes still hold an unresolved merge, so resolve them first:\n  "
             + "\n  ".join(broken))
-    git("-c", f"user.name={AUTHOR_NAME}", "-c", f"user.email={AUTHOR_EMAIL}",
-        "commit", "--quiet", "--message", datetime.now().strftime(MESSAGE_FORMAT))
+    # Committed as whoever the clone is configured as, which is the user: it is their vault, the
+    # identity is set on it in one place, and a commit made from here should read like any other.
+    git("commit", "--quiet", "--message", datetime.now().strftime(MESSAGE_FORMAT))
     return paths
 
 

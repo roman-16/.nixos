@@ -174,10 +174,11 @@ class TestSyncLocalWork:
         run("sync")
         assert re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", vault.subject())
 
-    def test_apollo_signs_its_own_commits(self, vault):
+    def test_a_commit_carries_the_identity_the_vault_is_configured_with(self, vault):
+        # The vault is the user's, and its identity is set on the clone, so nothing here overrides it.
         vault.write("Car.md", "notes\n")
         run("sync")
-        assert vault.author() == "Apollo|apollo@halerc.xyz"
+        assert vault.author() == "Vault|vault@example.test"
 
     def test_names_with_spaces_and_apostrophes_survive(self, vault, capsys):
         vault.write("New Year's Resolution/2026.md", "- ride more\n")
