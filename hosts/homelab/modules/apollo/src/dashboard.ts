@@ -1,6 +1,7 @@
 import type { ContextUsage } from "@earendil-works/pi-coding-agent";
 import QRCode from "qrcode";
 
+import type { AnthropicStatus } from "./anthropic";
 import { barColor, escapeHtml, humanTokens, truncate } from "./format";
 import type { LogRecord } from "./logs";
 import { RANGE_LABELS } from "./tokens";
@@ -247,7 +248,9 @@ export function renderPage(version: string): string {
 }
 
 export interface SummaryArgs {
-  anthropicConnected: boolean;
+  /** When the sign-in expired (ISO), shown with the `expired` status. */
+  anthropicExpiredAt?: string;
+  anthropicStatus: AnthropicStatus;
   authUrl: string;
   connectError?: string;
   linking: boolean;
@@ -296,23 +299,46 @@ async function linkScanning(state: WhatsAppState): Promise<string> {
   </div>`;
 }
 
-function claudeBody(args: SummaryArgs): string {
-  if (args.anthropicConnected) {
-    return `<div class="space-y-4">
-      ${statusRow("bg-emerald-400", "Connected to Anthropic")}
-      ${args.usage ? renderUsage(args.usage) : `<p class="text-xs text-neutral-500">Usage data unavailable right now.</p>`}
-    </div>`;
-  }
-  return `<div class="space-y-4">
-    ${statusRow("bg-neutral-600", "Not connected to Anthropic")}
-    <p class="text-xs leading-relaxed text-neutral-400">Authorize with your Claude account. You'll be redirected to a localhost page that won't load - that's expected: copy that URL (or the code in it) and paste it below.</p>
-    <a href="${args.authUrl}" target="_blank" rel="noreferrer" class="${PRIMARY_BUTTON}">Authorize with Anthropic</a>
+/** `DD.MM HH:MM` for an ISO timestamp, or "" when it isn't one. */
+function shortStamp(iso: string | undefined): string {
+  if (!iso) return "";
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return "";
+  return `${two(at.getDate())}.${two(at.getMonth() + 1)} ${two(at.getHours())}:${two(at.getMinutes())}`;
+}
+
+/** The authorize link and paste-code form: the one way back, whichever way the sign-in is absent. */
+function claudeConnect(args: SummaryArgs): string {
+  return `<a href="${args.authUrl}" target="_blank" rel="noreferrer" class="${PRIMARY_BUTTON}">Authorize with Anthropic</a>
     <form hx-post="/connect" hx-target="#summary" hx-swap="innerHTML" class="flex gap-2">
       <input name="code" placeholder="Paste code or redirect URL" autocomplete="off" spellcheck="false"
         class="min-w-0 flex-1 rounded-xl border border-white/10 bg-neutral-950/60 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus:border-indigo-400 focus:outline-none" />
       <button class="${GHOST_BUTTON}">Connect</button>
     </form>
-    ${args.connectError ? `<p class="text-xs text-red-400">${args.connectError}</p>` : ""}
+    ${args.connectError ? `<p class="text-xs text-red-400">${args.connectError}</p>` : ""}`;
+}
+
+function claudeBody(args: SummaryArgs): string {
+  if (args.anthropicStatus === "connected") {
+    return `<div class="space-y-4">
+      ${statusRow("bg-emerald-400", "Connected to Anthropic")}
+      ${args.usage ? renderUsage(args.usage) : `<p class="text-xs text-neutral-500">Usage data unavailable right now.</p>`}
+    </div>`;
+  }
+  // An expired sign-in reads as broken rather than as never set up: it stopped Apollo answering at a
+  // knowable moment, and what is waiting on the other side of renewing it is a whole conversation.
+  if (args.anthropicStatus === "expired") {
+    const at = shortStamp(args.anthropicExpiredAt);
+    return `<div class="space-y-4">
+      ${statusRow("bg-red-500", `Sign-in expired${at ? ` · ${at}` : ""}`)}
+      <p class="text-xs leading-relaxed text-neutral-400">Apollo can't reach Claude until you authorize again, and is holding every message you send until then. Your conversation is untouched.</p>
+      ${claudeConnect(args)}
+    </div>`;
+  }
+  return `<div class="space-y-4">
+    ${statusRow("bg-neutral-600", "Not connected to Anthropic")}
+    <p class="text-xs leading-relaxed text-neutral-400">Authorize with your Claude account. You'll be redirected to a localhost page that won't load - that's expected: copy that URL (or the code in it) and paste it below.</p>
+    ${claudeConnect(args)}
   </div>`;
 }
 

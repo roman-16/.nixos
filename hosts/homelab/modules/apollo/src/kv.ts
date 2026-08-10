@@ -7,6 +7,7 @@ import type { Database } from "bun:sqlite";
  */
 export interface Kv {
   get(key: string): string | undefined;
+  remove(key: string): void;
   set(key: string, value: string): void;
 }
 
@@ -15,10 +16,14 @@ export function createKv(db: Database): Kv {
   const upsert = db.query(
     "INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
   );
+  const remove = db.query("DELETE FROM kv WHERE key = ?");
   return {
     get(key) {
       const row = select.get(key) as { value: string } | null;
       return row ? row.value : undefined;
+    },
+    remove(key) {
+      remove.run(key);
     },
     set(key, value) {
       upsert.run(key, value);

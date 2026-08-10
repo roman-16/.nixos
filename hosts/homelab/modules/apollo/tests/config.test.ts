@@ -20,6 +20,7 @@ describe("loadConfig", () => {
     expect(config.whatsappDir).toBe("/tmp/apollo/whatsapp");
     expect(config.remindersDir).toBe("/tmp/apollo/workspace/reminders");
     expect(config.dbPath).toBe("/tmp/apollo/apollo.sqlite");
+    expect(config.dashboardUrl).toBe("");
     expect(config.dayStartHour).toBe(4);
     expect(config.keepRecentTokens).toBe(16_000);
     expect(config.memoryFile).toBe("/tmp/apollo/workspace/MEMORY.md");
@@ -35,10 +36,12 @@ describe("loadConfig", () => {
 
   it("reads overrides from the environment", () => {
     const config = loadConfig({
+      APOLLO_DASHBOARD_URL: "https://apollo.halerc.xyz",
       APOLLO_MODEL: "anthropic/claude-opus-4-8",
       APOLLO_THINKING: "high",
       PORT: "9090",
     });
+    expect(config.dashboardUrl).toBe("https://apollo.halerc.xyz");
     expect(config.model).toBe("anthropic/claude-opus-4-8");
     expect(config.thinkingLevel).toBe("high");
     expect(config.port).toBe(9090);

@@ -1,8 +1,8 @@
-import type { AgentSession, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { Logger } from "pino";
 
 import { compactionSettings } from "./agent";
-import { type AnthropicLogin, createAnthropicLogin } from "./anthropic-login";
+import type { Anthropic } from "./anthropic";
 import { assetsVersion, htmlHeaders, serveAsset } from "./assets";
 import { type Attachment, loadAttachment } from "./attachments";
 import { parseTranscript, renderChat } from "./chat";
@@ -107,11 +107,11 @@ export function fragmentCache(): FragmentCache {
 }
 
 export interface ServerDeps {
+  anthropic: Anthropic;
   chatStore: ChatStore;
   config: Config;
   logStore: LogStore;
   logger: Logger;
-  modelRuntime: ModelRuntime;
   pipeline: Pipeline;
   runBackup: () => Promise<string>;
   session: AgentSession;
@@ -121,11 +121,11 @@ export interface ServerDeps {
 /** Start the dashboard + health HTTP server: htmx polls each fragment endpoint and swaps its region. */
 export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
   const {
+    anthropic,
     chatStore,
     config,
     logStore,
     logger,
-    modelRuntime,
     pipeline,
     runBackup,
     session,
@@ -141,7 +141,6 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
     summary: fragmentCache(),
   };
 
-  const anthropicLogin: AnthropicLogin = createAnthropicLogin(modelRuntime);
   let linking = false;
 
   let chatCache: { body: string; version: string } | undefined;
@@ -182,41 +181,45 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
     });
   }
 
-  /** The current Anthropic access token, refreshed by the runtime when it is close to expiring. */
-  async function anthropicToken(): Promise<string | undefined> {
-    return (await modelRuntime.getAuth("anthropic"))?.auth.apiKey;
-  }
-
   /**
-   * Build the #summary fragment from live state. Anthropic connection status is whether a credential
-   * exists (no refresh, no network), so a usage-endpoint blip never shows "not connected". The usage
-   * endpoint rate-limits aggressively: fetch at most once per TTL (stamp the time before awaiting so
-   * concurrent polls dedupe), and keep the last good value across failures so a transient 429 never
-   * blanks the numbers. While disconnected, the sign-in is started so its authorization URL can be
-   * offered right in the section; it parks until a code is posted to /connect.
+   * Build the #summary fragment from live state.
+   *
+   * The usage poll doubles as the standing proof that Claude is still reachable: resolving a token is
+   * the only way to learn that a credential has died, so a sign-in that expired overnight surfaces
+   * here rather than in the user's next message. The endpoint rate-limits aggressively, so it is
+   * fetched at most once per TTL (the time is stamped before awaiting so concurrent polls dedupe) and
+   * the last good value is kept across failures, so a transient 429 never blanks the numbers.
+   *
+   * While there is no sign-in the login is started so its authorization URL can be offered right in
+   * the section; it parks until a code is posted to /connect.
    */
   async function summaryBody(connectError?: string): Promise<string> {
     const state = pipeline.state();
     if (state.status === "connected") linking = false;
-    const connected = modelRuntime.hasConfiguredAuth("anthropic");
-    if (connected && (!usage || Date.now() - usage.fetchedAt >= USAGE_TTL_MS)) {
+    if (
+      anthropic.status() === "connected" &&
+      (!usage || Date.now() - usage.fetchedAt >= USAGE_TTL_MS)
+    ) {
       usage = { data: usage?.data ?? null, fetchedAt: Date.now() };
-      const token = await anthropicToken();
+      const token = await anthropic.token();
       const fresh = token ? await fetchUsage(token) : null;
       if (fresh) usage = { data: fresh, fetchedAt: usage.fetchedAt };
     }
+    // Read after the probe, which may just have retired the credential.
+    const status = anthropic.status();
     let authUrl = "";
     let error = connectError;
-    if (!connected) {
+    if (status !== "connected") {
       try {
-        authUrl = await anthropicLogin.url();
+        authUrl = await anthropic.url();
       } catch (failure) {
         logger.warn({ error: failure }, "anthropic login could not be started");
         error ??= "Couldn't start the Anthropic sign-in. Reload the page to try again.";
       }
     }
     return renderSummary({
-      anthropicConnected: connected,
+      anthropicExpiredAt: anthropic.expiredAt(),
+      anthropicStatus: status,
       authUrl,
       connectError: error,
       linking,
@@ -226,17 +229,25 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
   }
 
   const routes = new Map<string, Handler>([
-    // Health is the whole service, not just the HTTP server: an Apollo that cannot receive a message
-    // is down, however happily it serves pages. Reporting that is what turns the status page red.
+    // Health is the whole service, not just the HTTP server: an Apollo that cannot receive a message,
+    // or cannot answer one, is down however happily it serves pages. Reporting that is what turns the
+    // status page red - and for a sign-in only the user can renew it is the one alarm Apollo can
+    // raise without needing Claude to raise it.
     [
       "GET /health",
       () => {
         const { downSince } = pipeline.state();
         const downFor = downSince === undefined ? 0 : Date.now() - downSince;
-        if (downFor <= config.linkGraceMs) return new Response("ok");
-        return new Response(`whatsapp link down for ${Math.round(downFor / 60_000)}m`, {
-          status: 503,
-        });
+        if (downFor > config.linkGraceMs) {
+          return new Response(`whatsapp link down for ${Math.round(downFor / 60_000)}m`, {
+            status: 503,
+          });
+        }
+        const status = anthropic.status();
+        if (status !== "connected") {
+          return new Response(`claude sign-in ${status}`, { status: 503 });
+        }
+        return new Response("ok");
       },
     ],
     [
@@ -381,9 +392,11 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
         const code = new URLSearchParams(await req.text()).get("code") ?? "";
         let error: string | undefined;
         try {
-          await anthropicLogin.submit(code);
+          await anthropic.submit(code);
+          // Whatever piled up while Apollo had no sign-in is still owed; the pipeline's own sweep
+          // delivers it as a catch-up turn within the minute.
           logger.info("anthropic connected via dashboard");
-          const token = await anthropicToken();
+          const token = await anthropic.token();
           usage = { data: token ? await fetchUsage(token) : null, fetchedAt: Date.now() };
         } catch (failure) {
           logger.warn({ error: failure }, "anthropic login failed");

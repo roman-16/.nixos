@@ -27,10 +27,16 @@ function readTextIfExists(file: string): string | undefined {
   return existsSync(file) ? readFileSync(file, "utf8") : undefined;
 }
 
-export interface ApolloSession {
-  /** Models plus their resolved auth: the dashboard's Anthropic sign-in and status run through it. */
-  modelRuntime: ModelRuntime;
-  session: AgentSession;
+/**
+ * Models plus their resolved auth. Built before the session and handed to it, because what Apollo
+ * may ask of Claude is also asked about outside a session: by the dashboard, and by the maintenance
+ * that runs when there is no turn in flight.
+ */
+export function createModelRuntime(config: Config): Promise<ModelRuntime> {
+  return ModelRuntime.create({
+    authPath: join(config.agentDir, "auth.json"),
+    modelsPath: join(config.agentDir, "models.json"),
+  });
 }
 
 /**
@@ -45,6 +51,8 @@ export function compactionSettings(config: Config): { enabled: boolean; keepRece
 export interface ApolloSessionOptions {
   /** What the skills delivered to the user in a span, for the summarizer's evidence. */
   delivered?: (fromMs: number, toMs: number) => DeliveredMessage[];
+  /** Judge a failed maintenance call, so a dead sign-in is learned wherever it surfaces. */
+  observe?: (detail: string) => void;
   /** Book the summarization call's tokens, so maintenance is not spent off the books. */
   recordUsage?: (usage: Usage, model: string) => void;
 }
@@ -53,13 +61,9 @@ export interface ApolloSessionOptions {
 export async function createApolloSession(
   config: Config,
   logger: Logger,
+  modelRuntime: ModelRuntime,
   options: ApolloSessionOptions = {},
-): Promise<ApolloSession> {
-  const modelRuntime = await ModelRuntime.create({
-    authPath: join(config.agentDir, "auth.json"),
-    modelsPath: join(config.agentDir, "models.json"),
-  });
-
+): Promise<AgentSession> {
   const resolved = resolveCliModel({
     cliModel: config.model,
     cliThinking: config.thinkingLevel,
@@ -91,6 +95,7 @@ export async function createApolloSession(
               logger,
               model: resolved.model,
               modelRuntime,
+              observe: options.observe,
               recordUsage: options.recordUsage,
             }),
             name: "apollo-compaction",
@@ -117,7 +122,7 @@ export async function createApolloSession(
     settingsManager,
     thinkingLevel: resolved.thinkingLevel ?? config.thinkingLevel,
   });
-  return { modelRuntime, session };
+  return session;
 }
 
 /**

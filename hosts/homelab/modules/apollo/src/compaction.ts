@@ -40,6 +40,8 @@ export interface CompactionExtensionOptions {
   logger: Logger;
   model: Model<Api>;
   modelRuntime: ModelRuntime;
+  /** Judge a failed call, so a dead sign-in is learned here as well as on the user's own turns. */
+  observe?: (detail: string) => void;
   /** Book the summarization call, so maintenance is not spent off the books. */
   recordUsage?: (usage: Usage, model: string) => void;
 }
@@ -151,7 +153,7 @@ function span(messages: { timestamp?: number }[]): { from: number; to: number } 
  * uncompacted.
  */
 export function createCompactionExtension(options: CompactionExtensionOptions): ExtensionFactory {
-  const { delivered, instructions, logger, model, modelRuntime, recordUsage } = options;
+  const { delivered, instructions, logger, model, modelRuntime, observe, recordUsage } = options;
   return (pi: ExtensionAPI) => {
     pi.on("session_before_compact", async (event) => {
       const { preparation, signal } = event;
@@ -193,6 +195,9 @@ export function createCompactionExtension(options: CompactionExtensionOptions): 
         };
       } catch (error) {
         if (!signal.aborted) {
+          // Judged before the log line, so a dead sign-in is already known by the time the notifier
+          // decides whether this warning is worth the user's attention.
+          observe?.(error instanceof Error ? error.message : String(error));
           logger.error({ err: error }, "custom compaction failed; using default compaction");
         }
         return undefined;

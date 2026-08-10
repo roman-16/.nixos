@@ -18,6 +18,7 @@ export interface Config {
   compactIdleMs: number;
   compactNightlyTokens: number;
   compactionPromptFile: string;
+  dashboardUrl: string;
   dayStartHour: number;
   dbPath: string;
   inboxRetentionDays: number;
@@ -72,6 +73,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     // Floor below which starting a new day isn't worth a summarization call.
     compactNightlyTokens: Number(env.APOLLO_COMPACT_NIGHTLY_TOKENS ?? 64_000),
     compactionPromptFile: join(agentDir, "COMPACTION_PROMPT.md"),
+    // Where the user renews a sign-in only they can renew. There is no sensible default for a
+    // deployment's own address, so an unset one just costs the notice its link.
+    dashboardUrl: env.APOLLO_DASHBOARD_URL ?? "",
     dayStartHour: Number(env.APOLLO_DAY_START_HOUR ?? 4),
     dbPath: env.APOLLO_DB_PATH ?? join(home, "apollo.sqlite"),
     inboxRetentionDays: Number(env.APOLLO_INBOX_RETENTION_DAYS ?? 30),

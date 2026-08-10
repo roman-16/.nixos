@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  claudeAuthNotice,
   claudeErrorNotice,
   deliveredMarker,
   failedMarker,
@@ -214,6 +215,37 @@ describe("claudeErrorNotice", () => {
 
   it("truncates a very long detail", () => {
     expect(claudeErrorNotice("x".repeat(500))).toContain("more chars");
+  });
+
+  it("keeps the reason and leaves the stack behind it out", () => {
+    const notice = claudeErrorNotice(
+      "Overloaded\n    at postJson (/nix/store/x/anthropic.js:155:19)\n    at async refresh",
+    );
+    expect(notice).toContain("Overloaded");
+    expect(notice).not.toContain("nix/store");
+  });
+});
+
+describe("claudeAuthNotice", () => {
+  it("names the one action that fixes it, and where", () => {
+    const notice = claudeAuthNotice("https://apollo.halerc.xyz");
+    expect(notice).toContain("expired");
+    expect(notice).toContain("https://apollo.halerc.xyz");
+    expect(notice).toContain("Authorize");
+  });
+
+  it("never tells the user to try again, because retrying cannot work", () => {
+    expect(claudeAuthNotice("u")).not.toContain("try again");
+  });
+
+  it("promises the messages are kept rather than lost", () => {
+    expect(claudeAuthNotice("u")).toContain("catch up");
+  });
+
+  it("still reads as an instruction without a configured address", () => {
+    const notice = claudeAuthNotice("");
+    expect(notice).toContain("the dashboard,");
+    expect(notice).not.toContain("()");
   });
 });
 

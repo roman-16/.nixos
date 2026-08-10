@@ -13,7 +13,7 @@ import {
 } from "../src/dashboard";
 
 const summary = (over: Partial<SummaryArgs>): SummaryArgs => ({
-  anthropicConnected: true,
+  anthropicStatus: "connected",
   authUrl: "",
   linking: false,
   usage: null,
@@ -174,7 +174,7 @@ describe("renderSummary", () => {
 
   it("offers the claude connect flow when disconnected", async () => {
     const html = await renderSummary(
-      summary({ anthropicConnected: false, authUrl: "https://claude.ai/oauth/authorize?x=1" }),
+      summary({ anthropicStatus: "missing", authUrl: "https://claude.ai/oauth/authorize?x=1" }),
     );
     expect(html).toContain("Not connected to Anthropic");
     expect(html).toContain("https://claude.ai/oauth/authorize?x=1");
@@ -182,9 +182,54 @@ describe("renderSummary", () => {
     expect(html).toContain(`name="code"`);
   });
 
+  it("offers the very same flow when the sign-in expired, and says so", async () => {
+    const html = await renderSummary(
+      summary({ anthropicStatus: "expired", authUrl: "https://claude.ai/oauth/authorize?x=1" }),
+    );
+    expect(html).toContain("Sign-in expired");
+    expect(html).toContain("bg-red-500");
+    expect(html).toContain("https://claude.ai/oauth/authorize?x=1");
+    expect(html).toContain(`hx-post="/connect"`);
+    expect(html).toContain(`name="code"`);
+    expect(html).not.toContain("Connected to Anthropic");
+  });
+
+  it("says the messages are being kept, so a quiet Apollo is not a lost one", async () => {
+    const html = await renderSummary(summary({ anthropicStatus: "expired", authUrl: "u" }));
+    expect(html).toContain("holding every message");
+  });
+
+  it("dates the expiry when it knows it, and omits it when it does not", async () => {
+    const html = await renderSummary(
+      summary({
+        anthropicExpiredAt: new Date(2026, 7, 10, 10, 38).toISOString(),
+        anthropicStatus: "expired",
+        authUrl: "u",
+      }),
+    );
+    expect(html).toContain("10.08 10:38");
+    expect(
+      await renderSummary(summary({ anthropicStatus: "expired", authUrl: "u" })),
+    ).not.toContain(" \u00b7 ");
+  });
+
+  it("ignores an unparseable expiry rather than rendering Invalid Date", async () => {
+    const html = await renderSummary(
+      summary({ anthropicExpiredAt: "whenever", anthropicStatus: "expired", authUrl: "u" }),
+    );
+    expect(html).toContain("Sign-in expired");
+    expect(html).not.toContain("Invalid");
+  });
+
+  it("never offers the flow while connected", async () => {
+    const html = await renderSummary(summary({ anthropicStatus: "connected" }));
+    expect(html).not.toContain(`hx-post="/connect"`);
+    expect(html).not.toContain("Sign-in expired");
+  });
+
   it("surfaces a connect error", async () => {
     const html = await renderSummary(
-      summary({ anthropicConnected: false, authUrl: "u", connectError: "nope" }),
+      summary({ anthropicStatus: "missing", authUrl: "u", connectError: "nope" }),
     );
     expect(html).toContain("nope");
   });

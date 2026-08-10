@@ -98,12 +98,30 @@ export function voiceFailure(): string {
   return "🎤 (voice note - I couldn't transcribe it; ask the user what they said)";
 }
 
-/** Friendly WhatsApp notice when a Claude/agent run fails terminally (any provider error). */
+/**
+ * WhatsApp notice when a Claude/agent run fails terminally (any provider error). Only the first line
+ * of the reason is worth sending: a provider's detail carries a stack trace behind it, and a wall of
+ * source paths tells the user nothing they can act on.
+ */
 export function claudeErrorNotice(detail: string): string {
-  const trimmed = detail.trim();
+  const [first = ""] = detail.trim().split("\n");
+  const reason = first.trim();
   return `⚠️ I couldn't reach Claude just now${
-    trimmed ? `: ${truncate(trimmed, 300)}` : ""
+    reason ? `: ${truncate(reason, 300)}` : ""
   }. Your message didn't go through - try again in a bit.`;
+}
+
+/**
+ * WhatsApp notice for a Claude sign-in that has expired. Retrying cannot fix it and only the user
+ * can, so this names the one action that will, and says their messages are being kept rather than
+ * lost while they get to it.
+ */
+export function claudeAuthNotice(dashboardUrl: string): string {
+  const where = dashboardUrl ? `the dashboard (${dashboardUrl})` : "the dashboard";
+  return (
+    `⚠️ My Claude sign-in expired, so I can't answer until it's renewed: open ${where}, ` +
+    `then Claude -> Authorize. I'll keep whatever you send me and catch up once it's back.`
+  );
 }
 
 function logLevelLabel(level: number): string {

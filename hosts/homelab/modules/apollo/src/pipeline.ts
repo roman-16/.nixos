@@ -6,6 +6,7 @@ import { type AgentSession, resizeImage } from "@earendil-works/pi-coding-agent"
 import type { Logger } from "pino";
 
 import { conversationTokens, deliver, onAssistantText, onRunError } from "./agent";
+import type { Anthropic, AnthropicStatus } from "./anthropic";
 import type { Attachment } from "./attachments";
 import { imageBlock } from "./attachments";
 import { buildBacklog } from "./backlog";
@@ -19,6 +20,7 @@ import type { MemoryFolder } from "./memory";
 import { foldReason } from "./memory-schedule";
 import { createThrottle, type LogStore, shouldNotify } from "./logs";
 import {
+  claudeAuthNotice,
   claudeErrorNotice,
   formatLogNotice,
   isAllowed,
@@ -59,6 +61,7 @@ const LAST_COMPACTED_KEY = "lastCompactedAt";
 const MEMORY_FOLDED_AT_KEY = "memoryFoldedAt";
 
 export interface PipelineDeps {
+  anthropic: Anthropic;
   chatStore: ChatStore;
   config: Config;
   inbox: Inbox;
@@ -90,7 +93,7 @@ export interface Pipeline {
 }
 
 export function createPipeline(deps: PipelineDeps): Pipeline {
-  const { chatStore, config, inbox, kv, logStore, logger, memory, session } = deps;
+  const { anthropic, chatStore, config, inbox, kv, logStore, logger, memory, session } = deps;
 
   const startedAt = Date.now();
   const disconnected: WhatsAppState = {
@@ -231,6 +234,33 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     if (typingTimer) sendComposing(); // a send clears the recipient's indicator; re-assert if mid-turn
   }
 
+  /**
+   * Say once, and in words the user can act on, that Claude is out of reach until they renew the
+   * sign-in. Every path that discovers a dead credential retires it, so watching the status is enough
+   * to catch all of them - including the nightly memory fold, which discovers it with nobody about,
+   * and the startup probe, which runs before this pipeline exists.
+   *
+   * A sign-in that was never set up is not news: that is a setup step, and the dashboard is where it
+   * is done. An expiry is, so it goes out the way an outage does - recorded in the chat, so the gap
+   * it explains is still explained to Apollo once it can read again - and is held onto until it has
+   * actually been delivered rather than being lost to a WhatsApp link that was not up yet.
+   */
+  let announced: AnthropicStatus | undefined;
+  function announceClaude(): void {
+    const status = anthropic.status();
+    if (status === announced) return;
+    if (status !== "expired") {
+      announced = status;
+      return;
+    }
+    void emitSkillMessage(claudeAuthNotice(config.dashboardUrl), "status").then(
+      () => {
+        announced = status;
+      },
+      (error: unknown) => logger.debug({ error }, "claude notice not delivered yet"),
+    );
+  }
+
   // Fan every warn+ log line out to WhatsApp - the log level is the single source of truth for
   // "worth interrupting the user". Deduped so a burst can't spam, and guarded against re-entrancy so
   // a send that itself logs (or Baileys chatter emitted mid-send) can't loop back in.
@@ -238,6 +268,10 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   let notifying = false;
   logStore.onRecord = (record) => {
     if (notifying || !shouldNotify(record, config.notifyLevel)) return;
+    // While there is no sign-in, every warning is a symptom of the one thing the user has already
+    // been told about, in a message that says what to do about it. Repeating the symptoms would only
+    // bury it.
+    if (anthropic.status() !== "connected") return;
     const to = recipient();
     if (!socket || !to || !connected()) return;
     const text =
@@ -283,6 +317,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   /** Whether the session is free for maintenance work right now. */
   function quiet(): boolean {
     if (!session.isIdle || session.isCompacting || session.isStreaming) return false;
+    // Summarizing and folding are model calls, so without a sign-in they are guaranteed-failing ones.
+    if (anthropic.status() !== "connected") return false;
     return inbox.pending(1).length === 0;
   }
 
@@ -322,6 +358,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     try {
       await session.compact();
     } catch (error) {
+      anthropic.observe(error instanceof Error ? error.message : String(error));
       logger.warn({ error }, "compaction failed");
     }
   }
@@ -351,6 +388,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   // rewriting, and it wants the compaction's own timestamp to fold against. Either can outlast the
   // tick, so a pass in flight owns the next ones until it is done.
   setInterval(() => {
+    announceClaude();
     if (maintaining) return;
     maintaining = true;
     void (async () => {
@@ -365,8 +403,16 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   }, MAINTENANCE_TICK_MS);
 
   // A run that ends in a terminal LLM error produces no text block, so log it at error - the
-  // notifier above delivers the friendly notice from notifyText.
+  // notifier above delivers the friendly notice from notifyText. A refusal that means the sign-in
+  // itself is finished is a different matter: it retires the credential, which both silences the
+  // generic notice (nothing to retry) and hands the announcement to announceClaude.
   onRunError(session, (detail) => {
+    anthropic.observe(detail);
+    if (anthropic.status() !== "connected") {
+      logger.error({ detail }, "claude sign-in expired");
+      announceClaude();
+      return;
+    }
     logger.error({ detail, notifyText: claudeErrorNotice(detail) }, "claude run error");
   });
 
@@ -474,12 +520,15 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
    * Hand the inbox's pending messages to the agent, oldest first, one turn at a time. The inbox is
    * the queue, so nothing is delivered into a running turn: a message that arrives mid-run stays
    * durable and joins the next batch. Nor is anything delivered without a link, since the agent's
-   * reply would have nowhere to go - it waits, which is the whole point of the inbox. A delivery
-   * that throws leaves its messages pending and backs off, so a persistent fault retries later
-   * instead of spinning.
+   * reply would have nowhere to go - it waits, which is the whole point of the inbox. Without a
+   * Claude sign-in there is no reply to be had at all, so the same applies: the messages stay owed
+   * rather than being spent on turns that cannot answer them, and go out as one catch-up once it is
+   * renewed. A delivery that throws leaves its messages pending and backs off, so a persistent fault
+   * retries later instead of spinning.
    */
   async function drain(): Promise<void> {
     if (draining || !connected() || session.isStreaming || session.isCompacting) return;
+    if (anthropic.status() !== "connected") return;
     if (Date.now() < retryAfter) return;
     draining = true;
     try {
@@ -499,6 +548,12 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
           logger.error({ error }, "prompt failed");
           stopTyping();
           void notify(`⚠️ ${error instanceof Error ? error.message : String(error)}`);
+          return;
+        }
+        // A turn that died with the sign-in was never answered, so its messages are still owed.
+        // onRunError condemns the credential while the run ends, before the delivery above resolves.
+        if (anthropic.status() !== "connected") {
+          stopTyping();
           return;
         }
         inbox.markHandled(batch.map((entry) => entry.waId));

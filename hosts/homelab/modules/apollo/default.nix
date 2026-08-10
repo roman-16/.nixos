@@ -512,6 +512,9 @@ in
               environment = {
                 APOLLO_ALLOW_FROM = secrets.mainNumber;
                 APOLLO_BACKUP_SCRIPT = lib.getExe workspaceBackupScript;
+                # Where the user renews a Claude sign-in only they can renew; named in the WhatsApp
+                # notice that tells them to, since that message is Apollo's only way to ask.
+                APOLLO_DASHBOARD_URL = "https://apollo.halerc.xyz";
                 APOLLO_DB_PATH = "%S/apollo/apollo.sqlite";
                 APOLLO_MODEL = "anthropic/claude-sonnet-5";
                 APOLLO_PROFILE_PICTURE = "${profilePicture}";

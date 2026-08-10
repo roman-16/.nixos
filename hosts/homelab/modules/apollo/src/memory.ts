@@ -192,6 +192,8 @@ export interface MemoryFolderOptions {
   /** The live model, so a model switch carries over. */
   model: () => Model<Api> | undefined;
   modelRuntime: ModelRuntime;
+  /** Judge a failed call, so a dead sign-in is learned here as well as on the user's own turns. */
+  observe?: (detail: string) => void;
   /** MEMORY.md. */
   path: string;
   /** MEMORY_PROMPT.md, read per fold so a reload picks up a new doctrine. */
@@ -251,6 +253,9 @@ export function createMemoryFolder(options: MemoryFolderOptions): MemoryFolder {
           { maxTokens: MAX_FOLD_TOKENS, signal: AbortSignal.timeout(FOLD_TIMEOUT_MS) },
         );
       } catch (error) {
+        // Judged before the log line, so a dead sign-in is already known by the time the notifier
+        // decides whether this warning is worth the user's attention.
+        options.observe?.(error instanceof Error ? error.message : String(error));
         logger.warn({ error, reason }, "memory fold failed");
         return false;
       }
@@ -258,6 +263,7 @@ export function createMemoryFolder(options: MemoryFolderOptions): MemoryFolder {
       // Every provider funnels a failed stream into a message with stopReason "error" rather than
       // throwing, so this is the only place a refused call shows up.
       if (reply.stopReason === "error") {
+        options.observe?.(reply.errorMessage ?? "");
         logger.warn({ detail: reply.errorMessage, reason }, "memory fold failed");
         return false;
       }

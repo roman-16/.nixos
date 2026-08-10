@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 
+import type { Anthropic } from "../src/anthropic";
 import type { Config } from "../src/config";
 import type { Pipeline } from "../src/pipeline";
 import { fragmentCache, isLoopback, type ServerDeps, startServer } from "../src/server";
@@ -68,23 +69,24 @@ describe("isLoopback", () => {
   });
 });
 
-/** A model runtime with no stored credential, parked on the sign-in exactly like pi's real flow. */
-function stubRuntime(over: Record<string, unknown> = {}): ServerDeps["modelRuntime"] {
+/** A Claude sign-in in whatever state a test needs; connected unless it says otherwise. */
+function stubAnthropic(over: Partial<Anthropic> = {}): Anthropic {
   return {
-    getAuth: async () => undefined,
-    hasConfiguredAuth: () => false,
-    login: (_provider: string, _type: string, interaction: any) => {
-      interaction.notify({ type: "auth_url", url: AUTH_URL });
-      return new Promise(() => {}); // parks until a code is submitted
-    },
+    expiredAt: () => undefined,
+    observe: () => {},
+    status: () => "connected",
+    submit: async () => {},
+    token: async () => "sk-live",
+    url: async () => AUTH_URL,
     ...over,
-  } as unknown as ServerDeps["modelRuntime"];
+  };
 }
 
 /** Minimal deps exercising the read-only routes; action routes and their session calls are unused here. */
 function stubDeps(over: Partial<ServerDeps> = {}): ServerDeps {
   const noop = () => {};
   return {
+    anthropic: stubAnthropic(),
     chatStore: {
       image: () => undefined,
       sync: () => {},
@@ -93,7 +95,6 @@ function stubDeps(over: Partial<ServerDeps> = {}): ServerDeps {
     config: { linkGraceMs: 600_000, port: 0 } as unknown as Config,
     logStore: { query: () => [], seq: 0 } as unknown as ServerDeps["logStore"],
     logger: { debug: noop, error: noop, info: noop, warn: noop } as unknown as ServerDeps["logger"],
-    modelRuntime: stubRuntime(),
     pipeline: {
       emitSkillMessage: async () => {},
       notify: async () => {},
@@ -145,6 +146,18 @@ describe("startServer routing", () => {
       } as unknown as Pipeline,
     });
     expect((await get(base, "/health")).status).toBe(200);
+  });
+
+  it("reports unhealthy while the claude sign-in is expired, however happily it serves pages", async () => {
+    const base = boot({ anthropic: stubAnthropic({ status: () => "expired" }) });
+    const res = await get(base, "/health");
+    expect(res.status).toBe(503);
+    expect(await res.text()).toBe("claude sign-in expired");
+  });
+
+  it("reports unhealthy when there has never been a claude sign-in", async () => {
+    const base = boot({ anthropic: stubAnthropic({ status: () => "missing" }) });
+    expect((await get(base, "/health")).status).toBe(503);
   });
 
   it("reports unhealthy once the link has been down past the grace period", async () => {
@@ -211,16 +224,34 @@ describe("startServer routing", () => {
   });
 
   it("offers pi's authorize url while Anthropic is not connected", async () => {
-    expect(await (await get(boot(), "/summary")).text()).toContain(AUTH_URL);
+    const base = boot({ anthropic: stubAnthropic({ status: () => "missing" }) });
+    expect(await (await get(base, "/summary")).text()).toContain(AUTH_URL);
+  });
+
+  it("renders the section rather than failing when the sign-in has expired", async () => {
+    // It used to resolve the token inline, so a dead credential threw and the poll 500d: htmx kept
+    // the stale green section, and the one screen that could fix it never appeared.
+    const base = boot({
+      anthropic: stubAnthropic({
+        expiredAt: () => new Date(2026, 7, 10, 10, 38).toISOString(),
+        status: () => "expired",
+        token: async () => undefined,
+      }),
+    });
+    const res = await get(base, "/summary");
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("Sign-in expired");
+    expect(html).toContain(AUTH_URL);
   });
 
   it("hands a pasted code to the parked sign-in and reports a rejected one", async () => {
     let pasted: string | undefined;
     const base = boot({
-      modelRuntime: stubRuntime({
-        login: async (_provider: string, _type: string, interaction: any) => {
-          interaction.notify({ type: "auth_url", url: AUTH_URL });
-          pasted = await interaction.prompt({ type: "manual_code", message: "code?" });
+      anthropic: stubAnthropic({
+        status: () => "missing",
+        submit: async (code: string) => {
+          pasted = code;
           throw new Error("bad code");
         },
       }),

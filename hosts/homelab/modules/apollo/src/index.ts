@@ -1,7 +1,8 @@
 import type { Usage } from "@earendil-works/pi-ai";
 import { pino } from "pino";
 
-import { createApolloSession } from "./agent";
+import { createApolloSession, createModelRuntime } from "./agent";
+import { createAnthropic } from "./anthropic";
 import { runWorkspaceBackup } from "./backup";
 import { createChatStore } from "./chat-store";
 import { loadConfig } from "./config";
@@ -58,8 +59,17 @@ export async function main(): Promise<void> {
     }
   };
 
-  const { modelRuntime, session } = await createApolloSession(config, logger, {
+  const modelRuntime = await createModelRuntime(config);
+  const anthropic = createAnthropic(modelRuntime, kv);
+  // Prove the credential at startup rather than inheriting the assumption that it still works: a
+  // sign-in that died while Apollo was down would otherwise read as connected until the first
+  // message spent itself discovering otherwise. Not awaited, so a slow Anthropic cannot keep the
+  // assistant off WhatsApp.
+  void anthropic.token();
+
+  const session = await createApolloSession(config, logger, modelRuntime, {
     delivered: (fromMs, toMs) => chatStore.skillMessagesBetween(session.sessionId, fromMs, toMs),
+    observe: anthropic.observe,
     recordUsage,
   });
   logger.info({ model: config.model, workspace: config.workspace }, "pi session ready");
@@ -70,6 +80,7 @@ export async function main(): Promise<void> {
     logger,
     model: () => session.model,
     modelRuntime,
+    observe: anthropic.observe,
     path: config.memoryFile,
     promptFile: config.memoryPromptFile,
     readCursor: () => Number(kv.get(MEMORY_CURSOR_KEY) ?? 0),
@@ -78,6 +89,7 @@ export async function main(): Promise<void> {
   });
 
   const pipeline = createPipeline({
+    anthropic,
     chatStore,
     config,
     inbox,
@@ -132,11 +144,11 @@ export async function main(): Promise<void> {
   }).start();
 
   startServer({
+    anthropic,
     chatStore,
     config,
     logStore,
     logger,
-    modelRuntime,
     pipeline,
     runBackup: runWorkspaceBackup,
     session,
