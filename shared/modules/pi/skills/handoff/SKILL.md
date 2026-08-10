@@ -59,7 +59,7 @@ Write the whole file every time, in this shape:
 
 Updated <DD.MM.YYYY HH:MM CET> · `<working root>`
 
-**This file is disposable.** It is scratch continuity state for this one task, not documentation, and it can be gone at any moment - if it is missing, no work is in flight, which is the normal state. Never restore it, never recreate it, never give it a second thought. It asks nothing of you except deletion once the goal is met. Sibling `HANDOFF-*.md` files belong to unrelated tasks; ignore them.
+**This file is disposable.** It is scratch continuity state for this one task, not documentation, and it can be gone at any moment - the user routinely deletes it the moment an agent has read it, so its absence says nothing about the work and never calls for a reaction. Never restore it, never recreate it, never give it a second thought. It asks nothing of you except deletion once the goal is met. Sibling `HANDOFF-*.md` files belong to unrelated tasks; ignore them.
 
 ## Goal
 
