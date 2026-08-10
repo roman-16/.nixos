@@ -382,6 +382,182 @@ class TestMacroHelpers:
         assert macros.frac_left(batch) == pytest.approx(0.5)
 
 
+class TestIngredientSources:
+    """An ingredient's numbers arrive three ways, and the two with a rate behind them are scaled
+    here rather than multiplied out by the caller."""
+
+    def notes(self):
+        return "\n".join(macros.NOTES)
+
+    def test_a_saved_food_is_scaled_by_the_amount(self, store):
+        set_goal()
+        add_skyr()
+        run("prep-add", "--name", "Bolognese")
+        run("prep-ingredient-add", "--name", "bolognese", "--food", "skyr", "--amount", "400")
+        ingredient = one_named("bolognese")["ingredients"][0]
+        assert ingredient["kcal"] == 256
+        assert ingredient["protein"] == 44
+
+    def test_the_label_writes_itself_from_the_food_and_the_amount(self, store):
+        set_goal()
+        add_skyr()
+        run("prep-add", "--name", "Bolognese")
+        run("prep-ingredient-add", "--name", "bolognese", "--food", "skyr", "--amount", "400")
+        assert one_named("bolognese")["ingredients"][0]["label"] == "Skyr, plain (400g)"
+
+    def test_a_label_can_still_be_given_for_a_saved_food(self, store):
+        set_goal()
+        add_skyr()
+        run("prep-add", "--name", "Bolognese")
+        run("prep-ingredient-add", "--name", "bolognese", "--food", "skyr", "--amount", "400",
+            "--label", "the skyr")
+        assert one_named("bolognese")["ingredients"][0]["label"] == "the skyr (400g)"
+
+    def test_a_liquid_food_keeps_its_own_unit(self, store):
+        set_goal()
+        run("food-add", "--name", "Cream", "--unit", "ml", "--kcal100", "300", "--protein100", "2",
+            "--fat100", "30", "--carbs100", "3", "--serving", "100")
+        run("prep-add", "--name", "Sauce")
+        run("prep-ingredient-add", "--name", "sauce", "--food", "cream", "--amount", "200")
+        ingredient = one_named("sauce")["ingredients"][0]
+        assert ingredient["label"] == "Cream (200ml)"
+        assert ingredient["kcal"] == 600
+
+    def test_a_packets_per_100_rate_is_scaled_by_the_amount(self, store):
+        set_goal()
+        run("prep-add", "--name", "Bolognese")
+        run("prep-ingredient-add", "--name", "bolognese", "--label", "Passata", "--kcal100", "35",
+            "--protein100", "1.5", "--carbs100", "7", "--amount", "700")
+        ingredient = one_named("bolognese")["ingredients"][0]
+        assert ingredient["label"] == "Passata (700g)"
+        assert ingredient["kcal"] == 245
+        assert ingredient["protein"] == 10.5
+
+    def test_a_bare_total_is_taken_as_it_is(self, store):
+        set_goal()
+        run("prep-add", "--name", "Bolognese")
+        run("prep-ingredient-add", "--name", "bolognese", "--label", "Olive oil", "--kcal", "265",
+            "--fat", "30")
+        ingredient = one_named("bolognese")["ingredients"][0]
+        assert ingredient["label"] == "Olive oil"
+        assert ingredient["kcal"] == 265
+
+    def test_a_scaled_ingredient_remembers_the_rate_it_came_from(self, store):
+        set_goal()
+        add_skyr()
+        run("prep-add", "--name", "Bolognese")
+        run("prep-ingredient-add", "--name", "bolognese", "--food", "skyr", "--amount", "400")
+        source = one_named("bolognese")["ingredients"][0]["source"]
+        assert source["kind"] == "food"
+        assert source["amount"] == 400
+        assert source["per100"]["kcal"] == 64
+
+    def test_a_bare_total_records_that_it_has_no_rate(self, store):
+        set_goal()
+        run("prep-add", "--name", "Bolognese")
+        run("prep-ingredient-add", "--name", "bolognese", "--label", "Oil", "--kcal", "265")
+        assert one_named("bolognese")["ingredients"][0]["source"] == {"kind": "log"}
+
+    def test_a_food_needs_an_amount(self, store):
+        set_goal()
+        add_skyr()
+        run("prep-add", "--name", "Bolognese")
+        with pytest.raises(SystemExit):
+            run("prep-ingredient-add", "--name", "bolognese", "--food", "skyr")
+
+    def test_a_rate_needs_an_amount(self, store):
+        set_goal()
+        run("prep-add", "--name", "Bolognese")
+        with pytest.raises(SystemExit):
+            run("prep-ingredient-add", "--name", "bolognese", "--label", "X", "--kcal100", "35")
+
+    def test_no_numbers_at_all_says_what_the_three_ways_are(self, store, capsys):
+        set_goal()
+        run("prep-add", "--name", "Bolognese")
+        with pytest.raises(SystemExit):
+            run("prep-ingredient-add", "--name", "bolognese", "--label", "X")
+        err = capsys.readouterr().err
+        assert "--food" in err and "--kcal100" in err and "--kcal" in err
+
+    def test_a_rate_needs_a_label_to_call_it(self, store):
+        set_goal()
+        run("prep-add", "--name", "Bolognese")
+        with pytest.raises(SystemExit):
+            run("prep-ingredient-add", "--name", "bolognese", "--kcal100", "35", "--amount", "700")
+
+    def test_two_rate_bases_at_once_are_refused(self, store):
+        set_goal()
+        add_skyr()
+        run("prep-add", "--name", "Bolognese")
+        with pytest.raises(SystemExit):
+            run("prep-ingredient-add", "--name", "bolognese", "--food", "skyr", "--amount", "400",
+                "--kcal", "100")
+
+    def test_a_loosely_matched_food_is_announced(self, store, capsys):
+        set_goal()
+        add_skyr()
+        run("prep-add", "--name", "Bolognese")
+        capsys.readouterr()
+        run("prep-ingredient-add", "--name", "bolognese", "--food", "skyer", "--amount", "400")
+        assert 'read "skyer" as Skyr, plain' in capsys.readouterr().out
+
+    def test_a_forgotten_scaled_ingredient_still_splits_the_eaten_share(self, store, capsys):
+        set_goal()
+        add_bolognese()
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/2")
+        add_skyr()
+        capsys.readouterr()
+        run("prep-ingredient-add", "--name", "bolognese", "--food", "skyr", "--amount", "400")
+        out = capsys.readouterr().out
+        assert "forgotten" in out
+        assert "logged the 128 kcal" in out
+
+
+class TestIngredientReWeigh:
+    def prepared(self):
+        set_goal()
+        add_skyr()
+        run("prep-add", "--name", "Bolognese")
+        run("prep-ingredient-add", "--name", "bolognese", "--food", "skyr", "--amount", "400")
+
+    def test_amount_rescales_from_the_ingredients_own_rate(self, store):
+        self.prepared()
+        run("prep-ingredient-edit", "--name", "bolognese", "--last", "--amount", "500")
+        ingredient = one_named("bolognese")["ingredients"][0]
+        assert ingredient["kcal"] == 320
+        assert ingredient["protein"] == 55
+
+    def test_it_relabels_with_the_new_amount(self, store):
+        self.prepared()
+        run("prep-ingredient-edit", "--name", "bolognese", "--last", "--amount", "500")
+        assert one_named("bolognese")["ingredients"][0]["label"] == "Skyr, plain (500g)"
+
+    def test_the_stored_rate_follows_the_new_amount(self, store):
+        self.prepared()
+        run("prep-ingredient-edit", "--name", "bolognese", "--last", "--amount", "500")
+        assert one_named("bolognese")["ingredients"][0]["source"]["amount"] == 500
+
+    def test_an_explicit_macro_still_wins_over_the_rescale(self, store):
+        self.prepared()
+        run("prep-ingredient-edit", "--name", "bolognese", "--last", "--amount", "500",
+            "--kcal", "999")
+        assert one_named("bolognese")["ingredients"][0]["kcal"] == 999
+
+    def test_an_ingredient_with_no_rate_cannot_be_re_weighed(self, store):
+        set_goal()
+        run("prep-add", "--name", "Bolognese")
+        run("prep-ingredient-add", "--name", "bolognese", "--label", "Oil", "--kcal", "265")
+        with pytest.raises(SystemExit):
+            run("prep-ingredient-edit", "--name", "bolognese", "--last", "--amount", "300")
+
+    def test_a_label_alone_leaves_the_amount_alone(self, store):
+        self.prepared()
+        run("prep-ingredient-edit", "--name", "bolognese", "--last", "--label", "the skyr")
+        ingredient = one_named("bolognese")["ingredients"][0]
+        assert ingredient["label"] == "the skyr"
+        assert ingredient["kcal"] == 256
+
+
 class TestPrep:
     def test_build_up_accumulates_total(self, store, capsys):
         set_goal()
@@ -403,7 +579,7 @@ class TestPrep:
     def test_reuses_a_finished_name(self, store):
         set_goal()
         add_bolognese()
-        run("prep-eat", "--name", "bolognese", "--remaining")   # finished -> auto-archived
+        run("prep-eat", "--name", "bolognese", "--of-rest")   # finished -> auto-archived
         run("prep-add", "--name", "Bolognese")                   # reuse the name -> fresh live batch
         assert len(live_named("bolognese")) == 1
         assert len(archived_named("bolognese")) == 1
@@ -414,7 +590,7 @@ class TestPrep:
         set_goal()
         add_bolognese()
         capsys.readouterr()
-        run("prep-eat", "--name", "bolo", "--fraction", "1/5")
+        run("prep-eat", "--name", "bolo", "--of-batch", "1/5")
         assert "Bolognese (20% of batch)" in capsys.readouterr().out
         batch = one_named("bolognese")
         assert macros.frac_left(batch) == pytest.approx(0.8)
@@ -427,7 +603,7 @@ class TestPrep:
     def test_finishing_auto_archives_and_retains(self, store, capsys):
         set_goal()
         add_bolognese()
-        run("prep-eat", "--name", "bolognese", "--remaining")
+        run("prep-eat", "--name", "bolognese", "--of-rest")
         batch = one_named("bolognese")
         assert batch["archivedAt"] is not None
         assert macros.frac_left(batch) == pytest.approx(0.0)
@@ -441,13 +617,13 @@ class TestPrep:
     def test_removing_the_rest_auto_archives(self, store):
         set_goal()
         add_bolognese()
-        run("prep-remove", "--name", "bolognese", "--remaining")
+        run("prep-remove", "--name", "bolognese", "--of-rest")
         assert archived_named("bolognese")
 
     def test_forgotten_ingredient_after_eating_logs_share(self, store, capsys):
         set_goal()
         add_bolognese()
-        run("prep-eat", "--name", "bolognese", "--fraction", "1/2")
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/2")
         capsys.readouterr()
         run("prep-ingredient-add", "--name", "bolognese", "--label", "Oil", "--kcal", "200")
         out = capsys.readouterr().out
@@ -461,7 +637,7 @@ class TestPrep:
     def test_later_ingredient_after_eating_goes_to_leftovers(self, store, capsys):
         set_goal()
         add_bolognese()
-        run("prep-eat", "--name", "bolognese", "--fraction", "1/2")
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/2")
         before = len(day_entries())
         capsys.readouterr()
         run("prep-ingredient-add", "--name", "bolognese", "--label", "Cheese",
@@ -484,7 +660,7 @@ class TestPrep:
         set_goal()
         add_bolognese()
         capsys.readouterr()
-        run("prep-remove", "--name", "bolognese", "--fraction", "1/4")
+        run("prep-remove", "--name", "bolognese", "--of-batch", "1/4")
         assert "unlogged" in capsys.readouterr().out
         batch = one_named("bolognese")
         assert macros.frac_left(batch) == pytest.approx(0.75)
@@ -502,7 +678,7 @@ class TestPrep:
     def test_archive_then_unarchive_roundtrip(self, store, capsys):
         set_goal()
         add_bolognese()
-        run("prep-eat", "--name", "bolognese", "--fraction", "1/4")   # 75% left, live
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/4")   # 75% left, live
         run("prep-archive", "--name", "bolognese")
         assert archived_named("bolognese")
         capsys.readouterr()
@@ -516,7 +692,7 @@ class TestPrep:
     def test_unarchive_refuses_when_name_is_active(self, store):
         set_goal()
         add_bolognese()
-        run("prep-eat", "--name", "bolognese", "--remaining")   # archived
+        run("prep-eat", "--name", "bolognese", "--of-rest")   # archived
         run("prep-add", "--name", "Bolognese")                   # fresh live one holds the name
         with pytest.raises(SystemExit):
             run("prep-unarchive", "--name", "bolognese")
@@ -524,7 +700,7 @@ class TestPrep:
     def test_get_by_id_reaches_an_archived_batch(self, store, capsys):
         set_goal()
         add_bolognese()
-        run("prep-eat", "--name", "bolognese", "--remaining")   # archived
+        run("prep-eat", "--name", "bolognese", "--of-rest")   # archived
         bid = archived_named("bolognese")[0]["id"]
         capsys.readouterr()
         run("prep-get", "--id", bid)
@@ -546,7 +722,7 @@ class TestPrep:
         run("prep-add", "--name", "Batch")
         run("prep-ingredient-add", "--name", "batch", "--label", "Base", "--kcal", "1800", "--protein", "120")
         run("prep-ingredient-add", "--name", "batch", "--label", "Cheese", "--kcal", "300")
-        run("prep-eat", "--name", "batch", "--fraction", "1/2")
+        run("prep-eat", "--name", "batch", "--of-batch", "1/2")
         capsys.readouterr()
         run("prep-ingredient-rm", "--name", "batch", "--last")
         assert "un-logged the 150 kcal" in capsys.readouterr().out
@@ -558,7 +734,7 @@ class TestPrep:
     def test_ingredient_edit_label_only_touches_no_ledger(self, store):
         set_goal()
         add_bolognese()
-        run("prep-eat", "--name", "bolognese", "--fraction", "1/2")
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/2")
         before = len(day_entries())
         run("prep-ingredient-edit", "--name", "bolognese", "--index", "1", "--label", "Beef mince")
         batch = one_named("bolognese")
@@ -570,7 +746,7 @@ class TestPrep:
         set_goal()
         run("prep-add", "--name", "Batch")
         run("prep-ingredient-add", "--name", "batch", "--label", "Beef", "--kcal", "1000", "--protein", "100")
-        run("prep-eat", "--name", "batch", "--fraction", "1/2")
+        run("prep-eat", "--name", "batch", "--of-batch", "1/2")
         capsys.readouterr()
         run("prep-ingredient-edit", "--name", "batch", "--last", "--kcal", "1200")
         assert "logged the 100 kcal" in capsys.readouterr().out
@@ -581,8 +757,8 @@ class TestPrep:
     def test_get_shows_log_and_split_after_others_eat(self, store, capsys):
         set_goal()
         add_bolognese()
-        run("prep-eat", "--name", "bolognese", "--fraction", "1/4")
-        run("prep-remove", "--name", "bolognese", "--fraction", "1/5")
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/4")
+        run("prep-remove", "--name", "bolognese", "--of-batch", "1/5")
         capsys.readouterr()
         run("prep-get", "--name", "bolognese")
         out = capsys.readouterr().out
@@ -605,7 +781,7 @@ class TestPrepUneat:
     def test_uneat_removed_restores(self, store):
         set_goal()
         add_bolognese()
-        run("prep-remove", "--name", "bolognese", "--fraction", "1/5")
+        run("prep-remove", "--name", "bolognese", "--of-batch", "1/5")
         run("prep-uneat", "--name", "bolognese", "--last")
         batch = one_named("bolognese")
         assert batch["consumption"] == []
@@ -615,7 +791,7 @@ class TestPrepUneat:
     def test_uneat_eaten_restores_and_unlogs(self, store):
         set_goal()
         add_bolognese()
-        run("prep-eat", "--name", "bolognese", "--fraction", "1/2")
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/2")
         assert day_entries()
         run("prep-uneat", "--name", "bolognese", "--last")
         batch = one_named("bolognese")
@@ -626,8 +802,8 @@ class TestPrepUneat:
     def test_uneat_index_targets_one_event(self, store):
         set_goal()
         add_bolognese()
-        run("prep-eat", "--name", "bolognese", "--fraction", "1/5")
-        run("prep-remove", "--name", "bolognese", "--fraction", "1/5")
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/5")
+        run("prep-remove", "--name", "bolognese", "--of-batch", "1/5")
         run("prep-uneat", "--name", "bolognese", "--index", "1")
         batch = one_named("bolognese")
         assert len(batch["consumption"]) == 1
@@ -637,8 +813,8 @@ class TestPrepUneat:
     def test_uneat_all_clears_everything(self, store):
         set_goal()
         add_bolognese()
-        run("prep-eat", "--name", "bolognese", "--fraction", "1/5")
-        run("prep-remove", "--name", "bolognese", "--fraction", "1/5")
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/5")
+        run("prep-remove", "--name", "bolognese", "--of-batch", "1/5")
         run("prep-uneat", "--name", "bolognese", "--all")
         batch = one_named("bolognese")
         assert batch["consumption"] == []
@@ -648,7 +824,7 @@ class TestPrepUneat:
     def test_unarchive_then_uneat_reopens_a_finished_batch(self, store):
         set_goal()
         add_bolognese()
-        run("prep-eat", "--name", "bolognese", "--remaining")   # finishes -> auto-archived
+        run("prep-eat", "--name", "bolognese", "--of-rest")   # finishes -> auto-archived
         assert archived_named("bolognese")
         run("prep-unarchive", "--name", "bolognese")
         run("prep-uneat", "--name", "bolognese", "--last")
@@ -668,23 +844,23 @@ class TestPrepUneat:
         add_bolognese()
         run("prep-add", "--name", "Curry")
         run("prep-ingredient-add", "--name", "curry", "--label", "All", "--kcal", "1000", "--protein", "50")
-        run("prep-remove", "--name", "bolognese", "--fraction", "1/5")  # mistake
+        run("prep-remove", "--name", "bolognese", "--of-batch", "1/5")  # mistake
         run("prep-uneat", "--name", "bolognese", "--last")               # undo it
-        run("prep-remove", "--name", "curry", "--fraction", "1/5")        # apply to the right one
+        run("prep-remove", "--name", "curry", "--of-batch", "1/5")        # apply to the right one
         assert macros.frac_left(one_named("bolognese")) == pytest.approx(1.0)
         assert macros.frac_left(one_named("curry")) == pytest.approx(0.8)
 
     def test_rm_blocks_a_live_prep_entry(self, store):
         set_goal()
         add_bolognese()
-        run("prep-eat", "--name", "bolognese", "--fraction", "1/2")
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/2")
         with pytest.raises(SystemExit):
             run("rm", "--last")
 
     def test_archived_batch_keeps_its_entry_locked(self, store):
         set_goal()
         add_bolognese()
-        run("prep-eat", "--name", "bolognese", "--fraction", "1/2")
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/2")
         run("prep-archive", "--name", "bolognese")
         with pytest.raises(SystemExit):
             run("rm", "--last")          # still managed by its (archived, not deleted) batch
@@ -720,7 +896,7 @@ class TestPrepSize:
         set_goal()
         self.add_ice_cream()
         capsys.readouterr()
-        run("prep-eat", "--name", "ice cream", "--fraction", "1/4")
+        run("prep-eat", "--name", "ice cream", "--of-batch", "1/4")
         assert "250g" in capsys.readouterr().out
         assert "250g" in day_entries()[-1]["item"]
 
@@ -786,7 +962,7 @@ class TestPortionDesc:
 class TestPrepPortionOutput:
     def eat_half(self):
         add_bolognese()
-        run("prep-eat", "--name", "bolognese", "--fraction", "1/2")
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/2")
 
     def test_fit_target_on_partial_shows_left_framing_and_dry_run_remaining(self, store, capsys):
         set_goal()
@@ -801,7 +977,7 @@ class TestPrepPortionOutput:
         set_goal()
         self.eat_half()
         capsys.readouterr()
-        run("prep-eat", "--name", "bolognese", "--fraction", "1/4")
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/4")
         out = capsys.readouterr().out
         assert "50% of what's left (25% of batch)" in out
         assert "🥘 Bolognese: 50% → 25% left" in out
@@ -810,7 +986,7 @@ class TestPrepPortionOutput:
         set_goal()
         add_bolognese()
         capsys.readouterr()
-        run("prep-eat", "--name", "bolognese", "--fraction", "1/4")
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/4")
         out = capsys.readouterr().out
         assert "🥘 Bolognese: 100% → 75% left" in out  # remaining is always stated
         assert "of what's left" not in out               # full batch: single framing
@@ -820,7 +996,7 @@ class TestPrepPortionOutput:
         set_goal()
         add_bolognese()
         capsys.readouterr()
-        run("prep-eat", "--name", "bolognese", "--fraction", "1/4", "--dry-run")
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/4", "--dry-run")
         assert "🥘 Bolognese: 100% left now, 75% if eaten" in capsys.readouterr().out
 
     def test_full_batch_fit_shows_single_framing_and_remaining(self, store, capsys):
@@ -837,7 +1013,7 @@ class TestPrepPortionOutput:
         set_goal()
         self.eat_half()
         capsys.readouterr()
-        run("prep-remove", "--name", "bolognese", "--fraction", "1/4")
+        run("prep-remove", "--name", "bolognese", "--of-batch", "1/4")
         out = capsys.readouterr().out
         assert "50% of what was left" in out
         assert "unlogged" in out
@@ -846,29 +1022,203 @@ class TestPrepPortionOutput:
         set_goal()
         add_bolognese()
         capsys.readouterr()
-        run("prep-remove", "--name", "bolognese", "--fraction", "1/4")
+        run("prep-remove", "--name", "bolognese", "--of-batch", "1/4")
         out = capsys.readouterr().out
         assert "removed 25% of Bolognese (unlogged - not your intake)" in out
         assert "of what was left" not in out
 
 
-class TestRemainingFraction:
+class TestShareDenominators:
+    """The two shares differ only in what they are a share *of*, so each flag names its denominator
+    and the conversion between them never happens in the caller's head."""
+
+    def notes(self):
+        return "\n".join(macros.NOTES)
+
+    def half_eaten(self):
+        set_goal()
+        add_bolognese()  # 1800 kcal
+        run("prep-eat", "--name", "bolognese", "--of-rest", "1/3")  # 67% left
+
+    def test_of_rest_is_a_share_of_what_is_left(self, store):
+        self.half_eaten()
+        macros.NOTES.clear()
+        run("prep-eat", "--name", "bolognese", "--of-rest", "0.4")
+        # 40% of the 66.7% that was left, so 26.7% of the batch.
+        assert macros.frac_left(one_named("bolognese")) == pytest.approx(0.4)
+
+    def test_of_batch_is_a_share_of_everything_made(self, store):
+        set_goal()
+        add_bolognese()
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/5")
+        assert macros.frac_left(one_named("bolognese")) == pytest.approx(0.8)
+
+    def test_of_batch_on_a_partly_eaten_batch_says_what_it_is_of_the_rest(self, store):
+        # The exact confusion this pair exists to prevent: 0.268 of the batch looks arbitrary, and
+        # is 40% of the leftovers.
+        self.half_eaten()
+        macros.NOTES.clear()
+        run("prep-eat", "--name", "bolognese", "--of-batch", "0.268", "--dry-run")
+        notes = self.notes()
+        assert "67% left" in notes
+        assert "40% of what's left" in notes
+        assert "--of-rest" in notes
+
+    def test_a_full_batch_needs_no_such_note(self, store):
+        set_goal()
+        add_bolognese()
+        macros.NOTES.clear()
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/3", "--dry-run")
+        assert self.notes() == ""
+
+    def test_of_rest_is_never_second_guessed(self, store):
+        self.half_eaten()
+        macros.NOTES.clear()
+        run("prep-eat", "--name", "bolognese", "--of-rest", "0.4", "--dry-run")
+        assert self.notes() == ""
+
+    def test_removing_shares_read_the_same_way(self, store):
+        self.half_eaten()
+        run("prep-remove", "--name", "bolognese", "--of-rest", "1/2")
+        assert macros.frac_left(one_named("bolognese")) == pytest.approx(1 / 3)
+
+    def test_a_removal_of_the_batch_is_flagged_the_same_way(self, store):
+        self.half_eaten()
+        macros.NOTES.clear()
+        run("prep-remove", "--name", "bolognese", "--of-batch", "0.1")
+        assert "--of-rest" in self.notes()
+
+    def test_naming_no_share_at_all_lists_the_ways(self, store, capsys):
+        set_goal()
+        add_bolognese()
+        with pytest.raises(SystemExit):
+            run("prep-eat", "--name", "bolognese")
+        err = capsys.readouterr().err
+        assert "--of-rest" in err and "--of-batch" in err
+
+    def test_the_two_shares_cannot_be_given_together(self, store):
+        set_goal()
+        add_bolognese()
+        with pytest.raises(SystemExit):
+            run("prep-eat", "--name", "bolognese", "--of-rest", "1/2", "--of-batch", "1/2")
+
+    def test_a_size_needs_a_sized_batch_and_says_so(self, store, capsys):
+        set_goal()
+        add_bolognese()
+        with pytest.raises(SystemExit):
+            run("prep-eat", "--name", "bolognese", "--size", "100")
+        assert "prep-size" in capsys.readouterr().err
+
+
+class TestFoodListUsage:
+    """The catalog is worth its entries only where they come back, so the listing shows what each
+    one has earned."""
+
+    def test_it_counts_how_often_a_food_was_eaten_and_when_last(self, store, capsys):
+        set_goal()
+        add_skyr()
+        run("food-eat", "--name", "skyr", "--amount", "400")
+        run("food-eat", "--name", "skyr", "--amount", "500")
+        capsys.readouterr()
+        run("food-list")
+        assert f"2x, last {macros.dm(macros.today())}" in capsys.readouterr().out
+
+    def test_one_helping_reads_as_once(self, store, capsys):
+        set_goal()
+        add_skyr()
+        run("food-eat", "--name", "skyr", "--amount", "400")
+        capsys.readouterr()
+        run("food-list")
+        assert "once, last" in capsys.readouterr().out
+
+    def test_a_food_that_never_came_back_says_so_with_the_day_it_was_saved(self, store, capsys):
+        set_goal()
+        add_skyr()
+        capsys.readouterr()
+        run("food-list")
+        assert f"never eaten, saved {macros.dm(macros.today())}" in capsys.readouterr().out
+
+    def test_the_most_eaten_lead_and_the_dead_weight_collects_at_the_end(self, store, capsys):
+        set_goal()
+        add_skyr()
+        run("food-add", "--name", "One-off", "--kcal100", "300", "--protein100", "1",
+            "--fat100", "1", "--carbs100", "1", "--serving", "100")
+        run("food-eat", "--name", "skyr", "--amount", "400")
+        capsys.readouterr()
+        run("food-list")
+        out = capsys.readouterr().out
+        assert out.index("Skyr, plain") < out.index("One-off")
+
+    def test_an_entry_logged_before_provenance_still_counts(self, store, capsys):
+        # Older entries carry no source, only the label the script itself wrote for them.
+        set_goal()
+        add_skyr()
+        macros.ensure_day("2026-05-01")
+        day = macros.load(macros.day_path("2026-05-01"), {})
+        day["entries"].append({"time": "08:00", "item": "Skyr, plain (500g)", "kcal": 320,
+                               "protein": 55, "fat": 0.5, "carbs": 20, "note": None})
+        macros.save(macros.day_path("2026-05-01"), day)
+        capsys.readouterr()
+        run("food-list")
+        assert "once, last 01.05" in capsys.readouterr().out
+
+    def test_aliases_are_shown_only_where_they_add_something(self, store, capsys):
+        set_goal()
+        add_skyr()
+        capsys.readouterr()
+        run("food-list")
+        out = capsys.readouterr().out
+        assert "my skyr" in out
+        assert "skyr, plain," not in out  # the name itself is not repeated as an alias
+
+    def test_an_empty_catalog_says_so(self, store, capsys):
+        run("food-list")
+        assert "no foods saved" in capsys.readouterr().out
+
+
+class TestSavingIsAGuess:
+    def notes(self):
+        return "\n".join(macros.NOTES)
+
+    def test_saving_records_the_day_it_was_saved(self, store):
+        set_goal()
+        add_skyr()
+        assert macros.load(macros.FOOD_FILE, {})["skyr, plain"]["added"] == macros.today()
+
+    def test_a_first_sight_save_is_named_as_a_guess(self, store):
+        set_goal()
+        add_skyr()
+        notes = self.notes()
+        assert "nothing with this rate has been logged before" in notes
+        assert "`eat`" in notes
+
+    def test_a_save_the_repeats_earned_is_not_second_guessed(self, store):
+        set_goal()
+        for _ in range(macros.REPEAT_NUDGE_AT):
+            run("eat", "--item", "Skyr, plain", "--kcal100", "64", "--protein100", "11",
+                "--fat100", "0.1", "--carbs100", "4", "--amount", "500")
+        macros.NOTES.clear()
+        add_skyr()
+        assert "guess" not in self.notes()
+
+
+class TestRestFraction:
     def test_parses_the_usual_forms(self):
-        assert macros.remaining_fraction("1/2") == 0.5
-        assert macros.remaining_fraction("50%") == 0.5
-        assert macros.remaining_fraction("0.5") == 0.5
-        assert macros.remaining_fraction("1") == 1.0
+        assert macros.rest_fraction("1/2") == 0.5
+        assert macros.rest_fraction("50%") == 0.5
+        assert macros.rest_fraction("0.5") == 0.5
+        assert macros.rest_fraction("1") == 1.0
 
     def test_rejects_a_share_above_one(self):
         with pytest.raises(SystemExit):
-            macros.remaining_fraction("3/2")
+            macros.rest_fraction("3/2")
 
 
-class TestPrepRemainingShare:
+class TestPrepRestShare:
     def test_half_of_a_full_batch(self, store):
         set_goal()
         add_bolognese()  # 1800 kcal total
-        run("prep-eat", "--name", "bolognese", "--remaining", "1/2")
+        run("prep-eat", "--name", "bolognese", "--of-rest", "1/2")
         batch = one_named("bolognese")
         assert macros.frac_left(batch) == pytest.approx(0.5)
         assert macros.consumed(batch, "eaten")["kcal"] == pytest.approx(900)
@@ -876,9 +1226,9 @@ class TestPrepRemainingShare:
     def test_half_of_what_is_left_after_a_prior_eat(self, store, capsys):
         set_goal()
         add_bolognese()
-        run("prep-eat", "--name", "bolognese", "--fraction", "1/2")  # 50% left
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/2")  # 50% left
         capsys.readouterr()
-        run("prep-eat", "--name", "bolognese", "--remaining", "1/2")  # half of the 50% = 25% of whole
+        run("prep-eat", "--name", "bolognese", "--of-rest", "1/2")  # half of the 50% = 25% of whole
         assert "50% of what's left" in capsys.readouterr().out
         batch = one_named("bolognese")
         assert macros.frac_left(batch) == pytest.approx(0.25)
@@ -886,8 +1236,8 @@ class TestPrepRemainingShare:
     def test_bare_remaining_still_takes_all(self, store):
         set_goal()
         add_bolognese()
-        run("prep-eat", "--name", "bolognese", "--fraction", "1/4")  # 75% left
-        run("prep-eat", "--name", "bolognese", "--remaining")
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/4")  # 75% left
+        run("prep-eat", "--name", "bolognese", "--of-rest")
         batch = one_named("bolognese")
         assert macros.frac_left(batch) == pytest.approx(0.0)
 
@@ -895,13 +1245,13 @@ class TestPrepRemainingShare:
         set_goal()
         add_bolognese()
         with pytest.raises(SystemExit):
-            run("prep-eat", "--name", "bolognese", "--remaining", "3/2")
+            run("prep-eat", "--name", "bolognese", "--of-rest", "3/2")
 
     def test_remove_half_of_what_is_left(self, store):
         set_goal()
         add_bolognese()
-        run("prep-eat", "--name", "bolognese", "--fraction", "1/2")  # 50% left
-        run("prep-remove", "--name", "bolognese", "--remaining", "1/2")  # half of the 50%, unlogged
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/2")  # 50% left
+        run("prep-remove", "--name", "bolognese", "--of-rest", "1/2")  # half of the 50%, unlogged
         batch = one_named("bolognese")
         assert macros.frac_left(batch) == pytest.approx(0.25)
         assert macros.consumed(batch, "removed")["kcal"] == pytest.approx(450)
@@ -941,7 +1291,7 @@ class TestEdit:
         set_goal()
         run("prep-add", "--name", "B")
         run("prep-ingredient-add", "--name", "b", "--label", "x", "--kcal", "1000")
-        run("prep-eat", "--name", "b", "--fraction", "1/2")
+        run("prep-eat", "--name", "b", "--of-batch", "1/2")
         with pytest.raises(SystemExit):
             run("edit", "--last", "--kcal", "400")
 
@@ -1232,7 +1582,7 @@ def macros_args(name):
         "food-edit": ["--name", "x"],
         "food-rm": ["--name", "x"],
         "prep-add": ["--name", "x"],
-        "prep-eat": ["--name", "x", "--fraction", "1/2"],
+        "prep-eat": ["--name", "x", "--of-batch", "1/2"],
     }
     return [name, *required.get(name, [])]
 
@@ -1361,6 +1711,7 @@ class TestRepeatDetection:
         set_goal()
         run("food-add", "--name", "Kinder Happy Hippo", "--kcal100", "579", "--protein100", "8.5",
             "--fat100", "35", "--carbs100", "55", "--serving", "100")
+        macros.NOTES.clear()  # the save's own note is not what this is about
         for _ in range(3):
             self.eat("Kinder")
         assert "food-add" not in self.notes()
@@ -1403,6 +1754,9 @@ class TestGuessedOverSavedFood:
     def save_sriracha(self):
         run("food-add", "--name", "Sriracha", "--kcal100", "137", "--protein100", "1.9",
             "--fat100", "0.9", "--carbs100", "28", "--serving", "30")
+        # Saving has its own note about being a first-sight guess; these tests are about what the
+        # eat that follows says.
+        macros.NOTES.clear()
 
     def guess(self, kcal="93", item="Sriracha"):
         run("eat", "--item", item, "--kcal100", kcal, "--amount", "10")

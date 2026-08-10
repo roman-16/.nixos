@@ -15,7 +15,7 @@ Tracks daily nutrition as JSON under `macros/` in the working directory. Every r
 
 ## Your job vs the script's job
 
-- **You:** read the message and identify the food and the amount. For a saved food, use `food-eat`; for a batch, `prep-eat`; for a one-off whose per-100 nutrition label you can read (a photo or screenshot), use `eat` with the label's per-100 values plus the amount; only when there is no per-100 rate at all (a pure guess from knowledge) do you supply the final macros yourself with `log --note estimated`. The script always does the scaling - never multiply a rate yourself.
+- **You:** read the message and identify the food and the amount. For a saved food, use `food-eat`; for a batch, `prep-eat`; for something going into a batch, `prep-ingredient-add`; for a one-off whose per-100 nutrition label you can read (a photo or screenshot), use `eat` with the label's per-100 values plus the amount; only when there is no per-100 rate at all (a pure guess from knowledge) do you supply the final macros yourself with `log --note estimated`. The script always does the scaling - never multiply a rate yourself, and never convert one share into another.
 - **The script:** does all scaling and portioning, stores entries, computes every total and the balance ledger, and prints the reply to send. It owns every number.
 
 ## Replying
@@ -116,12 +116,15 @@ Each saved food stores its macros per 100 of a **unit** - grams by default, or `
 
 `food-get` looks a food up (`--quiet` when you just need the numbers yourself; `food-eat` resolves names itself, so it is never needed as a pre-check); `food-add` saves one (only when the user explicitly asks); `food-edit` corrects a saved food's numbers, unit, or name; `food-rm` deletes one. `--unit` defaults to `g`; set it for liquids/countables and the per-100 values are then per 100 of that unit.
 
+**An entry is only worth having if the food comes back.** A one-off needs no entry - `eat` logs it and scales it just the same - and the catalog fills itself from what actually repeats, because the third time the same rate is typed in you get a ready-to-run `food-add`. So saving something on first sight is a guess about the future, and `food-add` says so when nothing with that rate has been logged before. `food-list` shows what each entry has earned (`2x, last 09.08`, or `never eaten, saved 04.08`), most eaten first, so anything that never came back collects at the bottom - if the list has filled up with those, offer to clear them out.
+
 ```bash
 {baseDir}/scripts/macros.py food-get skyr
 {baseDir}/scripts/macros.py food-add --name "Skyr, plain" --kcal100 64 --protein100 11 --fat100 0.1 --carbs100 4 --serving 500 --aliases "skyr,my skyr"
 {baseDir}/scripts/macros.py food-add --name "Gösser Märzen" --unit ml --kcal100 42 --protein100 0.5 --fat100 0 --carbs100 3.3 --serving 500 --aliases beer   # a liquid: per 100ml, 500ml default
 {baseDir}/scripts/macros.py food-edit --name skyr --kcal100 63 --serving 450   # only what you pass changes; also --unit, --rename, --aliases
 {baseDir}/scripts/macros.py food-rm --name skyr
+{baseDir}/scripts/macros.py food-list                                          # what's saved, most eaten first, with what each has earned
 ```
 
 Name matching is forgiving: an exact alias wins, else a unique substring, else the closest spelling. On the logging path a lone close match is logged and announced (`read "skyer" as Skyr, plain`); when several foods match it asks you to pick, and `food-edit`/`food-rm` never act on a guess (re-run with the exact name). On a miss, check `food-list`.
@@ -151,35 +154,38 @@ A recorded weigh-in is echoed in that day's summary (`Weight 66.4 kg (goal ...)`
 
 ## Meal prep (batch cooking)
 
-A batch is built up ingredient by ingredient, and everything that leaves it is a **consumption event** in a log: a portion **you** ate (logged to your day) or one that left **unlogged** (someone else ate it, a spill, a giveaway), so `remaining = total - your share - the unlogged share`. Every event is inspectable with `prep-get` and reversible with `prep-uneat`. Create the batch, then add ingredients one message at a time (look each up or estimate it, exactly like logging food):
+A batch is built up ingredient by ingredient, and everything that leaves it is a **consumption event** in a log: a portion **you** ate (logged to your day) or one that left **unlogged** (someone else ate it, a spill, a giveaway), so `remaining = total - your share - the unlogged share`. Every event is inspectable with `prep-get` and reversible with `prep-uneat`. Create the batch, then add ingredients one message at a time:
 
 ```bash
 {baseDir}/scripts/macros.py prep-add --name "Bolognese"                        # create an empty batch
 {baseDir}/scripts/macros.py prep-add --name "Ice cream" --size 1000            # optional total size (grams; --unit ml/pieces/...)
-{baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label "Beef mince (500g)" --kcal 1075 --protein 100 --fat 75 --carbs 0
-{baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label "Passata (700g)" --kcal 245 --protein 12 --fat 1 --carbs 45
+{baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --food skyr --amount 400                                    # a saved food, scaled here
+{baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label Passata --kcal100 35 --protein100 1.5 --carbs100 7 --amount 700   # off the packet, scaled here
+{baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label "Olive oil" --kcal 265 --fat 30                     # only the total is known
 {baseDir}/scripts/macros.py prep-get --name bolognese                          # ingredients, total, consumption log, % (and size) left
 ```
+
+**An ingredient is named the same three ways a meal is.** `--food <name> --amount N` for anything saved (the label writes itself, and `--unit` comes from the food); `--kcal100 ... --amount N` when you have the packet in front of you; `--kcal N` only when the total is all there is. As everywhere else, the script does the scaling - never multiply a per-100 rate by an amount to fill in `--kcal`. Amounts read back in the label (`Skyr (plain) (400g)`), and an ingredient scaled from a rate can be re-weighed later with one flag (`prep-ingredient-edit --amount 500`).
 
 `prep-add` makes an empty batch and refuses a name that's already **active** (so you never wipe one you're part-way through) - but a finished batch steps aside (it archives itself, below), so reusing its name for a fresh cook just works; a batch whose total you already know is just `prep-add` plus one `prep-ingredient-add`.
 
 **Eating, unlogged removal, undo** - the core verbs. `prep-eat` is a portion **you** eat (logged to your day); `prep-remove` is one that leaves the batch **unlogged**; `prep-uneat` reverses any event; `prep-archive` files a batch away when you're done (it's never deleted, just kept for lookup), and `prep-unarchive` brings one back:
 
 ```bash
-{baseDir}/scripts/macros.py prep-eat --name bolognese --remaining        # you finish whatever is left
-{baseDir}/scripts/macros.py prep-eat --name bolognese --remaining 1/2    # HALF of what's LEFT (also 50% or 0.5) - the default for "half the prep"
-{baseDir}/scripts/macros.py prep-eat --name bolognese --fraction 1/5     # 1/5 of the WHOLE original batch - only when they mean the original
+{baseDir}/scripts/macros.py prep-eat --name bolognese --of-rest          # you finish whatever is left
+{baseDir}/scripts/macros.py prep-eat --name bolognese --of-rest 1/2      # half of what's LEFT (also 50% or 0.5)
+{baseDir}/scripts/macros.py prep-eat --name bolognese --of-batch 1/5     # a fifth of the WHOLE batch - a fixed meal-prep serving
 {baseDir}/scripts/macros.py prep-eat --name "ice cream" --size 250       # you ate 250g (needs a size set)
 {baseDir}/scripts/macros.py prep-eat --name bolognese --fit-protein      # enough to reach today's protein goal
 {baseDir}/scripts/macros.py prep-eat --name bolognese --target-kcal 500  # a portion worth 500 kcal
-{baseDir}/scripts/macros.py prep-remove --name bolognese --remaining 1/3 # someone else ate / spilled 1/3 of what's LEFT - NOT your intake
+{baseDir}/scripts/macros.py prep-remove --name bolognese --of-rest 1/3   # someone else ate / spilled 1/3 of what's LEFT - NOT your intake
 {baseDir}/scripts/macros.py prep-uneat --name bolognese --last          # undo the last event (or --index N from prep-get, or --all)
 {baseDir}/scripts/macros.py prep-archive --name bolognese               # done with it - file it away (kept forever, never deleted)
 {baseDir}/scripts/macros.py prep-unarchive --name bolognese             # bring an archived batch back (or --id from prep-list --all)
 {baseDir}/scripts/macros.py prep-list                                   # active batches (add --all to include archived ones)
 ```
 
-**A share is of what's left by default.** When the user talks about a share of the prep - "half of it", "a third", "most of what's left", "the rest" - they mean of what's currently **left**, so use `--remaining <frac>` (`--remaining` on its own = all of it; it's a share of the leftovers, so it errors above 1). Reach for `--fraction <frac>` only when they clearly mean the **whole original** batch - a fixed meal-prep serving like "one of the 5" or "a fifth of what I made"; it's a share of the whole and errors if it exceeds what's left. On a full batch the two coincide, so `--remaining <frac>` is always the safe default; `--size` is for absolute grams. Every eat adds a `🥘` line with the batch's remaining before/after (a projection on `--dry-run`), so you always see how full it is - never assume it's full; once a batch is partway down the reply also reframes the portion as its share **of what's left** (e.g. `50% of what's left (30% of batch, ~250g)`). `prep-eat`'s `--fit-*`/`--target-*` size the portion for you and cap to what remains. **Batches are never deleted, only archived** - eating (or removing) a batch down to 0% archives it automatically, and `prep-archive` files one away on demand. Archived batches drop out of `prep-list` (see them with `--all`) but are kept forever for lookup with `prep-get` (by name, or `--id` when several archived batches share a name). To fix a finished batch, `prep-unarchive` it first, then `prep-uneat`/`prep-ingredient-edit`.
+**A share names its denominator, so say the one the user said.** "Half of it", "a third", "most of what's left", "the rest" are shares of what is currently **left**: `--of-rest <frac>` (bare `--of-rest` = all of it; it errors above 1, being a share of the leftovers). "One of the 5", "a fifth of what I made" is a share of the **whole** batch: `--of-batch <frac>` (it errors if it exceeds what's left). Never convert between the two yourself - pass the share as it was said and let the script do it; on a partly eaten batch `--of-batch` prints what that share is of the rest, so a mis-named denominator shows up at once. `--size` is for absolute grams. Every eat adds a `🥘` line with the batch's remaining before/after (a projection on `--dry-run`), so you always see how full it is - never assume it's full; once a batch is partway down the reply also reframes the portion as its share **of what's left** (e.g. `50% of what's left (30% of batch, ~250g)`). `prep-eat`'s `--fit-*`/`--target-*` size the portion for you and cap to what remains. **Batches are never deleted, only archived** - eating (or removing) a batch down to 0% archives it automatically, and `prep-archive` files one away on demand. Archived batches drop out of `prep-list` (see them with `--all`) but are kept forever for lookup with `prep-get` (by name, or `--id` when several archived batches share a name). To fix a finished batch, `prep-unarchive` it first, then `prep-uneat`/`prep-ingredient-edit`.
 
 ### Size (grams / ml / pieces)
 
@@ -205,8 +211,8 @@ Adding to a batch that's already been eaten from has two cases; the flag depends
 - **Added it to the leftovers** just now (`--later`) - none of it was in what was eaten, so all of it joins what's left and nothing is logged.
 
 ```bash
-{baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label "Olive oil (30ml)" --kcal 265 --fat 30                        # forgot it - was in the whole batch
-{baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label "Grated cheese (50g)" --kcal 200 --protein 12 --fat 16 --later # stirred into the leftovers
+{baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label "Olive oil" --kcal 265 --fat 30                          # forgot it - was in the whole batch
+{baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --food "grated cheese" --amount 50 --later                       # stirred into the leftovers
 ```
 
 Pick from the wording: "I forgot it also had X" / "X was in it" is the default; "I added / stirred in / topped it up with X" is `--later`. Before anything has been eaten the two are identical, so while you're still building a batch just add ingredients normally. If it's genuinely unclear which applies for a batch that's been eaten from, ask.
@@ -216,9 +222,12 @@ Pick from the wording: "I forgot it also had X" / "X was in it" is the default; 
 Use `prep-get` to see each ingredient's index, then correct or drop one by `--index N` (or `--last` for the one you just added) - no rebuild needed:
 
 ```bash
+{baseDir}/scripts/macros.py prep-ingredient-edit --name bolognese --last --amount 500  # re-weigh it: re-scales from its own rate and relabels
 {baseDir}/scripts/macros.py prep-ingredient-edit --name bolognese --last --kcal 1000   # fix a wrong number; only what you pass changes, also --label
 {baseDir}/scripts/macros.py prep-ingredient-rm --name bolognese --index 3              # drop a mis-added ingredient
 ```
+
+`--amount` re-scales an ingredient from the per-100 rate it was added with, so "it was 500g not 400g" needs no arithmetic. An ingredient added with `--kcal` alone has no rate behind it, so correct those with explicit macros.
 
 Before anything's been eaten this just adjusts the batch. If some has been eaten, the correction is applied exactly like a forgotten add in reverse: your already-eaten share of the change is corrected on today's log (a fix can show as a small negative entry), and the rest just adjusts the batch. Pass `--no-log-eaten` to skip touching the day.
 

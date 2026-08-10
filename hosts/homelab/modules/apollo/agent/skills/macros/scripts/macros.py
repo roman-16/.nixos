@@ -138,13 +138,13 @@ def parse_fraction(s: str) -> float:
     return float(s)
 
 
-def remaining_fraction(value: str) -> float:
-    """A --remaining amount as a fraction of what's *left* ("1/2", "50%", "0.5"; the bare flag
-    passes "1" for all of it). It's a share of the leftovers, so it can't exceed 1."""
+def rest_fraction(value: str) -> float:
+    """An --of-rest amount as a fraction of what's *left* ("1/2", "50%", "0.5"; the bare flag passes
+    "1" for all of it). It's a share of the leftovers, so it can't exceed 1."""
     frac = parse_fraction(value)
     if frac > 1 + 1e-6:
-        die("a --remaining amount is a share of what's left, so it can't exceed 1 "
-            "(use --remaining on its own to take all of it)")
+        die("an --of-rest amount is a share of what's left, so it can't exceed 1 "
+            "(use --of-rest on its own to take all of it)")
     return frac
 
 
@@ -826,15 +826,58 @@ def cmd_food_add(args):
     food = load(FOOD_FILE, {})
     key = args.name.lower()
     aliases = [a.strip().lower() for a in (args.aliases or "").split(",") if a.strip()]
+    per100 = {"kcal": args.kcal100, "protein": args.protein100, "fat": args.fat100, "carbs": args.carbs100}
+    unit = args.unit or "g"
     food[key] = {
         "name": args.name,
-        "per100": {"kcal": args.kcal100, "protein": args.protein100, "fat": args.fat100, "carbs": args.carbs100},
+        "per100": per100,
         "serving": args.serving,
-        "unit": args.unit or "g",
+        "unit": unit,
         "aliases": sorted(set(aliases) | {key}),
+        "added": today(),
     }
     save(FOOD_FILE, food)
     print(f"saved food: {args.name}")
+    # An entry earns its place by coming back, and at first sight there is no evidence that it will.
+    # The catalog fills itself from what actually repeats (see suggest_saving), so a save with no
+    # repeat behind it is a guess worth naming.
+    if eat_repeats(per100, unit, today()) == 0:
+        hint("[macros] nothing with this rate has been logged before, so saving it is a guess that it "
+             "comes back. A one-off needs no entry: `eat` logs it and scales it just the same, and "
+             "the third time the same label is typed in you get a ready-to-run food-add.")
+
+
+def food_usage(names) -> dict:
+    """How often each saved food has been eaten and when it last was, per name.
+
+    The catalog records what a food is, never what was done with it, so this is read from the days.
+    An entry names its food outright; one logged before that was recorded is matched on the label the
+    script itself wrote for it ("<name> (<amount>)"), which reconstructs the link rather than
+    guessing at it - it only misses a food that has been renamed since.
+    """
+    used = {name: {"last": None, "n": 0} for name in names}
+    for path in sorted(DAYS_DIR.glob("*.json")) if DAYS_DIR.exists() else []:
+        for entry in load(path, {}).get("entries", []):
+            source = entry.get("source") or {}
+            named = source.get("name") if source.get("kind") == "food" else None
+            if named is None and not source:
+                item = entry.get("item") or ""
+                named = next((name for name in used if item.startswith(f"{name} (")), None)
+            seen = used.get(named)
+            if seen is None:
+                continue
+            seen["n"] += 1
+            seen["last"] = path.stem
+    return used
+
+
+def usage_line(food: dict, seen: dict) -> str:
+    """What a saved food has earned, in the terms that decide whether it belongs in the catalog."""
+    if seen["n"] == 0:
+        added = food.get("added")
+        return f"never eaten, saved {dm(added)}" if added else "never eaten"
+    times = "once" if seen["n"] == 1 else f"{seen['n']}x"
+    return f"{times}, last {dm(seen['last'])}"
 
 
 def cmd_food_list(args):
@@ -842,8 +885,15 @@ def cmd_food_list(args):
     if not food:
         print("no foods saved")
         return
-    for v in food.values():
-        print(f"- {v['name']}  (aliases: {', '.join(v.get('aliases', []))})")
+    used = food_usage([v["name"] for v in food.values()])
+    # Most used first, so what the catalog is for sits at the top and what it has accumulated sits at
+    # the bottom, where it can be dealt with.
+    order = sorted(food.values(), key=lambda v: (-used[v["name"]]["n"], v["name"].lower()))
+    print(f"{len(order)} saved food(s), most eaten first:")
+    for v in order:
+        extra = [a for a in v.get("aliases", []) if a != v["name"].lower()]
+        also = f"  \u00b7  {', '.join(extra)}" if extra else ""
+        print(f"- {v['name']}  {usage_line(v, used[v['name']])}{also}")
 
 
 def cmd_food_eat(args):
@@ -1012,6 +1062,36 @@ def portion_desc(batch: dict, frac: float, left: float) -> str:
     return f"{of_whole}% of batch{size_txt}"
 
 
+def explicit_share(args, batch: dict, left: float):
+    """The share of the *whole* batch an explicitly named portion comes to, or None when none was
+    named (leaving prep-eat's --fit-*/--target-* to size it instead).
+
+    Every way of naming a portion converts here, because a share means nothing without its
+    denominator and picking between them is the one thing that must not happen in the caller's head:
+    --of-rest is a share of what is left, --of-batch a share of everything that was made, --size an
+    absolute amount of a batch whose size is known. The flags name their denominator, so there is
+    nothing to infer and nothing to convert before calling.
+    """
+    if args.size is not None:
+        if not batch.get("size"):
+            die(f'"{batch["name"]}" has no size set - set one with prep-size, or name a share '
+                "with --of-rest/--of-batch")
+        return args.size / batch["size"]["amount"]
+    if args.of_rest is not None:
+        return rest_fraction(args.of_rest) * left
+    if args.of_batch is not None:
+        frac = parse_fraction(args.of_batch)
+        # The two denominators only diverge once a batch is partly gone, which is exactly where
+        # choosing the wrong one is silent. Saying what this share is of the rest puts the other
+        # reading in front of the caller while it can still be corrected.
+        if 0 < left < 1 - 1e-6:
+            hint(f'[macros] {batch["name"]} is {round(left * 100)}% left, so --of-batch '
+                 f"{args.of_batch} is {round(frac / left * 100)}% of what's left. If that share was "
+                 "meant of the leftovers, --of-rest says so and works it out here.")
+        return frac
+    return None
+
+
 def remaining_note(batch: dict, frac: float, left: float, *, dry_run: bool) -> str:
     """The batch's remaining share before and after taking `frac` of the whole - the one place
     prep-eat surfaces how much is left, phrased as a projection on a dry run."""
@@ -1161,11 +1241,58 @@ def cmd_prep_size(args):
     print(prep_line(batch))
 
 
+def scaled_ingredient(label: str, per100: dict, amount, unit: str, kind: str, name: str) -> dict:
+    """An ingredient weighed out against a per-100 rate, scaled here and labelled with what went in.
+    Its rate is snapshotted the way a day entry's is, so "make that 500g" stays one flag later."""
+    rate = {k: per100[k] / 100 for k in MACROS}
+    return {
+        "label": f"{label} ({fmt_amount(amount, unit)})",
+        "kcal": round(rate["kcal"] * amount),
+        "protein": r1(rate["protein"] * amount),
+        "fat": r1(rate["fat"] * amount),
+        "carbs": r1(rate["carbs"] * amount),
+        "source": rate_source(kind, name, per100, amount, unit),
+    }
+
+
+def ingredient_from(args) -> tuple:
+    """(ingredient, assumed) for a new ingredient, from whichever way its numbers arrived.
+
+    Three ways in, because that is how they arrive: a saved food and how much of it went in, a label's
+    per-100 rate and how much went in, or the final macros when there is no rate behind them. The two
+    scaled forms are the same grammar `eat` uses and are worked out here, so an ingredient weighed off
+    a packet is never multiplied out first. `assumed` is the food name to announce when one was
+    matched loosely.
+    """
+    if args.food is not None:
+        if args.amount is None:
+            die("give --amount as well: how much of the food went in, in its own unit")
+        _, food, assumed = resolve(load(FOOD_FILE, {}), args.food,
+                                   noun="saved food", listing="food-list", strict=False)
+        return scaled_ingredient(args.label or food["name"], food["per100"], args.amount,
+                                 food.get("unit", "g"), "food", food["name"]), assumed
+    if args.kcal100 is not None:
+        if args.amount is None:
+            die("give --amount as well: how much of it went in")
+        if not args.label:
+            die("give --label as well: what to call the ingredient")
+        per100 = {k: getattr(args, f"{k}100") for k in MACROS}
+        return scaled_ingredient(args.label, per100, args.amount, args.unit or "g",
+                                 "eat", args.label), None
+    if args.kcal is None:
+        die("give the ingredient's macros: --food NAME --amount N for something saved, "
+            "--kcal100 N --amount N off a packet, or --kcal N when you only have the total")
+    if not args.label:
+        die("give --label as well: what to call the ingredient")
+    return {"label": args.label, "kcal": args.kcal, "protein": args.protein, "fat": args.fat,
+            "carbs": args.carbs, "source": {"kind": "log"}}, None
+
+
 def cmd_prep_ingredient_add(args):
     prep = load(PREP_FILE, {})
     key, batch, assumed = resolve(live_preps(prep), args.name, noun="active prep", listing="prep-list", strict=False)
-    ingredient = {"label": args.label, "kcal": args.kcal, "protein": args.protein,
-                  "fat": args.fat, "carbs": args.carbs}
+    ingredient, food_assumed = ingredient_from(args)
+    label = ingredient["label"]
     date = args.date or today()
     # A --later ingredient went into the leftovers only: all of it flows to remaining and
     # nothing is attributed to what already left. A forgotten one (the default) was in the
@@ -1178,10 +1305,12 @@ def cmd_prep_ingredient_add(args):
         " (forgotten - was in the whole batch)" if forgotten else "")
 
     leads = [f'📝 read "{args.name}" as {assumed}'] if assumed else []
-    leads.append(f"added to {batch['name']}{mode}: {args.label} - "
+    if food_assumed:
+        leads.append(f'📝 read "{args.food}" as {food_assumed}')
+    leads.append(f"added to {batch['name']}{mode}: {label} - "
                  f"{round(ingredient['kcal'])} kcal, {r1(ingredient['protein'])}g P")
     if forgotten:
-        apply_delta(batch, key, ingredient, date=date, label=args.label, verb="forgotten",
+        apply_delta(batch, key, ingredient, date=date, label=label, verb="forgotten",
                     leads=leads, log_eaten=not args.no_log_eaten)
     batch["ingredients"].append(ingredient)
     save(PREP_FILE, prep)
@@ -1196,11 +1325,25 @@ def cmd_prep_ingredient_edit(args):
     ingredient = batch["ingredients"][idx]
     old = {k: ingredient[k] for k in MACROS}
     new = dict(old)
+    # A new amount re-scales from the ingredient's own rate and relabels it, so "make that 500g" is
+    # one flag rather than four. Applied first, so any explicit macro passed alongside still wins.
+    relabel = None
+    if args.amount is not None:
+        source = ingredient.get("source") or {}
+        per100 = source.get("per100")
+        if not per100:
+            die("that ingredient has no per-100 rate to re-scale from - give its macros instead")
+        rate = {k: per100[k] / 100 for k in MACROS}
+        new["kcal"] = round(rate["kcal"] * args.amount)
+        for m in ("protein", "fat", "carbs"):
+            new[m] = r1(rate[m] * args.amount)
+        relabel = f"{source['name']} ({fmt_amount(args.amount, source.get('unit', 'g'))})"
+        source["amount"] = args.amount
     for m in MACROS:
         value = getattr(args, m)
         if value is not None:
             new[m] = value
-    label = args.label or ingredient["label"]
+    label = args.label or relabel or ingredient["label"]
     leads = [f'📝 read "{args.name}" as {assumed}'] if assumed else []
     leads.append(f"updated {batch['name']} ingredient {idx + 1}: {label} - "
                  f"{round(new['kcal'])} kcal, {r1(new['protein'])}g P")
@@ -1209,8 +1352,7 @@ def cmd_prep_ingredient_edit(args):
     apply_delta(batch, key, macro_sub(new, old), date=args.date or today(), label=label,
                 verb="corrected", leads=leads, log_eaten=not args.no_log_eaten)
     ingredient.update(new)
-    if args.label is not None:
-        ingredient["label"] = args.label
+    ingredient["label"] = label
     save(PREP_FILE, prep)
     leads.append(prep_line(batch))
     print("\n".join(leads))
@@ -1287,8 +1429,8 @@ def cmd_prep_eat(args):
     date = args.date or today()
     leads = [f'📝 read "{args.name}" as {assumed}'] if assumed else []
     capped = False
-    # --fraction/--remaining/--size are shares of the *whole* batch; --fit-*/--target-*
-    # size the share for you.
+    # A named share resolves in explicit_share, which owns the denominators; --fit-*/--target-* size
+    # the share from the day instead.
     if has_target(args):
         day = compute_day(date, [])
         if day is None:
@@ -1296,23 +1438,18 @@ def cmd_prep_eat(args):
         ideal, why, dim, requested = portion_for_target(batch["name"], total, day, args)
         frac = min(ideal, left)
         capped = ideal > left + 1e-6
-    elif args.size is not None:
-        if not batch.get("size"):
-            die(f'"{batch["name"]}" has no size set - set one with prep-size, or use --fraction')
-        frac = args.size / batch["size"]["amount"]
-    elif args.remaining is not None:
-        frac = remaining_fraction(args.remaining) * left
-    elif args.fraction is not None:
-        frac = parse_fraction(args.fraction)
     else:
-        die("give an amount: --fraction, --remaining [frac], --size, --fit-protein/--fit-kcal, or --target-protein/--target-kcal")
+        frac = explicit_share(args, batch, left)
+    if frac is None:
+        die("give an amount: --of-rest [frac], --of-batch <frac>, --size, --fit-protein/--fit-kcal, "
+            "or --target-protein/--target-kcal")
     if frac <= 0:
         die("amount must be positive")
     # An explicit over-ask is a mistake; a fit/target over-ask is capped above.
     if not has_target(args) and frac > left + 1e-6:
         die(f'only {round(left * 100)}% of "{batch["name"]}" is left '
             f"({round(total['kcal'] * left)} kcal); cannot eat "
-            f"{round(frac * 100)}%. Use --remaining to finish it.")
+            f"{round(frac * 100)}%. Use --of-rest to finish it.")
     portion = macro_scale(total, frac)
     size_part = portion_size(batch, frac)
     item = f"{batch['name']} ({round(frac * 100)}% of batch{f', {size_part}' if size_part else ''})"
@@ -1361,21 +1498,14 @@ def cmd_prep_remove(args):
     if total["kcal"] <= 0:
         die(f'"{batch["name"]}" has no ingredients yet')
     left = frac_left(batch)
-    if args.size is not None:
-        if not batch.get("size"):
-            die(f'"{batch["name"]}" has no size set - set one with prep-size, or use --fraction')
-        frac = args.size / batch["size"]["amount"]
-    elif args.remaining is not None:
-        frac = remaining_fraction(args.remaining) * left
-    elif args.fraction is not None:
-        frac = parse_fraction(args.fraction)
-    else:
-        die("give an amount: --fraction, --remaining [frac], or --size")
+    frac = explicit_share(args, batch, left)
+    if frac is None:
+        die("give an amount: --of-rest [frac], --of-batch <frac>, or --size")
     if frac <= 0:
         die("amount must be positive")
     if frac > left + 1e-6:
         die(f'only {round(left * 100)}% of "{batch["name"]}" is left; cannot remove {round(frac * 100)}%. '
-            f"Use --remaining to clear the rest.")
+            f"Use --of-rest to clear the rest.")
     portion = macro_scale(total, frac)
     batch["consumption"].append(make_event("removed", args.date or today(), portion, "unlogged"))
     maybe_archive(batch)
@@ -1644,8 +1774,17 @@ def build_parser() -> argparse.ArgumentParser:
     ping = command("prep-ingredient-add")
     ping.set_defaults(func=cmd_prep_ingredient_add)
     ping.add_argument("--name", required=True)
-    ping.add_argument("--label", required=True)
-    ping.add_argument("--kcal", type=nonneg, required=True)
+    ping.add_argument("--label")
+    # One rate basis per ingredient: a saved food, a packet's per-100, or the total typed out.
+    basis = ping.add_mutually_exclusive_group()
+    basis.add_argument("--food")
+    basis.add_argument("--kcal100", type=nonneg)
+    basis.add_argument("--kcal", type=nonneg)
+    ping.add_argument("--amount", type=positive)
+    ping.add_argument("--unit")
+    ping.add_argument("--protein100", type=nonneg, default=0)
+    ping.add_argument("--fat100", type=nonneg, default=0)
+    ping.add_argument("--carbs100", type=nonneg, default=0)
     ping.add_argument("--protein", type=nonneg, default=0)
     ping.add_argument("--fat", type=nonneg, default=0)
     ping.add_argument("--carbs", type=nonneg, default=0)
@@ -1658,6 +1797,7 @@ def build_parser() -> argparse.ArgumentParser:
     pied.add_argument("--name", required=True)
     pied.add_argument("--last", action="store_true")
     pied.add_argument("--index", type=int)
+    pied.add_argument("--amount", type=positive)
     pied.add_argument("--label")
     pied.add_argument("--kcal", type=nonneg)
     pied.add_argument("--protein", type=nonneg)
@@ -1682,15 +1822,15 @@ def build_parser() -> argparse.ArgumentParser:
     pe = command("prep-eat")
     pe.set_defaults(func=cmd_prep_eat)
     pe.add_argument("--name", required=True)
-    add_amount_flags(pe, ("--fraction", {}), ("--remaining", {"nargs": "?", "const": "1", "default": None}),
-                     ("--size", {"type": positive}))
+    add_amount_flags(pe, ("--of-rest", {"nargs": "?", "const": "1", "default": None}),
+                     ("--of-batch", {}), ("--size", {"type": positive}))
 
     prem = command("prep-remove")
     prem.set_defaults(func=cmd_prep_remove)
     prem.add_argument("--name", required=True)
     grp = prem.add_mutually_exclusive_group()
-    grp.add_argument("--fraction")
-    grp.add_argument("--remaining", nargs="?", const="1", default=None)
+    grp.add_argument("--of-rest", nargs="?", const="1", default=None)
+    grp.add_argument("--of-batch")
     grp.add_argument("--size", type=positive)
     prem.add_argument("--date")
 
