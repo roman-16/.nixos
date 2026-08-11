@@ -4,8 +4,16 @@ import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import { type ExtensionAPI, estimateTokens } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 
+type ExclusionReason = "generated" | "oversized" | "secret";
+
+interface ExcludedFile {
+  reason: ExclusionReason;
+  rel: string;
+  tokens?: number;
+}
+
 interface LoadContextDetails {
-  excluded: string[];
+  excluded: ExcludedFile[];
   excludedPaths: string[];
   fileCount: number;
   files: string[];
@@ -15,51 +23,72 @@ interface LoadContextDetails {
 
 const BINARY_SCAN_BYTES = 8192;
 
-// Basenames matching these globs are skipped when a directory is expanded:
-// lockfiles, minified bundles, source maps, other generated files (which cost
-// huge token counts because dense hashes/URLs tokenize far below the SDK's
-// 4-chars/token estimate), and secrets / private keys / keystores (which must
-// not land in the LLM transcript). All rarely add useful context. An explicitly
-// named file is always honored, and --all bypasses the list entirely.
-const DEFAULT_EXCLUDES = [
-  "*.jks",
-  "*.key",
-  "*.keystore",
+const BULKY_FORMATS = ["*.csv", "*.geojson", "*.ipynb", "*.snap", "*.sql", "*.svg", "*.tsv"];
+
+const BULKY_FORMAT_TOKEN_LIMIT = 2000;
+
+const ESTIMATED_CHARS_PER_TOKEN = 4;
+
+const GENERATED_FILES = [
   "*.lock",
   "*.lockfile",
   "*.map",
   "*.min.css",
   "*.min.js",
   "*.min.mjs",
-  "*.p12",
   "*.pb.go",
-  "*.pem",
-  "*.pfx",
-  "*.ppk",
   "*.tsbuildinfo",
-  ".env",
   "bun.lockb",
   "bun.nix",
   "go.sum",
   "go.work.sum",
-  "id_dsa",
-  "id_ecdsa",
-  "id_ed25519",
-  "id_rsa",
   "lock.dsc.yaml",
   "npm-shrinkwrap.json",
   "package-lock.json",
   "packages.lock.json",
   "pnpm-lock.yaml",
+];
+
+const SECRET_FILES = [
+  "*.jks",
+  "*.key",
+  "*.keystore",
+  "*.p12",
+  "*.pem",
+  "*.pfx",
+  "*.ppk",
+  ".env",
+  "id_dsa",
+  "id_ecdsa",
+  "id_ed25519",
+  "id_rsa",
   "secrets.json",
 ];
 
-const EXCLUDE_RES = DEFAULT_EXCLUDES.map(
-  (g) => new RegExp(`^${g.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`),
-);
+function globMatcher(globs: string[]): (name: string) => boolean {
+  const patterns = globs.map(
+    (g) => new RegExp(`^${g.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`),
+  );
+  return (name) => patterns.some((re) => re.test(name));
+}
 
-function isExcluded(name: string): boolean {
-  return EXCLUDE_RES.some((re) => re.test(name));
+const isBulkyFormat = globMatcher(BULKY_FORMATS);
+const isGenerated = globMatcher(GENERATED_FILES);
+const isSecret = globMatcher(SECRET_FILES);
+
+function estimateFileTokens(path: string): number {
+  return Math.ceil(statSync(path).size / ESTIMATED_CHARS_PER_TOKEN);
+}
+
+function exclusionFor(path: string): Omit<ExcludedFile, "rel"> | null {
+  const name = basename(path);
+  if (isSecret(name)) return { reason: "secret" };
+  if (isGenerated(name)) return { reason: "generated" };
+  if (isBulkyFormat(name)) {
+    const tokens = estimateFileTokens(path);
+    if (tokens > BULKY_FORMAT_TOKEN_LIMIT) return { reason: "oversized", tokens };
+  }
+  return null;
 }
 
 const PRIVATE_KEY_RE = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----/;
@@ -158,6 +187,15 @@ async function listFiles(pi: ExtensionAPI, dir: string): Promise<string[]> {
   return out;
 }
 
+function formatSkipped(excluded: ExcludedFile[]): string {
+  const width = Math.max(...excluded.map((e) => e.reason.length));
+  const lines = excluded.map(
+    (e) =>
+      `  ${e.reason.padEnd(width)}  ${e.rel}${e.tokens ? ` (~${e.tokens.toLocaleString()} tokens)` : ""}`,
+  );
+  return `\n\nskipped ${excluded.length} file(s) (use --all to include):\n${lines.join("\n")}`;
+}
+
 export default function (pi: ExtensionAPI) {
   pi.registerMessageRenderer<LoadContextDetails>("load-context", (message, { expanded }, theme) => {
     const details = message.details;
@@ -175,7 +213,7 @@ export default function (pi: ExtensionAPI) {
       text += "\n" + details.files.map((f) => theme.fg("dim", `  ${f}`)).join("\n");
     }
     if (expanded && details.excluded?.length) {
-      text += "\n" + details.excluded.map((f) => theme.fg("dim", `  - ${f} (skipped)`)).join("\n");
+      text += "\n" + details.excluded.map((e) => theme.fg("dim", `  - ${e.rel} (${e.reason})`)).join("\n");
     }
 
     return new Text(text, 0, 0);
@@ -183,7 +221,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerCommand("load-context", {
     description:
-      "Recursively load a path's files into context (gitignore-aware, skips lockfiles/minified/generated, !path to exclude, with confirmation)",
+      "Recursively load a path's files into context (gitignore-aware, skips secrets/generated/oversized files, !path to exclude, with confirmation)",
     handler: async (args, ctx) => {
       if (!ctx.hasUI) {
         ctx.ui.notify("load-context requires interactive mode", "error");
@@ -216,7 +254,7 @@ export default function (pi: ExtensionAPI) {
 
       const seen = new Set<string>();
       const files: string[] = [];
-      const excluded: string[] = [];
+      const excluded: ExcludedFile[] = [];
       let userExcludedCount = 0;
       for (const p of resolvedPaths) {
         const isDir = statSync(p).isDirectory();
@@ -228,8 +266,9 @@ export default function (pi: ExtensionAPI) {
             userExcludedCount++;
             continue;
           }
-          if (isDir && !includeAll && isExcluded(basename(f))) {
-            excluded.push(relative(ctx.cwd, f) || f);
+          const exclusion = isDir && !includeAll ? exclusionFor(f) : null;
+          if (exclusion) {
+            excluded.push({ ...exclusion, rel: relative(ctx.cwd, f) || f });
             continue;
           }
           files.push(f);
@@ -243,7 +282,7 @@ export default function (pi: ExtensionAPI) {
           if (isBinary(buf)) continue;
           const rel = relative(ctx.cwd, file) || file;
           if (!includeAll && containsPrivateKey(buf)) {
-            excluded.push(rel);
+            excluded.push({ reason: "secret", rel });
             continue;
           }
           entries.push({ rel, content: buf.toString("utf8") });
@@ -251,7 +290,7 @@ export default function (pi: ExtensionAPI) {
           // skip unreadable
         }
       }
-      excluded.sort();
+      excluded.sort((a, b) => a.reason.localeCompare(b.reason) || a.rel.localeCompare(b.rel));
 
       if (entries.length === 0) {
         ctx.ui.notify("No readable (non-binary, non-ignored) files found", "warning");
@@ -268,10 +307,7 @@ export default function (pi: ExtensionAPI) {
 
       const contextWindow = ctx.getContextUsage()?.contextWindow ?? ctx.model?.contextWindow;
       const pctStr = contextWindow ? ` (~${Math.round((estimated / contextWindow) * 100)}% of context)` : "";
-      const skippedNote =
-        excluded.length > 0
-          ? `\n\nskipped ${excluded.length} lockfile/minified/generated/secret file(s) (use --all to include):\n${excluded.map((f) => `  ${f}`).join("\n")}`
-          : "";
+      const skippedNote = excluded.length > 0 ? formatSkipped(excluded) : "";
 
       let topNote = "";
       if (showTop) {

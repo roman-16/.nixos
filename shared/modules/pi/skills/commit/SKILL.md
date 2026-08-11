@@ -40,8 +40,7 @@ anything yourself.
 
 ### 3. Generate the message
 
-Follow the format below, basing it **only on the staged diff**. The subject must capture the essence
-of the change; the body explains *why* when it isn't obvious. Cover all the staged changes.
+Follow the format below, basing it **only on the staged diff**. The subject carries the change and must stand alone. Most commits need no body at all; add one when there is a *why* the diff cannot show - a constraint, a trade-off, a reason that isn't obvious from the code. Never summarize what the diff already says.
 
 ### 4. Confirm via questionnaire
 
@@ -99,8 +98,7 @@ Any other free-form reply is an instruction: apply it and regenerate/re-confirm 
 - **Subject:** imperative mood, lowercase, no trailing period, ideally ≤ 50 chars (hard limit 72).
   e.g. `fix(parser): handle multiple spaces in arrays`.
 - **Scope:** optional noun in parentheses naming the affected area, e.g. `feat(api): …`.
-- **Body:** optional, one blank line after the subject. Explain *what* and *why*, not *how*. Wrap
-  around 72 columns. Free-form paragraphs.
+- **Body:** skip it when the subject and the diff already say everything. When there is a *why* neither can show, say it as briefly as it can be said - often a sentence or two - and let it run longer only when the reasoning genuinely earns the room. Write it in plain language for someone skimming `git log` in six months, not for a reviewer with the diff open: avoid function, type and identifier names unless the name itself is the point, never turn it into a file-by-file inventory, and reach for bullets only when there really are several independent reasons. One blank line after the subject, wrapped at 72 columns.
 - **Footers:** optional, one blank line after the body. Git-trailer style — token uses `-` for
   spaces, then `: ` or ` #`, e.g. `Reviewed-by: Z`, `Refs: #123`.
 - **Breaking changes:** add `!` before the colon (`feat!:` / `feat(api)!:`) and/or a
@@ -135,4 +133,42 @@ BREAKING CHANGE: the shipment endpoint now requires a customer email.
 revert: let us never again speak of the noodle incident
 
 Refs: 676104e, a215868
+```
+
+### Body
+
+Too long, and written for a reviewer who already has the diff:
+
+```
+refactor(load-context): restructure exclusion lists
+
+Split DEFAULT_EXCLUDES into SECRETS, GENERATED and BULKY_FORMATS.
+Add BULKY_FORMAT_TOKEN_LIMIT and move *.svg out of the unconditional
+list. Change excluded from string[] to { rel, reason }[] and update
+registerMessageRenderer. Apply the size check via statSync in the
+candidate loop rather than after readFileSync.
+```
+
+Better - the subject carries the change, the body adds only the *why*:
+
+```
+refactor(load-context): skip bulky assets by size, not by type
+
+Hand-written icons are worth reading; exported ones are a picture
+written in numbers. Size decides now, so small SVGs load again.
+```
+
+And longer is right when the reasoning needs the room:
+
+```
+refactor(load-context): skip bulky assets by size, not by type
+
+Hand-written icons are worth reading; exported ones are a picture
+written in numbers, and one of them can eat a tenth of the context
+window on its own.
+
+Size alone couldn't decide it. The largest files here are real source,
+so a blanket limit would have dropped those while happily keeping
+dozens of tiny icons. The format now decides whether size matters at
+all, and only then does the limit apply.
 ```
