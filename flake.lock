@@ -235,6 +235,26 @@
         "type": "github"
       }
     },
+    "git-vault": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1786453990,
+        "narHash": "sha256-hbrMbeE1Z16f5SgBV9sZ+xMlcw1tXdGyaMUFlCr3Dig=",
+        "owner": "roman-16",
+        "repo": "git-vault",
+        "rev": "d2928a89339635146c3badad7755776bb323d835",
+        "type": "github"
+      },
+      "original": {
+        "owner": "roman-16",
+        "repo": "git-vault",
+        "type": "github"
+      }
+    },
     "gnome-shell": {
       "flake": false,
       "locked": {
@@ -440,11 +460,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1786451787,
-        "narHash": "sha256-T2FBygk/SYBQ2dCDZhhjwjne0vVvEQPxuduJJMPI6Lc=",
+        "lastModified": 1786452909,
+        "narHash": "sha256-ONq5ITMocKapi8Dbp864tGoOcVylh5WQn8BV4ZUmy3o=",
         "owner": "roman-16",
         "repo": "proton-cli",
-        "rev": "ac14473808f2c97610fd762696cf921404c58086",
+        "rev": "a995a650c49d7c5c69693b99d5bf269b334db447",
         "type": "github"
       },
       "original": {
@@ -502,6 +522,7 @@
     "root": {
       "inputs": {
         "bun2nix": "bun2nix",
+        "git-vault": "git-vault",
         "home-manager": "home-manager",
         "llm-agents": "llm-agents",
         "microvm": "microvm",
