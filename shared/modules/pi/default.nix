@@ -20,8 +20,16 @@
     let
       pi = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.pi;
 
+      # Extensions: symlink each top-level entry as-is, so a multi-file extension
+      # directory becomes a single store path and its relative imports resolve
+      # (per-file symlinks put each file in its own store path, breaking them).
       extensionsDir = ./extensions;
-      extensionAttrs = builtins.listToAttrs (collectFiles ".pi/agent/extensions" extensionsDir);
+      extensionAttrs = builtins.listToAttrs (
+        lib.mapAttrsToList (name: _: {
+          name = ".pi/agent/extensions/${name}";
+          value.source = extensionsDir + "/${name}";
+        }) (builtins.readDir extensionsDir)
+      );
 
       upstreamExtensionAttrs = {
         ".pi/agent/extensions/questionnaire.ts".source =
