@@ -30,6 +30,8 @@ Every command has an audience. **By default it is the user**: the script posts i
 
 Silencing a write makes the news yours to deliver: if you log something quietly, tell the user what you logged. A `--dry-run` is never sent either (it changes nothing); relay it yourself when the user asked "what if", and you may add one short line after, e.g. "Want me to log it?".
 
+One thing `--quiet` cannot hide: **a change to the saved foods**. `food-add`, `food-edit`, `food-rm`, and a food the script saves by itself each state that change to the user whatever else the run kept private - the catalog is their data, so an entry can never arrive unseen. You'll see the line in the output and a delivered marker under it; don't repeat it.
+
 If the script prints `[macros: delivery FAILED ...]`, the send didn't happen: relay that command's output yourself, just this once (the data was still saved - don't re-run the command).
 
 Lines starting `[macros]` after the result are notes for you alone - they are never part of what the user receives. Act on them; never paste them.
@@ -72,13 +74,13 @@ In place of `--amount` it accepts the same `--fit-*`/`--target-*` sizing as `foo
 {baseDir}/scripts/macros.py eat --item "Granola" --kcal100 450 --protein100 10 --fat100 20 --carbs100 55 --fit-protein --dry-run
 ```
 
-`eat` never saves, but the script checks what you typed against the catalog so you don't have to. Three things it may tell you, in order:
+`eat` logs a one-off, and the script checks what you typed against the catalog so you don't have to. Three things may come of it, in order:
 
 - **The rate is already saved** - use `food-eat` next time; same numbers, no transcribing.
 - **A saved food already has that name, with different numbers** - you estimated over real label data. It names both values so you can see how far off the guess was; the entry is still logged, so switch to `food-eat` (and remove the estimate) unless it genuinely is a different food.
-- **The same rate has been typed in three times** - it prints a ready-to-run `food-add`.
+- **The same rate has now been logged three times** - the script saves it as a food itself and tells the user so. There is nothing for you to run; use `food-eat --name "..."` from then on.
 
-Saving or switching is the user's call: ask them first, then run it.
+Switching to a saved food is the user's call, so ask before you do it. Saving is not yours at all: it happens by itself once a food has earned it, and otherwise only when the user asks (see below).
 
 ## Viewing a day
 
@@ -114,14 +116,14 @@ Each saved food stores its macros per 100 of a **unit** - grams by default, or `
 
 `--fit-kcal` and `--target-kcal` size by calories the same way. Amounts and the logged label read in the food's unit (`500ml`, `4 pieces`, `500g`). `food-eat` prints the day summary; the script sends it to the user.
 
-`food-get` looks a food up (`--quiet` when you just need the numbers yourself; `food-eat` resolves names itself, so it is never needed as a pre-check); `food-add` saves one (only when the user explicitly asks); `food-edit` corrects a saved food's numbers, unit, or name; `food-rm` deletes one. `--unit` defaults to `g`; set it for liquids/countables and the per-100 values are then per 100 of that unit.
+`food-get` looks a food up (`--quiet` when you just need the numbers yourself; `food-eat` resolves names itself, so it is never needed as a pre-check); `food-add` saves one and refuses without `--asked`, which says the user asked for this food to be saved, in their own words; `food-edit` corrects a saved food's numbers, unit, or name; `food-rm` deletes one. `--unit` defaults to `g`; set it for liquids/countables and the per-100 values are then per 100 of that unit.
 
-**An entry is only worth having if the food comes back.** A one-off needs no entry - `eat` logs it and scales it just the same - and the catalog fills itself from what actually repeats, because the third time the same rate is typed in you get a ready-to-run `food-add`. So saving something on first sight is a guess about the future, and `food-add` says so when nothing with that rate has been logged before. `food-list` shows what each entry has earned (`2x, last 09.08`, or `never eaten, saved 04.08`), most eaten first, so anything that never came back collects at the bottom - if the list has filled up with those, offer to clear them out.
+**An entry is only worth having if the food comes back.** A one-off needs no entry - `eat` logs it and scales it just the same - and the catalog fills itself from what actually repeats: the third time the same rate is logged, the script saves it. So there are exactly two ways a food gets in, and neither of them is your judgement - the script decided it had earned it, or the user asked and you passed `--asked`. Saving on first sight is a guess about the future, and those guesses are what fill a catalog with entries nobody ever eats again. `food-list` shows what each entry has earned (`3x, last 09.08`, or `never eaten, saved 04.08`), most eaten first, so anything that never came back collects at the bottom - if the list has filled up with those, offer to clear them out.
 
 ```bash
 {baseDir}/scripts/macros.py food-get skyr
-{baseDir}/scripts/macros.py food-add --name "Skyr, plain" --kcal100 64 --protein100 11 --fat100 0.1 --carbs100 4 --serving 500 --aliases "skyr,my skyr"
-{baseDir}/scripts/macros.py food-add --name "Gösser Märzen" --unit ml --kcal100 42 --protein100 0.5 --fat100 0 --carbs100 3.3 --serving 500 --aliases beer   # a liquid: per 100ml, 500ml default
+{baseDir}/scripts/macros.py food-add --name "Skyr, plain" --kcal100 64 --protein100 11 --fat100 0.1 --carbs100 4 --serving 500 --aliases "skyr,my skyr" --asked
+{baseDir}/scripts/macros.py food-add --name "Gösser Märzen" --unit ml --kcal100 42 --protein100 0.5 --fat100 0 --carbs100 3.3 --serving 500 --aliases beer --asked   # a liquid: per 100ml, 500ml default
 {baseDir}/scripts/macros.py food-edit --name skyr --kcal100 63 --serving 450   # only what you pass changes; also --unit, --rename, --aliases
 {baseDir}/scripts/macros.py food-rm --name skyr
 {baseDir}/scripts/macros.py food-list                                          # what's saved, most eaten first, with what each has earned

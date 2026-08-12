@@ -24,6 +24,7 @@ def run(*argv):
 @pytest.fixture
 def store(tmp_path, monkeypatch):
     macros.NOTES.clear()
+    macros.ANNOUNCEMENTS.clear()
     root = tmp_path / "macros"
     monkeypatch.setattr(macros, "MACROS_DIR", root)
     monkeypatch.setattr(macros, "DAYS_DIR", root / "days")
@@ -39,7 +40,8 @@ def set_goal():
 
 def add_skyr():
     run("food-add", "--name", "Skyr, plain", "--kcal100", "64", "--protein100", "11",
-        "--fat100", "0.1", "--carbs100", "4", "--serving", "500", "--aliases", "skyr,my skyr")
+        "--fat100", "0.1", "--carbs100", "4", "--serving", "500", "--aliases", "skyr,my skyr",
+        "--asked")
 
 
 def add_bolognese():
@@ -190,7 +192,7 @@ class TestFoodCatalog:
 
     def test_edit_updates_value_and_renames(self, store):
         run("food-add", "--name", "Whey", "--kcal100", "375", "--protein100", "80",
-            "--fat100", "5", "--carbs100", "8", "--serving", "30")
+            "--fat100", "5", "--carbs100", "8", "--serving", "30", "--asked")
         run("food-edit", "--name", "whey", "--kcal100", "380", "--rename", "Whey Isolate")
         food = macros.load(macros.FOOD_FILE, {})
         assert "whey isolate" in food
@@ -228,7 +230,8 @@ class TestFoodEat:
 class TestFoodUnits:
     def add_beer(self):
         run("food-add", "--name", "Gösser", "--unit", "ml", "--kcal100", "42",
-            "--protein100", "0.5", "--fat100", "0", "--carbs100", "3.3", "--serving", "500")
+            "--protein100", "0.5", "--fat100", "0", "--carbs100", "3.3", "--serving", "500",
+            "--asked")
 
     def test_add_stores_the_unit(self, store):
         self.add_beer()
@@ -416,7 +419,7 @@ class TestIngredientSources:
     def test_a_liquid_food_keeps_its_own_unit(self, store):
         set_goal()
         run("food-add", "--name", "Cream", "--unit", "ml", "--kcal100", "300", "--protein100", "2",
-            "--fat100", "30", "--carbs100", "3", "--serving", "100")
+            "--fat100", "30", "--carbs100", "3", "--serving", "100", "--asked")
         run("prep-add", "--name", "Sauce")
         run("prep-ingredient-add", "--name", "sauce", "--food", "cream", "--amount", "200")
         ingredient = one_named("sauce")["ingredients"][0]
@@ -1142,7 +1145,7 @@ class TestFoodListUsage:
         set_goal()
         add_skyr()
         run("food-add", "--name", "One-off", "--kcal100", "300", "--protein100", "1",
-            "--fat100", "1", "--carbs100", "1", "--serving", "100")
+            "--fat100", "1", "--carbs100", "1", "--serving", "100", "--asked")
         run("food-eat", "--name", "skyr", "--amount", "400")
         capsys.readouterr()
         run("food-list")
@@ -1171,35 +1174,85 @@ class TestFoodListUsage:
         assert "my skyr" in out
         assert "skyr, plain," not in out  # the name itself is not repeated as an alias
 
+    def test_a_one_off_of_the_same_rate_counts_as_the_food_coming_back(self, store, capsys):
+        # The question the line answers is whether the food came back, not which command logged it.
+        set_goal()
+        add_skyr()
+        run("eat", "--item", "Skyr", "--kcal100", "64", "--protein100", "11", "--fat100", "0.1",
+            "--carbs100", "4", "--amount", "200")
+        capsys.readouterr()
+        run("food-list")
+        assert "once, last" in capsys.readouterr().out
+
+    def test_a_one_off_of_another_rate_does_not(self, store, capsys):
+        set_goal()
+        add_skyr()
+        run("eat", "--item", "Granola", "--kcal100", "450", "--protein100", "10",
+            "--fat100", "20", "--carbs100", "55", "--amount", "100")
+        capsys.readouterr()
+        run("food-list")
+        assert "never eaten" in capsys.readouterr().out
+
     def test_an_empty_catalog_says_so(self, store, capsys):
         run("food-list")
         assert "no foods saved" in capsys.readouterr().out
 
 
-class TestSavingIsAGuess:
-    def notes(self):
-        return "\n".join(macros.NOTES)
+class TestFoodAddDoor:
+    """`food-add` is the user's door into the catalog and nobody else's. The script keeps what
+    repeats by itself, so a save with neither a repeat nor the user behind it is a guess about the
+    future - and it is the guesses that fill a catalog with entries nothing ever eats again."""
 
-    def test_saving_records_the_day_it_was_saved(self, store):
+    def add(self, *extra):
+        run("food-add", "--name", "IKEA Köttbullar", "--kcal100", "207", "--protein100", "13",
+            "--fat100", "12", "--carbs100", "9", "--serving", "15", *extra)
+
+    def test_it_refuses_to_save_without_the_users_say_so(self, store):
+        set_goal()
+        with pytest.raises(SystemExit):
+            self.add()
+        assert macros.load(macros.FOOD_FILE, {}) == {}
+
+    def test_the_refusal_names_the_flag_and_what_to_do_instead(self, store, capsys):
+        set_goal()
+        with pytest.raises(SystemExit):
+            self.add()
+        err = capsys.readouterr().err
+        assert "--asked" in err
+        assert "`eat`" in err
+
+    def test_repeats_are_not_required_when_the_user_asked(self, store):
+        # The point of the door: a food the user names is theirs to have, first sighting or not.
+        set_goal()
+        self.add("--asked")
+        assert macros.load(macros.FOOD_FILE, {})["ikea köttbullar"]["per100"]["kcal"] == 207
+
+    def test_a_save_records_the_day_it_was_saved(self, store):
         set_goal()
         add_skyr()
         assert macros.load(macros.FOOD_FILE, {})["skyr, plain"]["added"] == macros.today()
 
-    def test_a_first_sight_save_is_named_as_a_guess(self, store):
+    def test_a_save_is_stated_to_the_user(self, store, capsys):
         set_goal()
         add_skyr()
-        notes = self.notes()
-        assert "nothing with this rate has been logged before" in notes
-        assert "`eat`" in notes
+        assert '📌 Saved "Skyr, plain"' in capsys.readouterr().out
+        assert any("Skyr, plain" in line for line in macros.ANNOUNCEMENTS)
 
-    def test_a_save_the_repeats_earned_is_not_second_guessed(self, store):
+    def test_removing_one_is_stated_too(self, store, capsys):
         set_goal()
-        for _ in range(macros.REPEAT_NUDGE_AT):
-            run("eat", "--item", "Skyr, plain", "--kcal100", "64", "--protein100", "11",
-                "--fat100", "0.1", "--carbs100", "4", "--amount", "500")
-        macros.NOTES.clear()
         add_skyr()
-        assert "guess" not in self.notes()
+        capsys.readouterr()
+        run("food-rm", "--name", "skyr")
+        assert '🗑️ Removed "Skyr, plain"' in capsys.readouterr().out
+
+    def test_editing_one_is_stated_too(self, store, capsys):
+        set_goal()
+        add_skyr()
+        capsys.readouterr()
+        run("food-edit", "--name", "skyr", "--kcal100", "63")
+        out = capsys.readouterr().out
+        assert '✏️ Updated "Skyr, plain"' in out
+        assert "per 100g 63 kcal" in out
 
 
 class TestRestFraction:
@@ -1567,6 +1620,35 @@ class TestAudience:
         assert "private note" not in sent[0]
         assert "private note" in capsys.readouterr().out
 
+    def test_a_catalog_change_reaches_the_user_even_when_the_run_was_quiet(self, store, monkeypatch):
+        # The catalog is the user's data, so an entry can never arrive unseen.
+        set_goal()
+        sent = self.deliver_spy(monkeypatch)
+        self.invoke(monkeypatch, "food-add", "--name", "Skyr, plain", "--kcal100", "64",
+                    "--protein100", "11", "--fat100", "0.1", "--carbs100", "4",
+                    "--serving", "500", "--asked", "--quiet")
+        assert len(sent) == 1
+        assert 'Saved "Skyr, plain"' in sent[0]
+
+    def test_only_the_change_is_sent_not_the_report_it_came_with(self, store, monkeypatch):
+        set_goal()
+        sent = self.deliver_spy(monkeypatch)
+        self.invoke(monkeypatch, "food-add", "--name", "Skyr, plain", "--kcal100", "64",
+                    "--protein100", "11", "--fat100", "0.1", "--carbs100", "4",
+                    "--serving", "500", "--asked", "--quiet")
+        assert "per 100g" not in sent[0]
+
+    def test_a_food_the_script_saves_is_sent_while_the_day_stays_private(self, store, monkeypatch):
+        set_goal()
+        sent = self.deliver_spy(monkeypatch)
+        for _ in range(macros.REPEATS_TO_SAVE):
+            self.invoke(monkeypatch, "eat", "--item", "Kinder", "--kcal100", "579",
+                        "--protein100", "8.5", "--fat100", "35", "--carbs100", "55",
+                        "--amount", "100", "--quiet")
+        assert len(sent) == 1
+        assert 'Saved "Kinder"' in sent[0]
+        assert "Target:" not in sent[0]
+
 
 def macros_args(name):
     """The smallest valid argv for a command, so the parser can be inspected."""
@@ -1577,7 +1659,7 @@ def macros_args(name):
         "edit": ["--last", "--kcal", "1"],
         "food-get": ["x"],
         "food-add": ["--name", "x", "--kcal100", "1", "--protein100", "1", "--fat100", "1",
-                     "--carbs100", "1", "--serving", "1"],
+                     "--carbs100", "1", "--serving", "1", "--asked"],
         "food-eat": ["--name", "x"],
         "food-edit": ["--name", "x"],
         "food-rm": ["--name", "x"],
@@ -1650,7 +1732,11 @@ class TestReScale:
             run("edit", "--last", "--amount", "300")
 
 
-class TestRepeatDetection:
+class TestSavingWhatRepeats:
+    """The catalog keeps what comes back, and it does that itself: the run that logs the same rate
+    for the third time is the run that saves it. Nothing is asked of the caller, because a criterion
+    the script can check is not a judgement to delegate."""
+
     KINDER = ["--kcal100", "579", "--protein100", "8.5", "--fat100", "35", "--carbs100", "55"]
 
     def eat(self, item, *extra):
@@ -1659,36 +1745,79 @@ class TestRepeatDetection:
     def notes(self):
         return "\n".join(macros.NOTES)
 
-    def test_nothing_is_said_before_the_threshold(self, store):
+    def foods(self):
+        return macros.load(macros.FOOD_FILE, {})
+
+    def test_a_first_sighting_saves_nothing_and_says_nothing(self, store):
         set_goal()
         self.eat("Kinder")
-        self.eat("Kinder")
+        assert self.foods() == {}
         assert self.notes() == ""
 
-    def test_the_third_typing_suggests_saving_it(self, store):
+    def test_nothing_is_saved_before_the_threshold(self, store):
         set_goal()
-        for _ in range(3):
+        self.eat("Kinder")
+        self.eat("Kinder")
+        assert self.foods() == {}
+
+    def test_the_third_log_saves_it(self, store):
+        set_goal()
+        for _ in range(macros.REPEATS_TO_SAVE):
             self.eat("Kinder")
-        notes = self.notes()
-        assert "3x as a one-off" in notes
-        assert "food-add --name \"Kinder\"" in notes
-        assert "--kcal100 579" in notes
+        saved = self.foods()["kinder"]
+        assert saved["name"] == "Kinder"
+        assert saved["per100"] == {"kcal": 579, "protein": 8.5, "fat": 35, "carbs": 55}
+        assert saved["added"] == macros.today()
+
+    def test_it_is_portioned_and_measured_by_what_was_eaten(self, store):
+        set_goal()
+        for _ in range(macros.REPEATS_TO_SAVE):
+            run("eat", "--item", "Oat drink", "--unit", "ml", "--kcal100", "46",
+                "--protein100", "1", "--amount", "250")
+        saved = self.foods()["oat drink"]
+        assert saved["unit"] == "ml"
+        assert saved["serving"] == 250
+
+    def test_it_is_aliased_by_its_own_name_alone(self, store):
+        # Nothing here is guessing at how the food might be referred to later; matching is forgiving.
+        set_goal()
+        for _ in range(macros.REPEATS_TO_SAVE):
+            self.eat("Kinder")
+        assert self.foods()["kinder"]["aliases"] == ["kinder"]
+
+    def test_the_save_is_stated_to_the_user(self, store, capsys):
+        set_goal()
+        for _ in range(macros.REPEATS_TO_SAVE):
+            capsys.readouterr()
+            self.eat("Kinder")
+        out = capsys.readouterr().out
+        assert '📌 Saved "Kinder"' in out
+        assert "logged 3x now" in out
+
+    def test_the_caller_is_told_to_use_food_eat_from_now_on(self, store):
+        set_goal()
+        for _ in range(macros.REPEATS_TO_SAVE):
+            self.eat("Kinder")
+        assert 'food-eat --name "Kinder"' in self.notes()
 
     def test_a_differently_worded_label_still_counts_as_the_same_product(self, store):
+        # The label of the log that earned it is the one that sticks; the user can rename it.
         set_goal()
         self.eat("Kinder Happy Hippo")
         run("eat", "--item", "Kinder hazelnut", "--kcal100", "580", "--protein100", "8.4",
             "--fat100", "35", "--carbs100", "55.2", "--amount", "100")
         self.eat("Kinder pieces")
-        assert "3x as a one-off" in self.notes()
+        assert list(self.foods()) == ["kinder pieces"]
 
-    def test_it_asks_only_once(self, store):
+    def test_it_is_saved_once_and_not_again(self, store, capsys):
         set_goal()
-        for _ in range(3):
+        for _ in range(macros.REPEATS_TO_SAVE):
             self.eat("Kinder")
+        capsys.readouterr()
         macros.NOTES.clear()
         self.eat("Kinder")
-        assert self.notes() == ""
+        assert "Saved" not in capsys.readouterr().out
+        assert "already saved" in self.notes()
 
     def test_a_different_product_does_not_count(self, store):
         set_goal()
@@ -1696,34 +1825,26 @@ class TestRepeatDetection:
         self.eat("Kinder")
         run("eat", "--item", "Granola", "--kcal100", "450", "--protein100", "10",
             "--fat100", "20", "--carbs100", "55", "--amount", "100")
-        assert self.notes() == ""
+        assert self.foods() == {}
 
-    def test_an_already_saved_rate_is_pointed_at_its_food(self, store):
+    def test_an_already_saved_rate_is_pointed_at_its_food_instead(self, store):
         set_goal()
         run("food-add", "--name", "Kinder Happy Hippo", "--kcal100", "579", "--protein100", "8.5",
-            "--fat100", "35", "--carbs100", "55", "--serving", "100")
+            "--fat100", "35", "--carbs100", "55", "--serving", "100", "--asked")
         self.eat("Kinder")
         notes = self.notes()
         assert "already saved" in notes
-        assert "food-eat --name \"Kinder Happy Hippo\"" in notes
-
-    def test_a_saved_food_is_never_suggested_for_saving_again(self, store):
-        set_goal()
-        run("food-add", "--name", "Kinder Happy Hippo", "--kcal100", "579", "--protein100", "8.5",
-            "--fat100", "35", "--carbs100", "55", "--serving", "100")
-        macros.NOTES.clear()  # the save's own note is not what this is about
-        for _ in range(3):
-            self.eat("Kinder")
-        assert "food-add" not in self.notes()
+        assert 'food-eat --name "Kinder Happy Hippo"' in notes
+        assert list(self.foods()) == ["kinder happy hippo"]
 
     def test_a_preview_counts_for_nothing(self, store):
         set_goal()
         for _ in range(2):
             self.eat("Kinder")
         self.eat("Kinder", "--dry-run")
-        macros.NOTES.clear()
+        assert self.foods() == {}
         self.eat("Kinder")
-        assert "3x as a one-off" in self.notes()
+        assert list(self.foods()) == ["kinder"]
 
 
 class TestSavedFoodNamed:
@@ -1753,10 +1874,7 @@ class TestGuessedOverSavedFood:
 
     def save_sriracha(self):
         run("food-add", "--name", "Sriracha", "--kcal100", "137", "--protein100", "1.9",
-            "--fat100", "0.9", "--carbs100", "28", "--serving", "30")
-        # Saving has its own note about being a first-sight guess; these tests are about what the
-        # eat that follows says.
-        macros.NOTES.clear()
+            "--fat100", "0.9", "--carbs100", "28", "--serving", "30", "--asked")
 
     def guess(self, kcal="93", item="Sriracha"):
         run("eat", "--item", item, "--kcal100", kcal, "--amount", "10")
@@ -1813,17 +1931,16 @@ class TestGuessedOverSavedFood:
         self.guess(item="Srirachaa sauce hot")
         assert self.notes() == ""
 
-    def test_it_pre_empts_the_save_nudge_that_would_overwrite(self, store):
-        # food-add on a name already in the catalog replaces that food, so "save it" must never
-        # be the advice when a food of this name already exists.
+    def test_repeated_guesses_never_overwrite_the_real_numbers(self, store):
+        # A saved food of this name already answers for it, so the repeat rule must not save the
+        # guess over it however often the guess is typed - the label data is the better record.
         set_goal()
         self.save_sriracha()
-        for _ in range(macros.REPEAT_NUDGE_AT):
+        for _ in range(macros.REPEATS_TO_SAVE):
             macros.NOTES.clear()
             self.guess()
-        notes = self.notes()
-        assert "food-add" not in notes
-        assert "already exists at" in notes
+        assert macros.load(macros.FOOD_FILE, {})["sriracha"]["per100"]["kcal"] == 137
+        assert "already exists at" in self.notes()
 
     def test_a_preview_never_nags(self, store):
         set_goal()

@@ -40,9 +40,9 @@ DAY_START_HOUR = 4
 # The four macro keys every food, day, and portion is measured in, in display order.
 MACROS = ("kcal", "protein", "fat", "carbs")
 
-# How often the same nutrition label may be typed in as a one-off before saving it is suggested,
-# and how far back that counting looks.
-REPEAT_NUDGE_AT = 3
+# How often the same nutrition label has to be logged as a one-off before the catalog keeps it, and
+# how far back that counting looks.
+REPEATS_TO_SAVE = 3
 REPEAT_WINDOW_DAYS = 90
 
 # Slack that still counts two labels as the same product. All four values must agree, so the
@@ -61,10 +61,22 @@ def die(msg: str):
 # and written after it, outside that buffer: same stream, never part of what the user receives.
 NOTES: list = []
 
+# The opposite audience: a change to the user's own catalog. That is news about their data rather
+# than a report about a question they asked, so it reaches them however the run was invoked - which
+# is what makes an entry nobody asked for impossible to accumulate unseen.
+ANNOUNCEMENTS: list = []
+
 
 def hint(msg: str):
     """Tell the caller something the user has no reason to read."""
     NOTES.append(msg)
+
+
+def announce(msg: str):
+    """State a change to the user's catalog: part of the reply as usual, and delivered even under
+    --quiet."""
+    ANNOUNCEMENTS.append(msg)
+    print(msg)
 
 
 def macro_date(dt: datetime) -> str:
@@ -389,10 +401,32 @@ def saved_food_named(item: str):
     return match.value if match.kind in ("exact", "substring") else None
 
 
-def suggest_saving(item: str, per100: dict, unit: str, amount, date: str):
-    """Point out that a hand-typed label is already saved - by its rate, or failing that by its
-    name - or that it has now been typed often enough to be worth saving. Saving and substituting
-    both stay the user's call, so this asks the agent to ask rather than acting."""
+def keep_food(item: str, per100: dict, unit: str, amount):
+    """Take a one-off into the catalog, on the log that earned it. Named and portioned after what was
+    actually eaten, and aliased only by its own name, because nothing here is guessing at how the
+    food might be referred to later."""
+    food = load(FOOD_FILE, {})
+    key = item.lower()
+    food[key] = {
+        "name": item,
+        "per100": {k: per100[k] for k in MACROS},
+        "serving": amount,
+        "unit": unit,
+        "aliases": [key],
+        "added": today(),
+    }
+    save(FOOD_FILE, food)
+    announce(f'📌 Saved "{item}" to your foods: logged {REPEATS_TO_SAVE}x now, default serving '
+             f"{fmt_amount(amount, unit)}. food-rm to drop it.")
+    hint(f'[macros] saved from repeats - from now on: food-eat --name "{item}"')
+
+
+def reconcile_catalog(item: str, per100: dict, unit: str, amount, date: str):
+    """What the catalog makes of a one-off log: the rate is already saved, so the wrong command was
+    used; a different food already answers to this name, so the numbers were guessed over real label
+    data; or the same rate has now been logged often enough that the catalog keeps it, which it does
+    here rather than asking for it to be done. A first sighting is none of those and passes in
+    silence, because an entry is only worth having once the food has come back."""
     saved = saved_food_matching(per100, unit)
     if saved:
         hint(f'[macros] this rate is already saved as "{saved["name"]}" - next time: '
@@ -409,13 +443,10 @@ def suggest_saving(item: str, per100: dict, unit: str, amount, date: str):
              f'{per100["kcal"]}. Its numbers come off the label, so prefer it unless this really '
              f'is a different food:\n  food-eat --name "{named["name"]}" --amount {amount}')
         return
-    if eat_repeats(per100, unit, date) != REPEAT_NUDGE_AT:
-        return
-    unit_flag = f" --unit {unit}" if unit != "g" else ""
-    hint(f'[macros] "{item}" has now been typed in {REPEAT_NUDGE_AT}x as a one-off. Ask whether to '
-         f"save it, then:\n  food-add --name \"{item}\" --kcal100 {per100['kcal']} "
-         f"--protein100 {per100['protein']} --fat100 {per100['fat']} --carbs100 {per100['carbs']} "
-         f"--serving {amount}{unit_flag}")
+    # >= rather than ==, so a rate that somehow passed the threshold unsaved is taken in on its next
+    # log instead of being missed for good.
+    if eat_repeats(per100, unit, date) >= REPEATS_TO_SAVE:
+        keep_food(item, per100, unit, amount)
 
 
 def append_entry(date: str, entry: dict):
@@ -618,7 +649,7 @@ def cmd_eat(args):
             if why else None)
     emit(date, entry, dry_run=args.dry_run, lead=lead, commit=lambda: append_entry(date, entry))
     if not args.dry_run:
-        suggest_saving(args.item, per100, unit, amount, date)
+        reconcile_catalog(args.item, per100, unit, amount, date)
 
 
 def cmd_show(args):
@@ -823,6 +854,14 @@ def cmd_food_get(args):
 
 
 def cmd_food_add(args):
+    # The catalog keeps what repeats, and keeps it itself (see reconcile_catalog), so the only thing
+    # left for this command is a food the user asked for by name. Nothing here can check that claim,
+    # which is exactly why it has to be made rather than assumed from the command being run at all:
+    # an entry saved on first sight is a guess about the future, and the guesses do not come back.
+    if not args.asked:
+        die("a saved food is kept for good, so it takes the user's say-so: pass --asked when they "
+            "asked for it. A one-off needs no entry - `eat` logs and scales it just the same, and "
+            f"the catalog saves it here by itself once the same rate has been logged {REPEATS_TO_SAVE}x.")
     food = load(FOOD_FILE, {})
     key = args.name.lower()
     aliases = [a.strip().lower() for a in (args.aliases or "").split(",") if a.strip()]
@@ -837,29 +876,33 @@ def cmd_food_add(args):
         "added": today(),
     }
     save(FOOD_FILE, food)
-    print(f"saved food: {args.name}")
-    # An entry earns its place by coming back, and at first sight there is no evidence that it will.
-    # The catalog fills itself from what actually repeats (see suggest_saving), so a save with no
-    # repeat behind it is a guess worth naming.
-    if eat_repeats(per100, unit, today()) == 0:
-        hint("[macros] nothing with this rate has been logged before, so saving it is a guess that it "
-             "comes back. A one-off needs no entry: `eat` logs it and scales it just the same, and "
-             "the third time the same label is typed in you get a ready-to-run food-add.")
+    announce(f'📌 Saved "{args.name}" to your foods.')
+    print(food_line(food[key]))
 
 
-def food_usage(names) -> dict:
+def food_usage(foods: dict) -> dict:
     """How often each saved food has been eaten and when it last was, per name.
 
     The catalog records what a food is, never what was done with it, so this is read from the days.
-    An entry names its food outright; one logged before that was recorded is matched on the label the
-    script itself wrote for it ("<name> (<amount>)"), which reconstructs the link rather than
-    guessing at it - it only misses a food that has been renamed since.
+    An entry names its food outright; a one-off logged from the same rate counts too, because the
+    question is whether the food came back and not which command said so; and an entry logged before
+    provenance was recorded is matched on the label the script itself wrote for it
+    ("<name> (<amount>)"), which reconstructs the link rather than guessing at it - it only misses a
+    food that has been renamed since.
     """
-    used = {name: {"last": None, "n": 0} for name in names}
+    used = {f["name"]: {"last": None, "n": 0} for f in foods.values()}
+    rates = {f["name"]: (f["per100"], f.get("unit", "g")) for f in foods.values()}
     for path in sorted(DAYS_DIR.glob("*.json")) if DAYS_DIR.exists() else []:
         for entry in load(path, {}).get("entries", []):
             source = entry.get("source") or {}
             named = source.get("name") if source.get("kind") == "food" else None
+            if named is None and source.get("kind") == "eat":
+                named = next(
+                    (name for name, (per100, unit) in rates.items()
+                     if source.get("unit", "g") == unit
+                     and same_per100(source.get("per100", {}), per100)),
+                    None,
+                )
             if named is None and not source:
                 item = entry.get("item") or ""
                 named = next((name for name in used if item.startswith(f"{name} (")), None)
@@ -885,7 +928,7 @@ def cmd_food_list(args):
     if not food:
         print("no foods saved")
         return
-    used = food_usage([v["name"] for v in food.values()])
+    used = food_usage(food)
     # Most used first, so what the catalog is for sits at the top and what it has accumulated sits at
     # the bottom, where it can be dealt with.
     order = sorted(food.values(), key=lambda v: (-used[v["name"]]["n"], v["name"].lower()))
@@ -954,7 +997,7 @@ def cmd_food_edit(args):
     del food[key]
     food[newkey] = entry
     save(FOOD_FILE, food)
-    print(f"updated food: {entry['name']}")
+    announce(f'✏️ Updated "{entry["name"]}" in your foods.')
     print(food_line(entry))
 
 
@@ -963,7 +1006,7 @@ def cmd_food_rm(args):
     key, entry, _ = resolve(food, args.name, noun="saved food", listing="food-list", strict=True)
     del food[key]
     save(FOOD_FILE, food)
-    print(f"removed food: {entry['name']}")
+    announce(f'🗑️ Removed "{entry["name"]}" from your foods.')
 
 
 def zero() -> dict:
@@ -1733,6 +1776,8 @@ def build_parser() -> argparse.ArgumentParser:
     fa.add_argument("--serving", type=positive, required=True)
     fa.add_argument("--unit")
     fa.add_argument("--aliases")
+    fa.add_argument("--asked", action="store_true",
+                    help="the user asked for this food to be saved (required)")
 
     command("food-list").set_defaults(func=cmd_food_list)
 
@@ -1869,6 +1914,9 @@ def should_deliver(dry_run: bool, quiet: bool) -> bool:
     return not (dry_run or quiet)
 
 
+DELIVERY_FAILED = "\n[macros: delivery FAILED - relay the output above to the user yourself]\n"
+
+
 def deliver_to_user(text: str) -> str | None:
     """POST the reply to the app's localhost hook, which delivers it to the user on WhatsApp and
     returns the marker to print. Returns the response body (the marker); None only if the app
@@ -1901,17 +1949,18 @@ def main():
         sys.stdout.write(buffer.getvalue())
     output = buffer.getvalue()
     quiet = getattr(args, "quiet", False)
-    if output.strip():
-        if should_deliver(getattr(args, "dry_run", False), quiet):
-            marker = deliver_to_user(output)
-            sys.stdout.write(
-                marker
-                if marker is not None
-                else "\n[macros: delivery FAILED - relay the output above to the user yourself]\n"
-            )
-        elif quiet:
-            # Say so explicitly: without a marker the caller cannot tell a silent run from a sent one.
-            sys.stdout.write("\n[macros: quiet - not sent to the user]\n")
+    if should_deliver(getattr(args, "dry_run", False), quiet):
+        sent = output if output.strip() else None
+    else:
+        # A run the caller wanted to itself still owes the user anything it changed about their
+        # catalog, so that goes on its own - the report it came with stays private.
+        sent = "\n".join(ANNOUNCEMENTS) if ANNOUNCEMENTS else None
+    if sent is not None:
+        marker = deliver_to_user(sent)
+        sys.stdout.write(marker if marker is not None else DELIVERY_FAILED)
+    elif quiet and output.strip():
+        # Say so explicitly: without a marker the caller cannot tell a silent run from a sent one.
+        sys.stdout.write("\n[macros: quiet - not sent to the user]\n")
     for note in NOTES:
         sys.stdout.write(f"{note}\n")
 
