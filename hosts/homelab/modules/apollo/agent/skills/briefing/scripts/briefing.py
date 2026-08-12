@@ -10,6 +10,12 @@ Two rules decide what appears. A section speaks when it has something to say, or
 emptiness needs no words, so a day with no events and no offers is just the sky. And a failure
 always gets a line, because saying nothing about the weather is indistinguishable from a clear
 sky, and a missing calendar would look exactly like a free day.
+
+The calendar it speaks for is the default one, where new events land, because a briefing is for what
+the day asks of its reader and not for every calendar they can see - a holiday feed and a habit
+tracker between them would bury the appointments. Which calendar that is comes from the account, so
+there is nothing to configure and nothing to keep in step. What day an event is on is decided here
+rather than taken from the provider's range, which overlaps generously at both ends.
 """
 
 from __future__ import annotations
@@ -26,6 +32,7 @@ import urllib.request
 from contextlib import redirect_stdout
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 # Sibling skills, found by name so the agent needs no configuration; the systemd job invokes store
 # paths, where siblings do not exist, so it passes these explicitly.
@@ -36,6 +43,11 @@ OFFERS = Path(os.environ.get("APOLLO_OFFERS_SCRIPT") or SKILLS / "offers" / "scr
 WEATHER_TIMEOUT = 60
 OFFERS_TIMEOUT = 90
 CALENDAR_TIMEOUT = 60
+
+# The user's timezone, named explicitly rather than taken from the host: every hour the briefing
+# prints comes from a timestamp in whichever zone the provider chose, so the conversion that makes it
+# readable must not depend on where this runs.
+TZ = ZoneInfo("Europe/Vienna")
 
 # Notes a skill addresses to its caller. They are never part of what the user reads.
 MARKER = re.compile(r"^\[[a-z][a-z-]*[:\]]")
@@ -78,9 +90,10 @@ def fetch_offers() -> str | None:
 
 
 def calendar_window(day: date) -> tuple:
-    """The range that means "this day" to proton-cli, whose --end is exclusive: asking for
-    start == end returns nothing at all, which would look like a free day forever."""
-    return day.isoformat(), (day + timedelta(days=1)).isoformat()
+    """The range that means "this day": both ends name the day itself, since --end is the last day
+    included. It is only ever a request - the reply carries whatever overlaps it, and a day past it -
+    so what is on the day is settled by covers() rather than by the range."""
+    return day.isoformat(), day.isoformat()
 
 
 def read_events(out: str) -> list | None:
@@ -96,13 +109,6 @@ def read_events(out: str) -> list | None:
     return events if isinstance(events, list) else None
 
 
-def fetch_events(day: date) -> list | None:
-    start, end = calendar_window(day)
-    out = run(["proton-cli", "calendar", "events", "list", "--start", start, "--end", end,
-               "--output", "json", "--quiet"], CALENDAR_TIMEOUT)
-    return None if out is None else read_events(out)
-
-
 def moment(value) -> datetime | None:
     try:
         return datetime.fromisoformat(str(value))
@@ -110,14 +116,93 @@ def moment(value) -> datetime | None:
         return None
 
 
+def local(when: datetime) -> datetime:
+    """A timestamp on the user's clock. An hour means nothing until it is read in the zone the reader
+    lives in - 14:00Z is a 16:00 appointment - and a timestamp arrives in whichever zone its source
+    was anchored to, so the conversion happens here rather than being assumed."""
+    return when.astimezone(TZ) if when.tzinfo else when.replace(tzinfo=TZ)
+
+
+def event_days(event: dict) -> tuple | None:
+    """The first and last day an event is on, or None when its start cannot be read.
+
+    An all-day event's end is the midnight it stops at, so its last day is the day before that -
+    except where the provider repeats the start instead, which is the other convention in the same
+    account (a recurring "Piano" ends where it starts; a public holiday ends the next midnight).
+    Taking the later of the two readings satisfies both without stretching a one-day event over two.
+    """
+    start = moment(event.get("start"))
+    if start is None:
+        return None
+    end = moment(event.get("end"))
+    # An all-day event names dates rather than instants, so its timestamps are read as written: moving
+    # a midnight marker between zones is what turns one day into another.
+    if not event.get("all_day"):
+        start = local(start)
+        end = local(end) if end else None
+    first = start.date()
+    if end is None:
+        return first, first
+    # The end is the moment the event stops, so a midnight end is not a day the event reaches into:
+    # the last day is the one holding the last instant still inside it. That reads an all-day event
+    # and one that runs to midnight alike, and cannot stretch a single day over two.
+    return first, max(first, (end - timedelta(microseconds=1)).date())
+
+
+def covers(event: dict, day: date) -> bool:
+    """Whether an event is on this day at all. This is what decides membership, because the range the
+    provider was asked for is not the range it answers with. An event whose start cannot be read is on
+    no day: printing it under today would be a guess, and a guess is what fills a briefing with other
+    days' events."""
+    span = event_days(event)
+    if span is None:
+        print(f"skipping an event with an unreadable start: {event.get('title')!r}", file=sys.stderr)
+        return False
+    return span[0] <= day <= span[1]
+
+
+def default_calendar() -> str | None:
+    """The calendar the briefing speaks for: the one new events land in. Read from the account rather
+    than configured, so it follows the account when it changes and there is nothing to set up."""
+    out = run(["proton-cli", "calendar", "settings", "get", "--output", "json", "--quiet"],
+              CALENDAR_TIMEOUT)
+    if out is None:
+        return None
+    try:
+        payload = json.loads(out or "{}")
+    except json.JSONDecodeError as error:
+        print(f"proton-cli returned unreadable json: {error}", file=sys.stderr)
+        return None
+    calendar = payload.get("default_calendar") if isinstance(payload, dict) else None
+    return calendar if isinstance(calendar, str) and calendar else None
+
+
+def fetch_events(day: date) -> list | None:
+    """What is on the day in the default calendar, or None when the calendar could not be read - a
+    distinction the briefing reports rather than passing off as a free day."""
+    calendar = default_calendar()
+    if calendar is None:
+        return None
+    start, end = calendar_window(day)
+    out = run(["proton-cli", "calendar", "events", "list", "--start", start, "--end", end,
+               "--calendar", calendar, "--output", "json", "--quiet"], CALENDAR_TIMEOUT)
+    if out is None:
+        return None
+    events = read_events(out)
+    return None if events is None else [event for event in events if covers(event, day)]
+
+
 def event_when(event: dict, day: date) -> str:
-    """When an event happens, as the day sees it. An event that runs past midnight at either end
-    is described by the part that falls on this day, not by a time on another one."""
+    """When an event happens, as the day sees it and on the user's clock. An event that runs past
+    midnight at either end is described by the part that falls on this day, not by a time on another
+    one."""
     if event.get("all_day"):
         return "all day"
     start, end = moment(event.get("start")), moment(event.get("end"))
     if start is None:
         return "all day"
+    start = local(start)
+    end = local(end) if end else None
     spans_before = start.date() < day
     spans_after = end is not None and end.date() > day
     if spans_before and spans_after:

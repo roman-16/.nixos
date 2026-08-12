@@ -56,7 +56,7 @@ If the script prints `[briefing: delivery FAILED ...]`, the send didn't happen: 
 ## Notes
 
 - The weather and offers blocks are the weather and offers skills' own output, so anything the user wants changed about them is changed there, not here.
-- The calendar covers the current day only, from midnight to midnight.
+- The calendar block is the current day in the **default calendar** only - the one new events land in. Anything kept elsewhere (a holiday feed, a habit or chore calendar) is deliberately absent, so its absence is never a bug. A multi-day event that runs through the day does appear, as `all day`.
 - The daily one is recorded in the chat like any other skill message, so you may see it noted as already delivered on the user's next message. Never resend it.
 
 `{baseDir}` = this skill's directory. Always resolve to the absolute path before executing.

@@ -162,6 +162,13 @@ in
             ];
           }
           {
+            name = "Trader Backup";
+            group = "Infrastructure";
+            url = "http://${traderIp}:8080/health/backup";
+            interval = "1h";
+            conditions = [ "[STATUS] == 200" ];
+          }
+          {
             name = "Homelab SSH";
             group = "Network";
             url = "tcp://${homelabIp}:22";

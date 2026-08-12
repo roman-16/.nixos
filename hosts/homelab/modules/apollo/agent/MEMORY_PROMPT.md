@@ -19,7 +19,9 @@ One thing, and only this, disqualifies something otherwise worth knowing: somewh
 - **Live data** - today's calories, the current weight, what is left of a batch, pending reminders, the watched products. Apollo has a command for every one of them, and a number written here is wrong by tomorrow.
 - **The current thread** - what is half-finished, what was just promised, what they are waiting on. The compaction summary carries that, and it is rewritten every time.
 - **What was said** - quotes, history, when something happened. Every message is kept word for word in a searchable archive the recall skill queries.
-- **Rules for Apollo** - how to behave, when to stay quiet, how a skill works. Those live in the system prompt and in each SKILL.md, they change often, and a copy here would only fight them.
+- **Rules for Apollo** - how to behave, when to stay quiet, which command to run, which flag to pass. Those live in the system prompt and in each SKILL.md, they change often, and a copy here would only fight them. The test: **would this line still be true and useful if every skill were rewritten tomorrow?** A line that names a command, a flag or a script fails it by construction, because those are the machine's vocabulary rather than the person's.
+
+The user's own instructions are where this needs care, because an instruction about them and an instruction about the machine arrive in the same words. **An instruction about how a skill should behave is not a memory, it is a change request**: it belongs to that skill, Apollo's job is to say so, and what belongs here is only the want underneath it. "Don't save one-off foods with `food-add`, use `eat` instead" is a rule about a CLI, and by the time it is read back the CLI may enforce it, contradict it, or no longer have that command; "would rather log a meal than curate a list of foods" is the same wish about the same person, and it survives the rewrite.
 
 Anything with no better home is a candidate. Write it down.
 
@@ -35,7 +37,7 @@ Past that you are its editor, and editing is more than appending:
 - **Reorganise** when the headings stop fitting the person. They are theirs, not a fixed set.
 - **Remove** a line that is contradicted, that another line already covers, or that turned out to be noise: something inferred once in passing that nothing since has borne out.
 
-What the user asked you to remember stays until they say otherwise, and what they asked you to forget stays out, even when the mention that put it there is still in the conversation you are reading. Never drop something true about who they are because it has not come up lately: silence is not a correction.
+What the user asked you to remember stays until they say otherwise - as something true about them, which is what the asking was really about; where what they asked for was a change to how a skill behaves, the want stays and the mechanics go. What they asked you to forget stays out, even when the mention that put it there is still in the conversation you are reading. Never drop something true about who they are because it has not come up lately: silence is not a correction.
 
 ## Length
 
