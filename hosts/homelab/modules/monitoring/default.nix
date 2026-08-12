@@ -327,13 +327,6 @@ in
                 icon = "mdi-bell-ring";
                 siteMonitor = "http://127.0.0.1:${toString ntfyPort}/v1/health";
                 statusStyle = "dot";
-
-                widget = {
-                  type = "ntfy";
-                  url = "http://127.0.0.1:${toString ntfyPort}";
-                  topic = ntfyTopic;
-                  key = secrets.ntfyHomepageToken;
-                };
               };
             }
             {
@@ -378,8 +371,8 @@ in
     };
 
     # Every consumer gets the narrowest grant that works: Gatus and Beszel publish
-    # without being able to read history, Homepage reads without being able to
-    # publish, and anonymous access (the public hostname) gets nothing at all.
+    # without being able to read history, and anonymous access (the public hostname)
+    # gets nothing at all.
     ntfy-sh = {
       enable = true;
 
@@ -387,18 +380,13 @@ in
         auth-access = [
           "beszel:${ntfyTopic}:wo"
           "gatus:${ntfyTopic}:wo"
-          "homepage:${ntfyTopic}:ro"
           "roman:${ntfyTopic}:rw"
         ];
         auth-default-access = "deny-all";
-        auth-tokens = [
-          "gatus:${secrets.ntfyGatusToken}:Gatus"
-          "homepage:${secrets.ntfyHomepageToken}:Homepage"
-        ];
+        auth-tokens = [ "gatus:${secrets.ntfyGatusToken}:Gatus" ];
         auth-users = [
           "beszel:${secrets.ntfyBeszelPasswordHash}:user"
           "gatus:${secrets.ntfyGatusPasswordHash}:user"
-          "homepage:${secrets.ntfyHomepagePasswordHash}:user"
           "roman:${secrets.ntfyPasswordHash}:user"
         ];
         base-url = "https://ntfy.halerc.xyz";
