@@ -50,25 +50,43 @@ describe("renderPage", () => {
 
   it("auto-loads older messages on scroll instead of a button", () => {
     const html = renderPage("v");
-    expect(html).toContain(`id="chat-window"`);
-    expect(html).toContain(`name="count"`);
-    expect(html).toContain(`hx-include="#chat-window, #chat-version"`);
-    expect(html).toContain("chatReload");
-    expect(html).toContain("chat-more"); // server-rendered "more history" marker the script watches
-    expect(html).toContain("distanceToOldest"); // the near-top scroll handler
+    expect(html).toContain(`hx-get="/chat/older"`);
+    expect(html).toContain("chatOlder");
+    expect(html).toContain("nearOldest"); // the near-top scroll handler
     expect(html).not.toContain("Load older"); // loading is scroll-driven, not a manual button
   });
 
-  it("holds the view still across a swap and never loads off its own completion", () => {
+  it("keeps the two ends of the transcript in their own regions", () => {
     const html = renderPage("v");
-    // The distance from the newest end is captured before a swap and restored after it, so
-    // prepended history lands above the viewport instead of re-pinning to the oldest edge.
-    expect(html).toContain(`chat.addEventListener("htmx:beforeSwap"`);
-    expect(html).toContain(`chat.addEventListener("htmx:afterSwap"`);
-    expect(html).toContain("keep = chat.scrollTop");
-    expect(html).toContain("chat.scrollTop = keep");
-    // A load that triggers the next load is a loop; growth follows a scroll gesture only.
-    expect(html).not.toContain(`chat.addEventListener("htmx:afterSettle"`);
+    expect(html).toContain(`id="chat-history"`);
+    expect(html).toContain(`id="chat-tail"`);
+    // History is inserted above what is shown; only the live tail is ever re-rendered.
+    expect(html).toContain(`hx-swap="afterbegin"`);
+    expect(html).toContain(`hx-get="/chat" hx-vals="js:{above: chatDayAbove()}"`);
+    expect(html.indexOf(`id="chat-history"`)).toBeLessThan(html.indexOf(`id="chat-tail"`));
+  });
+
+  it("names the cursor and the loaded day by reading the DOM, keeping no window state", () => {
+    const html = renderPage("v");
+    expect(html).toContain("function chatOldest()");
+    expect(html).toContain("function chatDayAbove()");
+    expect(html).toContain("[data-entry]");
+    expect(html).not.toContain(`id="chat-window"`); // no client-side window to grow and shrink
+    expect(html).not.toContain(`name="count"`);
+  });
+
+  it("never moves the scroll position, because it never rebuilds what is being read", () => {
+    // Older rows are inserted above the viewport, which a bottom-anchored scroller keeps still on
+    // its own. Writing scrollTop is what fought a momentum scroll, so nothing here writes it.
+    const html = renderPage("v");
+    expect(html).not.toContain("chat.scrollTop =");
+    expect(html).not.toContain("keep = chat.scrollTop");
+  });
+
+  it("stops asking for history once a page adds nothing", () => {
+    const html = renderPage("v");
+    expect(html).toContain("atOldest");
+    expect(html).toContain("chatOldest() === asking");
   });
 
   it("wires up WhatsApp-style chat copy", () => {

@@ -5,7 +5,7 @@ import { compactionSettings } from "./agent";
 import type { Anthropic } from "./anthropic";
 import { assetsVersion, htmlHeaders, serveAsset } from "./assets";
 import { type Attachment, loadAttachment } from "./attachments";
-import { parseTranscript, renderChat } from "./chat";
+import { dayKey, parseTranscript, renderChat, renderOlder } from "./chat";
 import type { ChatStore } from "./chat-store";
 import type { Config } from "./config";
 import {
@@ -30,17 +30,18 @@ const BACKUP_ALERT =
 /** The Anthropic usage endpoint rate-limits hard, so fetch it at most this often. */
 const USAGE_TTL_MS = 5 * 60 * 1000;
 
-/** Default transcript lines the chat renders; the dashboard's "Load older" grows this. */
-const DEFAULT_CHAT_LINES = 60;
-const MAX_CHAT_LINES = 5000;
+/**
+ * The transcript is read from both ends. The tail is the live end: a fixed number of newest entries,
+ * re-rendered whenever anything changes. History is the other end: fixed pages, each fetched once and
+ * then left alone, because they are what the reader is looking at while they scroll.
+ */
+const TAIL_ENTRIES = 60;
+const HISTORY_PAGE = 60;
 
 /** Long-lived cache for immutable transcript media (an entry's image never changes). */
 const IMMUTABLE_CACHE = "public, max-age=31536000, immutable";
 
-/** Zero-height marker at the oldest end; its presence tells the chat more history remains. */
-const CHAT_MORE_MARKER = `<div id="chat-more" hidden></div>`;
-
-/** The version of the rendered window, echoed back by the next poll as `have`. */
+/** The version of the rendered tail, echoed back by the next poll as `have`. */
 function chatVersionInput(version: string): string {
   return `<input id="chat-version" type="hidden" name="have" value="${escapeHtml(version)}" />`;
 }
@@ -50,14 +51,6 @@ const GZIPPABLE = /^(?:text\/|application\/(?:json|javascript)|image\/svg)/;
 const GZIP_MIN_BYTES = 1024;
 
 type Handler = (req: Request, url: URL) => Response | Promise<Response>;
-
-/** Coerce the chat window's `count` query into a sane, bounded line count. */
-function chatLines(value: string | null): number {
-  const n = Number(value);
-  return Number.isFinite(n) && n >= 1
-    ? Math.min(Math.floor(n), MAX_CHAT_LINES)
-    : DEFAULT_CHAT_LINES;
-}
 
 /** Whether a socket address is loopback - the guard for localhost-only /internal endpoints. */
 export function isLoopback(address: string): boolean {
@@ -143,27 +136,27 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
 
   let linking = false;
 
-  let chatCache: { body: string; version: string } | undefined;
+  let tailCache: { body: string; version: string } | undefined;
   let usage: { data: UsageData | null; fetchedAt: number } | undefined;
 
   /**
-   * Render the chat window from SQLite (the source of truth), memoized by a cheap version tag.
-   * The fragment carries that tag, so the next poll can say what it is already showing.
+   * Render the live tail from SQLite (the source of truth), memoized by a cheap version tag. The
+   * fragment carries that tag, so the next poll can say what it is already showing. `dayAbove` is the
+   * day the loaded history ends on, so the tail never redraws a divider that already sits up there.
    */
-  function renderChatBody(count: number): { body: string; version: string } {
-    const { entries, more, version } = chatStore.tail(session.sessionId, count);
+  function renderTail(dayAbove: string): { body: string; version: string } {
+    const { entries, newest } = chatStore.tail(session.sessionId, TAIL_ENTRIES);
     const live = session.isStreaming;
-    const tag = `${version}:${live}`;
-    if (!chatCache || chatCache.version !== tag) {
-      chatCache = {
+    const version = `${dayAbove}:${newest}:${live}`;
+    if (!tailCache || tailCache.version !== version) {
+      tailCache = {
         body:
-          (more ? CHAT_MORE_MARKER : "") +
-          chatVersionInput(tag) +
-          renderChat(parseTranscript(entries.join("\n")), new Date(), live),
-        version: tag,
+          chatVersionInput(version) +
+          renderChat(parseTranscript(entries.join("\n")), { dayAbove, live }),
+        version,
       };
     }
-    return chatCache;
+    return tailCache;
   }
 
   /** Serve one chat image (`/media/<entryId>/<n>`) from SQLite with a long immutable cache. */
@@ -258,15 +251,32 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
       },
     ],
     // Dedup belongs to the side that knows what it displays: the fragment carries its version, the
-    // poll echoes it back as `have`, and an unchanged window is a 204. A render the page drops (it
+    // poll echoes it back as `have`, and an unchanged tail is a 204. A render the page drops (it
     // cancels a swap to protect a selection) leaves the old version in the DOM, so the next poll
     // asks for it again instead of going stale.
     [
       "GET /chat",
       (_req, url) => {
-        const { body, version } = renderChatBody(chatLines(url.searchParams.get("count")));
+        const { body, version } = renderTail(url.searchParams.get("above") ?? "");
         if (url.searchParams.get("have") === version) return new Response(null, { status: 204 });
         return new Response(body, { headers: htmlHeaders });
+      },
+    ],
+    // One page of history, to be inserted above what is already shown. The cursor is the oldest entry
+    // the page holds, so this is idempotent and needs no memo: each page is asked for once, and once
+    // inserted it is never rendered again. Nothing older is a 204, which is also how the client knows
+    // it has reached the beginning of the conversation.
+    [
+      "GET /chat/older",
+      (_req, url) => {
+        const before = url.searchParams.get("before") ?? "";
+        if (!before) return new Response(null, { status: 204 });
+        const { boundaryTime, entries } = chatStore.older(session.sessionId, before, HISTORY_PAGE);
+        if (entries.length === 0) return new Response(null, { status: 204 });
+        const dayBelow = boundaryTime == undefined ? undefined : dayKey(new Date(boundaryTime));
+        return new Response(renderOlder(parseTranscript(entries.join("\n")), { dayBelow }), {
+          headers: htmlHeaders,
+        });
       },
     ],
     [

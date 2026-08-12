@@ -27,9 +27,7 @@ describe("createChatStore", () => {
   it("mirrors entries and returns them oldest-first", () => {
     const store = createChatStore(openDatabase(":memory:"));
     store.sync("s1", [entry({ id: "a" }), entry({ id: "b" })]);
-    const tail = store.tail("s1", 10);
-    expect(ids(tail.entries)).toEqual(["a", "b"]);
-    expect(tail.more).toBe(false);
+    expect(ids(store.tail("s1", 10).entries)).toEqual(["a", "b"]);
   });
 
   it("stores each entry verbatim", () => {
@@ -54,16 +52,13 @@ describe("createChatStore", () => {
     expect(ids(createChatStore(db).tail("s1", 10).entries)).toEqual(["a", "b", "c"]);
   });
 
-  it("windows to the last N and flags older history", () => {
+  it("keeps only the last N at the live end", () => {
     const store = createChatStore(openDatabase(":memory:"));
     store.sync(
       "s1",
       ["a", "b", "c", "d"].map((id) => entry({ id })),
     );
-    const tail = store.tail("s1", 2);
-    expect(ids(tail.entries)).toEqual(["c", "d"]);
-    expect(tail.more).toBe(true);
-    expect(store.tail("s1", 10).more).toBe(false);
+    expect(ids(store.tail("s1", 2).entries)).toEqual(["c", "d"]);
   });
 
   it("scopes entries by session", () => {
@@ -74,12 +69,65 @@ describe("createChatStore", () => {
     expect(ids(store.tail("s2", 10).entries)).toEqual(["b"]);
   });
 
-  it("bumps the version tag when a new entry lands", () => {
+  it("bumps the change tag when a new entry lands", () => {
     const store = createChatStore(openDatabase(":memory:"));
     store.sync("s1", [entry({ id: "a" })]);
-    const before = store.tail("s1", 10).version;
+    const before = store.tail("s1", 10).newest;
     store.sync("s1", [entry({ id: "a" }), entry({ id: "b" })]);
-    expect(store.tail("s1", 10).version).not.toBe(before);
+    expect(store.tail("s1", 10).newest).toBeGreaterThan(before);
+  });
+
+  describe("older", () => {
+    const four = (store: ReturnType<typeof createChatStore>) =>
+      store.sync(
+        "s1",
+        ["a", "b", "c", "d"].map((id) => entry({ id })),
+      );
+
+    it("returns the entries just before the cursor, oldest-first", () => {
+      const store = createChatStore(openDatabase(":memory:"));
+      four(store);
+      expect(ids(store.older("s1", "d", 2).entries)).toEqual(["b", "c"]);
+    });
+
+    it("never includes the cursor itself, so a page cannot repeat a row", () => {
+      const store = createChatStore(openDatabase(":memory:"));
+      four(store);
+      expect(ids(store.older("s1", "c", 10).entries)).toEqual(["a", "b"]);
+    });
+
+    it("is empty at the beginning of the conversation", () => {
+      const store = createChatStore(openDatabase(":memory:"));
+      four(store);
+      expect(store.older("s1", "a", 10).entries).toEqual([]);
+    });
+
+    it("answers an unknown cursor the same way, rather than throwing", () => {
+      const store = createChatStore(openDatabase(":memory:"));
+      four(store);
+      expect(store.older("s1", "nope", 10).entries).toEqual([]);
+    });
+
+    it("reports when the cursor entry was recorded, for the day it butts against", () => {
+      const store = createChatStore(openDatabase(":memory:"));
+      four(store);
+      expect(store.older("s1", "d", 2).boundaryTime).toBe(Date.parse("2026-07-19T10:00:00.000Z"));
+    });
+
+    it("asks twice for the same page and gets the same page", () => {
+      const store = createChatStore(openDatabase(":memory:"));
+      four(store);
+      expect(ids(store.older("s1", "d", 2).entries)).toEqual(
+        ids(store.older("s1", "d", 2).entries),
+      );
+    });
+
+    it("scopes pages by session", () => {
+      const store = createChatStore(openDatabase(":memory:"));
+      four(store);
+      store.sync("s2", [entry({ id: "x" }), entry({ id: "y" })]);
+      expect(ids(store.older("s2", "y", 10).entries)).toEqual(["x"]);
+    });
   });
 
   it("serves an image by entry id and index", () => {
@@ -146,6 +194,6 @@ describe("createChatStore", () => {
 
   it("returns an empty tail for an unknown session", () => {
     const store = createChatStore(openDatabase(":memory:"));
-    expect(store.tail("nope", 10)).toEqual({ entries: [], more: false, version: "10:0" });
+    expect(store.tail("nope", 10)).toEqual({ entries: [], newest: 0 });
   });
 });

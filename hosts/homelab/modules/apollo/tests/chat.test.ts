@@ -1,6 +1,13 @@
 import { describe, expect, it } from "bun:test";
 
-import { copyText, imageFromLine, type LogItem, parseTranscript, renderChat } from "../src/chat";
+import {
+  copyText,
+  imageFromLine,
+  type LogItem,
+  parseTranscript,
+  renderChat,
+  renderOlder,
+} from "../src/chat";
 
 import type { ContextNote } from "../src/temporal";
 
@@ -19,8 +26,8 @@ describe("parseTranscript", () => {
     ].join("\n");
 
     expect(parseTranscript(jsonl)).toEqual([
-      { contexts: [], images: [], kind: "user", text: "hello" },
-      { kind: "assistant", text: "hi there" },
+      { contexts: [], entry: "a", images: [], kind: "user", text: "hello" },
+      { entry: "b", kind: "assistant", text: "hi there" },
     ]);
   });
 
@@ -41,6 +48,7 @@ describe("parseTranscript", () => {
     expect(parseTranscript(jsonl)).toEqual([
       {
         args: { command: "ls" },
+        entry: "a",
         hasResult: true,
         images: 0,
         isError: false,
@@ -89,6 +97,7 @@ describe("parseTranscript", () => {
     );
     expect(items[0]).toEqual({
       contexts: [],
+      entry: "a",
       images: [{ id: "a", index: 0, mimeType: "image/png" }],
       kind: "user",
       text: "look",
@@ -103,9 +112,9 @@ describe("parseTranscript", () => {
     ].join("\n");
 
     expect(parseTranscript(jsonl)).toEqual([
-      { kind: "compaction", summary: "recap", tokensBefore: 123456 },
-      { kind: "thinking", text: "hmm" },
-      { kind: "divider", label: "Branch summary" },
+      { entry: "c", kind: "compaction", summary: "recap", tokensBefore: 123456 },
+      { entry: "a", kind: "thinking", text: "hmm" },
+      { entry: "d", kind: "divider", label: "Branch summary" },
     ]);
   });
 
@@ -123,8 +132,8 @@ describe("parseTranscript", () => {
     ].join("\n");
 
     expect(parseTranscript(jsonl)).toEqual([
-      { kind: "divider", label: "Reloaded" },
-      { contexts: [], images: [], kind: "user", text: "hi" },
+      { entry: "r", kind: "divider", label: "Reloaded" },
+      { contexts: [], entry: "a", images: [], kind: "user", text: "hi" },
     ]);
   });
 
@@ -134,8 +143,8 @@ describe("parseTranscript", () => {
       role: "assistant",
     });
     expect(parseTranscript(jsonl)).toEqual([
-      { kind: "assistant", text: "Done \u2705" },
-      { kind: "internal", text: "macros already sent it" },
+      { entry: "a", kind: "assistant", text: "Done \u2705" },
+      { entry: "a", kind: "internal", text: "macros already sent it" },
     ]);
   });
 
@@ -144,7 +153,9 @@ describe("parseTranscript", () => {
       content: [{ text: "<internal>nothing to add</internal>", type: "text" }],
       role: "assistant",
     });
-    expect(parseTranscript(jsonl)).toEqual([{ kind: "internal", text: "nothing to add" }]);
+    expect(parseTranscript(jsonl)).toEqual([
+      { entry: "a", kind: "internal", text: "nothing to add" },
+    ]);
   });
 
   it("renders a skill_message custom entry as a skill item", () => {
@@ -157,7 +168,7 @@ describe("parseTranscript", () => {
       type: "custom",
     });
     expect(parseTranscript(jsonl)).toEqual([
-      { images: [], kind: "skill", source: "reminders", text: "⏰ get my food" },
+      { entry: "sk", images: [], kind: "skill", source: "reminders", text: "⏰ get my food" },
     ]);
   });
 
@@ -176,6 +187,7 @@ describe("parseTranscript", () => {
     });
     expect(parseTranscript(jsonl)).toEqual([
       {
+        entry: "sk",
         images: [{ id: "sk", index: 0, mimeType: "image/png" }],
         kind: "skill",
         source: "diagram",
@@ -199,7 +211,13 @@ describe("parseTranscript", () => {
     const items = parseTranscript(
       message("a", { command: "echo hi", exitCode: 0, output: "hi", role: "bashExecution" }),
     );
-    expect(items[0]).toEqual({ command: "echo hi", exitCode: 0, kind: "bash", output: "hi" });
+    expect(items[0]).toEqual({
+      command: "echo hi",
+      entry: "a",
+      exitCode: 0,
+      kind: "bash",
+      output: "hi",
+    });
   });
 
   it("tolerates the header, blank lines, and a half-written trailing line", () => {
@@ -207,7 +225,7 @@ describe("parseTranscript", () => {
       "\n",
     );
     expect(parseTranscript(jsonl)).toEqual([
-      { contexts: [], images: [], kind: "user", text: "ok" },
+      { contexts: [], entry: "a", images: [], kind: "user", text: "ok" },
     ]);
   });
 
@@ -253,6 +271,7 @@ describe("parseTranscript context", () => {
             source: "reply",
           },
         ],
+        entry: "a",
         images: [],
         kind: "user",
         text: "yo",
@@ -406,8 +425,8 @@ describe("renderChat", () => {
       name: "bash",
       output: "",
     };
-    expect(renderChat([tool], new Date(), true)).toContain("running");
-    expect(renderChat([tool], new Date(), false)).toContain("interrupted");
+    expect(renderChat([tool], { live: true })).toContain("running");
+    expect(renderChat([tool], { live: false })).toContain("interrupted");
   });
 
   it("truncates very long tool output", () => {
@@ -436,6 +455,17 @@ describe("renderChat", () => {
     expect(html).not.toContain("base64");
   });
 
+  it("gives an image a height before it loads, so it cannot shift the text around it", () => {
+    // An unsized <img> is nothing until the bytes arrive and 160px afterwards, which moves whatever
+    // the reader is looking at. A definite height makes vertical layout independent of loading.
+    const html = renderChat([
+      { images: [{ id: "a", index: 0, mimeType: "image/png" }], kind: "user", text: "" },
+    ]);
+    expect(html).toContain("h-40");
+    expect(html).toContain("object-contain");
+    expect(html).not.toContain("max-h-40");
+  });
+
   it("renders a compaction entry as an expandable summary with token count", () => {
     const html = renderChat([
       { kind: "compaction", summary: "what happened", tokensBefore: 123456 },
@@ -457,7 +487,7 @@ describe("renderChat", () => {
   it("stamps timed bubbles with a clock", () => {
     const html = renderChat(
       [{ images: [], kind: "user", text: "hi", time: "2026-07-14T10:00:00.000Z" }],
-      new Date("2026-07-14T12:00:00.000Z"),
+      { now: new Date("2026-07-14T12:00:00.000Z") },
     );
     expect(html).toMatch(/>\d{2}:\d{2}</);
   });
@@ -468,7 +498,7 @@ describe("renderChat", () => {
         { images: [], kind: "user", text: "a", time: "2026-07-14T09:00:00.000Z" },
         { kind: "assistant", text: "b", time: "2026-07-14T10:00:00.000Z" },
       ],
-      new Date("2026-07-14T12:00:00.000Z"),
+      { now: new Date("2026-07-14T12:00:00.000Z") },
     );
     expect(html.match(/Today/g)?.length).toBe(1);
   });
@@ -480,7 +510,7 @@ describe("renderChat", () => {
         { kind: "assistant", text: "b", time: "2026-07-13T12:00:00.000Z" },
         { kind: "assistant", text: "c", time: "2026-07-14T12:00:00.000Z" },
       ],
-      new Date("2026-07-14T12:00:00.000Z"),
+      { now: new Date("2026-07-14T12:00:00.000Z") },
     );
     expect(html).toContain("10.07.2026");
     expect(html).toContain("Yesterday");
@@ -489,6 +519,40 @@ describe("renderChat", () => {
 
   it("adds no day divider for untimed items", () => {
     expect(renderChat([{ kind: "assistant", text: "x" }])).not.toContain("Today");
+  });
+
+  it("identifies each day divider by its day, so a page of history can take it over", () => {
+    const html = renderChat([
+      { images: [], kind: "user", text: "a", time: "2026-07-14T09:00:00.000Z" },
+    ]);
+    expect(html).toContain('id="day-2026-07-14"');
+    expect(html).toContain('data-day="2026-07-14"');
+  });
+
+  it("leaves a day's divider to the rows above when they already drew it", () => {
+    // The live tail sits under loaded history; redrawing a divider history owns would strand it.
+    const html = renderChat(
+      [{ images: [], kind: "user", text: "a", time: "2026-07-14T09:00:00.000Z" }],
+      { dayAbove: "2026-07-14" },
+    );
+    expect(html).not.toContain('id="day-2026-07-14"');
+  });
+
+  it("still opens a day the rows above do not reach", () => {
+    const html = renderChat(
+      [{ images: [], kind: "user", text: "a", time: "2026-07-14T09:00:00.000Z" }],
+      { dayAbove: "2026-07-13" },
+    );
+    expect(html).toContain('id="day-2026-07-14"');
+  });
+
+  it("tags each row with the entry it came from, and dividers with none", () => {
+    // This is how the client names the oldest row it holds when it asks for the page before it.
+    const html = renderChat([
+      { entry: "e7", images: [], kind: "user", text: "a", time: "2026-07-14T09:00:00.000Z" },
+    ]);
+    expect(html).toContain('data-entry="e7"');
+    expect((html.match(/data-entry=/g) ?? []).length).toBe(1);
   });
 
   it("marks an internal note as not sent and escapes it", () => {
@@ -533,7 +597,7 @@ describe("renderChat", () => {
         { images: [], kind: "user", text: "older", time: "2026-07-14T09:00:00.000Z" },
         { kind: "assistant", text: "newer", time: "2026-07-14T10:00:00.000Z" },
       ],
-      new Date("2026-07-14T12:00:00.000Z"),
+      { now: new Date("2026-07-14T12:00:00.000Z") },
     );
     expect(html.indexOf("older")).toBeLessThan(html.indexOf("newer"));
   });
@@ -541,7 +605,7 @@ describe("renderChat", () => {
   it("puts a day divider before the day it labels", () => {
     const html = renderChat(
       [{ images: [], kind: "user", text: "morning", time: "2026-07-14T09:00:00.000Z" }],
-      new Date("2026-07-14T12:00:00.000Z"),
+      { now: new Date("2026-07-14T12:00:00.000Z") },
     );
     expect(html.indexOf("Today")).toBeLessThan(html.indexOf("morning"));
   });
@@ -692,7 +756,7 @@ describe("renderChat data-copy", () => {
   it("does not embed data-copy on day dividers", () => {
     const html = renderChat(
       [{ images: [], kind: "user", text: "a", time: "2026-07-19T09:00:00.000Z" }],
-      new Date("2026-07-19T12:00:00.000Z"),
+      { now: new Date("2026-07-19T12:00:00.000Z") },
     );
     // Only the user row carries data-copy; the inserted day divider must not.
     expect((html.match(/data-copy=/g) ?? []).length).toBe(1);
@@ -745,5 +809,63 @@ describe("renderChat context notes", () => {
     expect(html).toContain("&lt;i&gt;y&lt;/i&gt;");
     expect(html).toContain("&lt;b&gt;x&lt;/b&gt;");
     expect(html).not.toContain("<b>x</b>");
+  });
+});
+
+describe("renderOlder", () => {
+  const at = (day: string, hour: string) => `2026-07-${day}T${hour}:00:00.000Z`;
+  const row = (day: string, hour: string, text: string): LogItem => ({
+    entry: `e-${day}-${hour}`,
+    images: [],
+    kind: "user",
+    text,
+    time: at(day, hour),
+  });
+
+  it("renders a page of older rows with their own day dividers", () => {
+    const html = renderOlder([row("12", "09", "older")], { now: new Date(at("14", "12")) });
+    expect(html).toContain("older");
+    expect(html).toContain('id="day-2026-07-12"');
+  });
+
+  it("retires the divider below it when it continues that same day upward", () => {
+    // The page's rows belong to the day the existing rows open with, so that divider is now stranded
+    // in the middle of the day: the page draws it where it belongs and deletes the old one.
+    const html = renderOlder([row("14", "08", "earlier that day")], {
+      dayBelow: "2026-07-14",
+      now: new Date(at("14", "12")),
+    });
+    expect(html).toContain('id="day-2026-07-14" hx-swap-oob="delete"');
+    expect(html.indexOf('id="day-2026-07-14"')).toBeLessThan(html.indexOf("hx-swap-oob"));
+  });
+
+  it("leaves the divider below alone when the page ends on an earlier day", () => {
+    const html = renderOlder([row("12", "09", "another day")], {
+      dayBelow: "2026-07-14",
+      now: new Date(at("14", "12")),
+    });
+    expect(html).not.toContain("hx-swap-oob");
+  });
+
+  it("never reports a page as running, however it ends", () => {
+    const html = renderOlder([
+      {
+        args: {},
+        entry: "e1",
+        hasResult: false,
+        images: 0,
+        isError: false,
+        kind: "tool",
+        name: "bash",
+        output: "",
+      },
+    ]);
+    expect(html).toContain("interrupted");
+    expect(html).not.toContain("running");
+  });
+
+  it("renders nothing at the beginning of the conversation", () => {
+    expect(renderOlder([])).toBe("");
+    expect(renderOlder([])).not.toContain("No messages yet");
   });
 });

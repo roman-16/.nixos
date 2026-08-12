@@ -15,12 +15,22 @@ import { type ImageBytes, imageFromLine } from "./chat";
  */
 
 export interface ChatTail {
-  /** The window's entries, oldest-first, each a stored JSONL line. */
+  /** The newest entries, oldest-first, each a stored JSONL line. */
   entries: string[];
-  /** Whether older entries exist before the window, so the chat can load more. */
-  more: boolean;
-  /** Cheap change tag (count + newest row id) for render dedup. */
-  version: string;
+  /** Row id of the newest entry, as a cheap change tag for render dedup. */
+  newest: number;
+}
+
+/**
+ * A page of history: the entries immediately older than a cursor, oldest-first.
+ *
+ * The cursor is an entry id rather than an offset, so a page names a fixed stretch of the log
+ * whatever arrives in the meantime, and asking twice returns the same thing.
+ */
+export interface ChatPage {
+  entries: string[];
+  /** When the cursor entry was recorded: the day this page's oldest dividers butt against. */
+  boundaryTime: number | undefined;
 }
 
 export interface SkillMessage {
@@ -38,6 +48,8 @@ export interface ChatStore {
     images?: ImageContent[],
   ): void;
   image(sessionId: string, entryId: string, index: number): ImageBytes | undefined;
+  /** The `count` entries just older than `beforeEntryId`; empty at the start of the conversation. */
+  older(sessionId: string, beforeEntryId: string, count: number): ChatPage;
   /** Skill messages delivered in a time span: what the user saw that the session never recorded. */
   skillMessagesBetween(sessionId: string, fromMs: number, toMs: number): SkillMessage[];
   sync(sessionId: string, entries: SessionEntry[]): void;
@@ -51,7 +63,10 @@ export function createChatStore(db: Database): ChatStore {
   const selectTail = db.query(
     "SELECT id, data FROM chat WHERE session_id = ? ORDER BY id DESC LIMIT ?",
   );
-  const olderExists = db.query("SELECT 1 FROM chat WHERE session_id = ? AND id < ? LIMIT 1");
+  const selectCursor = db.query("SELECT id, time FROM chat WHERE session_id = ? AND entry_id = ?");
+  const selectOlder = db.query(
+    "SELECT data FROM chat WHERE session_id = ? AND id < ? ORDER BY id DESC LIMIT ?",
+  );
   const selectData = db.query("SELECT data FROM chat WHERE session_id = ? AND entry_id = ?");
   const selectSkillMessages = db.query(
     "SELECT time, data FROM chat WHERE session_id = ? AND type = 'custom' AND time >= ? AND time <= ? ORDER BY id",
@@ -79,6 +94,19 @@ export function createChatStore(db: Database): ChatStore {
     image(sessionId, entryId, index) {
       const row = selectData.get(sessionId, entryId) as { data: string } | null;
       return row ? imageFromLine(row.data, index) : undefined;
+    },
+    older(sessionId, beforeEntryId, count) {
+      const cursor = selectCursor.get(sessionId, beforeEntryId) as {
+        id: number;
+        time: number | null;
+      } | null;
+      // An unknown cursor is the same answer as the start of the conversation: nothing older.
+      if (!cursor) return { boundaryTime: undefined, entries: [] };
+      const rows = selectOlder.all(sessionId, cursor.id, count) as { data: string }[];
+      return {
+        boundaryTime: cursor.time ?? undefined,
+        entries: rows.map((row) => row.data).reverse(),
+      };
     },
     skillMessagesBetween(sessionId, fromMs, toMs) {
       const rows = selectSkillMessages.all(sessionId, fromMs, toMs) as {
@@ -125,16 +153,7 @@ export function createChatStore(db: Database): ChatStore {
     },
     tail(sessionId, count) {
       const rows = selectTail.all(sessionId, count) as { data: string; id: number }[];
-      const oldest = rows[rows.length - 1];
-      const more =
-        rows.length === count && oldest != undefined
-          ? olderExists.get(sessionId, oldest.id) != null
-          : false;
-      return {
-        entries: rows.map((row) => row.data).reverse(),
-        more,
-        version: `${count}:${rows[0]?.id ?? 0}`,
-      };
+      return { entries: rows.map((row) => row.data).reverse(), newest: rows[0]?.id ?? 0 };
     },
   };
 }

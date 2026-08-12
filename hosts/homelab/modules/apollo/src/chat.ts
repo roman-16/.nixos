@@ -22,7 +22,13 @@ export interface ChatImage {
   mimeType: string;
 }
 
-export type LogItem =
+/**
+ * One displayable row. `entry` is the transcript entry it came from - several rows can share one
+ * entry (an assistant turn is a reply plus its thinking and tool calls), and a day divider has none.
+ * It is rendered as `data-entry`, which is how the client names the oldest row it holds when it asks
+ * for the page before it.
+ */
+export type LogItem = { entry?: string } & (
   | { kind: "assistant"; text: string; time?: string }
   | {
       command: string;
@@ -46,7 +52,8 @@ export type LogItem =
       output: string;
       time?: string;
     }
-  | { contexts?: ContextNote[]; images: ChatImage[]; kind: "user"; text: string; time?: string };
+  | { contexts?: ContextNote[]; images: ChatImage[]; kind: "user"; text: string; time?: string }
+);
 
 interface ToolResult {
   images: number;
@@ -88,6 +95,7 @@ function assistantItems(
   message: Record<string, any>,
   results: Map<string, ToolResult>,
   time: string | undefined,
+  entry: string,
 ): LogItem[] {
   const items: LogItem[] = [];
   const content = Array.isArray(message.content) ? message.content : [];
@@ -96,14 +104,15 @@ function assistantItems(
       // What was sent, then the notes that were not: a note reads as a footnote to the reply,
       // and a block that is only a note becomes an internal row on its own.
       const { delivered, internal } = splitInternal(block.text);
-      if (delivered) items.push({ kind: "assistant", text: delivered, time });
-      for (const note of internal) items.push({ kind: "internal", text: note, time });
+      if (delivered) items.push({ entry, kind: "assistant", text: delivered, time });
+      for (const note of internal) items.push({ entry, kind: "internal", text: note, time });
     } else if (block?.type === "thinking" && block.thinking?.trim()) {
-      items.push({ kind: "thinking", text: block.thinking, time });
+      items.push({ entry, kind: "thinking", text: block.thinking, time });
     } else if (block?.type === "toolCall") {
       const result = results.get(block.id);
       items.push({
         args: block.arguments ?? {},
+        entry,
         hasResult: result != undefined,
         images: result?.images ?? 0,
         isError: result?.isError ?? false,
@@ -142,8 +151,10 @@ export function parseTranscript(jsonl: string): LogItem[] {
   const items: LogItem[] = [];
   for (const entry of entries) {
     const time = isoTime(entry.timestamp);
+    const id = String(entry.id ?? "");
     if (entry.type === "compaction") {
       items.push({
+        entry: id,
         kind: "compaction",
         summary: typeof entry.summary === "string" ? entry.summary : "",
         time,
@@ -152,20 +163,18 @@ export function parseTranscript(jsonl: string): LogItem[] {
       continue;
     }
     if (entry.type === "branch_summary") {
-      items.push({ kind: "divider", label: "Branch summary" });
+      items.push({ entry: id, kind: "divider", label: "Branch summary" });
       continue;
     }
     if (entry.type === "custom" && entry.customType === "apollo_reload") {
-      items.push({ kind: "divider", label: "Reloaded" });
+      items.push({ entry: id, kind: "divider", label: "Reloaded" });
       continue;
     }
     if (entry.type === "custom" && entry.customType === "skill_message") {
       const data = (entry.data ?? {}) as { images?: unknown; source?: unknown; text?: unknown };
-      const { images } = splitContent(
-        Array.isArray(data.images) ? data.images : [],
-        String(entry.id ?? ""),
-      );
+      const { images } = splitContent(Array.isArray(data.images) ? data.images : [], id);
       items.push({
+        entry: id,
         images,
         kind: "skill",
         source: typeof data.source === "string" ? data.source : "skill",
@@ -180,11 +189,12 @@ export function parseTranscript(jsonl: string): LogItem[] {
     if (!message || typeof message !== "object") continue;
     switch (message.role) {
       case "assistant":
-        items.push(...assistantItems(message, results, time));
+        items.push(...assistantItems(message, results, time, id));
         break;
       case "bashExecution":
         items.push({
           command: message.command ?? "",
+          entry: id,
           exitCode: message.exitCode,
           kind: "bash",
           output: message.output ?? "",
@@ -192,10 +202,10 @@ export function parseTranscript(jsonl: string): LogItem[] {
         });
         break;
       case "user": {
-        const { images, text } = splitContent(message.content, String(entry.id ?? ""));
+        const { images, text } = splitContent(message.content, id);
         if (text || images.length > 0) {
           const { contexts, message: body } = splitUserContext(text);
-          items.push({ contexts, images, kind: "user", text: body, time });
+          items.push({ contexts, entry: id, images, kind: "user", text: body, time });
         }
         break;
       }
@@ -291,13 +301,29 @@ function dayLabel(date: Date, now: Date): string {
   return `${two(date.getDate())}.${two(date.getMonth() + 1)}.${date.getFullYear()}`;
 }
 
-/** A `data-copy` attribute carrying an item's canonical plain text, or nothing. */
-function copyAttr(text: string | undefined): string {
-  return text == undefined ? "" : ` data-copy="${escapeHtml(text)}"`;
+/** The local calendar day a moment belongs to, as the identity of its divider. */
+export function dayKey(date: Date): string {
+  return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}`;
 }
 
-function chipDivider(label: string, dataCopy?: string): string {
-  return `<div class="flex justify-center py-1"${copyAttr(dataCopy)}>
+/**
+ * The divider that opens a day. It is identified by the day itself, because the transcript holds one
+ * contiguous stretch of the log and so shows each day exactly once: that makes the id unique, and it
+ * is what lets a page of older history retire the divider it has just taken over.
+ */
+function dayDivider(date: Date, now: Date): string {
+  const key = dayKey(date);
+  return chipDivider(dayLabel(date, now), ` id="day-${key}" data-day="${key}"`);
+}
+
+/** The attributes every row carries: its plain text for copying, and the entry it came from. */
+function rowAttrs(item: LogItem): string {
+  const entry = item.entry ? ` data-entry="${escapeHtml(item.entry)}"` : "";
+  return ` data-copy="${escapeHtml(copyText(item))}"${entry}`;
+}
+
+function chipDivider(label: string, attrs = ""): string {
+  return `<div class="flex justify-center py-1"${attrs}>
     <span class="rounded-full border border-white/10 bg-neutral-900/90 px-3 py-1 text-[11px] font-medium text-neutral-400">${escapeHtml(label)}</span>
   </div>`;
 }
@@ -306,11 +332,11 @@ function bubble(
   side: "left" | "right",
   tone: string,
   body: string,
-  time?: string,
-  dataCopy?: string,
+  time: string | undefined,
+  attrs: string,
 ): string {
   const align = side === "right" ? "items-end" : "items-start";
-  return `<div class="flex flex-col ${align}"${copyAttr(dataCopy)}>
+  return `<div class="flex flex-col ${align}"${attrs}>
     <div class="max-w-[85%] px-3.5 py-2 text-sm shadow-sm sm:max-w-[75%] ${tone}">${body}${stamp(time)}</div>
   </div>`;
 }
@@ -355,13 +381,21 @@ function contextNotes(notes: ContextNote[] | undefined): string {
   return `<div class="mb-1.5 flex flex-col gap-1">${notes.map(contextNote).join("")}</div>`;
 }
 
+/**
+ * A picture in the transcript, in a box whose height is settled before the bytes arrive.
+ *
+ * An `<img>` with no dimensions is nothing until it loads and then suddenly 160px tall, and this is
+ * the only element in the chat whose height is not final at parse time - so it is the only thing that
+ * can move the text under the reader's eyes. A definite height (the image contained inside it) makes
+ * vertical layout independent of loading, which is what keeps lazy loading safe while scrolling.
+ */
 function images(list: ChatImage[]): string {
   if (list.length === 0) return "";
   const tags = list
     .map(
       (image) =>
         `<img src="/media/${encodeURIComponent(image.id)}/${image.index}" alt="image" loading="lazy"
-          class="max-h-40 cursor-zoom-in rounded-xl"
+          class="h-40 w-auto max-w-full cursor-zoom-in rounded-xl object-contain"
           onclick="const box = document.getElementById('lightbox'); box.querySelector('img').src = this.src; box.showModal()" />`,
     )
     .join("");
@@ -382,8 +416,8 @@ function toolBadge(item: Extract<LogItem, { kind: "tool" }>, running: boolean): 
     : `<span class="text-neutral-500">interrupted</span>`;
 }
 
-function disclosure(summary: string, detail: string, dataCopy?: string): string {
-  return `<details class="group overflow-hidden rounded-xl border border-white/10 bg-neutral-950/40 transition hover:border-white/20"${copyAttr(dataCopy)}>
+function disclosure(summary: string, detail: string, attrs: string): string {
+  return `<details class="group overflow-hidden rounded-xl border border-white/10 bg-neutral-950/40 transition hover:border-white/20"${attrs}>
     <summary class="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs text-neutral-300 transition hover:bg-white/5">
       <span class="shrink-0 text-[10px] text-neutral-400 transition group-open:rotate-90">▶</span>
       ${summary}
@@ -451,7 +485,7 @@ export function copyText(item: LogItem): string {
 }
 
 function renderItem(item: LogItem, running = false): string {
-  const copy = copyText(item);
+  const attrs = rowAttrs(item);
   switch (item.kind) {
     case "assistant":
       return bubble(
@@ -459,13 +493,13 @@ function renderItem(item: LogItem, running = false): string {
         "rounded-2xl rounded-bl-sm border border-white/5 bg-neutral-800/80 text-neutral-100",
         textBlock(item.text),
         item.time,
-        copy,
+        attrs,
       );
     case "bash": {
       const summary = `${tag("bash")}<span class="min-w-0 truncate font-mono text-neutral-200">$ ${escapeHtml(
         truncate(item.command, PREVIEW_CHARS),
       )}</span><span class="ml-auto shrink-0 text-neutral-500">exit ${item.exitCode ?? "?"}</span>`;
-      return disclosure(summary, pre(item.output), copy);
+      return disclosure(summary, pre(item.output), attrs);
     }
     case "compaction": {
       const meta =
@@ -475,7 +509,7 @@ function renderItem(item: LogItem, running = false): string {
             item.summary,
           )}</div>`
         : "";
-      return `<details class="group py-1 text-center"${copyAttr(copy)}>
+      return `<details class="group py-1 text-center"${attrs}>
         <summary class="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full border border-white/10 bg-neutral-900/90 px-3 py-1 text-[11px] font-medium text-neutral-400 transition hover:text-neutral-200">
           Context compacted${meta}<span class="transition group-open:rotate-180">▾</span>
         </summary>
@@ -483,7 +517,7 @@ function renderItem(item: LogItem, running = false): string {
       </details>`;
     }
     case "divider":
-      return chipDivider(item.label, copy);
+      return chipDivider(item.label, attrs);
     case "internal":
       return bubble(
         "left",
@@ -492,7 +526,7 @@ function renderItem(item: LogItem, running = false): string {
           item.text,
         )}`,
         item.time,
-        copy,
+        attrs,
       );
     case "skill":
       return bubble(
@@ -502,7 +536,7 @@ function renderItem(item: LogItem, running = false): string {
           item.source,
         )}</span></div>${item.text ? textBlock(item.text) : ""}${images(item.images)}`,
         item.time,
-        copy,
+        attrs,
       );
     case "thinking": {
       const preview = escapeHtml(truncate(item.text.replace(/\s+/g, " ").trim(), PREVIEW_CHARS));
@@ -512,7 +546,7 @@ function renderItem(item: LogItem, running = false): string {
         `<p class="whitespace-pre-wrap break-words italic text-neutral-500">${escapeHtml(
           truncate(item.text, MAX_OUTPUT_CHARS),
         )}</p>`,
-        copy,
+        attrs,
       );
     }
     case "tool": {
@@ -524,7 +558,7 @@ function renderItem(item: LogItem, running = false): string {
       const detail = `<pre class="mb-2 overflow-x-auto whitespace-pre-wrap break-words text-neutral-500">${escapeHtml(
         JSON.stringify(item.args, null, 2),
       )}</pre>${output}${note}`;
-      return disclosure(summary, detail, copy);
+      return disclosure(summary, detail, attrs);
     }
     case "user":
       return bubble(
@@ -532,32 +566,77 @@ function renderItem(item: LogItem, running = false): string {
         "rounded-2xl rounded-br-sm bg-indigo-500 text-white",
         `${contextNotes(item.contexts)}${item.text ? textBlock(item.text) : ""}${images(item.images)}`,
         item.time,
-        copy,
+        attrs,
       );
   }
 }
 
-/** Render the chat-log fragment (the rows of the polling #chat-log transcript), inserting a day divider whenever the calendar day of timed items changes. */
-export function renderChat(items: LogItem[], now: Date = new Date(), live = false): string {
+export interface ChatContext {
+  /**
+   * The day already shown immediately above these rows. Its divider has been drawn there, so these
+   * rows must not draw it again - which is what keeps the live tail from re-introducing a divider a
+   * page of history has taken over.
+   */
+  dayAbove?: string;
+  /**
+   * The day already shown immediately below these rows, whose divider these rows take over when they
+   * continue that same day upward.
+   */
+  dayBelow?: string;
+  /** Whether the newest end is streaming, so a trailing resultless tool reads as still running. */
+  live?: boolean;
+  now?: Date;
+}
+
+/** The day the last of these rows belongs to, which is the day the rows below them butt against. */
+function lastDay(items: LogItem[]): string | undefined {
+  for (let i = items.length - 1; i >= 0; i -= 1) {
+    const time = items[i]!.time;
+    if (time) return dayKey(new Date(time));
+  }
+  return undefined;
+}
+
+/** Render rows for a stretch of the transcript, opening each calendar day with its divider. */
+export function renderChat(items: LogItem[], context: ChatContext = {}): string {
   if (items.length === 0) {
     return `<p class="m-auto text-sm text-neutral-600">No messages yet.</p>`;
   }
+  const now = context.now ?? new Date();
   // Only the most recent tool call can still be running, and only while a run is
   // active; every earlier resultless call was orphaned when its run ended.
   const last = items[items.length - 1];
-  const runningIndex = live && last?.kind === "tool" && !last.hasResult ? items.length - 1 : -1;
+  const runningIndex =
+    context.live && last?.kind === "tool" && !last.hasResult ? items.length - 1 : -1;
   const parts: string[] = [];
-  let lastDay: string | undefined;
+  let shownDay = context.dayAbove;
   for (const [index, item] of items.entries()) {
     if (item.time) {
       const date = new Date(item.time);
-      const day = date.toDateString();
-      if (day !== lastDay) {
-        parts.push(chipDivider(dayLabel(date, now)));
-        lastDay = day;
+      const key = dayKey(date);
+      if (key !== shownDay) {
+        parts.push(dayDivider(date, now));
+        shownDay = key;
       }
     }
     parts.push(renderItem(item, index === runningIndex));
   }
   return parts.join("");
+}
+
+/**
+ * Render a page of older history, to be inserted above what is already shown.
+ *
+ * A divider opens a day, so when this page continues the day the rows below it start with, the
+ * divider down there is now stranded mid-day: this page draws that day's divider in its rightful
+ * place and retires the old one out of band. Nothing else about the existing rows is touched, which
+ * is the whole point - they are what the reader is looking at.
+ */
+export function renderOlder(items: LogItem[], context: ChatContext = {}): string {
+  if (items.length === 0) return "";
+  const rows = renderChat(items, { live: false, now: context.now });
+  const taken = context.dayBelow;
+  return taken && lastDay(items) === taken
+    ? `${rows}<div id="day-${taken}" hx-swap-oob="delete"></div>`
+    : rows;
 }

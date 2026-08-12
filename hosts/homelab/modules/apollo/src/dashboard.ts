@@ -15,10 +15,8 @@ const GHOST_BUTTON =
 const PRIMARY_BUTTON =
   "inline-block rounded-xl bg-indigo-500 px-5 py-2 text-sm font-medium text-white transition hover:bg-indigo-400";
 
-/** Chat window: lines rendered initially, the step each auto-load adds, and the ceiling. */
-const CHAT_WINDOW_START = 60;
-const CHAT_WINDOW_STEP = 60;
-const CHAT_WINDOW_MAX = 5000;
+/** How close to the oldest row the reader gets before the next page of history is fetched. */
+const HISTORY_TRIGGER_PX = 300;
 
 function headingRow(title: string, right = ""): string {
   return `<div class="mt-8 mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -51,6 +49,13 @@ function filterChip(name: string, value: string, label: string, checked = false)
  * no scroll bookkeeping. Its single child #chat-log holds the transcript in reading order,
  * so selection, copy and screen readers follow the conversation as it appears.
  *
+ * #chat-log carries one region per end of the transcript, because the two ends move independently.
+ * #chat-tail is the live end: the newest entries, re-rendered whenever anything changes. #chat-history
+ * is everything before it, prepended a page at a time and then never touched again - an insertion
+ * above the viewport, which is precisely the case bottom-anchoring keeps still for free. That is why
+ * nothing here saves or restores a scroll position: the rows the reader is looking at are never
+ * rebuilt, so there is no position to lose.
+ *
  * #tokens-daily is the same arrangement turned on its side: the scroller is reversed so a range
  * too wide to fit opens on the most recent day, while its single child keeps the days in
  * chronological order, oldest to newest, left to right.
@@ -77,7 +82,6 @@ export function renderPage(version: string): string {
         "conversation",
         `<span id="session-status" class="text-xs"></span>
         <div class="ml-auto flex items-center gap-2">
-          <input id="chat-window" type="hidden" name="count" value="${CHAT_WINDOW_START}" />
           <button hx-post="/compact" hx-target="#session-status" hx-swap="innerHTML" hx-disabled-elt="this"
             class="${GHOST_BUTTON}">Compact</button>
           <button hx-post="/reload" hx-target="#session-status" hx-swap="innerHTML" hx-disabled-elt="this"
@@ -86,9 +90,14 @@ export function renderPage(version: string): string {
       )}
       <div class="${SURFACE} flex flex-col overflow-hidden">
         <div id="chat" class="flex h-[70dvh] flex-col-reverse [&>*]:shrink-0 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:h-[75dvh]">
-          <div id="chat-log" class="flex min-h-full flex-col justify-end gap-3 [&>*]:shrink-0"
-            hx-get="/chat" hx-include="#chat-window, #chat-version" hx-trigger="load, every 2s, chatReload" hx-swap="innerHTML">
-            <p class="m-auto text-sm text-neutral-500">Loading…</p>
+          <div id="chat-log" class="flex min-h-full flex-col justify-end gap-3 [&>*]:shrink-0">
+            <div id="chat-history" class="flex flex-col gap-3 [&>*]:shrink-0 empty:hidden"
+              hx-get="/chat/older" hx-vals="js:{before: chatOldest()}" hx-trigger="chatOlder" hx-swap="afterbegin"></div>
+            <div id="chat-tail" class="flex grow flex-col justify-end gap-3 [&>*]:shrink-0"
+              hx-get="/chat" hx-vals="js:{above: chatDayAbove()}" hx-include="#chat-version"
+              hx-trigger="load, every 2s" hx-swap="innerHTML">
+              <p class="m-auto text-sm text-neutral-500">Loading…</p>
+            </div>
           </div>
         </div>
         <footer class="flex items-center gap-3 border-t border-white/5 px-4 py-3 sm:px-5">
@@ -177,69 +186,59 @@ export function renderPage(version: string): string {
           e.preventDefault();
         });
         // Keep the 2s poll from wiping an in-progress selection. The dropped render is not lost:
-        // the version input still on the page tells the next poll to send it again.
+        // the version input still on the page tells the next poll to send it again. A page of history
+        // is never dropped this way - it is inserted above, where it cannot disturb a selection.
         document.body.addEventListener("htmx:beforeSwap", function (e) {
-          if (e.target && e.target.id === "chat-log" && selectedRows().length > 0) {
+          if (e.target && e.target.id === "chat-tail" && selectedRows().length > 0) {
             e.detail.shouldSwap = false;
           }
         });
       })();
-      // Infinite scroll upward: widen the transcript window (via the #chat-window count the
-      // poll includes) whenever the user scrolls near the oldest end, and shrink it back once they
-      // return to the newest end so the live poll stays cheap. #chat-more, rendered by the
-      // server only while older lines remain, is the stop signal.
+      // What the two chat requests need to know, read off the DOM at request time rather than tracked:
+      // the oldest row on the page names where history continues, and the last day already drawn in
+      // history tells the tail which divider it must not draw again.
+      function chatOldest() {
+        var row = document.querySelector("#chat-log [data-entry]");
+        return row ? row.dataset.entry : "";
+      }
+      function chatDayAbove() {
+        var days = document.querySelectorAll("#chat-history [data-day]");
+        var last = days[days.length - 1];
+        return last ? last.dataset.day : "";
+      }
+      // Infinite scroll upward: ask for the page before the oldest row whenever the reader gets near
+      // it. The response is inserted above them, so there is no scroll position to preserve and
+      // nothing they are reading gets rebuilt - a fling can never be clamped mid-gesture.
       //
-      // The page owns the scroll position across a swap: the distance from the newest end is what
-      // stays constant. That is the right answer in all three cases - parked at the bottom you keep
-      // following the tail, mid-history an arriving message leaves your place alone, and sixty
-      // older messages land above the viewport where they belong. Left to the browser it is not:
-      // a reversed scroller sitting at its oldest edge gets re-pinned to that edge, so growing the
-      // window would leave the position unchanged and immediately ask to grow again.
+      // Reaching the beginning of the conversation needs no flag from the server: a page that adds
+      // nothing leaves the oldest row where it was, and that is the signal to stop asking.
       (function () {
         var chat = document.getElementById("chat");
-        var log = document.getElementById("chat-log");
-        var win = document.getElementById("chat-window");
-        if (!chat || !log || !win) return;
-        var start = ${CHAT_WINDOW_START};
-        var step = ${CHAT_WINDOW_STEP};
-        var max = ${CHAT_WINDOW_MAX};
-        var inFlight = false;
-        // #chat is reversed, so |scrollTop| is the distance from the newest end in every
-        // browser, and (scrollable span - that) is the distance left to the oldest end.
-        function distanceToOldest() {
-          return chat.scrollHeight - chat.clientHeight - Math.abs(chat.scrollTop);
+        var history = document.getElementById("chat-history");
+        var tail = document.getElementById("chat-tail");
+        if (!chat || !history || !tail) return;
+        var asking = "";
+        var atOldest = false;
+        // #chat is reversed, so |scrollTop| is the distance from the newest end in every browser,
+        // and (scrollable span - that) is the distance left to the oldest end.
+        function nearOldest() {
+          return chat.scrollHeight - chat.clientHeight - Math.abs(chat.scrollTop) <= ${HISTORY_TRIGGER_PX};
         }
-        function growIfNearTop() {
-          if (inFlight || Number(win.value) >= max) return;
-          if (!document.getElementById("chat-more")) return; // nothing older remains
-          if (chat.scrollHeight <= chat.clientHeight || distanceToOldest() > 300) return;
-          inFlight = true;
-          win.value = String(Math.min(Number(win.value) + step, max));
-          htmx.trigger(log, "chatReload");
+        function ask() {
+          if (asking || atOldest || !nearOldest()) return;
+          var before = chatOldest();
+          if (!before) return;
+          asking = before;
+          htmx.trigger(history, "chatOlder");
         }
-        function shrinkIfAtBottom() {
-          if (Math.abs(chat.scrollTop) < 40 && Number(win.value) !== start) win.value = String(start);
-        }
-        chat.addEventListener(
-          "scroll",
-          function () {
-            window.requestAnimationFrame(function () {
-              growIfNearTop();
-              shrinkIfAtBottom();
-            });
-          },
-          { passive: true },
-        );
-        var keep = 0;
-        chat.addEventListener("htmx:beforeSwap", function (e) {
-          if (e.target && e.target.id === "chat-log") keep = chat.scrollTop;
-        });
-        chat.addEventListener("htmx:afterSwap", function (e) {
-          if (e.target && e.target.id === "chat-log") chat.scrollTop = keep;
-        });
-        // Growing is a response to scrolling, never to its own completion: one gesture, one load.
-        chat.addEventListener("htmx:afterRequest", function () {
-          inFlight = false;
+        chat.addEventListener("scroll", ask, { passive: true });
+        // A tail that does not fill the viewport leaves the reader already at the oldest row, with no
+        // scrolling to be done and so no scroll event to act on.
+        tail.addEventListener("htmx:afterSwap", ask);
+        history.addEventListener("htmx:afterRequest", function () {
+          if (chatOldest() === asking) atOldest = true;
+          asking = "";
+          ask(); // still near the oldest row after a short page: keep going
         });
       })();
     </script>

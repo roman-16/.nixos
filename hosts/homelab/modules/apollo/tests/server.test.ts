@@ -89,8 +89,9 @@ function stubDeps(over: Partial<ServerDeps> = {}): ServerDeps {
     anthropic: stubAnthropic(),
     chatStore: {
       image: () => undefined,
+      older: () => ({ boundaryTime: undefined, entries: [] }),
       sync: () => {},
-      tail: () => ({ entries: [], more: false, version: "0:0" }),
+      tail: () => ({ entries: [], newest: 0 }),
     } as unknown as ServerDeps["chatStore"],
     config: { linkGraceMs: 600_000, port: 0 } as unknown as Config,
     logStore: { query: () => [], seq: 0 } as unknown as ServerDeps["logStore"],
@@ -272,8 +273,9 @@ describe("startServer routing", () => {
           id === "m1" && index === 0
             ? { bytes: Buffer.from("hello"), mimeType: "image/png" }
             : undefined,
+        older: () => ({ boundaryTime: undefined, entries: [] }),
         sync: () => {},
-        tail: () => ({ entries: [], more: false, version: "0:0" }),
+        tail: () => ({ entries: [], newest: 0 }),
       } as unknown as ServerDeps["chatStore"],
     });
     const res = await get(base, "/media/m1/0");
@@ -281,27 +283,6 @@ describe("startServer routing", () => {
     expect(res.headers.get("content-type")).toBe("image/png");
     expect(res.headers.get("cache-control")).toContain("immutable");
     expect(await res.text()).toBe("hello");
-  });
-
-  it("marks older history with #chat-more only when the window doesn't cover it", async () => {
-    const row = (id: string) =>
-      JSON.stringify({ id, message: { content: id, role: "user" }, type: "message" });
-    const base = boot({
-      chatStore: {
-        image: () => undefined,
-        sync: () => {},
-        tail: (_session: string, count: number) =>
-          count < 5
-            ? { entries: ["m3", "m4"].map(row), more: true, version: `${count}:5` }
-            : {
-                entries: ["m0", "m1", "m2", "m3", "m4"].map(row),
-                more: false,
-                version: `${count}:5`,
-              },
-      } as unknown as ServerDeps["chatStore"],
-    });
-    expect(await (await get(base, "/chat?count=2")).text()).toContain('id="chat-more"');
-    expect(await (await get(base, "/chat?count=50")).text()).not.toContain('id="chat-more"');
   });
 
   it("204s a chat poll that already shows the rendered version, and re-sends a stale one", async () => {
@@ -312,6 +293,70 @@ describe("startServer routing", () => {
     expect((await get(base, `/chat?have=${encodeURIComponent(version)}`)).status).toBe(204);
     // A render the page dropped (a swap cancelled to protect a selection) is asked for again.
     expect((await get(base, "/chat?have=stale")).status).toBe(200);
+  });
+
+  it("re-renders the tail when the history above it reaches a different day", async () => {
+    // Two tabs scrolled to different depths must not be served each other's tail: which divider the
+    // tail may draw depends on how far back that tab has loaded.
+    const base = boot();
+    const first = await (await get(base, "/chat?above=2026-07-14")).text();
+    const version = /id="chat-version"[^>]*value="([^"]*)"/.exec(first)?.[1] ?? "";
+    expect(version).toContain("2026-07-14");
+    expect(
+      (await get(base, `/chat?above=2026-07-13&have=${encodeURIComponent(version)}`)).status,
+    ).toBe(200);
+  });
+
+  describe("/chat/older", () => {
+    const row = (id: string) =>
+      JSON.stringify({
+        id,
+        message: { content: id, role: "user" },
+        timestamp: "2026-07-14T09:00:00.000Z",
+        type: "message",
+      });
+    const withHistory = (entries: string[]) => ({
+      chatStore: {
+        image: () => undefined,
+        older: (_session: string, before: string) =>
+          before === "m3"
+            ? { boundaryTime: Date.parse("2026-07-14T09:00:00.000Z"), entries }
+            : { boundaryTime: undefined, entries: [] },
+        sync: () => {},
+        tail: () => ({ entries: [], newest: 0 }),
+      } as unknown as ServerDeps["chatStore"],
+    });
+
+    it("returns the page before the cursor", async () => {
+      const base = boot(withHistory(["m1", "m2"].map(row)));
+      const res = await get(base, "/chat/older?before=m3");
+      expect(res.status).toBe(200);
+      const html = await res.text();
+      expect(html).toContain("m1");
+      expect(html).toContain("m2");
+    });
+
+    it("retires the divider the page takes over from the rows below", async () => {
+      const base = boot(withHistory(["m1"].map(row)));
+      expect(await (await get(base, "/chat/older?before=m3")).text()).toContain(
+        'id="day-2026-07-14" hx-swap-oob="delete"',
+      );
+    });
+
+    it("204s at the beginning of the conversation, which is how the client stops asking", async () => {
+      const base = boot(withHistory([]));
+      expect((await get(base, "/chat/older?before=m0")).status).toBe(204);
+    });
+
+    it("204s without a cursor rather than guessing which page was meant", async () => {
+      const base = boot(withHistory(["m1"].map(row)));
+      expect((await get(base, "/chat/older")).status).toBe(204);
+    });
+
+    it("carries no version input, because a page is fetched once and never refreshed", async () => {
+      const base = boot(withHistory(["m1"].map(row)));
+      expect(await (await get(base, "/chat/older?before=m3")).text()).not.toContain("chat-version");
+    });
   });
 
   it("notifies on the backup-alert hook and returns 204", async () => {
