@@ -78,7 +78,7 @@ In place of `--amount` it accepts the same `--fit-*`/`--target-*` sizing as `foo
 
 - **The rate is already saved** - use `food-eat` next time; same numbers, no transcribing.
 - **A saved food already has that name, with different numbers** - you estimated over real label data. It names both values so you can see how far off the guess was; the entry is still logged, so switch to `food-eat` (and remove the estimate) unless it genuinely is a different food.
-- **The same rate has now been logged three times** - the script saves it as a food itself and tells the user so. There is nothing for you to run; use `food-eat --name "..."` from then on.
+- **The same food has now been written out on three separate days** - the script saves it as a food itself and tells the user so. There is nothing for you to run; use `food-eat --name "..."` from then on. Ingredients weighed into a batch count toward those three days, so a staple can earn its entry without ever being eaten on its own.
 
 Switching to a saved food is the user's call, so ask before you do it. Saving is not yours at all: it happens by itself once a food has earned it, and otherwise only when the user asks (see below).
 
@@ -118,7 +118,13 @@ Each saved food stores its macros per 100 of a **unit** - grams by default, or `
 
 `food-get` looks a food up (`--quiet` when you just need the numbers yourself; `food-eat` resolves names itself, so it is never needed as a pre-check); `food-add` saves one and refuses without `--asked`, which says the user asked for this food to be saved, in their own words; `food-edit` corrects a saved food's numbers, unit, or name; `food-rm` deletes one. `--unit` defaults to `g`; set it for liquids/countables and the per-100 values are then per 100 of that unit.
 
-**An entry is only worth having if the food comes back.** A one-off needs no entry - `eat` logs it and scales it just the same - and the catalog fills itself from what actually repeats: the third time the same rate is logged, the script saves it. So there are exactly two ways a food gets in, and neither of them is your judgement - the script decided it had earned it, or the user asked and you passed `--asked`. Saving on first sight is a guess about the future, and those guesses are what fill a catalog with entries nobody ever eats again. `food-list` shows what each entry has earned (`3x, last 09.08`, or `never eaten, saved 04.08`), most eaten first, so anything that never came back collects at the bottom - if the list has filled up with those, offer to clear them out.
+**An entry is only worth having if the food comes back.** A one-off needs no entry - `eat` logs it and scales it just the same - and the catalog fills itself from what actually repeats: once the same food has been written out by hand on **three separate days**, the script saves it. Writing it out means either logging it with `eat` or weighing it into a batch with `prep-ingredient-add --kcal100`, since both are the same act - a rate typed in because the catalog has no entry for it. So there are exactly two ways a food gets in, and neither of them is your judgement - the script decided it had earned it, or the user asked and you passed `--asked`. Saving on first sight is a guess about the future, and those guesses are what fill a catalog with entries nobody ever uses again.
+
+**Days, not helpings.** Three of something at one sitting is one occasion, and a food that comes back comes back on another day - so five entries today count once, and a batch dates all of its ingredients, so reaching for the same thing twice while cooking counts once too. Nothing you do makes this happen faster; logging the same food three times to force a save just logs it three times.
+
+**Two foods are the same food when the name, the rate and the unit all agree.** Not the rate alone: a kitchen staple is a near-pure macronutrient, so every sugar reads 400 kcal/100g and everything calorie-free reads zero, and counting by rate would make one product of salt and xanthan gum. Not the name alone either, since one name covers milk at two fat levels. The amount plays no part - it is what the rate gets scaled by, and the thing certain to differ between two uses. So write a food's name the same way each time and the repeats will find each other; a genuinely new spelling starts its own count, and `food-add --asked` is there when the user wants it saved regardless.
+
+`food-list` shows what each entry has earned (`3 days, last 09.08`, or `never used, saved 04.08`), most used first, counted in the same days the threshold uses and counting a batch ingredient as the food coming back, so anything that genuinely never came back collects at the bottom - if the list has filled up with those, offer to clear them out.
 
 ```bash
 {baseDir}/scripts/macros.py food-get skyr
@@ -126,7 +132,7 @@ Each saved food stores its macros per 100 of a **unit** - grams by default, or `
 {baseDir}/scripts/macros.py food-add --name "Gösser Märzen" --unit ml --kcal100 42 --protein100 0.5 --fat100 0 --carbs100 3.3 --serving 500 --aliases beer --asked   # a liquid: per 100ml, 500ml default
 {baseDir}/scripts/macros.py food-edit --name skyr --kcal100 63 --serving 450   # only what you pass changes; also --unit, --rename, --aliases
 {baseDir}/scripts/macros.py food-rm --name skyr
-{baseDir}/scripts/macros.py food-list                                          # what's saved, most eaten first, with what each has earned
+{baseDir}/scripts/macros.py food-list                                          # what's saved, most used first, with what each has earned
 ```
 
 Name matching is forgiving: an exact alias wins, else a unique substring, else the closest spelling. On the logging path a lone close match is logged and announced (`read "skyer" as Skyr, plain`); when several foods match it asks you to pick, and `food-edit`/`food-rm` never act on a guess (re-run with the exact name). On a miss, check `food-list`.
@@ -167,7 +173,7 @@ A batch is built up ingredient by ingredient, and everything that leaves it is a
 {baseDir}/scripts/macros.py prep-get --name bolognese                          # ingredients, total, consumption log, % (and size) left
 ```
 
-**An ingredient is named the same three ways a meal is.** `--food <name> --amount N` for anything saved (the label writes itself, and `--unit` comes from the food); `--kcal100 ... --amount N` when you have the packet in front of you; `--kcal N` only when the total is all there is. As everywhere else, the script does the scaling - never multiply a per-100 rate by an amount to fill in `--kcal`. Amounts read back in the label (`Skyr (plain) (400g)`), and an ingredient scaled from a rate can be re-weighed later with one flag (`prep-ingredient-edit --amount 500`).
+**An ingredient is named the same three ways a meal is.** `--food <name> --amount N` for anything saved (the label writes itself, and `--unit` comes from the food); `--kcal100 ... --amount N` when you have the packet in front of you; `--kcal N` only when the total is all there is. The middle one is a food written out by hand, so it counts toward earning a saved entry exactly as `eat` does: weigh the same butter into a batch on a third separate day and the script saves it, and tells the user it did. As everywhere else, the script does the scaling - never multiply a per-100 rate by an amount to fill in `--kcal`. Amounts read back in the label (`Skyr (plain) (400g)`), and an ingredient scaled from a rate can be re-weighed later with one flag (`prep-ingredient-edit --amount 500`).
 
 `prep-add` makes an empty batch and refuses a name that's already **active** (so you never wipe one you're part-way through) - but a finished batch steps aside (it archives itself, below), so reusing its name for a fresh cook just works; a batch whose total you already know is just `prep-add` plus one `prep-ingredient-add`.
 

@@ -5,6 +5,20 @@ let
   homelabIp = "192.168.70.70";
   traderIp = "192.168.70.74";
 
+  # The push channel runs on the host, not in a VM: an alerter has to outlive what
+  # it reports, and a wedged guest kernel takes its own alerting down with it.
+  #
+  # Steps that cannot live in this repo: route ntfy.halerc.xyz -> 127.0.0.1:2586 on
+  # the token-managed tunnel in the Cloudflare dashboard; add that server in the
+  # ntfy app, log in as `roman` (ntfyPassword) and subscribe to the topic; point
+  # Beszel's Settings -> Notifications at
+  # ntfy://beszel:<ntfyBeszelPassword>@127.0.0.1:2586/homelab?scheme=http and enable
+  # its per-system alerts (disk on the trader VM above all).
+  ntfyPort = 2586;
+  ntfyTopic = "homelab";
+
+  secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
+
   rebootServer = pkgs.writeScript "reboot-server" ''
     #!${pkgs.python3}/bin/python3
     from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -120,6 +134,19 @@ in
       openFirewall = true;
 
       settings = {
+        alerting.ntfy = {
+          url = "http://127.0.0.1:${toString ntfyPort}";
+          topic = ntfyTopic;
+          token = secrets.ntfyGatusToken;
+          priority = 4;
+
+          default-alert = {
+            failure-threshold = 3;
+            success-threshold = 2;
+            send-on-resolved = true;
+          };
+        };
+
         endpoints = [
           {
             name = "Apollo";
@@ -129,6 +156,12 @@ in
             conditions = [
               "[STATUS] == 200"
               "[RESPONSE_TIME] < 5000"
+            ];
+            alerts = [
+              {
+                type = "ntfy";
+                description = "Apollo is not responding";
+              }
             ];
           }
           {
@@ -140,6 +173,13 @@ in
               "[STATUS] < 500"
               "[RESPONSE_TIME] < 10000"
             ];
+            # Delivery rides this same tunnel, so ntfy buffers the alert until it is back.
+            alerts = [
+              {
+                type = "ntfy";
+                description = "the public tunnel is not serving halerc.xyz";
+              }
+            ];
           }
           {
             name = "Home Assistant";
@@ -149,6 +189,23 @@ in
             conditions = [
               "[STATUS] < 500"
               "[RESPONSE_TIME] < 5000"
+            ];
+            alerts = [
+              {
+                type = "ntfy";
+                description = "Home Assistant is not responding";
+              }
+            ];
+          }
+          {
+            # Deliberately without an alert: it cannot page about its own transport.
+            name = "ntfy";
+            group = "Infrastructure";
+            url = "http://127.0.0.1:${toString ntfyPort}/v1/health";
+            interval = "5m";
+            conditions = [
+              "[STATUS] == 200"
+              "[BODY].healthy == true"
             ];
           }
           {
@@ -160,6 +217,12 @@ in
               "[STATUS] == 200"
               "[RESPONSE_TIME] < 5000"
             ];
+            alerts = [
+              {
+                type = "ntfy";
+                description = "the trader dashboard is unreachable (VM down or daemon dead)";
+              }
+            ];
           }
           {
             name = "Trader Backup";
@@ -167,6 +230,13 @@ in
             url = "http://${traderIp}:8080/health/backup";
             interval = "1h";
             conditions = [ "[STATUS] == 200" ];
+            alerts = [
+              {
+                type = "ntfy";
+                description = "no off-box backup has succeeded in over 26h";
+                failure-threshold = 1;
+              }
+            ];
           }
           {
             name = "Homelab SSH";
@@ -174,6 +244,12 @@ in
             url = "tcp://${homelabIp}:22";
             interval = "5m";
             conditions = [ "[CONNECTED] == true" ];
+            alerts = [
+              {
+                type = "ntfy";
+                description = "the homelab is not accepting SSH";
+              }
+            ];
           }
         ];
 
@@ -245,6 +321,22 @@ in
               };
             }
             {
+              "ntfy" = {
+                description = "Alerts & push notifications";
+                href = "https://ntfy.halerc.xyz";
+                icon = "mdi-bell-ring";
+                siteMonitor = "http://127.0.0.1:${toString ntfyPort}/v1/health";
+                statusStyle = "dot";
+
+                widget = {
+                  type = "ntfy";
+                  url = "http://127.0.0.1:${toString ntfyPort}";
+                  topic = ntfyTopic;
+                  key = secrets.ntfyHomepageToken;
+                };
+              };
+            }
+            {
               "Reboot" = {
                 description = "Restart N100 server";
                 href = "https://halerc.xyz/reboot";
@@ -283,6 +375,37 @@ in
           };
         }
       ];
+    };
+
+    # Every consumer gets the narrowest grant that works: Gatus and Beszel publish
+    # without being able to read history, Homepage reads without being able to
+    # publish, and anonymous access (the public hostname) gets nothing at all.
+    ntfy-sh = {
+      enable = true;
+
+      settings = {
+        auth-access = [
+          "beszel:${ntfyTopic}:wo"
+          "gatus:${ntfyTopic}:wo"
+          "homepage:${ntfyTopic}:ro"
+          "roman:${ntfyTopic}:rw"
+        ];
+        auth-default-access = "deny-all";
+        auth-tokens = [
+          "gatus:${secrets.ntfyGatusToken}:Gatus"
+          "homepage:${secrets.ntfyHomepageToken}:Homepage"
+        ];
+        auth-users = [
+          "beszel:${secrets.ntfyBeszelPasswordHash}:user"
+          "gatus:${secrets.ntfyGatusPasswordHash}:user"
+          "homepage:${secrets.ntfyHomepagePasswordHash}:user"
+          "roman:${secrets.ntfyPasswordHash}:user"
+        ];
+        base-url = "https://ntfy.halerc.xyz";
+        behind-proxy = true;
+        enable-login = true;
+        listen-http = "127.0.0.1:${toString ntfyPort}";
+      };
     };
 
     # Reverse proxy: single entrypoint for cloudflared tunnel

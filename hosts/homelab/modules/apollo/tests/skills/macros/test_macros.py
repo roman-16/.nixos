@@ -1117,29 +1117,31 @@ class TestFoodListUsage:
     """The catalog is worth its entries only where they come back, so the listing shows what each
     one has earned."""
 
-    def test_it_counts_how_often_a_food_was_eaten_and_when_last(self, store, capsys):
+    def test_it_counts_the_days_the_food_came_back_on(self, store, capsys):
+        set_goal()
+        add_skyr()
+        run("food-eat", "--name", "skyr", "--amount", "400", "--date", days_ago(1))
+        run("food-eat", "--name", "skyr", "--amount", "500")
+        capsys.readouterr()
+        run("food-list")
+        assert f"2 days, last {macros.dm(macros.today())}" in capsys.readouterr().out
+
+    def test_several_helpings_in_one_day_are_one_day(self, store, capsys):
+        # The same unit the threshold counts in, so the listing and the saving never disagree.
         set_goal()
         add_skyr()
         run("food-eat", "--name", "skyr", "--amount", "400")
         run("food-eat", "--name", "skyr", "--amount", "500")
         capsys.readouterr()
         run("food-list")
-        assert f"2x, last {macros.dm(macros.today())}" in capsys.readouterr().out
-
-    def test_one_helping_reads_as_once(self, store, capsys):
-        set_goal()
-        add_skyr()
-        run("food-eat", "--name", "skyr", "--amount", "400")
-        capsys.readouterr()
-        run("food-list")
-        assert "once, last" in capsys.readouterr().out
+        assert "1 day, last" in capsys.readouterr().out
 
     def test_a_food_that_never_came_back_says_so_with_the_day_it_was_saved(self, store, capsys):
         set_goal()
         add_skyr()
         capsys.readouterr()
         run("food-list")
-        assert f"never eaten, saved {macros.dm(macros.today())}" in capsys.readouterr().out
+        assert f"never used, saved {macros.dm(macros.today())}" in capsys.readouterr().out
 
     def test_the_most_eaten_lead_and_the_dead_weight_collects_at_the_end(self, store, capsys):
         set_goal()
@@ -1163,7 +1165,7 @@ class TestFoodListUsage:
         macros.save(macros.day_path("2026-05-01"), day)
         capsys.readouterr()
         run("food-list")
-        assert "once, last 01.05" in capsys.readouterr().out
+        assert "1 day, last 01.05" in capsys.readouterr().out
 
     def test_aliases_are_shown_only_where_they_add_something(self, store, capsys):
         set_goal()
@@ -1174,24 +1176,34 @@ class TestFoodListUsage:
         assert "my skyr" in out
         assert "skyr, plain," not in out  # the name itself is not repeated as an alias
 
-    def test_a_one_off_of_the_same_rate_counts_as_the_food_coming_back(self, store, capsys):
-        # The question the line answers is whether the food came back, not which command logged it.
+    def test_a_one_off_of_the_same_food_counts_as_it_coming_back(self, store, capsys):
+        # The question the line answers is whether the food came back, not which command wrote it out.
         set_goal()
         add_skyr()
         run("eat", "--item", "Skyr", "--kcal100", "64", "--protein100", "11", "--fat100", "0.1",
             "--carbs100", "4", "--amount", "200")
         capsys.readouterr()
         run("food-list")
-        assert "once, last" in capsys.readouterr().out
+        assert "1 day, last" in capsys.readouterr().out
 
-    def test_a_one_off_of_another_rate_does_not(self, store, capsys):
+    def test_an_ingredient_weighed_into_a_batch_counts_too(self, store, capsys):
+        # A staple that goes into every batch has come back as surely as a snack that gets eaten.
+        set_goal()
+        add_skyr()
+        run("prep-add", "--name", "Ice cream")
+        run("prep-ingredient-add", "--name", "ice cream", "--food", "skyr", "--amount", "1000")
+        capsys.readouterr()
+        run("food-list")
+        assert "1 day, last" in capsys.readouterr().out
+
+    def test_a_one_off_of_another_food_does_not(self, store, capsys):
         set_goal()
         add_skyr()
         run("eat", "--item", "Granola", "--kcal100", "450", "--protein100", "10",
             "--fat100", "20", "--carbs100", "55", "--amount", "100")
         capsys.readouterr()
         run("food-list")
-        assert "never eaten" in capsys.readouterr().out
+        assert "never used" in capsys.readouterr().out
 
     def test_an_empty_catalog_says_so(self, store, capsys):
         run("food-list")
@@ -1641,10 +1653,10 @@ class TestAudience:
     def test_a_food_the_script_saves_is_sent_while_the_day_stays_private(self, store, monkeypatch):
         set_goal()
         sent = self.deliver_spy(monkeypatch)
-        for _ in range(macros.REPEATS_TO_SAVE):
+        for ago in reversed(range(macros.DAYS_TO_SAVE)):
             self.invoke(monkeypatch, "eat", "--item", "Kinder", "--kcal100", "579",
                         "--protein100", "8.5", "--fat100", "35", "--carbs100", "55",
-                        "--amount", "100", "--quiet")
+                        "--amount", "100", "--date", days_ago(ago), "--quiet")
         assert len(sent) == 1
         assert 'Saved "Kinder"' in sent[0]
         assert "Target:" not in sent[0]
@@ -1739,8 +1751,13 @@ class TestSavingWhatRepeats:
 
     KINDER = ["--kcal100", "579", "--protein100", "8.5", "--fat100", "35", "--carbs100", "55"]
 
-    def eat(self, item, *extra):
-        run("eat", "--item", item, *self.KINDER, "--amount", "100", *extra)
+    def eat(self, item, *extra, ago=0):
+        run("eat", "--item", item, *self.KINDER, "--amount", "100", "--date", days_ago(ago), *extra)
+
+    def eat_on(self, *agos, item="Kinder"):
+        """One use on each of the given days back, since separate days are what earning an entry takes."""
+        for ago in agos:
+            self.eat(item, ago=ago)
 
     def notes(self):
         return "\n".join(macros.NOTES)
@@ -1756,14 +1773,20 @@ class TestSavingWhatRepeats:
 
     def test_nothing_is_saved_before_the_threshold(self, store):
         set_goal()
-        self.eat("Kinder")
-        self.eat("Kinder")
+        self.eat_on(1, 0)
         assert self.foods() == {}
 
-    def test_the_third_log_saves_it(self, store):
+    def test_three_helpings_in_one_day_are_one_occasion(self, store):
+        # A food that comes back comes back on another day. Three at one sitting is one occasion,
+        # however many entries it makes, so it earns nothing.
         set_goal()
-        for _ in range(macros.REPEATS_TO_SAVE):
+        for _ in range(5):
             self.eat("Kinder")
+        assert self.foods() == {}
+
+    def test_the_third_day_saves_it(self, store):
+        set_goal()
+        self.eat_on(2, 1, 0)
         saved = self.foods()["kinder"]
         assert saved["name"] == "Kinder"
         assert saved["per100"] == {"kcal": 579, "protein": 8.5, "fat": 35, "carbs": 55}
@@ -1771,9 +1794,9 @@ class TestSavingWhatRepeats:
 
     def test_it_is_portioned_and_measured_by_what_was_eaten(self, store):
         set_goal()
-        for _ in range(macros.REPEATS_TO_SAVE):
+        for ago in (2, 1, 0):
             run("eat", "--item", "Oat drink", "--unit", "ml", "--kcal100", "46",
-                "--protein100", "1", "--amount", "250")
+                "--protein100", "1", "--amount", "250", "--date", days_ago(ago))
         saved = self.foods()["oat drink"]
         assert saved["unit"] == "ml"
         assert saved["serving"] == 250
@@ -1781,38 +1804,50 @@ class TestSavingWhatRepeats:
     def test_it_is_aliased_by_its_own_name_alone(self, store):
         # Nothing here is guessing at how the food might be referred to later; matching is forgiving.
         set_goal()
-        for _ in range(macros.REPEATS_TO_SAVE):
-            self.eat("Kinder")
+        self.eat_on(2, 1, 0)
         assert self.foods()["kinder"]["aliases"] == ["kinder"]
 
     def test_the_save_is_stated_to_the_user(self, store, capsys):
         set_goal()
-        for _ in range(macros.REPEATS_TO_SAVE):
-            capsys.readouterr()
-            self.eat("Kinder")
+        self.eat_on(2, 1)
+        capsys.readouterr()
+        self.eat("Kinder")
         out = capsys.readouterr().out
         assert '📌 Saved "Kinder"' in out
-        assert "logged 3x now" in out
+        assert "used on 3 separate days now" in out
 
     def test_the_caller_is_told_to_use_food_eat_from_now_on(self, store):
         set_goal()
-        for _ in range(macros.REPEATS_TO_SAVE):
-            self.eat("Kinder")
+        self.eat_on(2, 1, 0)
         assert 'food-eat --name "Kinder"' in self.notes()
 
-    def test_a_differently_worded_label_still_counts_as_the_same_product(self, store):
-        # The label of the log that earned it is the one that sticks; the user can rename it.
+    def test_the_same_rate_under_another_name_is_another_food(self, store):
+        # A staple is a near-pure macronutrient, so a rate is not an identity: every sugar reads
+        # 400/0/0/100 and everything calorie-free reads zero. Counting by rate alone would make one
+        # product of salt and xanthan gum, and save it under whichever name came third.
         set_goal()
-        self.eat("Kinder Happy Hippo")
-        run("eat", "--item", "Kinder hazelnut", "--kcal100", "580", "--protein100", "8.4",
-            "--fat100", "35", "--carbs100", "55.2", "--amount", "100")
-        self.eat("Kinder pieces")
-        assert list(self.foods()) == ["kinder pieces"]
+        for ago, name in ((2, "Salt"), (1, "Xanthan gum"), (0, "Sweetener")):
+            run("eat", "--item", name, "--kcal100", "0", "--amount", "5", "--date", days_ago(ago))
+        assert self.foods() == {}
+
+    def test_the_same_name_at_another_rate_is_another_food(self, store):
+        # One name covers milk at two fat levels, so the numbers have to agree as well.
+        set_goal()
+        for ago, kcal, protein in ((2, "64", "3.2"), (1, "42", "3.5"), (0, "42", "3.5")):
+            run("eat", "--item", "Milk", "--kcal100", kcal, "--protein100", protein,
+                "--amount", "200", "--date", days_ago(ago))
+        assert self.foods() == {}
+
+    def test_punctuation_and_case_are_not_part_of_the_name(self, store):
+        set_goal()
+        for ago, name in ((2, "Skyr, plain"), (1, "skyr plain"), (0, "SKYR  Plain")):
+            run("eat", "--item", name, "--kcal100", "64", "--protein100", "11", "--amount", "500",
+                "--date", days_ago(ago))
+        assert len(self.foods()) == 1
 
     def test_it_is_saved_once_and_not_again(self, store, capsys):
         set_goal()
-        for _ in range(macros.REPEATS_TO_SAVE):
-            self.eat("Kinder")
+        self.eat_on(2, 1, 0)
         capsys.readouterr()
         macros.NOTES.clear()
         self.eat("Kinder")
@@ -1821,8 +1856,7 @@ class TestSavingWhatRepeats:
 
     def test_a_different_product_does_not_count(self, store):
         set_goal()
-        self.eat("Kinder")
-        self.eat("Kinder")
+        self.eat_on(2, 1)
         run("eat", "--item", "Granola", "--kcal100", "450", "--protein100", "10",
             "--fat100", "20", "--carbs100", "55", "--amount", "100")
         assert self.foods() == {}
@@ -1833,18 +1867,165 @@ class TestSavingWhatRepeats:
             "--fat100", "35", "--carbs100", "55", "--serving", "100", "--asked")
         self.eat("Kinder")
         notes = self.notes()
-        assert "already saved" in notes
+        assert '"Kinder Happy Hippo" is already saved' in notes
         assert 'food-eat --name "Kinder Happy Hippo"' in notes
         assert list(self.foods()) == ["kinder happy hippo"]
 
     def test_a_preview_counts_for_nothing(self, store):
         set_goal()
-        for _ in range(2):
-            self.eat("Kinder")
+        self.eat_on(2, 1)
         self.eat("Kinder", "--dry-run")
         assert self.foods() == {}
         self.eat("Kinder")
         assert list(self.foods()) == ["kinder"]
+
+
+class TestSameFood:
+    """What makes two records the same food. Both a saved food and the provenance of a use carry a
+    name, a rate and a unit under those names, so one comparison serves both."""
+
+    def rate(self, kcal=717, protein=0.9, fat=81, carbs=0.1):
+        return {"kcal": kcal, "protein": protein, "fat": fat, "carbs": carbs}
+
+    def use(self, name="Butter", unit="g", amount=115, **over):
+        return {"name": name, "unit": unit, "amount": amount, "per100": self.rate(**over)}
+
+    def test_the_same_name_rate_and_unit_is_the_same_food(self):
+        assert macros.same_food(self.use(), self.use()) is True
+
+    def test_the_amount_is_not_part_of_it(self):
+        # It is what the rate gets scaled by, and the one thing certain to differ between two uses.
+        assert macros.same_food(self.use(amount=115), self.use(amount=227)) is True
+
+    def test_the_same_rate_under_another_name_is_not(self):
+        salt = self.use(name="Salt", kcal=0, protein=0, fat=0, carbs=0)
+        gum = self.use(name="Xanthan gum", kcal=0, protein=0, fat=0, carbs=0)
+        assert macros.same_food(salt, gum) is False
+
+    def test_the_same_name_at_another_rate_is_not(self):
+        assert macros.same_food(self.use(name="Milk", kcal=64), self.use(name="Milk", kcal=42)) is False
+
+    def test_the_same_name_and_rate_in_another_unit_is_not(self):
+        assert macros.same_food(self.use(unit="g"), self.use(unit="ml")) is False
+
+    def test_case_and_punctuation_are_not_part_of_the_name(self):
+        assert macros.same_food(self.use(name="Skyr, plain"), self.use(name="skyr plain")) is True
+        assert macros.same_food(self.use(name="SKYR  Plain"), self.use(name="skyr-plain")) is True
+
+    def test_a_misread_digit_is_still_the_same_rate(self):
+        assert macros.same_food(self.use(kcal=717), self.use(kcal=719)) is True
+
+
+class TestPrepIngredientsCount:
+    """An ingredient weighed out from a rate is that rate written out by hand, exactly as a one-off
+    meal is, so it counts the same toward earning an entry."""
+
+    BUTTER = ["--kcal100", "717", "--protein100", "0.9", "--fat100", "81", "--carbs100", "0.1"]
+
+    def into(self, batch, amount="115", label="Butter", ago=0, rate=None):
+        """A batch cooked `ago` days back, with one ingredient weighed into it by hand. A batch dates
+        its own ingredients, so back-dating it is how a use lands on another day."""
+        run("prep-add", "--name", batch)
+        if ago:
+            prep = macros.load(macros.PREP_FILE, {})
+            for b in prep.values():
+                if b["name"] == batch:
+                    b["created"] = days_ago(ago)
+            macros.save(macros.PREP_FILE, prep)
+        run("prep-ingredient-add", "--name", batch, "--label", label, *(rate or self.BUTTER),
+            "--amount", amount)
+
+    def eaten(self, amount="20", label="Butter", ago=0):
+        run("eat", "--item", label, *self.BUTTER, "--amount", amount, "--date", days_ago(ago))
+
+    def foods(self):
+        return macros.load(macros.FOOD_FILE, {})
+
+    def test_two_batches_and_a_meal_earn_the_entry(self, store):
+        set_goal()
+        self.into("Dough", ago=2)
+        self.into("Cookies", ago=1)
+        assert self.foods() == {}
+        self.eaten()
+        assert list(self.foods()) == ["butter"]
+
+    def test_three_batches_earn_it_without_ever_eating_it(self, store):
+        set_goal()
+        for ago, batch in ((2, "Dough"), (1, "Cookies"), (0, "Brownies")):
+            self.into(batch, ago=ago)
+        assert list(self.foods()) == ["butter"]
+
+    def test_two_batches_in_one_day_are_one_occasion(self, store):
+        # Cooking twice on a Saturday is one day, so with a use on one other day it is two.
+        set_goal()
+        self.into("Dough")
+        self.into("Cookies")
+        self.eaten(ago=1)
+        assert self.foods() == {}
+
+    def test_it_is_measured_by_the_ingredient_that_earned_it(self, store):
+        set_goal()
+        for ago, batch, amount in ((2, "Dough", "115"), (1, "Cookies", "180"), (0, "Brownies", "227")):
+            self.into(batch, amount=amount, ago=ago)
+        saved = self.foods()["butter"]
+        assert saved["per100"]["kcal"] == 717
+        assert saved["serving"] == 227
+
+    def test_the_batch_states_the_save_to_the_user(self, store, capsys):
+        set_goal()
+        self.into("Dough", ago=2)
+        self.into("Cookies", ago=1)
+        capsys.readouterr()
+        self.into("Brownies")
+        assert '📌 Saved "Butter"' in capsys.readouterr().out
+        assert any("Butter" in line for line in macros.ANNOUNCEMENTS)
+
+    def test_afterwards_the_batch_command_is_the_one_suggested(self, store):
+        set_goal()
+        for ago, batch in ((2, "Dough"), (1, "Cookies"), (0, "Brownies")):
+            self.into(batch, ago=ago)
+        macros.NOTES.clear()
+        self.into("Shortbread")
+        notes = "\n".join(macros.NOTES)
+        assert '"Butter" is already saved' in notes
+        assert 'prep-ingredient-add --name "Shortbread" --food "Butter"' in notes
+
+    def test_a_staple_that_shares_a_rate_is_not_the_same_ingredient(self, store):
+        # Sugar, brown sugar and vanilla sugar all read 400/0/0/100 on this account.
+        set_goal()
+        sugar = ["--kcal100", "400", "--carbs100", "100"]
+        for ago, batch, label in ((2, "Dough", "Sugar"), (1, "Cookies", "Brown sugar"),
+                                  (0, "Brownies", "Vanilla sugar")):
+            self.into(batch, amount="40", label=label, ago=ago, rate=sugar)
+        assert self.foods() == {}
+
+    def test_an_ingredient_taken_from_a_saved_food_earns_nothing_new(self, store):
+        set_goal()
+        add_skyr()
+        for ago, batch in ((2, "Dough"), (1, "Cookies"), (0, "Brownies")):
+            run("prep-add", "--name", batch)
+            run("prep-ingredient-add", "--name", batch, "--food", "skyr", "--amount", "400")
+        assert list(self.foods()) == ["skyr, plain"]
+
+    def test_an_ingredient_with_only_a_total_counts_for_nothing(self, store):
+        # No rate behind it, so there is nothing to save.
+        set_goal()
+        for ago, batch in ((2, "Dough"), (1, "Cookies"), (0, "Brownies")):
+            run("prep-add", "--name", batch)
+            run("prep-ingredient-add", "--name", batch, "--label", "Butter", "--kcal", "825")
+        assert self.foods() == {}
+
+    def test_a_batch_outside_the_window_no_longer_counts(self, store):
+        # Three days of use, but the first is older than the window, so two remain.
+        set_goal()
+        self.into("Dough")
+        prep = macros.load(macros.PREP_FILE, {})
+        for batch in prep.values():
+            batch["created"] = "2025-01-01"
+        macros.save(macros.PREP_FILE, prep)
+        self.into("Cookies", ago=1)
+        self.eaten()
+        assert self.foods() == {}
 
 
 class TestSavedFoodNamed:
@@ -1910,7 +2091,7 @@ class TestGuessedOverSavedFood:
         run("eat", "--item", "Sriracha", "--kcal100", "137", "--protein100", "1.9",
             "--fat100", "0.9", "--carbs100", "28", "--amount", "10")
         notes = self.notes()
-        assert "this rate is already saved" in notes
+        assert '"Sriracha" is already saved' in notes
         assert "already exists at" not in notes
 
     def test_one_matching_macro_is_not_a_matching_rate(self, store):
@@ -1933,12 +2114,13 @@ class TestGuessedOverSavedFood:
 
     def test_repeated_guesses_never_overwrite_the_real_numbers(self, store):
         # A saved food of this name already answers for it, so the repeat rule must not save the
-        # guess over it however often the guess is typed - the label data is the better record.
+        # guess over it however many days the guess is typed on - the label data is the better record.
         set_goal()
         self.save_sriracha()
-        for _ in range(macros.REPEATS_TO_SAVE):
+        for ago in reversed(range(macros.DAYS_TO_SAVE)):
             macros.NOTES.clear()
-            self.guess()
+            run("eat", "--item", "Sriracha", "--kcal100", "93", "--amount", "10",
+                "--date", days_ago(ago))
         assert macros.load(macros.FOOD_FILE, {})["sriracha"]["per100"]["kcal"] == 137
         assert "already exists at" in self.notes()
 

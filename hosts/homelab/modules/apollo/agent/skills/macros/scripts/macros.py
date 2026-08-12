@@ -14,6 +14,7 @@ import difflib
 import io
 import json
 import os
+import re
 import secrets
 import sys
 import tempfile
@@ -40,15 +41,19 @@ DAY_START_HOUR = 4
 # The four macro keys every food, day, and portion is measured in, in display order.
 MACROS = ("kcal", "protein", "fat", "carbs")
 
-# How often the same nutrition label has to be logged as a one-off before the catalog keeps it, and
-# how far back that counting looks.
-REPEATS_TO_SAVE = 3
+# On how many separate days the same food has to be written out by hand before the catalog keeps it,
+# and how far back that counting looks. Days rather than times, because the question is whether the
+# food comes back, and three helpings at one sitting is one occasion.
+DAYS_TO_SAVE = 3
 REPEAT_WINDOW_DAYS = 90
 
-# Slack that still counts two labels as the same product. All four values must agree, so the
-# tolerance absorbs a misread digit without ever merging two genuinely different foods.
+# Slack that still counts two rates as the same numbers. All four values must agree, so the tolerance
+# absorbs a misread digit without ever merging two genuinely different rates.
 KCAL_TOLERANCE = 3
 MACRO_TOLERANCE = 0.5
+
+# Everything in a name that does not identify the food: case, punctuation and spacing.
+NAME_NOISE = re.compile(r"[^a-z0-9]+")
 
 
 def die(msg: str):
@@ -361,36 +366,85 @@ def rate_source(kind: str, name: str, per100: dict, amount, unit: str) -> dict:
 
 
 def same_per100(a: dict, b: dict) -> bool:
-    """Whether two per-100 rates describe the same product, allowing for label-reading slack."""
+    """Whether two per-100 rates are the same numbers, allowing for label-reading slack."""
     if abs(a.get("kcal", 0) - b.get("kcal", 0)) > KCAL_TOLERANCE:
         return False
     return all(abs(a.get(k, 0) - b.get(k, 0)) <= MACRO_TOLERANCE for k in ("protein", "fat", "carbs"))
 
 
-def saved_food_matching(per100: dict, unit: str):
-    """A saved food with this rate, or None - so a label already in the catalog is never typed in
-    by hand a second time."""
-    for food in load(FOOD_FILE, {}).values():
-        if food.get("unit", "g") == unit and same_per100(food.get("per100", {}), per100):
-            return food
-    return None
+def normal(name: str) -> str:
+    """A name reduced to what identifies it, so "Skyr, plain" and "skyr plain" are one name."""
+    return NAME_NOISE.sub(" ", name.lower()).strip()
 
 
-def eat_repeats(per100: dict, unit: str, upto: str) -> int:
-    """How many recent one-off entries share this rate. The entries are the count - remove one and
-    it drops by itself - so nothing separate has to be kept in step."""
+def same_food(a: dict, b: dict) -> bool:
+    """Whether two records are the same food: the same name, the same rate, the same unit. Both a
+    saved food and the provenance of a use carry those three under those names, so one comparison
+    serves wherever the question is asked.
+
+    All three are needed. The rate alone is not a food: a kitchen staple is a near-pure
+    macronutrient, so every sugar reads 400/0/0/100 and everything calorie-free reads zero, and
+    counting by rate would make one product of salt and xanthan gum. The name alone is not a food
+    either, since one name covers milk at two fat levels. The amount is deliberately not part of it:
+    it is what the rate gets scaled by, and the one thing certain to differ between two uses of the
+    same food.
+    """
+    if a.get("unit", "g") != b.get("unit", "g"):
+        return False
+    if normal(a.get("name", "")) != normal(b.get("name", "")):
+        return False
+    return same_per100(a.get("per100") or {}, b.get("per100") or {})
+
+
+def saved_food_for(foods: dict, use: dict):
+    """The saved food a hand-written use belongs to, or None - so a food already in the catalog is
+    never written out by hand a second time.
+
+    The numbers have to agree, the name only has to refer to the same thing: a deliberate entry called
+    "Skyr, plain" is what "Skyr" means. That forgiveness is safe here in a way it is not when deciding
+    what earns an entry (see same_food), because it takes a saved food to match against - so it can
+    recognise a spelling, never invent a food out of two staples that share a rate.
+    """
+    match = find(foods, use.get("name", ""))
+    if match.kind not in ("exact", "substring"):
+        return None
+    food = match.value
+    if food.get("unit", "g") != use.get("unit", "g"):
+        return None
+    return food if same_per100(food.get("per100", {}), use.get("per100") or {}) else None
+
+
+def typed_days(use: dict, upto: str) -> int:
+    """On how many separate days this food has been written out by hand lately: as a one-off meal, and
+    as an ingredient weighed into a batch. Both are the same act - a rate typed in because the catalog
+    has no entry for it - so both count toward earning one.
+
+    Days, not times: a food that comes back comes back on another day, while three helpings at one
+    sitting are one occasion however many entries they make. A batch dates all of its ingredients, so
+    reaching for the same thing twice while cooking is one day too.
+
+    The entries and the batches are the count, so removing either lowers it by itself and nothing
+    separate has to be kept in step. An ingredient carries no date of its own, so its batch dates it:
+    a batch is built over hours or days, which a window of months forgives.
+    """
     start = (parse_date(upto) - timedelta(days=REPEAT_WINDOW_DAYS)).strftime("%Y-%m-%d")
-    seen = 0
+    days = set()
     for path in sorted(DAYS_DIR.glob("*.json")) if DAYS_DIR.exists() else []:
         if not start <= path.stem <= upto:
             continue
         for entry in load(path, {}).get("entries", []):
             source = entry.get("source") or {}
-            if source.get("kind") != "eat" or source.get("unit", "g") != unit:
-                continue
-            if same_per100(source.get("per100", {}), per100):
-                seen += 1
-    return seen
+            if source.get("kind") == "eat" and same_food(use, source):
+                days.add(path.stem)
+    for batch in load(PREP_FILE, {}).values():
+        created = batch.get("created", "")
+        if not start <= created <= upto:
+            continue
+        for ingredient in batch["ingredients"]:
+            source = ingredient.get("source") or {}
+            if source.get("kind") == "eat" and same_food(use, source):
+                days.add(created)
+    return len(days)
 
 
 def saved_food_named(item: str):
@@ -401,52 +455,57 @@ def saved_food_named(item: str):
     return match.value if match.kind in ("exact", "substring") else None
 
 
-def keep_food(item: str, per100: dict, unit: str, amount):
-    """Take a one-off into the catalog, on the log that earned it. Named and portioned after what was
-    actually eaten, and aliased only by its own name, because nothing here is guessing at how the
-    food might be referred to later."""
+def keep_food(use: dict, amount):
+    """Take a hand-written food into the catalog, on the use that earned it. Named, measured and
+    portioned after what was actually written out, and aliased only by its own name, because nothing
+    here is guessing at how the food might be referred to later."""
     food = load(FOOD_FILE, {})
-    key = item.lower()
+    name, unit = use["name"], use.get("unit", "g")
+    key = name.lower()
     food[key] = {
-        "name": item,
-        "per100": {k: per100[k] for k in MACROS},
+        "name": name,
+        "per100": {k: use["per100"][k] for k in MACROS},
         "serving": amount,
         "unit": unit,
         "aliases": [key],
         "added": today(),
     }
     save(FOOD_FILE, food)
-    announce(f'📌 Saved "{item}" to your foods: logged {REPEATS_TO_SAVE}x now, default serving '
-             f"{fmt_amount(amount, unit)}. food-rm to drop it.")
-    hint(f'[macros] saved from repeats - from now on: food-eat --name "{item}"')
+    announce(f'📌 Saved "{name}" to your foods: used on {DAYS_TO_SAVE} separate days now, default '
+             f"serving {fmt_amount(amount, unit)}. food-rm to drop it.")
+    hint(f'[macros] saved from repeats - from now on: food-eat --name "{name}"')
 
 
-def reconcile_catalog(item: str, per100: dict, unit: str, amount, date: str):
-    """What the catalog makes of a one-off log: the rate is already saved, so the wrong command was
-    used; a different food already answers to this name, so the numbers were guessed over real label
-    data; or the same rate has now been logged often enough that the catalog keeps it, which it does
-    here rather than asking for it to be done. A first sighting is none of those and passes in
-    silence, because an entry is only worth having once the food has come back."""
-    saved = saved_food_matching(per100, unit)
+def reconcile_catalog(use: dict, amount, date: str, use_saved):
+    """What the catalog makes of a food written out by hand, whether that was a one-off meal or an
+    ingredient weighed into a batch: it is already saved, so the wrong command was used; a different
+    food already answers to this name, so the numbers were guessed over real label data; or it has now
+    been written out often enough that the catalog keeps it, which it does here rather than asking for
+    it to be done. A first sighting is none of those and passes in silence, because an entry is only
+    worth having once the food has come back.
+
+    `use_saved(name)` renders the command that would have used the saved food instead, since only the
+    caller knows its own grammar.
+    """
+    saved = saved_food_for(load(FOOD_FILE, {}), use)
     if saved:
-        hint(f'[macros] this rate is already saved as "{saved["name"]}" - next time: '
-             f'food-eat --name "{saved["name"]}" --amount {amount}')
+        hint(f'[macros] "{saved["name"]}" is already saved - next time: {use_saved(saved["name"])}')
         return
-    # The rate check above only fires when the numbers agree, so a guess wide of the saved food
-    # slips past it - which is exactly when the saved food was worth having. The gap between the
-    # two is the point: it says the typed numbers are wrong, not merely redundant.
-    named = saved_food_named(item)
+    # The check above needs the numbers to agree as well, so a guess wide of the saved food slips past
+    # it - which is exactly when the saved food was worth having. The gap between the two is the
+    # point: it says the typed numbers are wrong, not merely redundant.
+    named = saved_food_named(use["name"])
     if named:
         saved_unit = named.get("unit", "g")
         hint(f'[macros] a saved food "{named["name"]}" already exists at '
-             f'{named["per100"]["kcal"]} kcal/100{saved_unit}, but this was logged at '
-             f'{per100["kcal"]}. Its numbers come off the label, so prefer it unless this really '
-             f'is a different food:\n  food-eat --name "{named["name"]}" --amount {amount}')
+             f'{named["per100"]["kcal"]} kcal/100{saved_unit}, but this was written out at '
+             f'{use["per100"]["kcal"]}. Its numbers come off the label, so prefer it unless this '
+             f'really is a different food:\n  {use_saved(named["name"])}')
         return
-    # >= rather than ==, so a rate that somehow passed the threshold unsaved is taken in on its next
-    # log instead of being missed for good.
-    if eat_repeats(per100, unit, date) >= REPEATS_TO_SAVE:
-        keep_food(item, per100, unit, amount)
+    # >= rather than ==, so a food that somehow passed the threshold unsaved is taken in on its next
+    # use instead of being missed for good.
+    if typed_days(use, date) >= DAYS_TO_SAVE:
+        keep_food(use, amount)
 
 
 def append_entry(date: str, entry: dict):
@@ -624,7 +683,8 @@ def cmd_log(args):
 
 def cmd_eat(args):
     """Log a one-off food from a per-100 nutrition label (a photo), scaling it by the amount
-    here so that multiplication never happens in-model. Nothing is saved to the catalog."""
+    here so that multiplication never happens in-model. Saves nothing by itself; the catalog decides
+    that afterwards, from how often the food has been written out."""
     unit = args.unit or "g"
     per100 = {k: getattr(args, f"{k}100") for k in MACROS}
     rate = {k: v / 100 for k, v in per100.items()}
@@ -649,7 +709,8 @@ def cmd_eat(args):
             if why else None)
     emit(date, entry, dry_run=args.dry_run, lead=lead, commit=lambda: append_entry(date, entry))
     if not args.dry_run:
-        reconcile_catalog(args.item, per100, unit, amount, date)
+        reconcile_catalog(entry["source"], amount, date,
+                          use_saved=lambda name: f'food-eat --name "{name}" --amount {amount}')
 
 
 def cmd_show(args):
@@ -861,7 +922,8 @@ def cmd_food_add(args):
     if not args.asked:
         die("a saved food is kept for good, so it takes the user's say-so: pass --asked when they "
             "asked for it. A one-off needs no entry - `eat` logs and scales it just the same, and "
-            f"the catalog saves it here by itself once the same rate has been logged {REPEATS_TO_SAVE}x.")
+            f"the catalog saves it here by itself once the same food has been written out on "
+            f"{DAYS_TO_SAVE} separate days, in a meal or as an ingredient.")
     food = load(FOOD_FILE, {})
     key = args.name.lower()
     aliases = [a.strip().lower() for a in (args.aliases or "").split(",") if a.strip()]
@@ -880,47 +942,56 @@ def cmd_food_add(args):
     print(food_line(food[key]))
 
 
-def food_usage(foods: dict) -> dict:
-    """How often each saved food has been eaten and when it last was, per name.
+def food_behind(foods: dict, source: dict, item: str) -> str | None:
+    """Which saved food a record is a use of, or None. A record names its food outright, or is the
+    same food written out by hand, or - for one made before provenance was recorded - is matched on
+    the label the script itself wrote for it ("<name> (<amount>)"), which reconstructs the link rather
+    than guessing at it and only misses a food that has been renamed since."""
+    kind = source.get("kind")
+    if kind == "food":
+        return source.get("name")
+    if kind == "eat":
+        food = saved_food_for(foods, source)
+        return food["name"] if food else None
+    if not source and item:
+        return next((f["name"] for f in foods.values() if item.startswith(f'{f["name"]} (')), None)
+    return None
 
-    The catalog records what a food is, never what was done with it, so this is read from the days.
-    An entry names its food outright; a one-off logged from the same rate counts too, because the
-    question is whether the food came back and not which command said so; and an entry logged before
-    provenance was recorded is matched on the label the script itself wrote for it
-    ("<name> (<amount>)"), which reconstructs the link rather than guessing at it - it only misses a
-    food that has been renamed since.
+
+def food_usage(foods: dict) -> dict:
+    """On how many days each saved food has been used, and when it last was, per name.
+
+    The catalog records what a food is, never what was done with it, so this is read from the days and
+    the batches. Both count: the question a listing answers is whether the food came back, and a
+    staple that goes into every batch has come back as surely as a snack that gets eaten. An
+    ingredient carries no date of its own, so its batch dates it.
+
+    Days rather than helpings, and the same unit the threshold is measured in, so the listing and the
+    saving never answer the same question two ways.
     """
-    used = {f["name"]: {"last": None, "n": 0} for f in foods.values()}
-    rates = {f["name"]: (f["per100"], f.get("unit", "g")) for f in foods.values()}
+    used = {f["name"]: set() for f in foods.values()}
+
+    def count(named, when):
+        if named in used and when:
+            used[named].add(when)
+
     for path in sorted(DAYS_DIR.glob("*.json")) if DAYS_DIR.exists() else []:
         for entry in load(path, {}).get("entries", []):
-            source = entry.get("source") or {}
-            named = source.get("name") if source.get("kind") == "food" else None
-            if named is None and source.get("kind") == "eat":
-                named = next(
-                    (name for name, (per100, unit) in rates.items()
-                     if source.get("unit", "g") == unit
-                     and same_per100(source.get("per100", {}), per100)),
-                    None,
-                )
-            if named is None and not source:
-                item = entry.get("item") or ""
-                named = next((name for name in used if item.startswith(f"{name} (")), None)
-            seen = used.get(named)
-            if seen is None:
-                continue
-            seen["n"] += 1
-            seen["last"] = path.stem
-    return used
+            count(food_behind(foods, entry.get("source") or {}, entry.get("item") or ""), path.stem)
+    for batch in load(PREP_FILE, {}).values():
+        for ingredient in batch["ingredients"]:
+            count(food_behind(foods, ingredient.get("source") or {}, ""), batch.get("created", ""))
+    return {name: {"n": len(days), "last": max(days) if days else None} for name, days in used.items()}
 
 
 def usage_line(food: dict, seen: dict) -> str:
-    """What a saved food has earned, in the terms that decide whether it belongs in the catalog."""
+    """What a saved food has earned, in the terms that decide whether it belongs in the catalog: the
+    days it came back on, which is what the threshold counts too."""
     if seen["n"] == 0:
         added = food.get("added")
-        return f"never eaten, saved {dm(added)}" if added else "never eaten"
-    times = "once" if seen["n"] == 1 else f"{seen['n']}x"
-    return f"{times}, last {dm(seen['last'])}"
+        return f"never used, saved {dm(added)}" if added else "never used"
+    days = "1 day" if seen["n"] == 1 else f"{seen['n']} days"
+    return f"{days}, last {dm(seen['last'])}"
 
 
 def cmd_food_list(args):
@@ -932,7 +1003,7 @@ def cmd_food_list(args):
     # Most used first, so what the catalog is for sits at the top and what it has accumulated sits at
     # the bottom, where it can be dealt with.
     order = sorted(food.values(), key=lambda v: (-used[v["name"]]["n"], v["name"].lower()))
-    print(f"{len(order)} saved food(s), most eaten first:")
+    print(f"{len(order)} saved food(s), most used first:")
     for v in order:
         extra = [a for a in v.get("aliases", []) if a != v["name"].lower()]
         also = f"  \u00b7  {', '.join(extra)}" if extra else ""
@@ -1359,6 +1430,16 @@ def cmd_prep_ingredient_add(args):
     save(PREP_FILE, prep)
     leads.append(prep_line(batch))
     print("\n".join(leads))
+    # An ingredient weighed out from a rate is that rate written out by hand, exactly as a one-off
+    # meal is, so it counts the same. Reconciled after the save, so the ingredient just added is part
+    # of the count, and after the report, so a save reads as news under it.
+    source = ingredient.get("source") or {}
+    if source.get("kind") == "eat":
+        reconcile_catalog(
+            source, source["amount"], date,
+            use_saved=lambda name: (f'prep-ingredient-add --name "{batch["name"]}" '
+                                    f'--food "{name}" --amount {source["amount"]}'),
+        )
 
 
 def cmd_prep_ingredient_edit(args):
