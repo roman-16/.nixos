@@ -106,6 +106,8 @@
         pi.agentsMd = builtins.readFile ./AGENTS.md;
 
         home = {
+          packages = [ pkgs.libnotify ];
+
           file = {
             ".pi/agent/AGENTS.md".text = config.pi.agentsMd;
             ".pi/agent/keybindings.json".text = keybindingsJson;
