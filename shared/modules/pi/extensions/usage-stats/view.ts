@@ -142,7 +142,7 @@ function sessionTab(): TableTab<SessionRow> {
 			formatDate(row.lastTs),
 		],
 		columns,
-		defaultSort: "Cost",
+		defaultSort: "Last",
 		name: "Session",
 		rows: sessionRows,
 		sorts: sortOptions<SessionRow>(columns, [
