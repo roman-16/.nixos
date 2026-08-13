@@ -75,6 +75,8 @@ in
       let
         port = 8080;
 
+        checks = import ../monitoring/checks.nix { inherit lib pkgs; };
+
         secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
 
         protonCli = inputs.proton-cli.packages.${pkgs.stdenv.hostPlatform.system}.default;
@@ -408,6 +410,8 @@ in
 
       in
       {
+        imports = [ { systemd = checks.pushUnits "apollo"; } ];
+
         microvm = {
           hypervisor = "qemu";
           mem = 4096;
@@ -590,8 +594,11 @@ in
 
               path = gitPkgs;
 
+              onFailure = [ "${checks.failureUnitName checks.registry.apollo-workspace-backup}.service" ];
+
               serviceConfig = {
                 ExecStart = lib.getExe workspaceBackupScript;
+                ExecStartPost = checks.pushSuccess checks.registry.apollo-workspace-backup;
                 ExecStartPre = gitBootstrap;
                 Group = "apollo";
                 StateDirectory = "apollo";
@@ -607,7 +614,10 @@ in
               description = "Back up the Apollo SQLite database to Proton Drive";
 
               after = [ "network-online.target" ];
-              onFailure = [ "apollo-db-backup-alert.service" ];
+              onFailure = [
+                "apollo-db-backup-alert.service"
+                "${checks.failureUnitName checks.registry.apollo-db-backup}.service"
+              ];
               wants = [ "network-online.target" ];
 
               environment = {
@@ -617,6 +627,7 @@ in
 
               serviceConfig = {
                 ExecStart = lib.getExe dbBackupScript;
+                ExecStartPost = checks.pushSuccess checks.registry.apollo-db-backup;
                 # This unit exists to talk to Proton, so a sign-in it cannot complete
                 # ends the run here rather than at the first Drive call.
                 ExecStartPre = protonLogin;
