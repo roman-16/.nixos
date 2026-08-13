@@ -671,10 +671,10 @@ in
             };
 
             apollo-db-backup = {
-              description = "Back up the Apollo SQLite database daily at 03:30";
+              description = "Back up the Apollo SQLite database daily at 01:00";
 
               timerConfig = {
-                OnCalendar = "*-*-* 03:30:00";
+                OnCalendar = "*-*-* 01:00:00";
                 Persistent = true;
               };
 
