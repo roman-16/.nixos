@@ -106,22 +106,25 @@ function formatStatusBar(data: UsageData, theme: any): string {
 
 export default function usage(pi: ExtensionAPI) {
 	let refreshTimer: ReturnType<typeof setInterval> | undefined;
-	let cachedData: UsageData | null = null;
+	let generation = 0;
 
-	async function refreshStatus(ctx: { modelRegistry: any; ui: any }) {
+	async function refreshStatus(ctx: { modelRegistry: any; ui: any }, epoch = generation) {
 		const token = await ctx.modelRegistry.getApiKeyForProvider("anthropic");
-		if (!token || !token.includes("sk-ant-oat")) return;
+		if (epoch !== generation || !token || !token.includes("sk-ant-oat")) return;
 
-		cachedData = await fetchUsage(token);
-		if (cachedData) {
-			ctx.ui.setStatus("usage", formatStatusBar(cachedData, ctx.ui.theme));
-		}
+		const data = await fetchUsage(token);
+		if (epoch !== generation || !data) return;
+
+		ctx.ui.setStatus("usage", formatStatusBar(data, ctx.ui.theme));
 	}
 
 	function startRefreshLoop(ctx: { modelRegistry: any; ui: any }) {
 		if (refreshTimer) clearInterval(refreshTimer);
-		refreshStatus(ctx);
-		refreshTimer = setInterval(() => refreshStatus(ctx), REFRESH_INTERVAL);
+		generation++;
+		const epoch = generation;
+		void refreshStatus(ctx, epoch).catch(() => {});
+		refreshTimer = setInterval(() => void refreshStatus(ctx, epoch).catch(() => {}), REFRESH_INTERVAL);
+		refreshTimer.unref?.();
 	}
 
 	pi.on("session_start", async (_event, ctx) => {
@@ -129,7 +132,9 @@ export default function usage(pi: ExtensionAPI) {
 	});
 
 	pi.on("session_shutdown", async () => {
+		generation++;
 		if (refreshTimer) clearInterval(refreshTimer);
+		refreshTimer = undefined;
 	});
 
 	pi.registerCommand("usage", {
@@ -152,8 +157,6 @@ export default function usage(pi: ExtensionAPI) {
 				return;
 			}
 
-			// Update cached data and status bar
-			cachedData = data;
 			ctx.ui.setStatus("usage", formatStatusBar(data, ctx.ui.theme));
 
 			const limits: { title: string; limit?: UsageLimit }[] = [

@@ -1,14 +1,21 @@
-{ inputs, ... }:
+{ ... }:
 let
-  modulesDir = ./modules;
-  entries = builtins.readDir modulesDir;
-  modules = map (name: modulesDir + "/${name}") (builtins.attrNames entries);
+  hostModules = map (name: ./modules + "/${name}") (builtins.attrNames (builtins.readDir ./modules));
+
+  sharedModules = map (name: (import (../../shared/modules + "/${name}")).nixos) [
+    "git.nix"
+    "locale.nix"
+    "nix.nix"
+    "system.nix"
+    "user.nix"
+  ];
 in
 {
   imports = [
     ./hardware-configuration.nix
   ]
-  ++ modules;
+  ++ hostModules
+  ++ sharedModules;
 
   boot = {
     # Prevent host from claiming the Realtek RTL8761B BT dongle (0bda:b85b)
@@ -37,9 +44,6 @@ in
   };
 
   nix = {
-    nixPath = [ "nixpkgs=${inputs.nixpkgs}" ];
-    optimise.automatic = true;
-
     gc = {
       automatic = true;
       dates = "weekly";
@@ -47,19 +51,11 @@ in
       persistent = true;
     };
 
-    settings = {
-      experimental-features = [
-        "nix-command"
-        "flakes"
-      ];
-      trusted-users = [
-        "root"
-        "roman"
-      ];
-    };
+    settings.trusted-users = [
+      "root"
+      "roman"
+    ];
   };
-
-  nixpkgs.config.allowUnfree = true;
 
   security.sudo.wheelNeedsPassword = false;
 
@@ -114,8 +110,6 @@ in
       wantedBy = [ "timers.target" ];
     };
   };
-
-  time.timeZone = "Europe/Vienna";
 
   users.users.roman = {
     extraGroups = [
