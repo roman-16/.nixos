@@ -112,10 +112,12 @@ in
           interval = "24h";
           conditions = [ "[DOMAIN_EXPIRATION] > 720h" ];
 
+          # Two readings, because a single WHOIS lookup can fail on its own and the
+          # answer is a 30-day warning: 48h late is still 28 days early.
           alerts = [
             (ntfyAlert {
               description = "${facts.domain} expires in less than 30 days";
-              failure-threshold = 1;
+              failure-threshold = 2;
               priority = 3;
             })
           ];
@@ -295,11 +297,15 @@ in
           interval = "1h";
           conditions = [ "[STATUS] == 200" ];
 
+          # A single failure here is as likely to mean "the VM is restarting" as
+          # "the backup is stale", and only one of those is about backups. Two
+          # readings an hour apart tell them apart, and against a 26h freshness
+          # window the hour costs nothing.
           alerts = [
             (ntfyAlert {
               description = "no off-box backup has succeeded in over 26h";
               click = "https://trader.${facts.domain}";
-              failure-threshold = 1;
+              failure-threshold = 2;
             })
           ];
         }
