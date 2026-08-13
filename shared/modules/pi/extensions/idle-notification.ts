@@ -3,6 +3,8 @@ import { homedir } from "node:os";
 import { basename } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
+const INTERACTIVE_TOOLS = new Set(["questionnaire"]);
+
 const TERMINAL_DESKTOP_IDS: Record<string, string> = {
 	WezTerm: "org.wezfurlong.wezterm",
 	vscode: "code",
@@ -46,13 +48,13 @@ export default function (pi: ExtensionAPI) {
 		pending = undefined;
 	};
 
-	pi.on("agent_settled", (_event, ctx) => {
+	const notify = (ctx: ExtensionContext, status: string) => {
 		if (!notifiable(ctx)) return;
 
 		withdraw();
 
 		const title = `π · ${pi.getSessionName() ?? basename(ctx.cwd)}`;
-		const child = spawn("notify-send", notifySendArgs(title, `${homeRelative(ctx.cwd)} · ready for input`), {
+		const child = spawn("notify-send", notifySendArgs(title, `${homeRelative(ctx.cwd)} · ${status}`), {
 			stdio: "ignore",
 		});
 		const forget = () => {
@@ -64,6 +66,18 @@ export default function (pi: ExtensionAPI) {
 		child.unref();
 
 		pending = child;
+	};
+
+	pi.on("agent_settled", (_event, ctx) => {
+		notify(ctx, "ready for input");
+	});
+
+	pi.on("tool_execution_start", (event, ctx) => {
+		if (INTERACTIVE_TOOLS.has(event.toolName)) notify(ctx, "waiting for your answer");
+	});
+
+	pi.on("tool_execution_end", (event) => {
+		if (INTERACTIVE_TOOLS.has(event.toolName)) withdraw();
 	});
 
 	pi.on("agent_start", withdraw);
