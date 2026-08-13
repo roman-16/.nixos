@@ -5,7 +5,7 @@
       murmur =
         let
           uuid = "murmur@roman-16.github.io";
-          version = "1.2.1";
+          version = "1.2.2";
         in
         # Murmur is written in TypeScript, so take the built extension from the
         # release asset rather than compiling the checkout.
@@ -14,7 +14,7 @@
           inherit version;
           src = pkgs.fetchurl {
             url = "https://github.com/roman-16/murmur/releases/download/v${version}/${uuid}.shell-extension.zip";
-            hash = "sha256-fmIzdXnT3IYEB9v57wCpnGF2ym9fjbwfD5sBmHZFxys=";
+            hash = "sha256-TNZw5hZmJXJkV61JXLHwJgzxq8ftVX5IH2BVFg0irQ0=";
           };
           nativeBuildInputs = [
             pkgs.glib

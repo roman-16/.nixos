@@ -1,11 +1,13 @@
 ---
 name: changelog
-description: Maintain a project's CHANGELOG.md in Keep a Changelog 1.1.0 format - decide whether a change is notable, pick the right category, word it for the humans who use the project, and insert it under [Unreleased] without disturbing the rest of the file. Also cuts a release section (promotes [Unreleased] to a dated version and updates the compare links) and creates CHANGELOG.md for a project that has none. Use when the user asks to add or write a changelog entry, update the changelog, record a change in CHANGELOG.md, or prepare a release section. Reads git but never commits, tags, or bumps version files.
+description: Maintain a project's CHANGELOG.md in Keep a Changelog 1.1.0 format - record only what moved the project's user-facing surface (commands, flags, API, config, output, screens) and never internal work, pick the right category, word it for the humans who use the project, and insert it under [Unreleased] without disturbing the rest of the file. Also cuts a release section (promotes [Unreleased] to a dated version and updates the compare links) and creates CHANGELOG.md for a project that has none. Use when the user asks to add or write a changelog entry, update the changelog, record a change in CHANGELOG.md, or prepare a release section. Reads git but never commits, tags, or bumps version files.
 ---
 
 # Changelog
 
 Write the line a stranger reads to decide whether and how to upgrade. A changelog is a curated list of notable changes for humans, not a rendering of the git history: a commit documents a step in the source's evolution, an entry documents the difference that a user of the project can feel, often across several commits. If an entry could have been generated from `git log`, it is the wrong entry.
+
+That decision turns on one thing: what moved on the surface the reader touches - the commands they type, the calls they make, the settings they set, the screens they see. Work that leaves that surface untouched, however large, is invisible to them and belongs nowhere in this file.
 
 ## Scope
 
@@ -39,19 +41,46 @@ A new entry must be indistinguishable from the entries already there. Where the 
 
 ### 3. Establish what changed
 
-Arguments passed to the skill are the change; use them as the subject, still categorized and worded by the rules below. Otherwise derive it, in this order: the staged diff, the unstaged diff, then the commits since the last released section. Prefer what you already know from the session over re-reading diffs.
+Arguments passed to the skill are the change; use them as the subject, still filtered, categorized and worded by the rules below. Otherwise derive it, in this order: the staged diff, the unstaged diff, then the commits since the last released section. Prefer what you already know from the session over re-reading diffs.
 
-### 4. Filter down to what is notable
+### 4. Name the surface
 
-An entry is owed for anything a user can observe: features, changed behavior, changed defaults, CLI, API, config or data-format surface, dependency changes users feel, performance they notice, deprecations, removals, security fixes, and bugs that shipped.
+The surface is everything the project's consumers touch, and what it consists of depends on who they are. Establish it once from what the project shows the outside world: its README, its `--help` output, the `bin` and `exports` of its manifest, its route table, its options schema.
 
-No entry for refactors, internal renames, formatting, tests, CI, comments, or internal docs, unless they change something observable.
+| The project is | Its surface is |
+| --- | --- |
+| A CLI | Commands and subcommands, flag and argument names, prompts, stdout and stderr shape, exit codes, config file, env vars |
+| A library or SDK | Exported symbols, signatures, types, semantics, thrown errors, runtime requirements |
+| A service or API | Routes, methods, request and response schemas, status codes, headers, auth, rate limits, webhooks |
+| An app or UI | Screens, controls, flows, copy, shortcuts, notifications |
+| A system or config module | Options and their defaults, generated files and their paths, managed services, manual steps it demands |
+| Developer tooling (linter, test runner, build tool) | Its rules, its reports, its cache behavior, and the speed felt by the developer who runs it |
 
-No entry for a bug introduced and fixed inside the same unreleased cycle. It never reached anyone, so there is nothing to tell them; do not file a `Fixed` against an `Added` that is still sitting in `[Unreleased]`.
+A project with two audiences has two surfaces - a CLI that is also a library owes entries on both - and every entry names an element of one of them.
 
-Be consistent about this. A changelog that covers only some observable changes is more dangerous than none, because users treat it as the single source of truth.
+### 5. Keep only what moves the surface
 
-### 5. Categorize
+One test per candidate change: **name the surface element it moves.** A command, subcommand, flag, argument, output line or exit code; an exported signature or its semantics; an endpoint, its request or its response; a config key, env var, default, file or wire format; a screen, control, message or error text. If you cannot name one, there is no entry - not a shorter entry, none.
+
+| Candidate | Verdict |
+| --- | --- |
+| A new `--dry-run` flag | Entry, it names a flag |
+| `sync` renamed to `push` | Entry, and breaking: name the new spelling and what the reader must update |
+| Same command, different output shape | Entry, output is surface |
+| A command the reader runs is perceptibly faster | Entry, naming the command and the difference |
+| The test suite is twice as fast | No entry, nobody outside the repository runs it |
+| A module split with identical behavior | No entry |
+| A dependency bump nobody has to act on | No entry. Only when it raises a minimum runtime version, changes a requirement, or fixes a vulnerability the reader is exposed to |
+| A build or CI pipeline change | No entry, unless the project ships that pipeline |
+| Formatting, comments, coverage, internal docs | No entry |
+
+Nothing at all is a normal outcome. When the work moves no surface element, say so and write no entry; never reach for the nearest internal change to fill a section.
+
+No entry either for a bug introduced and fixed inside the same unreleased cycle. It never reached anyone, so there is nothing to tell them; do not file a `Fixed` against an `Added` that is still sitting in `[Unreleased]`.
+
+Be consistent about this. A changelog that covers only some of the surface changes is more dangerous than none, because readers treat it as the single source of truth.
+
+### 6. Categorize
 
 Six categories, always in this order. It is the specification's order, not alphabetical, and it stays that way.
 
@@ -70,10 +99,10 @@ A `Deprecated` entry names its replacement. A `Removed` or breaking entry names 
 
 One change per bullet. A single piece of work may owe entries in several categories; split it.
 
-### 6. Word it
+### 7. Word it
 
 - One line per entry, stating the effect, not the mechanism.
-- No file, function, class, or module names, no "refactored X into Y", no commit hashes. Name the user-facing thing: the command, flag, endpoint, setting, screen.
+- Open on the surface element you named, never on the file, function, class or module behind it. No "refactored X into Y", no commit hashes.
 - `Added` reads as the thing gained. `Changed`, `Deprecated`, `Removed`, `Fixed` read as a verb on the observable behavior.
 - Say why it matters when the effect alone does not carry it, in the same sentence.
 - Issue or PR references only when the file already carries them, in the file's own format.
@@ -81,7 +110,14 @@ One change per bullet. A single piece of work may owe entries in several categor
 
 ```
 Bad   - Refactored the sizing module into smaller functions.
-Good  (no entry - nothing observable changed)
+Good  (no entry - nothing on the surface moved)
+
+Bad   - Renamed the sync command handler and updated its tests.
+Good  - Renamed the `sync` command to `push`. `sync` is gone, update any scripts that call it.
+
+Bad   - Optimized the backtest engine and the test suite.
+Good  - `neh backtest` gets through a year of data in about a third of the time.
+Good  (no entry for the test suite - nobody outside the repository runs it)
 
 Bad   - Fixed bug in market.py.
 Good  - Fixed positions being sized against stale balances after a partial fill.
@@ -93,11 +129,11 @@ Bad   - Changed the config path.
 Good  - Moved configuration to `~/.config/neh/config.toml`. Move the existing file before upgrading, it is no longer read from the old path.
 ```
 
-### 7. Confirm
+### 8. Confirm
 
-Show the exact bullets under the exact headings they will land in, then ask with the `questionnaire` tool for a single `Add to CHANGELOG.md`. Any other reply is a correction: apply it, show it again, ask again.
+Show the exact bullets under the exact headings they will land in. Below them, name in one line what you dropped as internal (`skipped as internal: test-suite speedup, module split`), so a wrong drop is caught before the file is written. Then ask with the `questionnaire` tool for a single `Add to CHANGELOG.md`. Any other reply is a correction: apply it, show it again, ask again.
 
-### 8. Insert
+### 9. Insert
 
 1. Ensure `## [Unreleased]` exists as the first version heading, directly after the preamble. Create it if it is missing, along with its link reference if the file uses them.
 2. Inside `[Unreleased]`, find the `### <Category>`. If it is absent, insert the heading in canonical order among the categories already present.
