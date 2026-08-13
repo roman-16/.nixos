@@ -1,6 +1,13 @@
 {
   domain = "halerc.xyz";
-  ntfyTopic = "homelab";
+
+  # Two topics, because they answer different questions: infra is "something is
+  # broken", trader is the bot's own voice (fills, redemptions, halts). One inbox,
+  # separately mutable.
+  ntfyTopics = {
+    infra = "homelab";
+    trader = "trader";
+  };
 
   ips = {
     apollo = "192.168.70.73";

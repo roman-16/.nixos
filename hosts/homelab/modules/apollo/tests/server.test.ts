@@ -359,21 +359,6 @@ describe("startServer routing", () => {
     });
   });
 
-  it("notifies on the backup-alert hook and returns 204", async () => {
-    let notified: string | undefined;
-    const base = boot({
-      pipeline: {
-        notify: async (text: string) => {
-          notified = text;
-        },
-        state: () => ({ qr: undefined, status: "connecting", user: undefined }),
-      } as unknown as Pipeline,
-    });
-    const res = await fetch(`${base}/internal/backup-alert`, { method: "POST" });
-    expect(res.status).toBe(204);
-    expect(notified).toContain("backup FAILED");
-  });
-
   it("delivers a skill message via the loopback hook and returns the marker", async () => {
     let got: { source: string; text: string } | undefined;
     const base = boot({

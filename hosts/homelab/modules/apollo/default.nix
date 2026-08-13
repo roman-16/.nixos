@@ -313,18 +313,6 @@ in
           '';
         };
 
-        # signal-cli has no place here, so a failed backup pings the user over the same
-        # WhatsApp channel the app already owns: curl the app's localhost-only alert
-        # hook (src/index.ts), wired as the backup unit's OnFailure below.
-        dbBackupAlertScript = pkgs.writeShellApplication {
-          name = "apollo-db-backup-alert";
-          runtimeInputs = [ pkgs.curl ];
-          text = ''
-            curl --silent --show-error --fail --max-time 30 \
-              --request POST "http://127.0.0.1:${toString port}/internal/backup-alert"
-          '';
-        };
-
         # Scheduled jobs: a command run as the apollo user on a calendar schedule, with the
         # workspace and the app's localhost hook in reach. A schedule is infrastructure, so it
         # belongs here; what a job acts on (the watched products, the postcode, the coordinates) is
@@ -614,10 +602,7 @@ in
               description = "Back up the Apollo SQLite database to Proton Drive";
 
               after = [ "network-online.target" ];
-              onFailure = [
-                "apollo-db-backup-alert.service"
-                "${checks.failureUnitName checks.registry.apollo-db-backup}.service"
-              ];
+              onFailure = [ "${checks.failureUnitName checks.registry.apollo-db-backup}.service" ];
               wants = [ "network-online.target" ];
 
               environment = {
@@ -649,23 +634,6 @@ in
               };
             };
 
-            apollo-db-backup-alert = {
-              description = "Notify on WhatsApp when the Apollo SQLite backup fails";
-
-              serviceConfig = {
-                ExecStart = lib.getExe dbBackupAlertScript;
-                Type = "oneshot";
-
-                NoNewPrivileges = true;
-                ProtectHome = true;
-                ProtectSystem = "strict";
-                RestrictAddressFamilies = [
-                  "AF_INET"
-                  "AF_INET6"
-                  "AF_UNIX"
-                ];
-              };
-            };
           }
           // jobUnits jobService;
 

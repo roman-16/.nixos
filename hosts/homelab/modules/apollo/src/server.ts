@@ -24,9 +24,6 @@ import type { Pipeline } from "./pipeline";
 import { parseRange, renderTokens, renderTokensDaily, type TokenStore } from "./tokens";
 import { fetchUsage, type UsageData } from "./usage";
 
-const BACKUP_ALERT =
-  "⚠️ Apollo: nightly SQLite backup FAILED - check `journalctl -u apollo-db-backup` on the VM.";
-
 /** The Anthropic usage endpoint rate-limits hard, so fetch it at most this often. */
 const USAGE_TTL_MS = 5 * 60 * 1000;
 
@@ -413,14 +410,6 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
           error = "That code didn't work. Authorize again and paste the new code.";
         }
         return caches.summary.prime(await summaryBody(error));
-      },
-    ],
-    // Localhost-only hook the apollo-db-backup unit curls when the nightly SQLite backup fails.
-    [
-      "POST /internal/backup-alert",
-      () => {
-        void pipeline.notify(BACKUP_ALERT);
-        return new Response(null, { status: 204 });
       },
     ],
     // Localhost-only hook the backup skill curls to run the workspace backup. The git capability

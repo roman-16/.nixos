@@ -49,7 +49,7 @@ in
     settings = {
       alerting.ntfy = {
         url = "http://127.0.0.1:${toString facts.ports.ntfy}";
-        topic = facts.ntfyTopic;
+        topic = facts.ntfyTopics.infra;
         token = secrets.ntfyGatusToken;
         priority = 4;
 
