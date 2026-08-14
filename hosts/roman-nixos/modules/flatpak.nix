@@ -12,6 +12,7 @@
             inherit sha256;
           }}";
         }
+        "com.stremio.Stremio"
       ];
 
       overrides = {

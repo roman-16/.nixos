@@ -27,7 +27,6 @@
       file-roller
       qbittorrent
       gradia
-      stremio-linux-shell
     ];
 
     services.xserver.excludePackages = with pkgs; [
