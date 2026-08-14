@@ -205,6 +205,38 @@ let
       '';
     };
 
+    unclean-shutdowns = {
+      group = "Host";
+      name = "Unclean Shutdown";
+      source = "host";
+      heartbeat = "45m";
+      priority = 3;
+      description = "the machine lost power or was hard-reset";
+      probeInputs = with pkgs; [
+        coreutils
+        jq
+        smartmontools
+      ];
+      # The drive counts every stop it was not told about. The count alone says
+      # nothing (it is a lifetime total), so this reports the delta: whether power
+      # is still being lost is the question a UPS answers, and the first run only
+      # records where the count stands.
+      probe = ''
+        state="''${STATE_DIRECTORY:-/var/lib/gatus-collect}/unsafe-shutdowns"
+        current=$(smartctl --json --all /dev/nvme0 2>/dev/null \
+          | jq --exit-status '.nvme_smart_health_information_log.unsafe_shutdowns') \
+          || { echo "smartctl reported no shutdown count for /dev/nvme0"; exit 1; }
+
+        previous=$(cat "$state" 2>/dev/null || echo "$current")
+        printf '%s' "$current" >"$state"
+
+        [ "$current" -le "$previous" ] || {
+          echo "$((current - previous)) unclean shutdown(s) since the last check (lifetime total $current)"
+          exit 1
+        }
+      '';
+    };
+
     trader-backup-run = {
       group = "Jobs";
       name = "Trader Backup Run";
@@ -369,6 +401,7 @@ in
 
         serviceConfig = {
           ExecStart = collectorExe source;
+          StateDirectory = "gatus-collect";
           Type = "oneshot";
 
           NoNewPrivileges = true;

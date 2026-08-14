@@ -104,6 +104,13 @@ in
         '';
       };
 
+      # hass-vm above owns this domain end to end - it defines it, starts it if it
+      # is not running, and shuts it down gracefully on stop. libvirt-guests is a
+      # second owner for the same guest: on boot it tries to resume a domain that
+      # hass-vm has already started and fails with "Domain is already active".
+      # Nothing else here is a libvirt guest, so it has no work left to do.
+      libvirt-guests.enable = false;
+
       # Workarounds for libvirt 12.1.0 NixOS regression:
       # 1. virt-secret-init-encryption.service hardcodes /usr/bin/sh
       # 2. Same service uses `dd` which isn't in the default systemd PATH
@@ -118,10 +125,5 @@ in
   virtualisation.libvirtd = {
     allowedBridges = [ "br0" ];
     enable = true;
-
-    # Default "suspend" saves VM RAM to disk and restores on boot.
-    # This preserves crashed addon state (Z2M, Bluetooth) across host reboots —
-    # the VM resumes mid-crash instead of booting fresh with auto-start addons.
-    onShutdown = "shutdown";
   };
 }

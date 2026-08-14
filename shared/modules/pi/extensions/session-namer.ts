@@ -1,9 +1,22 @@
+import { createHash } from "node:crypto";
 import { complete, getModel } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 
 const AUTHORSHIP_ENTRY = "session-namer";
 const MAX_MESSAGES = 64;
+const QUESTIONNAIRE_TOOL = "questionnaire";
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+
+interface Authorship {
+	digest: string;
+	name: string;
+}
+
+interface QuestionnaireResult {
+	answers: { id: string; label: string }[];
+	cancelled: boolean;
+	questions: { id: string; prompt: string }[];
+}
 
 const INSTRUCTIONS = [
 	"Generate a concise title for a coding assistant session based on the user's latest messages, given in chronological order.",
@@ -42,29 +55,46 @@ function cleanName(raw: string): string {
 		.trim();
 }
 
-function authoredName(entries: SessionEntry[]): string | undefined {
-	let name: string | undefined;
+function authorship(entries: SessionEntry[]): Authorship | undefined {
+	let authored: Authorship | undefined;
 	for (const entry of entries) {
 		if (entry.type === "custom" && entry.customType === AUTHORSHIP_ENTRY) {
-			name = (entry.data as { name?: string } | undefined)?.name;
+			authored = entry.data as Authorship | undefined;
 		}
 	}
-	return name;
+	return authored;
+}
+
+function textBlocks(content: { type: string }[]): string {
+	return content
+		.filter((block): block is { type: "text"; text: string } => block.type === "text")
+		.map((block) => block.text)
+		.join("\n");
+}
+
+function questionnaireText(details: QuestionnaireResult | undefined): string {
+	if (!details || details.cancelled) return "";
+	return details.answers
+		.map((answer) => {
+			const prompt = details.questions.find((question) => question.id === answer.id)?.prompt ?? answer.id;
+			return `Answered "${prompt}" with "${answer.label}"`;
+		})
+		.join("\n");
 }
 
 function userTexts(ctx: ExtensionContext, pendingPrompt?: string): string[] {
 	const texts = ctx.sessionManager
 		.getBranch()
 		.flatMap((entry) => {
-			if (entry.type !== "message" || entry.message.role !== "user") return [];
-			const { content } = entry.message;
-			if (typeof content === "string") return [content];
-			return [
-				content
-					.filter((block) => block.type === "text")
-					.map((block) => block.text)
-					.join("\n"),
-			];
+			if (entry.type !== "message") return [];
+			const { message } = entry;
+			if (message.role === "user") {
+				return [typeof message.content === "string" ? message.content : textBlocks(message.content)];
+			}
+			if (message.role === "toolResult" && message.toolName === QUESTIONNAIRE_TOOL) {
+				return [questionnaireText(message.details)];
+			}
+			return [];
 		})
 		.map((text) => text.trim())
 		.filter((text) => text.length > 0);
@@ -80,6 +110,10 @@ function buildPrompt(texts: string[]): string {
 		.slice(-MAX_MESSAGES)
 		.map((text) => `<message>\n${text}\n</message>`)
 		.join("\n");
+}
+
+function digestOf(prompt: string): string {
+	return createHash("sha256").update(prompt).digest("hex");
 }
 
 async function generateName(ctx: ExtensionContext, prompt: string): Promise<string> {
@@ -113,7 +147,7 @@ async function generateName(ctx: ExtensionContext, prompt: string): Promise<stri
 
 export default function (pi: ExtensionAPI) {
 	let ownName: string | undefined;
-	let namedPrompt: string | undefined;
+	let namedDigest: string | undefined;
 	let naming = false;
 	let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -124,24 +158,30 @@ export default function (pi: ExtensionAPI) {
 		if (currentName && currentName !== ownName) return;
 
 		const prompt = buildPrompt(userTexts(ctx, pendingPrompt));
-		if (!prompt || prompt === namedPrompt) return;
+		if (!prompt) return;
+
+		const digest = digestOf(prompt);
+		if (digest === namedDigest) return;
 
 		naming = true;
 		try {
 			const name = await generateName(ctx, prompt);
-			namedPrompt = prompt;
-			if (!name || name === currentName) return;
-			ownName = name;
-			pi.setSessionName(name);
-			pi.appendEntry(AUTHORSHIP_ENTRY, { name });
+			namedDigest = digest;
+			if (!name) return;
+			if (name !== currentName) {
+				ownName = name;
+				pi.setSessionName(name);
+			}
+			pi.appendEntry(AUTHORSHIP_ENTRY, { digest, name });
 		} finally {
 			naming = false;
 		}
 	};
 
 	pi.on("session_start", (_event, ctx) => {
-		ownName = authoredName(ctx.sessionManager.getEntries());
-		namedPrompt = undefined;
+		const authored = authorship(ctx.sessionManager.getEntries());
+		ownName = authored?.name;
+		namedDigest = authored?.digest;
 		clearInterval(refreshTimer);
 		refreshTimer = setInterval(() => {
 			void refresh(ctx).catch(() => {});
