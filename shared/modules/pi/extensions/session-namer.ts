@@ -5,7 +5,7 @@ import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-wor
 const AUTHORSHIP_ENTRY = "session-namer";
 const MAX_MESSAGES = 64;
 const QUESTIONNAIRE_TOOL = "questionnaire";
-const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
 interface Authorship {
 	digest: string;
