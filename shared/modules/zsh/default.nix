@@ -56,23 +56,6 @@
     }:
     {
       programs = {
-        atuin = {
-          enable = true;
-          enableZshIntegration = true;
-          forceOverwriteSettings = true;
-
-          daemon.enable = true;
-
-          settings = {
-            enter_accept = true;
-
-            ai = {
-              enabled = true;
-              model = "max";
-            };
-          };
-        };
-
         carapace = {
           enable = true;
           enableZshIntegration = true;
