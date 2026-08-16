@@ -98,7 +98,7 @@ One change per bullet. A single piece of work may owe entries in several categor
 - One line per entry, stating the effect, not the mechanism.
 - Open on the surface element you named, never on the file, function, class or module behind it. No "refactored X into Y", no commit hashes.
 - `Added` reads as the thing gained. `Changed`, `Deprecated`, `Removed`, `Fixed` read as a verb on the observable behavior.
-- Say why it matters when the effect alone does not carry it, in the same sentence.
+- Short and easy to read. Take the room the reader needs to know what moved and what to do about it, and no more - the background, the mechanism and the reasoning belong in the commit, the issue or the docs.
 - Issue or PR references only when the file already carries them, in the file's own format.
 - Hyphens only, never em-dashes or en-dashes.
 
@@ -121,6 +121,9 @@ Good  - Endpoint for listing tracked markets with their current spreads.
 
 Bad   - Changed the config path.
 Good  - Moved configuration to `~/.config/neh/config.toml`. Move the existing file before upgrading, it is no longer read from the old path.
+
+Bad   - `--if-exists replace|rename|skip` on `drive items upload` answers what to do about a name Drive already has: write the bytes as a new revision, keep both under a numbered name, or leave what is there alone. Without it an upload still refuses rather than overwriting, and with `--recursive` the answer is about the folder the tree lands in rather than about each file inside it.
+Good  - `drive items upload --if-exists replace|rename|skip` picks what happens when the name is taken. Without it, an upload still refuses rather than overwriting.
 ```
 
 ### 8. Confirm

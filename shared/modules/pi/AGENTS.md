@@ -45,8 +45,10 @@ Available on the system:
 
 ### Prose
 
+- **Brevity**: Everything a person reads - replies, plans, changelog entries, commit messages, PR text - should be as short as it can be without losing anything they need. Answer first, then the details. Don't repeat what they already have: their own question, the diff, the tool output, the edits they watched you make. Don't narrate what you did or grade your own work. Never cut the things they need to act on: the caveat, the cost, what failed, the open question. Files written for another agent to act on (a handoff) are the exception - they must be complete, so they may be long, but they still get no filler.
 - **Dashes**: NEVER use em-dashes (—) or en-dashes (–). Use only hyphens (-) when a dash is genuinely needed.
 - **Line breaks**: NEVER insert manual line breaks to align text to a hypothetical maximum line width. Let lines flow and wrap naturally; only break where a break is semantically meaningful (new paragraph, list item, etc.).
+- **Readability**: Format for a human skimming it. Reach for a table, list, heading or bold run wherever it makes the content quicker to take in than a paragraph would - the goal is that it reads easily, not that it reads plainly.
 
 ## Interaction
 

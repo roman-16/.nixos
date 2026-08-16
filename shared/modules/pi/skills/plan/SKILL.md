@@ -68,11 +68,22 @@ Lead with the disagreement, never bury it in a risk list: what was asked, what y
 
 ### Explicit reasoning
 
-Make your reasoning visible in the plan: state the fundamentals you identified and how they lead to the proposed approach, so the user can check the logic rather than trust a conclusion. When you propose a rewrite over a patch, say why the fundamentals demand it.
+Make your reasoning visible in the plan: state the fundamentals you identified and how they lead to the proposed approach, so the user can check the logic rather than trust a conclusion. When you propose a rewrite over a patch, say why the fundamentals demand it. Only the fundamentals that decide something belong here - the research that led you to them does not.
 
 ## Output
 
-Produce a clear plan in whatever structure fits the task. Iterate with the user across turns. Stay read-only the entire time, even when the user asks follow-up questions or requests refinements.
+The plan is a decision document: it holds what the user needs to answer yes, no, or differently, and nothing else. Default shape:
+
+```markdown
+# What changes for the user   ← one before/after transcript per moved element, no retelling
+# Why this shape              ← the fundamentals that decide it
+# The edits                   ← what each file gets
+# Found on the way            ← one line each
+```
+
+Depart from it when the task genuinely needs another shape, never to make room for more. Never draft the artifact inside the plan - no full file bodies, no target file trees, no finished implementation the user has not approved - unless the exact text is itself the decision being made. Offer it on request.
+
+Iterate with the user across turns. Stay read-only the entire time, even when the user asks follow-up questions or requests refinements.
 
 ### Lead with what the user will see
 
@@ -107,7 +118,7 @@ Continue? [y/N]
 
 **Keep it true.** Take the before from the thing itself - `--help`, the strings in the source, golden files, docs, a screenshot, a read-only run - never from memory or plausibility, and never by running anything that mutates. Mark whatever could not be verified.
 
-**Keep it complete.** Every surface element that moves gets its own rendered before/after, however long that makes the plan - never a summary in place of a transcript, never "and similar for the other commands". The limit is the number of elements that actually move, not the length of the section. When many move, a one-line list up front helps orientation, but it never replaces the transcripts below it. When the plan changes across turns, update this section with it: it is the part that gets re-read.
+**Keep it complete.** Every surface element that moves gets its own rendered before/after - never a summary in place of a transcript, never "and similar for the other commands". Completeness is paid in transcripts, not in prose about them: the transcript carries the change, so a line of framing is all it gets. When many move, a one-line list up front helps orientation, but it never replaces the transcripts below it. When the plan changes across turns, update this section with it: it is the part that gets re-read.
 
 ### Found on the way
 
@@ -139,4 +150,14 @@ What ships is the first and only version of that code: one coherent design, exac
 
 ### Finish on green
 
-Before reporting the work as done, run whatever gates the project defines - formatter, linter, type check, tests, `nix flake check`, build - and fix what they surface until they pass. Show the result. Reporting success you did not verify hands the failure to the user.
+Before reporting the work as done, run whatever gates the project defines - formatter, linter, type check, tests, `nix flake check`, build - and fix what they surface until they pass. Reporting success you did not verify hands the failure to the user.
+
+The report is that it is done, what the gates said, and whatever needs the user - nothing else:
+
+```console
+Done. `nix fmt` clean, `nix flake check` passed.
+
+`_shared/surface.md` is untracked, so the check ran without it. `git add` needs your approval - run it?
+```
+
+The user watched the edits happen; never recap them.
