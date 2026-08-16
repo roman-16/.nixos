@@ -346,6 +346,25 @@ in
           };
         };
 
+        # A job exists to say something to the user, so it has nothing to do until the
+        # app can carry it. The catch-up run of a missed schedule lands seconds after
+        # boot, well before WhatsApp has linked, and delivery then fails - so this
+        # waits, and if the app never becomes able to deliver, the run is skipped
+        # rather than failed. ExecCondition is what draws that distinction: a job that
+        # had nothing to say is not a fault worth waking anyone for.
+        deliverable = pkgs.writeShellApplication {
+          name = "apollo-deliverable";
+          runtimeInputs = [ pkgs.curl ];
+          text = ''
+            for _ in $(seq 60); do
+              curl --silent --fail --max-time 5 "http://127.0.0.1:${toString port}/health" >/dev/null && exit 0
+              sleep 2
+            done
+            echo "the app cannot deliver messages; skipping this run"
+            exit 1
+          '';
+        };
+
         jobService = _name: job: {
           inherit (job) description;
 
@@ -363,6 +382,7 @@ in
           path = job.packages or [ ];
 
           serviceConfig = {
+            ExecCondition = lib.getExe deliverable;
             ExecStart = job.exec;
             Group = "apollo";
             NoNewPrivileges = true;

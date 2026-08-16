@@ -1,4 +1,9 @@
-{ ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   hostModules = map (name: ./modules + "/${name}") (builtins.attrNames (builtins.readDir ./modules));
 
@@ -94,20 +99,49 @@ in
       };
     };
 
-    # Daily reboot at 04:00 to keep services fresh
-    services.scheduled-reboot = {
-      description = "Scheduled daily reboot";
+    # A switch replaces everything except the kernel it is running on, and this host
+    # follows nixpkgs-unstable, so without rebooting it drifts into an old kernel
+    # under a new userland.
+    #
+    # The paths it compares are written into this unit at build time, so the unit
+    # itself changes exactly when the kernel or the initrd does - and a switch
+    # restarts changed units, which makes the reboot happen as part of installing the
+    # kernel rather than hours later on a timer. On an ordinary switch nothing here
+    # differs, the unit is left alone, and nobody is interrupted.
+    #
+    # The reboot is scheduled a minute out rather than taken immediately, so the
+    # deploy that triggered it finishes and reports success instead of dying with the
+    # connection.
+    services.reboot-for-new-kernel = {
+      description = "Reboot when a newer kernel has been installed";
+      wantedBy = [ "multi-user.target" ];
 
       serviceConfig = {
-        ExecStart = "/run/current-system/sw/bin/systemctl reboot";
+        ExecStart = lib.getExe (
+          pkgs.writeShellApplication {
+            name = "reboot-for-new-kernel";
+            runtimeInputs = with pkgs; [
+              coreutils
+              systemd
+            ];
+            text = ''
+              kernel=${config.boot.kernelPackages.kernel}/${config.system.boot.loader.kernelFile}
+              initrd=${config.system.build.initialRamdisk}/${config.system.boot.loader.initrdFile}
+
+              if [ "$(readlink /run/booted-system/kernel)" = "$kernel" ] &&
+                 [ "$(readlink /run/booted-system/initrd)" = "$initrd" ]; then
+                echo "still running the installed kernel"
+                exit 0
+              fi
+
+              echo "a newer kernel is installed; rebooting into it in a minute"
+              systemd-run --on-active=60 --unit=reboot-for-new-kernel-now systemctl reboot
+            '';
+          }
+        );
+        RemainAfterExit = true;
         Type = "oneshot";
       };
-    };
-
-    timers.scheduled-reboot = {
-      description = "Daily reboot at 04:00";
-      timerConfig.OnCalendar = "*-*-* 04:00:00";
-      wantedBy = [ "timers.target" ];
     };
   };
 

@@ -69,14 +69,6 @@ in
         interval = "60s";
       };
 
-      # The host reboots at 04:00 and takes every VM with it. Silence is the
-      # intent, not an accident of the failure thresholds.
-      maintenance = {
-        start = "03:55";
-        duration = "25m";
-        timezone = "Europe/Vienna";
-      };
-
       endpoints = [
         {
           name = "Homelab SSH";
