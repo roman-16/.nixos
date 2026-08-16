@@ -30,7 +30,7 @@ State the resolved PATH and CONTEXT back before planning so the resolution is vi
 
 The guarantee is that nothing outside the scope notices, so first pin the observable surface at the scope boundary - this is the freeze line, and everything crossing it must stay identical:
 
-- End-user surface: CLI commands/flags/output/exit codes, HTTP routes and schemas, UI/UX, public API signatures and semantics.
+- End-user surface: everything in the sibling `../_shared/surface.md` that crosses the scope boundary.
 - Config and data: accepted configuration, env vars, file formats, schemas, on-disk and wire formats.
 - Boundary API: every symbol, export, or behavior that code outside PATH depends on.
 - Observable effects: what it writes, emits, logs as contract, or calls.
@@ -63,4 +63,4 @@ Once the user authorizes implementation:
 1. Establish or confirm the behavior safety net.
 2. Rewrite the in-scope code from the ground up per the target design.
 3. Run verification and the project's quality gates (formatters, linters, type checks, tests, `nix flake check` - whatever the project defines). Fix until green.
-4. Clean up: no leftover files, no compatibility shims unless the contract needs them, no reference anywhere to the previous version. The result reads as the first and only version.
+4. Clean up: no leftover files, and no compatibility shim the frozen contract does not require.

@@ -460,11 +460,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1786906148,
-        "narHash": "sha256-dfdtLYN+x9lzVhBqICBbTLwhwXJ8YJgMPpMNJbzOreo=",
+        "lastModified": 1786911664,
+        "narHash": "sha256-gfdUYPjbA8oF9n7ERF8YWnf4QGGFhDw/u8O4XgK2CGo=",
         "owner": "roman-16",
         "repo": "proton-cli",
-        "rev": "964d59a9b5ce7b665ea86656cba992d53b388092",
+        "rev": "5f88a1bfdec18c3504643c7c948205e0cda9eaf9",
         "type": "github"
       },
       "original": {
