@@ -32,6 +32,18 @@ in
     # Soft lockups stay non-fatal on purpose: a long backup can produce one without
     # anything actually being wrong.
     kernelParams = [
+      # Eleven crash dumps recovered from the firmware say the same thing: pointers
+      # that cannot exist, an instruction pointer of 0x1, double faults, corrupted
+      # lists - state corruption scattered across unrelated subsystems, twice landing
+      # in the idle path itself, and never once accompanied by a memory or machine
+      # check error. That is what a CPU returning from a deep idle state with
+      # corrupted state looks like on Alder Lake-N.
+      #
+      # So: only C1. Deliberately blunt, because the point is a clean answer rather
+      # than a fix - if it still crashes with the deep states gone, idle is
+      # exonerated. Costs a few watts, and can be relaxed to 2 or 3 once a few weeks
+      # have passed without a reset.
+      "intel_idle.max_cstate=1"
       "nmi_watchdog=1"
       # Opportunistic: only lands when the desktop happens to be on, which is a
       # minority of the day. It costs nothing and occasionally gives us the messages
