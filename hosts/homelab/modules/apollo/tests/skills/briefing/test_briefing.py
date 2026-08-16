@@ -23,14 +23,13 @@ def event(**over):
 
 class TestCalendarWindow:
     def test_both_ends_name_the_day_itself(self):
-        # --end is the last day included. The range is only a request: what is on the day is settled
-        # by covers(), which is why the exact range carries no weight.
+        # --end is the last day included, so one day is that date twice.
         assert briefing.calendar_window(DAY) == ("2026-08-03", "2026-08-03")
 
 
 class TestCovers:
-    """What the provider returns is wider than what it was asked for, at both ends, so membership of
-    a day is decided here."""
+    """A day's events arrive whole, carrying the span of the event rather than of the part that falls
+    on the day, so membership of a day is decided here."""
 
     def test_a_timed_event_on_the_day(self):
         assert briefing.covers(event(), DAY) is True
@@ -45,10 +44,10 @@ class TestCovers:
         assert briefing.covers(late, date(2026, 8, 4)) is True
 
     def test_an_all_day_event_that_ends_where_it_starts_is_one_day(self):
-        # One of the two conventions in the same account: a recurring all-day event repeats its start.
-        piano = event(all_day=True, start="2026-08-03T00:00:00Z", end="2026-08-03T00:00:00Z")
-        assert briefing.covers(piano, DAY) is True
-        assert briefing.covers(piano, date(2026, 8, 4)) is False
+        # An event is on at least the day it starts, however its end reads.
+        marker = event(all_day=True, start="2026-08-03T00:00:00Z", end="2026-08-03T00:00:00Z")
+        assert briefing.covers(marker, DAY) is True
+        assert briefing.covers(marker, date(2026, 8, 4)) is False
 
     def test_an_all_day_event_that_ends_the_next_midnight_is_also_one_day(self):
         holiday = event(all_day=True, start="2026-08-03T00:00:00Z", end="2026-08-04T00:00:00Z")

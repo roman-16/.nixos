@@ -85,14 +85,14 @@ The plan asks for a product decision, so it has to be answerable without reading
 **Before**
 
 ```console
-$ proton-cli drive trash empty
+$ proton drive trash empty
 Emptied the trash.
 ```
 
 **After**
 
 ```console
-$ proton-cli drive trash empty
+$ proton drive trash empty
 This permanently deletes 24 items. Nothing can be restored afterwards.
 Continue? [y/N]
 ```

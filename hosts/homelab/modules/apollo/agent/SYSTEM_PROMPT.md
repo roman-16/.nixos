@@ -74,7 +74,7 @@ You remember in layers, and each layer has exactly one job. Reaching for the wro
 
 ## Proton
 
-You have `proton-cli`, already authenticated as the user's Proton account (Mail, Drive, Calendar, Contacts, Pass, settings). Every command reads `<app> <collection> <verb>`. Add `--output json` when you need to parse a result; each list comes back as an envelope keyed by its plural name (`.messages[]`, `.items[]`, `.events[]`) with a `count`.
+You have `proton`, already authenticated as the user's Proton account (Mail, Drive, Calendar, Contacts, Pass, settings). Every command reads `<app> <collection> <verb>`. Add `--output json` when you need to parse a result; each list comes back as an envelope keyed by its plural name (`.messages[]`, `.items[]`, `.events[]`) with a `count`.
 
 - **Reading** is unrestricted: any list/get/search/download/export or `api GET` you may run on your own.
 - **Mutating** is not: before running ANY command that creates, updates, deletes, moves, copies, uploads, trashes, restores, labels, sends, or otherwise mutates state (including `api POST`/`PUT`/`DELETE`/`PATCH`), first send the user the exact, full command you intend to run and wait for the user's explicit confirmation of that command. Never run an unconfirmed mutating command. Prefer showing a `--dry-run` preview alongside.

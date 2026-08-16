@@ -229,12 +229,12 @@ in
         # (same world-readable /nix/store trade-off as the git deploy keys above).
         protonPassword = pkgs.writeText "apollo-proton-password" (secrets.proton.password or "");
 
-        # An account reaches proton-cli through `account login`, which saves a session
+        # An account reaches proton through `account login`, which saves a session
         # under $HOME. Signing in again with a live session only resumes it, so a unit
         # can do this before its real work and recover on its own from a session that
         # expired or was revoked.
         protonLogin = ''
-          ${protonCli}/bin/proton-cli account login --quiet \
+          ${protonCli}/bin/proton account login --quiet \
             --user ${secrets.proton.user or ""} --password-file %d/proton-password'';
 
         protonCredential = "proton-password:${protonPassword}";
@@ -271,10 +271,10 @@ in
             # would only trade it for a confusing one.
             ensure_folder() {
               local path="$1" status=0
-              proton-cli drive items get "$path" >/dev/null 2>&1 || status=$?
+              proton drive items get "$path" >/dev/null 2>&1 || status=$?
               case "$status" in
                 0) ;;
-                3) proton-cli drive folders create "$path" >/dev/null ;;
+                3) proton drive folders create "$path" >/dev/null ;;
                 *) echo "cannot reach Drive ($path, exit $status)" >&2; exit "$status" ;;
               esac
             }
@@ -291,13 +291,13 @@ in
             ensure_folder "$remote_parent"
             ensure_folder "$remote"
             echo "uploading $(basename "$comp") ($(stat --format=%s "$comp") bytes)"
-            proton-cli drive items upload "$comp" "$remote"
+            proton drive items upload "$comp" "$remote"
 
             # Newest-first by name (UTC timestamps sort lexicographically); keep the
             # newest $keep, delete the rest in one call. Runs only after the upload
             # succeeds.
             stale="$(
-              proton-cli drive items list "$remote" --output json \
+              proton drive items list "$remote" --output json \
                 | jq --raw-output '[.items[].name | select(startswith("apollo-"))] | sort | reverse | .[]' \
                 | tail --lines=+$((keep + 1))
             )"
@@ -307,7 +307,7 @@ in
                 echo "pruning $name"
                 paths+=("$remote/$name")
               done <<<"$stale"
-              proton-cli drive items delete --yes "''${paths[@]}"
+              proton drive items delete --yes "''${paths[@]}"
             fi
             echo "backup complete"
           '';
@@ -342,7 +342,7 @@ in
             ];
             # HOME is the app's state directory, so this keeps the session the agent
             # uses alive as much as it serves the briefing's own calendar read.
-            proton = true;
+            protonSession = true;
           };
         };
 
@@ -376,7 +376,7 @@ in
             PORT = toString port;
             SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
           }
-          // lib.optionalAttrs (job.proton or false) { PROTON_NO_INPUT = "1"; }
+          // lib.optionalAttrs (job.protonSession or false) { PROTON_NO_INPUT = "1"; }
           // (job.environment or { });
 
           path = job.packages or [ ];
@@ -392,7 +392,7 @@ in
             User = "apollo";
             WorkingDirectory = "%S/apollo";
           }
-          // lib.optionalAttrs (job.proton or false) {
+          // lib.optionalAttrs (job.protonSession or false) {
             # Leading "-": a job does more than talk to Proton, so an unreachable
             # Proton costs it that part of its work rather than the whole run.
             ExecStartPre = "-${protonLogin}";
@@ -617,7 +617,7 @@ in
             };
 
             # Runs as root (no DynamicUser) so it can read the apollo-owned DB; its
-            # own StateDirectory doubles as proton-cli's HOME for the session cache.
+            # own StateDirectory doubles as proton's HOME for the session cache.
             apollo-db-backup = {
               description = "Back up the Apollo SQLite database to Proton Drive";
 

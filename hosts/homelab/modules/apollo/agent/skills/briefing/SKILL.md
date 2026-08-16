@@ -20,7 +20,7 @@ The briefing is a fixed digest of the current day, not a way to answer questions
 | They ask                                | Use                                                          |
 | --------------------------------------- | ------------------------------------------------------------ |
 | weather, rain, sun, how long the day is | the **weather** skill                                        |
-| what's on today, when is X, am I free   | `proton-cli calendar events list` (see the **proton** skill) |
+| what's on today, when is X, am I free   | `proton calendar events list` (see the **proton** skill) |
 | is X on offer, what's cheap this week   | the **offers** skill                                         |
 
 Only "send me the briefing" and the like call for this script.

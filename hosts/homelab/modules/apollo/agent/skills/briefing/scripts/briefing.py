@@ -14,8 +14,9 @@ sky, and a missing calendar would look exactly like a free day.
 The calendar it speaks for is the default one, where new events land, because a briefing is for what
 the day asks of its reader and not for every calendar they can see - a holiday feed and a habit
 tracker between them would bury the appointments. Which calendar that is comes from the account, so
-there is nothing to configure and nothing to keep in step. What day an event is on is decided here
-rather than taken from the provider's range, which overlaps generously at both ends.
+there is nothing to configure and nothing to keep in step. An event that runs across several days
+comes back whole, so what the day sees of it - whether it is on the day at all, and which of its
+hours are - is worked out here.
 """
 
 from __future__ import annotations
@@ -91,19 +92,19 @@ def fetch_offers() -> str | None:
 
 def calendar_window(day: date) -> tuple:
     """The range that means "this day": both ends name the day itself, since --end is the last day
-    included. It is only ever a request - the reply carries whatever overlaps it, and a day past it -
-    so what is on the day is settled by covers() rather than by the range."""
+    included. Everything overlapping the day comes back, a multi-day event among them, carrying the
+    start and end of the whole event rather than of the part that falls on the day."""
     return day.isoformat(), day.isoformat()
 
 
 def read_events(out: str) -> list | None:
-    """The events in a listing, or None when the reply is not one. Every proton-cli collection comes
+    """The events in a listing, or None when the reply is not one. Every proton collection comes
     back as an envelope keyed by its plural name, so an empty day is [] and None means the calendar
     could not be read - a distinction the briefing reports differently."""
     try:
         payload = json.loads(out or "{}")
     except json.JSONDecodeError as error:
-        print(f"proton-cli returned unreadable json: {error}", file=sys.stderr)
+        print(f"proton returned unreadable json: {error}", file=sys.stderr)
         return None
     events = payload.get("events") if isinstance(payload, dict) else None
     return events if isinstance(events, list) else None
@@ -126,10 +127,9 @@ def local(when: datetime) -> datetime:
 def event_days(event: dict) -> tuple | None:
     """The first and last day an event is on, or None when its start cannot be read.
 
-    An all-day event's end is the midnight it stops at, so its last day is the day before that -
-    except where the provider repeats the start instead, which is the other convention in the same
-    account (a recurring "Piano" ends where it starts; a public holiday ends the next midnight).
-    Taking the later of the two readings satisfies both without stretching a one-day event over two.
+    An event is on at least the day it starts, and on every day up to the last instant still inside
+    it. An end is the moment the event stops rather than a day it reaches into, so an end at midnight
+    belongs to the day before.
     """
     start = moment(event.get("start"))
     if start is None:
@@ -150,10 +150,10 @@ def event_days(event: dict) -> tuple | None:
 
 
 def covers(event: dict, day: date) -> bool:
-    """Whether an event is on this day at all. This is what decides membership, because the range the
-    provider was asked for is not the range it answers with. An event whose start cannot be read is on
-    no day: printing it under today would be a guess, and a guess is what fills a briefing with other
-    days' events."""
+    """Whether an event is on this day at all. A multi-day event arrives whole, and the day an hour
+    belongs to is a matter of the zone it is read in rather than of the timestamp as written, so
+    membership is settled here. An event whose start cannot be read is on no day: printing it under
+    today would be a guess, and a guess is what fills a briefing with other days' events."""
     span = event_days(event)
     if span is None:
         print(f"skipping an event with an unreadable start: {event.get('title')!r}", file=sys.stderr)
@@ -164,14 +164,14 @@ def covers(event: dict, day: date) -> bool:
 def default_calendar() -> str | None:
     """The calendar the briefing speaks for: the one new events land in. Read from the account rather
     than configured, so it follows the account when it changes and there is nothing to set up."""
-    out = run(["proton-cli", "calendar", "settings", "get", "--output", "json", "--quiet"],
+    out = run(["proton", "calendar", "settings", "get", "--output", "json", "--quiet"],
               CALENDAR_TIMEOUT)
     if out is None:
         return None
     try:
         payload = json.loads(out or "{}")
     except json.JSONDecodeError as error:
-        print(f"proton-cli returned unreadable json: {error}", file=sys.stderr)
+        print(f"proton returned unreadable json: {error}", file=sys.stderr)
         return None
     calendar = payload.get("default_calendar") if isinstance(payload, dict) else None
     return calendar if isinstance(calendar, str) and calendar else None
@@ -184,7 +184,7 @@ def fetch_events(day: date) -> list | None:
     if calendar is None:
         return None
     start, end = calendar_window(day)
-    out = run(["proton-cli", "calendar", "events", "list", "--start", start, "--end", end,
+    out = run(["proton", "calendar", "events", "list", "--start", start, "--end", end,
                "--calendar", calendar, "--output", "json", "--quiet"], CALENDAR_TIMEOUT)
     if out is None:
         return None
