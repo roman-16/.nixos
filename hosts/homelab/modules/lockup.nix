@@ -1,17 +1,16 @@
 { ... }:
-let
-  facts = import ../facts.nix;
-in
 {
-  # This machine locks up hard roughly every eleven days: no console, no SysRq, no
-  # log line, nothing written to disk because the log lives on the disk that stops
-  # answering. Fifteen of them since March cost about 76 hours of downtime, almost
-  # all of it spent waiting for someone to notice.
+  # This machine crashes roughly every eleven days. It was never a silent hang: the
+  # firmware had been keeping the crash dumps all along, and the eleven recovered
+  # from it show state corruption scattered across unrelated subsystems. What made
+  # it look like a hang is that the first oops did not stop the machine - it limped
+  # on with corrupted state, cascading (667 oopses on one occasion) until nothing
+  # worked, and then sat there until someone noticed hours later.
   #
-  # Two problems, two answers. Recovery: the chipset timer resets the board when the
-  # kernel stops petting it, so an outage lasts a minute instead of a day. Evidence:
-  # the kernel's last words have to leave the machine over the network, because
-  # every path through the disk is exactly the one that fails.
+  # Two problems, two answers. Recovery: the first oops now takes the machine down
+  # and the chipset timer catches whatever manages to hang anyway, so an outage
+  # lasts a minute instead of a day. Evidence: every crash writes itself to the
+  # firmware, where the next boot collects it.
   boot = {
     kernelModules = [ "iTCO_wdt" ];
 
@@ -39,16 +38,13 @@ in
       # check error. That is what a CPU returning from a deep idle state with
       # corrupted state looks like on Alder Lake-N.
       #
-      # So: only C1. Deliberately blunt, because the point is a clean answer rather
-      # than a fix - if it still crashes with the deep states gone, idle is
-      # exonerated. Costs a few watts, and can be relaxed to 2 or 3 once a few weeks
-      # have passed without a reset.
-      "intel_idle.max_cstate=1"
+      # So: the shallow states only, and nothing that lets the package descend.
+      # The value counts states rather than naming them, and with Enhanced C-states
+      # enabled in firmware the driver marks plain C1 unusable in favour of C1E - so
+      # 1 leaves nothing behind at all and the CPU busy-spins at 75 degrees. 2 keeps
+      # C1E and stops short of C6.
+      "intel_idle.max_cstate=2"
       "nmi_watchdog=1"
-      # Opportunistic: only lands when the desktop happens to be on, which is a
-      # minority of the day. It costs nothing and occasionally gives us the messages
-      # live rather than after the reboot.
-      "netconsole=6666@${facts.ips.homelab}/br0,6666@192.168.68.52/04:7c:16:e6:d7:e2"
     ];
 
     kernel.sysctl = {
