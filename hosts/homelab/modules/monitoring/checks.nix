@@ -205,22 +205,26 @@ let
       '';
     };
 
-    unclean-shutdowns = {
+    unexpected-reset = {
       group = "Host";
-      name = "Unclean Shutdown";
+      name = "Unexpected Reset";
       source = "host";
       heartbeat = "45m";
       priority = 3;
-      description = "the machine lost power or was hard-reset";
+      description = "the machine froze and reset itself (the watchdog, most likely)";
       probeInputs = with pkgs; [
         coreutils
         jq
         smartmontools
       ];
-      # The drive counts every stop it was not told about. The count alone says
-      # nothing (it is a lifetime total), so this reports the delta: whether power
-      # is still being lost is the question a UPS answers, and the first run only
-      # records where the count stands.
+      # The drive counts every stop it was not told about, which a scheduled reboot
+      # is not and a watchdog reset is. Once the watchdog turns a lockup into a
+      # sixty-second blip, nothing else notices one happened at all: too short for
+      # the dead man's switch, too short for the service checks. This is what keeps
+      # count, and therefore what says whether a future mitigation worked.
+      #
+      # The lifetime total means nothing on its own, so the delta is the signal and
+      # the first run only records where the count stands.
       probe = ''
         state="''${STATE_DIRECTORY:-/var/lib/gatus-collect}/unsafe-shutdowns"
         current=$(smartctl --json --all /dev/nvme0 2>/dev/null \
@@ -231,7 +235,7 @@ let
         printf '%s' "$current" >"$state"
 
         [ "$current" -le "$previous" ] || {
-          echo "$((current - previous)) unclean shutdown(s) since the last check (lifetime total $current)"
+          echo "$((current - previous)) unexpected reset(s) since the last check (lifetime total $current)"
           exit 1
         }
       '';
