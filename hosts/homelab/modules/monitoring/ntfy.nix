@@ -7,9 +7,9 @@ in
   # The push channel runs on the host, not in a VM: an alerter has to outlive what
   # it reports, and a wedged guest kernel takes its own alerting down with it.
   #
-  # It listens on the LAN rather than on loopback so a guest can publish without
-  # leaving the building. Going out through the tunnel would mean an alert path that
-  # fails exactly when the tunnel is what broke.
+  # It listens on the LAN so a guest can publish without leaving the building. Going
+  # out through the tunnel would mean an alert path that fails exactly when the
+  # tunnel is what broke.
   #
   # Steps that cannot live in this repo: route ntfy.halerc.xyz -> 127.0.0.1:2586 on
   # the token-managed tunnel in the Cloudflare dashboard; add that server in the

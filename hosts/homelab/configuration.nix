@@ -105,9 +105,9 @@ in
     #
     # The paths it compares are written into this unit at build time, so the unit
     # itself changes exactly when the kernel or the initrd does - and a switch
-    # restarts changed units, which makes the reboot happen as part of installing the
-    # kernel rather than hours later on a timer. On an ordinary switch nothing here
-    # differs, the unit is left alone, and nobody is interrupted.
+    # restarts changed units, which makes the reboot part of installing the kernel.
+    # On an ordinary switch nothing here differs, the unit is left alone, and nobody
+    # is interrupted.
     #
     # The reboot is scheduled a minute out rather than taken immediately, so the
     # deploy that triggered it finishes and reports success instead of dying with the

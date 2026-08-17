@@ -302,10 +302,10 @@ in
           ];
         }
         {
-          # The Zigbee coordinator is a USB device passed through to a VM that reboots
-          # every night, and a passthrough that loses the race leaves Home Assistant
-          # up with every Zigbee device dead. Zigbee2mqtt's own bridge state is what
-          # knows the difference.
+          # The Zigbee coordinator is a USB device passed through to a VM, and a
+          # passthrough that loses the race on boot leaves Home Assistant up with
+          # every Zigbee device dead. Zigbee2mqtt's own bridge state is what knows
+          # the difference.
           name = "Zigbee";
           group = "Services";
           url = "http://${facts.ips.hass}:8123/api/states/binary_sensor.zigbee2mqtt_bridge_connection_state";

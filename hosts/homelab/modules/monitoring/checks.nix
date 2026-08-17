@@ -217,12 +217,11 @@ let
         gnugrep
         systemd
       ];
-      # Once the watchdog turns a lockup into a ninety-second blip, nothing else
-      # notices it happened: too short for the dead man's switch, too short for the
-      # service checks, and a warm reset never cuts power to the drive, so the SMART
-      # counter this used to read stays put. What does distinguish them is that a
-      # shutdown writes something before it goes and a reset writes nothing - so the
-      # question is whether the previous boot ended, or simply stopped.
+      # A machine that crashes and recovers is back within about ninety seconds,
+      # which is too short for the dead man's switch and too short for the service
+      # checks - so without this, it says nothing at all. What separates a crash from
+      # a deploy is that a shutdown writes something before it goes and a reset writes
+      # nothing, so the question is whether the previous boot ended or simply stopped.
       #
       # This reports once per unexpected boot: the boot ID is remembered, and only a
       # change to it asks the question.
