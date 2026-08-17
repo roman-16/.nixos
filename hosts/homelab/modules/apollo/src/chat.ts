@@ -5,7 +5,7 @@
  * treated as a linear sequence.
  */
 
-import { escapeHtml, humanTokens, truncate } from "./format";
+import { escapeHtml, humanBytes, humanTokens, truncate } from "./format";
 import { splitInternal, splitUserContext } from "./messages";
 
 import { type ContextNote, withContext } from "./temporal";
@@ -20,6 +20,13 @@ export interface ChatImage {
   id: string;
   index: number;
   mimeType: string;
+}
+
+/** A file the chat exchanged. It is on the phone and on disk, so only what it was is recorded. */
+export interface ChatFile {
+  mimeType: string;
+  name: string;
+  size: number;
 }
 
 /**
@@ -40,7 +47,14 @@ export type LogItem = { entry?: string } & (
   | { kind: "compaction"; summary: string; time?: string; tokensBefore: number | undefined }
   | { kind: "divider"; label: string; time?: string }
   | { kind: "internal"; text: string; time?: string }
-  | { images: ChatImage[]; kind: "skill"; source: string; text: string; time?: string }
+  | {
+      files: ChatFile[];
+      images: ChatImage[];
+      kind: "skill";
+      source: string;
+      text: string;
+      time?: string;
+    }
   | { kind: "thinking"; text: string; time?: string }
   | {
       args: Record<string, unknown>;
@@ -79,6 +93,22 @@ function splitContent(content: unknown, id: string): { images: ChatImage[]; text
     }
   }
   return { images, text: texts.join("\n").trim() };
+}
+
+/** The files a skill message recorded, ignoring anything in the list that is not one. */
+function readFiles(value: unknown): ChatFile[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((one: Record<string, unknown>) =>
+    typeof one?.name === "string"
+      ? [
+          {
+            mimeType: typeof one.mimeType === "string" ? one.mimeType : "",
+            name: one.name,
+            size: typeof one.size === "number" ? one.size : 0,
+          },
+        ]
+      : [],
+  );
 }
 
 function toolResult(message: Record<string, any>): ToolResult {
@@ -171,10 +201,16 @@ export function parseTranscript(jsonl: string): LogItem[] {
       continue;
     }
     if (entry.type === "custom" && entry.customType === "skill_message") {
-      const data = (entry.data ?? {}) as { images?: unknown; source?: unknown; text?: unknown };
+      const data = (entry.data ?? {}) as {
+        files?: unknown;
+        images?: unknown;
+        source?: unknown;
+        text?: unknown;
+      };
       const { images } = splitContent(Array.isArray(data.images) ? data.images : [], id);
       items.push({
         entry: id,
+        files: readFiles(data.files),
         images,
         kind: "skill",
         source: typeof data.source === "string" ? data.source : "skill",
@@ -402,6 +438,20 @@ function images(list: ChatImage[]): string {
   return `<div class="mt-1 flex flex-wrap gap-2">${tags}</div>`;
 }
 
+/** What a file looked like in the bubble: its name and size, the way WhatsApp shows one. */
+function fileChips(list: ChatFile[]): string {
+  return list
+    .map(
+      (file) =>
+        `<div class="mt-1 flex items-center gap-2 rounded-xl border border-white/10 bg-neutral-950/40 px-3 py-2">
+      <span class="shrink-0 text-xs">\u{1f4ce}</span>
+      <span class="min-w-0 truncate font-mono text-xs text-neutral-200">${escapeHtml(file.name)}</span>
+      <span class="ml-auto shrink-0 text-[11px] text-neutral-500">${humanBytes(file.size)}</span>
+    </div>`,
+    )
+    .join("");
+}
+
 function toolBadge(item: Extract<LogItem, { kind: "tool" }>, running: boolean): string {
   if (item.hasResult) {
     return item.isError
@@ -458,10 +508,13 @@ export function copyText(item: LogItem): string {
     case "internal":
       return `${lead}Apollo (internal, not sent): ${item.text}`;
     case "skill": {
-      const note =
-        item.images.length > 0
-          ? `${item.text ? " " : ""}[${item.images.length} image${item.images.length > 1 ? "s" : ""}]`
-          : "";
+      const marks = [
+        ...item.files.map((file) => `[file: ${file.name}]`),
+        ...(item.images.length > 0
+          ? [`[${item.images.length} image${item.images.length > 1 ? "s" : ""}]`]
+          : []),
+      ];
+      const note = marks.length > 0 ? `${item.text ? " " : ""}${marks.join(" ")}` : "";
       return `${lead}Apollo (via ${item.source}): ${item.text}${note}`;
     }
     case "thinking":
@@ -534,7 +587,7 @@ function renderItem(item: LogItem, running = false): string {
         "rounded-2xl rounded-bl-sm border border-indigo-400/30 bg-neutral-800/80 text-neutral-100",
         `<div class="mb-1"><span class="rounded bg-indigo-500/20 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-indigo-200">via ${escapeHtml(
           item.source,
-        )}</span></div>${item.text ? textBlock(item.text) : ""}${images(item.images)}`,
+        )}</span></div>${item.text ? textBlock(item.text) : ""}${fileChips(item.files)}${images(item.images)}`,
         item.time,
         attrs,
       );

@@ -5,6 +5,8 @@ import {
   claudeErrorNotice,
   deliveredMarker,
   failedMarker,
+  fileContextNote,
+  fileMark,
   formatLogNotice,
   isAllowed,
   jidForNumber,
@@ -279,15 +281,21 @@ describe("skillContextNote", () => {
   });
 
   it("names an image as an image, with its caption as the body", () => {
-    const note = skillContextNote("diagram", "how a message reaches you", true);
+    const note = skillContextNote("diagram", "how a message reaches you", "image");
     expect(note.info).toBe("The diagram skill sent the user an image directly.");
     expect(note.body).toBe("how a message reaches you");
   });
 
-  it("still describes an uncaptioned image as an image", () => {
-    const note = skillContextNote("diagram", "", true);
-    expect(note.info).toContain("an image");
-    expect(note.body).toBe("");
+  it("names a file as a file", () => {
+    const note = skillContextNote("files", "12 notes from your vault", "file");
+    expect(note.info).toBe("The files skill sent the user a file directly.");
+    expect(note.body).toBe("12 notes from your vault");
+  });
+
+  it("still describes an uncaptioned attachment for what it was", () => {
+    expect(skillContextNote("diagram", "", "image").info).toContain("an image");
+    expect(skillContextNote("files", "", "file").info).toContain("a file");
+    expect(skillContextNote("files", "", "file").body).toBe("");
   });
 
   it("keeps a long (under-cap) message intact in the body", () => {
@@ -299,6 +307,61 @@ describe("skillContextNote", () => {
 
   it("truncates only a very long body", () => {
     expect(skillContextNote("macros", "x".repeat(5000)).body).toContain("more chars");
+  });
+});
+
+describe("fileMark", () => {
+  it("reads like the document bubble did on the phone", () => {
+    expect(fileMark("Handbook.pdf")).toBe("📎 Handbook.pdf");
+  });
+});
+
+describe("fileContextNote", () => {
+  const landed = {
+    mimeType: "application/pdf",
+    name: "Handbook.pdf",
+    path: "/var/lib/apollo/files/8f21c4a9/Handbook.pdf",
+    size: 2_306_867,
+  };
+
+  it("tags itself as a file and gives the path, which is the whole point", () => {
+    const note = fileContextNote(landed, 30);
+    expect(note.source).toBe("file");
+    expect(note.info).toContain("Handbook.pdf");
+    expect(note.info).toContain("2.2 MB");
+    expect(note.info).toContain("application/pdf");
+    expect(note.info).toContain(landed.path);
+  });
+
+  it("says it is a file rather than something Apollo can see", () => {
+    expect(fileContextNote(landed, 30).body).toContain("not something I can see");
+  });
+
+  it("names the deadline and where things have to be moved to survive it", () => {
+    const body = fileContextNote(landed, 14).body;
+    expect(body).toContain("14 days");
+    expect(body).toContain("working directory or the vault");
+  });
+
+  it("says plainly when a file never landed, and why", () => {
+    const note = fileContextNote(
+      {
+        mimeType: "video/mp4",
+        name: "holiday.mp4",
+        problem: "it is 612.0 MB, and I stop at 100.0 MB",
+        size: 642_000_000,
+      },
+      30,
+    );
+    expect(note.info).toContain("could not take it");
+    expect(note.info).toContain("612.0 MB");
+    expect(note.body).toContain("not on this machine");
+    expect(note.body).not.toContain("days");
+  });
+
+  it("still says something when a refusal carries no reason", () => {
+    const note = fileContextNote({ mimeType: "", name: "x.bin", size: 0 }, 30);
+    expect(note.info).toContain("did not arrive");
   });
 });
 

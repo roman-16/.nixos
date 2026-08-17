@@ -1,4 +1,5 @@
-import { truncate } from "./format";
+import type { ReceivedFile } from "./files";
+import { humanBytes, truncate } from "./format";
 
 import type { LogRecord } from "./logs";
 import { type ContextNote, describeDelay, stamp } from "./temporal";
@@ -107,6 +108,43 @@ export function voiceFailure(): string {
 }
 
 /**
+ * How a file reads in the transcript. What appeared on the phone was a document bubble showing the
+ * name, so that is what the message says - which also puts the name where the recall skill can find
+ * it, the way a voice note's transcript is put where its words can be found.
+ */
+export function fileMark(name: string): string {
+  return `📎 ${name}`;
+}
+
+/**
+ * The file context: where it landed and what to do with it, or why it never landed.
+ *
+ * The path is the whole point. Apollo cannot see a file the way it sees a photo, so what it is
+ * given is somewhere to point its own tools at - and a reminder that this place empties, since the
+ * only thing standing between a file worth keeping and its deletion is Apollo moving it.
+ */
+export function fileContextNote(file: ReceivedFile, retentionDays: number): ContextNote {
+  const size = humanBytes(file.size);
+  if (!file.path) {
+    return {
+      body:
+        "It is not on this machine, so say so plainly rather than trying to open it. Suggest what " +
+        "would work instead - something smaller, split up, or put somewhere I can fetch it from.",
+      info: `The user sent ${file.name} (${size}), but I could not take it: ${file.problem ?? "it did not arrive"}.`,
+      source: "file",
+    };
+  }
+  return {
+    body:
+      "It is a file on this machine, not something I can see - open it with my own tools. Files " +
+      `the user sends are deleted after ${retentionDays} days, so anything worth keeping has to be ` +
+      "moved into the working directory or the vault; the files skill covers that, and sending one back.",
+    info: `The user sent ${file.name} (${size}, ${file.mimeType}). It is at ${file.path}.`,
+    source: "file",
+  };
+}
+
+/**
  * WhatsApp notice when a Claude/agent run fails terminally (any provider error). Only the first line
  * of the reason is worth sending: a provider's detail carries a stack trace behind it, and a wall of
  * source paths tells the user nothing they can act on.
@@ -161,15 +199,18 @@ export function formatLogNotice(record: LogRecord): string {
 /**
  * Context note telling the agent a skill delivered something to the user out of band: a coherent
  * description in `info`, and what was delivered in `body` - the message itself, or the caption an
- * image went out with. An image is named as one, so the agent knows the picture has landed and
- * does not describe it back.
+ * image or a file went out with. An attachment is named for what it was, so the agent knows the
+ * picture has landed or the file has been sent, and does not describe it back.
  */
-export function skillContextNote(source: string, text: string, hasImage = false): ContextNote {
+export function skillContextNote(
+  source: string,
+  text: string,
+  attached?: "file" | "image",
+): ContextNote {
+  const what = attached ? (attached === "file" ? "a file" : "an image") : "a message";
   return {
     body: truncate(text, SKILL_NOTE_MAX_CHARS),
-    info: hasImage
-      ? `The ${source} skill sent the user an image directly.`
-      : `The ${source} skill sent the user a message directly.`,
+    info: `The ${source} skill sent the user ${what} directly.`,
     source,
   };
 }

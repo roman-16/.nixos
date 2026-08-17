@@ -1,6 +1,7 @@
 import type { ImageContent } from "@earendil-works/pi-ai";
 import type { Database } from "bun:sqlite";
 
+import type { ReceivedFile } from "./files";
 import type { ContextNote } from "./temporal";
 
 /**
@@ -24,6 +25,8 @@ import type { ContextNote } from "./temporal";
 export interface InboxEntry {
   /** Notes belonging to this message alone, e.g. the reply it quotes. */
   contexts: ContextNote[];
+  /** What came with it that is not for reading: where each file landed, or why it did not. */
+  files: ReceivedFile[];
   images: ImageContent[];
   sentAt: number;
   text: string;
@@ -71,8 +74,10 @@ export function createInbox(db: Database, horizonMs: number): Inbox {
   return {
     admit(entry) {
       if (entry.sentAt < Date.now() - horizonMs) return "expired";
+      // Metadata only, never the bytes: a file lives on disk, and this row outlives the turn.
       const payload = JSON.stringify({
         contexts: entry.contexts,
+        files: entry.files,
         images: entry.images,
         text: entry.text,
       });
@@ -91,11 +96,13 @@ export function createInbox(db: Database, horizonMs: number): Inbox {
       return (selectPending.all(limit) as PendingRow[]).map((row) => {
         const payload = JSON.parse(row.payload) as {
           contexts?: ContextNote[];
+          files?: ReceivedFile[];
           images?: ImageContent[];
           text?: string;
         };
         return {
           contexts: payload.contexts ?? [],
+          files: payload.files ?? [],
           images: payload.images ?? [],
           sentAt: row.sent_at,
           text: payload.text ?? "",

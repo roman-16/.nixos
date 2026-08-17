@@ -168,7 +168,14 @@ describe("parseTranscript", () => {
       type: "custom",
     });
     expect(parseTranscript(jsonl)).toEqual([
-      { entry: "sk", images: [], kind: "skill", source: "reminders", text: "⏰ get my food" },
+      {
+        entry: "sk",
+        files: [],
+        images: [],
+        kind: "skill",
+        source: "reminders",
+        text: "⏰ get my food",
+      },
     ]);
   });
 
@@ -188,12 +195,50 @@ describe("parseTranscript", () => {
     expect(parseTranscript(jsonl)).toEqual([
       {
         entry: "sk",
+        files: [],
         images: [{ id: "sk", index: 0, mimeType: "image/png" }],
         kind: "skill",
         source: "diagram",
         text: "how a message reaches you",
       },
     ]);
+  });
+
+  it("reads the file a skill message delivered", () => {
+    const jsonl = JSON.stringify({
+      customType: "skill_message",
+      data: {
+        files: [{ mimeType: "application/zip", name: "bike-notes.zip", size: 148_000 }],
+        source: "files",
+        text: "12 notes from your vault",
+      },
+      id: "sk",
+      parentId: null,
+      timestamp: "t",
+      type: "custom",
+    });
+    expect(parseTranscript(jsonl)).toEqual([
+      {
+        entry: "sk",
+        files: [{ mimeType: "application/zip", name: "bike-notes.zip", size: 148_000 }],
+        images: [],
+        kind: "skill",
+        source: "files",
+        text: "12 notes from your vault",
+      },
+    ]);
+  });
+
+  it("ignores a recorded file that is not one", () => {
+    const jsonl = JSON.stringify({
+      customType: "skill_message",
+      data: { files: ["bike-notes.zip", { size: 10 }], source: "files", text: "" },
+      id: "sk",
+      parentId: null,
+      timestamp: "t",
+      type: "custom",
+    });
+    expect((parseTranscript(jsonl)[0] as { files: unknown[] }).files).toEqual([]);
   });
 
   it("ignores custom entries of other types", () => {
@@ -564,13 +609,13 @@ describe("renderChat", () => {
 
   it("renders a skill message as a badged left bubble, escaping content", () => {
     const html = renderChat([
-      { images: [], kind: "skill", source: "reminders", text: "⏰ get my food" },
+      { files: [], images: [], kind: "skill", source: "reminders", text: "⏰ get my food" },
     ]);
     expect(html).toContain("via reminders");
     expect(html).toContain("get my food");
 
     const unsafe = renderChat([
-      { images: [], kind: "skill", source: "<x>", text: "<script>alert(1)</script>" },
+      { files: [], images: [], kind: "skill", source: "<x>", text: "<script>alert(1)</script>" },
     ]);
     expect(unsafe).toContain("&lt;x&gt;");
     expect(unsafe).toContain("&lt;script&gt;");
@@ -580,6 +625,7 @@ describe("renderChat", () => {
   it("shows a skill message's image, and no empty paragraph when it has no caption", () => {
     const html = renderChat([
       {
+        files: [],
         images: [{ id: "sk", index: 0, mimeType: "image/png" }],
         kind: "skill",
         source: "diagram",
@@ -589,6 +635,35 @@ describe("renderChat", () => {
     expect(html).toContain('src="/media/sk/0"');
     expect(html).toContain("via diagram");
     expect(html).not.toContain('<p class="whitespace-pre-wrap break-words"></p>');
+  });
+
+  it("names a file the chat exchanged, with its size, and escapes the name", () => {
+    const html = renderChat([
+      {
+        files: [{ mimeType: "application/zip", name: "bike <notes>.zip", size: 151_552 }],
+        images: [],
+        kind: "skill",
+        source: "files",
+        text: "12 notes",
+      },
+    ]);
+    expect(html).toContain("bike &lt;notes&gt;.zip");
+    expect(html).toContain("148 KB");
+    expect(html).not.toContain("<notes>");
+  });
+
+  it("does not offer a file for download - it is on the phone, not on this page", () => {
+    const html = renderChat([
+      {
+        files: [{ mimeType: "application/zip", name: "bike-notes.zip", size: 10 }],
+        images: [],
+        kind: "skill",
+        source: "files",
+        text: "",
+      },
+    ]);
+    expect(html).not.toContain("<a ");
+    expect(html).not.toContain("href");
   });
 
   it("emits rows in reading order, so DOM order matches what is on screen", () => {
@@ -691,18 +766,34 @@ describe("copyText", () => {
   });
 
   it("formats a skill message with its source", () => {
-    expect(copyText({ images: [], kind: "skill", source: "macros", text: "Today: 400 kcal" })).toBe(
-      "Apollo (via macros): Today: 400 kcal",
-    );
+    expect(
+      copyText({
+        files: [],
+        images: [],
+        kind: "skill",
+        source: "macros",
+        text: "Today: 400 kcal",
+      }),
+    ).toBe("Apollo (via macros): Today: 400 kcal");
   });
 
   it("notes an image a skill message delivered, captioned or not", () => {
     const image = { id: "sk", index: 0, mimeType: "image/png" };
-    expect(copyText({ images: [image], kind: "skill", source: "diagram", text: "the flow" })).toBe(
-      "Apollo (via diagram): the flow [1 image]",
-    );
-    expect(copyText({ images: [image], kind: "skill", source: "diagram", text: "" })).toBe(
-      "Apollo (via diagram): [1 image]",
+    expect(
+      copyText({ files: [], images: [image], kind: "skill", source: "diagram", text: "the flow" }),
+    ).toBe("Apollo (via diagram): the flow [1 image]");
+    expect(
+      copyText({ files: [], images: [image], kind: "skill", source: "diagram", text: "" }),
+    ).toBe("Apollo (via diagram): [1 image]");
+  });
+
+  it("names a file a skill message delivered, captioned or not", () => {
+    const file = { mimeType: "application/zip", name: "bike-notes.zip", size: 148_000 };
+    expect(
+      copyText({ files: [file], images: [], kind: "skill", source: "files", text: "12 notes" }),
+    ).toBe("Apollo (via files): 12 notes [file: bike-notes.zip]");
+    expect(copyText({ files: [file], images: [], kind: "skill", source: "files", text: "" })).toBe(
+      "Apollo (via files): [file: bike-notes.zip]",
     );
   });
 

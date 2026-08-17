@@ -13,6 +13,7 @@ function freshInbox(horizonMs = HORIZON_MS) {
 function entry(over: Partial<InboxEntry> = {}): InboxEntry {
   return {
     contexts: [],
+    files: [],
     images: [],
     sentAt: Date.now(),
     text: "hello",
@@ -29,6 +30,38 @@ describe("createInbox", () => {
     const message = entry();
     expect(inbox.admit(message)).toBe("admitted");
     expect(inbox.pending(10)).toEqual([message]);
+  });
+
+  it("round-trips a file by where it landed, never by its bytes", () => {
+    const { inbox } = freshInbox();
+    const carrying = entry({
+      files: [
+        {
+          mimeType: "application/pdf",
+          name: "Handbook.pdf",
+          path: "/var/lib/apollo/files/8f21c4a9/Handbook.pdf",
+          size: 2_200_000,
+        },
+      ],
+    });
+    inbox.admit(carrying);
+    expect(inbox.pending(10)[0]).toEqual(carrying);
+  });
+
+  it("keeps a file it could not take, so the turn can still say so", () => {
+    const { inbox } = freshInbox();
+    const refused = entry({
+      files: [
+        {
+          mimeType: "video/mp4",
+          name: "holiday.mp4",
+          problem: "it is 612.0 MB, and I stop at 100.0 MB",
+          size: 642_000_000,
+        },
+      ],
+    });
+    inbox.admit(refused);
+    expect(inbox.pending(10)[0]!.files[0]!.problem).toContain("612.0 MB");
   });
 
   it("round-trips images and per-message context notes", () => {
@@ -140,7 +173,7 @@ describe("createInbox", () => {
       JSON.stringify({ contexts: [], images: [], text: "eggs" }),
     );
     expect(inbox.pending(10)).toEqual([
-      { contexts: [], images: [], sentAt, text: "eggs", waId: "recovered" },
+      { contexts: [], files: [], images: [], sentAt, text: "eggs", waId: "recovered" },
     ]);
   });
 });

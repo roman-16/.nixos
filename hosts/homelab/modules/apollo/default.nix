@@ -22,14 +22,21 @@ let
       git
       gnugrep
       gnused
+      gnutar
+      gzip
       imagemagick
       jq
       mermaid-cli
       openssh
+      p7zip
       poppler-utils
       python3
       ripgrep
       tesseract
+      unzip
+      xz
+      zip
+      zstd
     ])
     ++ [ inputs.proton-cli.packages.${system}.default ];
 
@@ -133,6 +140,7 @@ in
           ln -sfn ${./agent/skills/backup} "$agentDir/skills/backup"
           ln -sfn ${./agent/skills/briefing} "$agentDir/skills/briefing"
           ln -sfn ${./agent/skills/diagram} "$agentDir/skills/diagram"
+          ln -sfn ${./agent/skills/files} "$agentDir/skills/files"
           ln -sfn ${./agent/skills/image} "$agentDir/skills/image"
           ln -sfn ${./agent/skills/macros} "$agentDir/skills/macros"
           ln -sfn ${./agent/skills/obsidian} "$agentDir/skills/obsidian"
@@ -528,6 +536,9 @@ in
                 # notice that tells them to, since that message is Apollo's only way to ask.
                 APOLLO_DASHBOARD_URL = "https://apollo.halerc.xyz";
                 APOLLO_DB_PATH = "%S/apollo/apollo.sqlite";
+                # Where a file the user sends lands: beside the database, so it is neither
+                # committed to the workspace repo nor carried into the nightly database backup.
+                APOLLO_FILE_DIR = "%S/apollo/files";
                 APOLLO_MODEL = "anthropic/claude-sonnet-5";
                 APOLLO_PROFILE_PICTURE = "${profilePicture}";
                 APOLLO_THINKING = "high";

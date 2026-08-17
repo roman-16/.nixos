@@ -8,7 +8,6 @@ import type { Logger } from "pino";
 import { conversationTokens, deliver, onAssistantText, onRunError } from "./agent";
 import type { Anthropic, AnthropicStatus } from "./anthropic";
 import type { Attachment } from "./attachments";
-import { imageBlock } from "./attachments";
 import { buildBacklog } from "./backlog";
 import type { ChatStore } from "./chat-store";
 import { type CompactionReason, compactionReason } from "./compaction-schedule";
@@ -22,6 +21,8 @@ import { createThrottle, type LogStore, shouldNotify } from "./logs";
 import {
   claudeAuthNotice,
   claudeErrorNotice,
+  fileContextNote,
+  fileMark,
   formatLogNotice,
   isAllowed,
   jidForNumber,
@@ -100,7 +101,7 @@ export interface PipelineDeps {
 export interface Pipeline {
   /** Bind the live socket once WhatsApp has connected. */
   attach(socket: WhatsApp): void;
-  /** Deliver a skill-originated message to the user out of band: send it, record it in the chat DB, and queue a context note for the agent's next turn. Text alone, or an image with `text` as its caption. */
+  /** Deliver a skill-originated message to the user out of band: send it, record it in the chat DB, and queue a context note for the agent's next turn. Text alone, or a picture or file with `text` as its caption. */
   emitSkillMessage(text: string, source: string, attachment?: Attachment): Promise<void>;
   /** Handle a (re)connect: note any gap, apply the profile picture, and deliver what is owed. */
   handleConnect(): void;
@@ -179,7 +180,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   async function sendToUser(text: string, attachment?: Attachment): Promise<void> {
     const to = recipient();
     if (!socket || !to || !connected()) throw new Error("whatsapp not connected");
-    if (attachment) await socket.sendImage(to, attachment, text);
+    if (attachment) await socket.sendMedia(to, attachment, text);
     else await socket.send(to, text);
   }
 
@@ -236,10 +237,10 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     kv.remove(LINK_GAP_KEY);
   }
 
-  // Deliver a message a skill produced (a fired reminder, a macros reply, a rendered diagram)
-  // directly to the user, record it in the chat DB as a "via <source>" bubble, and queue a context
-  // note so the agent learns about it next turn. Send first, so a failed send (the reminder watcher
-  // retries) never logs or contexts a message the user never received.
+  // Deliver a message a skill produced (a fired reminder, a macros reply, a rendered diagram, a
+  // file) directly to the user, record it in the chat DB as a "via <source>" bubble, and queue a
+  // context note so the agent learns about it next turn. Send first, so a failed send (the reminder
+  // watcher retries) never logs or contexts a message the user never received.
   async function emitSkillMessage(
     text: string,
     source: string,
@@ -247,19 +248,14 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   ): Promise<void> {
     await sendToUser(text, attachment);
     try {
-      chatStore.appendSkillMessage(
-        session.sessionId,
-        source,
-        text,
-        attachment ? [imageBlock(attachment)] : [],
-      );
+      chatStore.appendSkillMessage(session.sessionId, source, text, attachment ? [attachment] : []);
     } catch (error) {
       logger.error({ error }, "skill message chat-log append failed");
     }
     kv.set(
       "skillNotes",
       JSON.stringify(
-        [...readSkillNotes(), skillContextNote(source, text, Boolean(attachment))].slice(
+        [...readSkillNotes(), skillContextNote(source, text, attachment?.kind)].slice(
           -SKILL_NOTES_MAX,
         ),
       ),
@@ -647,7 +643,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       startTyping();
 
       // Normalizing before admission means the stored message is exactly what the agent will see:
-      // a transcript rather than audio, downloaded images, the quoted message resolved.
+      // a transcript rather than audio, downloaded images, files already on disk, the quoted
+      // message resolved.
       let admitted = 0;
       for (const message of allowed) {
         const spoken = await transcribe(message);
@@ -658,11 +655,30 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
           contexts.push(resolved.note);
           raw = [...raw, ...resolved.images];
         }
+        for (const file of message.files) {
+          contexts.push(fileContextNote(file, config.fileRetentionDays));
+          if (file.problem) {
+            logger.warn(
+              { name: file.name, problem: file.problem, size: file.size },
+              "a file the user sent could not be taken",
+            );
+          }
+        }
         const { dropped, images, resized } = await fitImages(raw, resizeImage);
         if (dropped > 0) logger.warn({ dropped }, "images could not be fitted for the model");
-        const text = [spoken, droppedImageNote(dropped)].filter(Boolean).join("\n").trim();
+        // The file's name leads, because that is how the message reads on the phone: a document
+        // bubble, and the caption under it.
+        const text = [
+          ...message.files.map((file) => fileMark(file.name)),
+          spoken,
+          droppedImageNote(dropped),
+        ]
+          .filter(Boolean)
+          .join("\n")
+          .trim();
         const admission = inbox.admit({
           contexts,
+          files: message.files,
           images,
           sentAt: message.sentAt,
           text,
@@ -675,6 +691,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         logger[level](
           {
             chars: text.length,
+            files: message.files.length,
             from: message.number,
             images: images.length,
             offline: message.offline,

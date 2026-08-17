@@ -21,11 +21,14 @@ export interface Config {
   dashboardUrl: string;
   dayStartHour: number;
   dbPath: string;
+  fileDir: string;
+  fileRetentionDays: number;
   inboxRetentionDays: number;
   keepRecentTokens: number;
   linkGraceMs: number;
   logLevel: string;
   logRetentionDays: number;
+  maxFileBytes: number;
   maxMessageChars: number;
   memoryEvidenceMaxChars: number;
   memoryFile: string;
@@ -78,6 +81,12 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     dashboardUrl: env.APOLLO_DASHBOARD_URL ?? "",
     dayStartHour: Number(env.APOLLO_DAY_START_HOUR ?? 4),
     dbPath: env.APOLLO_DB_PATH ?? join(home, "apollo.sqlite"),
+    // Where a file the user sends lands. Beside the database rather than inside the working
+    // directory, which is a git repo, or the database, which is copied off the machine nightly.
+    fileDir: env.APOLLO_FILE_DIR ?? join(home, "files"),
+    // How long a received file stays. It is a landing zone, not an archive: anything worth keeping
+    // is moved into the working directory or the vault, which are the things that are backed up.
+    fileRetentionDays: Number(env.APOLLO_FILE_RETENTION_DAYS ?? 30),
     inboxRetentionDays: Number(env.APOLLO_INBOX_RETENTION_DAYS ?? 30),
     // The tail compaction leaves verbatim. Everything older is what the summary has to carry, so
     // this is the line between what Apollo still has in its own words and what it has as a note.
@@ -87,6 +96,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     linkGraceMs: Number(env.APOLLO_LINK_GRACE_MS ?? 10 * 60_000),
     logLevel: env.APOLLO_LOG_LEVEL ?? "info",
     logRetentionDays: Number(env.APOLLO_LOG_RETENTION_DAYS ?? 30),
+    // The largest file worth moving in either direction, on a 40 GB disk with 4 GB of memory.
+    // Files stream to and from disk, so this bounds the disk rather than the process.
+    maxFileBytes: Number(env.APOLLO_MAX_FILE_BYTES ?? 100 * 1024 * 1024),
     maxMessageChars: Number(env.APOLLO_MAX_MESSAGE_CHARS ?? 4000),
     // How much of the conversation one memory fold reads. What was actually said is a low
     // single-digit share of the context, so this covers a couple of busy days.

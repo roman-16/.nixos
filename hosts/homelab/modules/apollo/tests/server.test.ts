@@ -93,7 +93,11 @@ function stubDeps(over: Partial<ServerDeps> = {}): ServerDeps {
       sync: () => {},
       tail: () => ({ entries: [], newest: 0 }),
     } as unknown as ServerDeps["chatStore"],
-    config: { linkGraceMs: 600_000, port: 0 } as unknown as Config,
+    config: {
+      linkGraceMs: 600_000,
+      maxFileBytes: 100 * 1024 * 1024,
+      port: 0,
+    } as unknown as Config,
     logStore: { query: () => [], seq: 0 } as unknown as ServerDeps["logStore"],
     logger: { debug: noop, error: noop, info: noop, warn: noop } as unknown as ServerDeps["logger"],
     pipeline: {
@@ -452,6 +456,91 @@ describe("startServer routing", () => {
     const body = await res.text();
     expect(body).toContain("cannot send");
     expect(body).not.toContain("relay");
+  });
+
+  it("delivers a file via the loopback hook and returns the marker", async () => {
+    let got: { attachment?: any; source: string; text: string } | undefined;
+    const path = `/tmp/apollo-test-${Bun.hash(String(Math.random()))}.zip`;
+    await Bun.write(path, "PK\u0003\u0004 pretend archive");
+    const base = boot({
+      pipeline: {
+        emitSkillMessage: async (text: string, source: string, attachment: unknown) => {
+          got = { attachment, source, text };
+        },
+        notify: async () => {},
+        state: () => ({ qr: undefined, status: "connected", user: undefined }),
+      } as unknown as Pipeline,
+    });
+    const res = await fetch(
+      `${base}/internal/skill-file?source=files&path=${encodeURIComponent(path)}`,
+      { body: "12 notes from your vault", method: "POST" },
+    );
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("[files: delivered to the user");
+    expect(got?.text).toBe("12 notes from your vault");
+    expect(got?.source).toBe("files");
+    expect(got?.attachment?.kind).toBe("file");
+    expect(got?.attachment?.name).toBe(path.split("/").pop());
+    // The file stays a path: nothing here reads a hundred megabytes to hand them straight back.
+    expect(got?.attachment?.path).toBe(path);
+  });
+
+  it("sends a file with no words when the body is empty", async () => {
+    let got: { text: string } | undefined;
+    const path = `/tmp/apollo-test-${Bun.hash(String(Math.random()))}.zip`;
+    await Bun.write(path, "PK\u0003\u0004");
+    const base = boot({
+      pipeline: {
+        emitSkillMessage: async (text: string) => {
+          got = { text };
+        },
+        notify: async () => {},
+        state: () => ({ qr: undefined, status: "connected", user: undefined }),
+      } as unknown as Pipeline,
+    });
+    const res = await fetch(`${base}/internal/skill-file?path=${encodeURIComponent(path)}`, {
+      method: "POST",
+    });
+    expect(res.status).toBe(200);
+    expect(got?.text).toBe("");
+  });
+
+  it("refuses a file that is not there as the caller's mistake", async () => {
+    const base = boot();
+    const res = await fetch(`${base}/internal/skill-file?source=files&path=/tmp/nope.zip`, {
+      method: "POST",
+    });
+    expect(res.status).toBe(400);
+    const body = await res.text();
+    expect(body).toContain("cannot send");
+    expect(body).not.toContain("relay");
+  });
+
+  it("asks for a path when none is named for a file", async () => {
+    const base = boot();
+    const res = await fetch(`${base}/internal/skill-file?source=files`, { method: "POST" });
+    expect(res.status).toBe(400);
+    expect(await res.text()).toContain("path");
+  });
+
+  it("returns the failed marker when a file cannot be delivered", async () => {
+    const path = `/tmp/apollo-test-${Bun.hash(String(Math.random()))}.zip`;
+    await Bun.write(path, "PK\u0003\u0004");
+    const base = boot({
+      pipeline: {
+        emitSkillMessage: async () => {
+          throw new Error("whatsapp down");
+        },
+        notify: async () => {},
+        state: () => ({ qr: undefined, status: "connecting", user: undefined }),
+      } as unknown as Pipeline,
+    });
+    const res = await fetch(
+      `${base}/internal/skill-file?source=files&path=${encodeURIComponent(path)}`,
+      { method: "POST" },
+    );
+    expect(res.status).toBe(503);
+    expect(await res.text()).toContain("[files: delivery FAILED");
   });
 
   it("asks for a path when none is named", async () => {

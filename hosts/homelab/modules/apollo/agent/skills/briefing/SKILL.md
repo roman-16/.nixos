@@ -17,11 +17,11 @@ One message with the shape of the day: today's sky, what is on their calendar, a
 
 The briefing is a fixed digest of the current day, not a way to answer questions. When the user asks something specific, use the skill that owns it and answer in your own words:
 
-| They ask                                | Use                                                          |
-| --------------------------------------- | ------------------------------------------------------------ |
-| weather, rain, sun, how long the day is | the **weather** skill                                        |
+| They ask                                | Use                                                      |
+| --------------------------------------- | -------------------------------------------------------- |
+| weather, rain, sun, how long the day is | the **weather** skill                                    |
 | what's on today, when is X, am I free   | `proton calendar events list` (see the **proton** skill) |
-| is X on offer, what's cheap this week   | the **offers** skill                                         |
+| is X on offer, what's cheap this week   | the **offers** skill                                     |
 
 Only "send me the briefing" and the like call for this script.
 

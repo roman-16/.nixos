@@ -4,7 +4,7 @@ import type { Logger } from "pino";
 import { compactionSettings } from "./agent";
 import type { Anthropic } from "./anthropic";
 import { assetsVersion, htmlHeaders, serveAsset } from "./assets";
-import { type Attachment, loadAttachment } from "./attachments";
+import { type Attachment, loadFile, loadImage } from "./attachments";
 import { dayKey, parseTranscript, renderChat, renderOlder } from "./chat";
 import type { ChatStore } from "./chat-store";
 import type { Config } from "./config";
@@ -444,7 +444,42 @@ export function startServer(deps: ServerDeps): ReturnType<typeof Bun.serve> {
         // reported as itself rather than as something to relay to the user.
         let attachment: Attachment;
         try {
-          attachment = await loadAttachment(path);
+          attachment = await loadImage(path);
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error);
+          return new Response(`cannot send ${path}: ${reason}\n`, { headers, status: 400 });
+        }
+        try {
+          await pipeline.emitSkillMessage(caption, source, attachment);
+          return new Response(deliveredMarker(source), { headers, status: 200 });
+        } catch {
+          return new Response(failedMarker(source), { headers, status: 503 });
+        }
+      },
+    ],
+    // Localhost-only hook for handing the user a file, shaped exactly like its picture sibling
+    // above: what the user reads is the body, everything about the delivery is the query. The file
+    // stays a path all the way to WhatsApp, because nothing on this side needs to read it and a
+    // hundred megabytes through a loopback hop would buy nothing.
+    [
+      "POST /internal/skill-file",
+      async (req, url) => {
+        const source = url.searchParams.get("source") ?? "files";
+        const path = url.searchParams.get("path") ?? "";
+        const headers = { "content-type": "text/plain; charset=utf-8" };
+        if (!path) {
+          return new Response("name the file with ?path=/tmp/x.zip; the caption is the body\n", {
+            headers,
+            status: 400,
+          });
+        }
+        // An empty caption is a file sent without words, which is a thing people do.
+        const caption = (await req.text()).trim();
+        // A file that cannot be sent is the caller's to fix, not a delivery that failed, so it is
+        // reported as itself rather than as something to relay to the user.
+        let attachment: Attachment;
+        try {
+          attachment = await loadFile(path, config.maxFileBytes);
         } catch (error) {
           const reason = error instanceof Error ? error.message : String(error);
           return new Response(`cannot send ${path}: ${reason}\n`, { headers, status: 400 });

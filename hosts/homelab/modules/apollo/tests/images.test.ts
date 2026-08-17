@@ -39,6 +39,11 @@ describe("fitImages", () => {
     expect(result.dropped).toBe(1);
   });
 
+  it("drops a sticker the resizer cannot read, rather than sending the model something it isn't", async () => {
+    const result = await fitImages([image("bm9wZQ==", "image/webp")], async () => null);
+    expect(result).toMatchObject({ dropped: 1, images: [] });
+  });
+
   it("drops an image whose resize throws", async () => {
     const result = await fitImages([image("YmFk")], async () => {
       throw new Error("photon unavailable");

@@ -1,4 +1,6 @@
+import { createWriteStream, statSync, unlinkSync } from "node:fs";
 import { rm } from "node:fs/promises";
+import { pipeline } from "node:stream/promises";
 
 import type { ImageContent } from "@earendil-works/pi-ai";
 import makeWASocket, {
@@ -19,6 +21,8 @@ import makeWASocket, {
 import type { Logger } from "pino";
 
 import type { Attachment } from "./attachments";
+import type { FileStore, ReceivedFile } from "./files";
+import { humanBytes } from "./format";
 import { numberFromJid, splitMessage } from "./messages";
 import { describeQuotedMessage, type QuotedContext } from "./quoted";
 
@@ -34,10 +38,26 @@ const RECONNECT_MAX_MS = 60_000;
 const WARN_AFTER_ATTEMPTS = 3;
 
 /**
- * How much text rides along under a photo. WhatsApp takes far less in a caption than in a message,
- * so anything longer follows as ordinary messages rather than being silently dropped.
+ * How much text rides along under a photo or a file. WhatsApp takes far less in a caption than in a
+ * message, so anything longer follows as ordinary messages rather than being silently dropped.
  */
 const MAX_CAPTION_CHARS = 900;
+
+/** What a file claims to be when WhatsApp says nothing about it. */
+const UNKNOWN_MIME = "application/octet-stream";
+
+// A voice note is spoken into the microphone; an audio file is picked out of the phone's storage.
+// WhatsApp marks the first with ptt and encodes it as opus in ogg, and either is enough - so a
+// voice note is never filed away as an attachment for want of one flag.
+const VOICE_MIME = /(ogg|opus)/i;
+
+// Subtypes whose name is not the extension anyone uses.
+const EXTENSION_FIX: Record<string, string> = {
+  mpeg: "mp3",
+  plain: "txt",
+  quicktime: "mov",
+  "x-matroska": "mkv",
+};
 
 /** How long a successfully resolved WhatsApp Web version is reused before it is looked up again. */
 const VERSION_TTL_MS = 6 * 60 * 60 * 1000;
@@ -66,6 +86,8 @@ export interface WhatsAppState {
 
 export interface InboundMessage {
   audio: { data: Buffer; mimeType: string; seconds: number | undefined } | undefined;
+  /** What came with it that is not for reading, already on disk (or refused, and saying why). */
+  files: ReceivedFile[];
   from: string;
   images: ImageContent[];
   key: WAMessage["key"];
@@ -86,15 +108,19 @@ export interface WhatsApp {
   read: (key: WAMessage["key"]) => Promise<void>;
   relink: () => void;
   send: (to: string, text: string) => Promise<void>;
-  sendImage: (to: string, image: Attachment, caption: string) => Promise<void>;
+  /** Put a picture or a file in front of the user, with an optional line under it. */
+  sendMedia: (to: string, attachment: Attachment, caption: string) => Promise<void>;
   setProfilePicture: (image: Buffer) => Promise<void>;
   stop: () => Promise<void>;
 }
 
 export interface WhatsAppOptions {
   baileysLogLevel: string;
+  /** Where a file that arrives is put, since it never rides in the conversation. */
+  fileStore: FileStore;
   logger: Logger;
   maxChars: number;
+  maxFileBytes: number;
   onConnect?: () => void;
   /** One delivery from WhatsApp, which may carry a whole queue's worth of messages at once. */
   onMessages: (messages: InboundMessage[]) => Promise<void> | void;
@@ -112,13 +138,21 @@ function unwrap(content: Content): Content {
   );
 }
 
+/** What receiving a message needs: the connection it came in on, and somewhere to put a file. */
+interface Receiving {
+  logger: Logger;
+  maxFileBytes: number;
+  sock: Socket;
+  store: FileStore;
+}
+
 /** Download an inbound media attachment to a buffer, logging and swallowing a failure. */
 async function downloadMedia(
-  sock: Socket,
+  receiving: Receiving,
   message: WAMessage,
-  logger: Logger,
   kind: "audio" | "image",
 ): Promise<Buffer | undefined> {
+  const { logger, sock } = receiving;
   try {
     return await downloadMediaMessage(
       message,
@@ -133,18 +167,121 @@ async function downloadMedia(
 }
 
 /**
+ * Whether an audio message is a voice note rather than an audio file the user picked out. The first
+ * is words, and is transcribed; the second is a file, and goes to disk like any other.
+ */
+export function isVoiceNote(audio: NonNullable<Content["audioMessage"]>): boolean {
+  return audio.ptt === true || VOICE_MIME.test(audio.mimetype ?? "");
+}
+
+/** A message's file, if it carries one: everything that is neither a picture nor a voice note. */
+interface FileInfo {
+  fileLength?: Parameters<typeof toNumber>[0];
+  fileName?: null | string;
+  mimetype?: null | string;
+  /** What to call it when WhatsApp carries no name, as a video or an audio file never does. */
+  stem: string;
+}
+
+function fileInfo(content: Content): FileInfo | undefined {
+  const document = content.documentMessage;
+  if (document) {
+    return {
+      fileLength: document.fileLength,
+      fileName: document.fileName ?? document.title,
+      mimetype: document.mimetype,
+      stem: "document",
+    };
+  }
+  const video = content.videoMessage;
+  if (video) {
+    return { fileLength: video.fileLength, mimetype: video.mimetype, stem: "video" };
+  }
+  const audio = content.audioMessage;
+  if (audio && !isVoiceNote(audio)) {
+    return { fileLength: audio.fileLength, mimetype: audio.mimetype, stem: "audio" };
+  }
+  return undefined;
+}
+
+/** The name to keep a file under: the one WhatsApp carried, or one built from what it is. */
+export function mediaName(
+  given: null | string | undefined,
+  mimeType: string,
+  stem: string,
+): string {
+  const named = given?.trim();
+  if (named) return named;
+  const subtype = mimeType.split("/")[1] || "bin";
+  return `${stem}.${EXTENSION_FIX[subtype] ?? subtype}`;
+}
+
+function discard(path: string): void {
+  try {
+    unlinkSync(path);
+  } catch {
+    // never written, or already gone
+  }
+}
+
+/**
+ * Put a message's file on disk, or say why it is not there.
+ *
+ * It is streamed rather than read, so a file the size of the cap never sits in memory. One too
+ * large is refused before it is fetched, and one that arrives larger than it claimed is deleted -
+ * but either way the message still goes through carrying the refusal, because a file nobody
+ * mentions is indistinguishable from a message nobody read.
+ */
+async function receiveFile(
+  receiving: Receiving,
+  message: WAMessage,
+  info: FileInfo,
+): Promise<ReceivedFile> {
+  const { logger, maxFileBytes, sock, store } = receiving;
+  const mimeType = (info.mimetype ?? "").split(";")[0]!.trim() || UNKNOWN_MIME;
+  const name = mediaName(info.fileName, mimeType, info.stem);
+  const claimed = toNumber(info.fileLength);
+  const tooBig = (size: number) =>
+    `it is ${humanBytes(size)}, and I stop at ${humanBytes(maxFileBytes)}`;
+  if (claimed > maxFileBytes) return { mimeType, name, problem: tooBig(claimed), size: claimed };
+
+  const path = store.slot(message.key.id!, name);
+  try {
+    const stream = await downloadMediaMessage(
+      message,
+      "stream",
+      {},
+      { logger, reuploadRequest: sock.updateMediaMessage },
+    );
+    await pipeline(stream, createWriteStream(path));
+  } catch (error) {
+    logger.error({ error }, "failed to download file");
+    discard(path);
+    return { mimeType, name, problem: "the download failed", size: claimed };
+  }
+
+  // What it claimed is not what it is, so the cap is enforced on what actually landed.
+  const size = statSync(path).size;
+  if (size > maxFileBytes) {
+    discard(path);
+    return { mimeType, name, problem: tooBig(size), size };
+  }
+  return { mimeType, name, path, size };
+}
+
+/**
  * Build the quoted-reply context from a message's contextInfo: classify the quoted
  * message, work out who sent it (Apollo, the user, or unknown), and download its image
  * or voice bytes so the agent can see/hear it. Media download is best-effort - a failure
  * just leaves the media out, and the [context] line degrades to a plain label.
  */
 async function toQuoted(
-  sock: Socket,
+  receiving: Receiving,
   message: WAMessage,
   contextInfo: QuotedInfo,
   userNumber: string,
-  logger: Logger,
 ): Promise<QuotedContext> {
+  const { sock } = receiving;
   const quotedMessage = contextInfo.quotedMessage!;
   const { kind, text } = describeQuotedMessage(quotedMessage);
   const self = sock.user?.id ? numberFromJid(sock.user.id) : "";
@@ -164,12 +301,7 @@ async function toQuoted(
       },
       message: quotedMessage,
     } as WAMessage;
-    const buffer = await downloadMedia(
-      sock,
-      quotedWA,
-      logger,
-      kind === "image" ? "image" : "audio",
-    );
+    const buffer = await downloadMedia(receiving, quotedWA, kind === "image" ? "image" : "audio");
     if (buffer && kind === "image") {
       images.push({
         data: buffer.toString("base64"),
@@ -184,9 +316,8 @@ async function toQuoted(
 }
 
 async function toInbound(
-  sock: Socket,
+  receiving: Receiving,
   message: WAMessage,
-  logger: Logger,
   offline: boolean,
 ): Promise<InboundMessage | undefined> {
   const remote = message.key.remoteJid;
@@ -203,14 +334,18 @@ async function toInbound(
   const number = numberFromJid(from);
 
   const content = unwrap(message.message);
-  const image = content.imageMessage;
+
+  // Everything WhatsApp delivers is either something Apollo can read - a picture it looks at, a
+  // voice note it transcribes - or an object, which goes to disk and is handed over as a path. A
+  // sticker is a picture; an audio file nobody spoke into is an object, as documents and videos are.
+  const picture = content.imageMessage ?? content.stickerMessage;
   const images: ImageContent[] = [];
-  if (image) {
-    const buffer = await downloadMedia(sock, message, logger, "image");
+  if (picture) {
+    const buffer = await downloadMedia(receiving, message, "image");
     if (buffer) {
       images.push({
         data: buffer.toString("base64"),
-        mimeType: image.mimetype ?? "image/jpeg",
+        mimeType: picture.mimetype ?? "image/jpeg",
         type: "image",
       });
     }
@@ -218,8 +353,8 @@ async function toInbound(
 
   const audioMessage = content.audioMessage;
   let audio: InboundMessage["audio"];
-  if (audioMessage) {
-    const buffer = await downloadMedia(sock, message, logger, "audio");
+  if (audioMessage && isVoiceNote(audioMessage)) {
+    const buffer = await downloadMedia(receiving, message, "audio");
     if (buffer) {
       audio = {
         data: buffer,
@@ -229,10 +364,15 @@ async function toInbound(
     }
   }
 
+  const wanted = fileInfo(content);
+  const files = wanted ? [await receiveFile(receiving, message, wanted)] : [];
+
   const text = (
     content.conversation ??
     content.extendedTextMessage?.text ??
-    image?.caption ??
+    content.imageMessage?.caption ??
+    content.videoMessage?.caption ??
+    content.documentMessage?.caption ??
     ""
   ).trim();
 
@@ -245,14 +385,15 @@ async function toInbound(
     content.stickerMessage?.contextInfo ??
     undefined;
   const quoted = contextInfo?.quotedMessage
-    ? await toQuoted(sock, message, contextInfo, number, logger)
+    ? await toQuoted(receiving, message, contextInfo, number)
     : undefined;
 
-  if (!text && images.length === 0 && !audio && !quoted) return undefined;
+  if (!text && images.length === 0 && !audio && !quoted && files.length === 0) return undefined;
   // WhatsApp stamps the send time in seconds; a message with none is happening now.
   const stamped = toNumber(message.messageTimestamp) * 1000;
   return {
     audio,
+    files,
     from,
     images,
     key: message.key,
@@ -328,6 +469,12 @@ export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp>
       version: await waVersion(),
     });
     sock = socket;
+    const receiving: Receiving = {
+      logger: options.logger,
+      maxFileBytes: options.maxFileBytes,
+      sock: socket,
+      store: options.fileStore,
+    };
 
     socket.ev.on("creds.update", saveCreds);
 
@@ -386,7 +533,7 @@ export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp>
       // batch: that is what lets it be answered as a single catch-up rather than message by message.
       const inbound: InboundMessage[] = [];
       for (const message of messages) {
-        const one = await toInbound(socket, message, options.logger, offline);
+        const one = await toInbound(receiving, message, offline);
         if (one) inbound.push(one);
       }
       options.logger.info(
@@ -432,18 +579,29 @@ export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp>
         await sock?.sendMessage(to, { text: chunk });
       }
     },
-    sendImage: async (to, image, caption) => {
+    sendMedia: async (to, attachment, caption) => {
       const [head, ...rest] = splitMessage(caption, MAX_CAPTION_CHARS);
-      // Dimensions and the preview are supplied, so baileys never reaches for the image library it
-      // does not have here (see attachments.ts).
-      await sock?.sendMessage(to, {
-        caption: head,
-        height: image.height,
-        image: image.bytes,
-        jpegThumbnail: image.thumbnail,
-        mimetype: image.mimeType,
-        width: image.width,
-      });
+      // A picture carries its dimensions and preview, so baileys never reaches for the image library
+      // it does not have here; a file is named by its path, so its bytes are streamed off disk
+      // rather than read into memory (see attachments.ts).
+      await sock?.sendMessage(
+        to,
+        attachment.kind === "image"
+          ? {
+              caption: head,
+              height: attachment.height,
+              image: attachment.bytes,
+              jpegThumbnail: attachment.thumbnail,
+              mimetype: attachment.mimeType,
+              width: attachment.width,
+            }
+          : {
+              caption: head,
+              document: { url: attachment.path },
+              fileName: attachment.name,
+              mimetype: attachment.mimeType,
+            },
+      );
       for (const chunk of rest) await sock?.sendMessage(to, { text: chunk });
     },
     setProfilePicture: async (image) => {

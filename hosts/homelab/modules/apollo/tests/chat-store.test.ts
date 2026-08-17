@@ -23,6 +23,14 @@ function b64(text: string): string {
   return Buffer.from(text).toString("base64");
 }
 
+function picture(text: string): any {
+  return { bytes: Buffer.from(text), height: 10, kind: "image", mimeType: "image/png", width: 10 };
+}
+
+function file(name: string, size = 148_000): any {
+  return { kind: "file", mimeType: "application/zip", name, path: `/tmp/${name}`, size };
+}
+
 describe("createChatStore", () => {
   it("mirrors entries and returns them oldest-first", () => {
     const store = createChatStore(openDatabase(":memory:"));
@@ -160,9 +168,7 @@ describe("createChatStore", () => {
 
   it("records the image a skill message delivered, and serves it back", () => {
     const store = createChatStore(openDatabase(":memory:"));
-    store.appendSkillMessage("s1", "diagram", "how it flows", [
-      { data: b64("png-bytes"), mimeType: "image/png", type: "image" },
-    ]);
+    store.appendSkillMessage("s1", "diagram", "how it flows", [picture("png-bytes")]);
     const stored = JSON.parse(store.tail("s1", 10).entries[0]!);
     expect(stored.data.images).toHaveLength(1);
     expect(store.image("s1", stored.id, 0)).toEqual({
@@ -171,7 +177,19 @@ describe("createChatStore", () => {
     });
   });
 
-  it("leaves the images key off a skill message that delivered none", () => {
+  it("records a file a skill message delivered by what it was, never by its bytes", () => {
+    const store = createChatStore(openDatabase(":memory:"));
+    store.appendSkillMessage("s1", "files", "12 notes", [file("bike-notes.zip")]);
+    const stored = JSON.parse(store.tail("s1", 10).entries[0]!);
+    expect(stored.data.files).toEqual([
+      { mimeType: "application/zip", name: "bike-notes.zip", size: 148_000 },
+    ]);
+    expect(stored.data.images).toBeUndefined();
+    // The database is copied off the machine nightly; the file is on disk already.
+    expect(store.tail("s1", 10).entries[0]).not.toContain("/tmp/bike-notes.zip");
+  });
+
+  it("leaves both keys off a skill message that delivered nothing", () => {
     const store = createChatStore(openDatabase(":memory:"));
     store.appendSkillMessage("s1", "macros", "summary");
     expect(JSON.parse(store.tail("s1", 10).entries[0]!).data).toEqual({

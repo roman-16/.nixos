@@ -7,6 +7,7 @@ import { runWorkspaceBackup } from "./backup";
 import { createChatStore } from "./chat-store";
 import { loadConfig } from "./config";
 import { openDatabase } from "./db";
+import { createFileStore } from "./files";
 import { createInbox } from "./inbox";
 import { createKv } from "./kv";
 import { createLogStore } from "./logs";
@@ -34,13 +35,17 @@ export async function main(): Promise<void> {
 
   const logRetentionMs = config.logRetentionDays * 24 * HOUR_MS;
   const inboxRetentionMs = config.inboxRetentionDays * 24 * HOUR_MS;
+  const fileRetentionMs = config.fileRetentionDays * 24 * HOUR_MS;
   // The inbox remembers message ids exactly as long as it keeps their rows, so one window governs
   // both what it prunes and how old a message may be and still count as unseen.
   const inbox = createInbox(db, inboxRetentionMs);
+  const fileStore = createFileStore(config.fileDir);
 
   const prune = () => {
     logStore.prune(Date.now() - logRetentionMs);
     inbox.prune(Date.now() - inboxRetentionMs);
+    const files = fileStore.prune(Date.now() - fileRetentionMs);
+    if (files > 0) logger.info({ files }, "pruned received files past their retention");
   };
   prune();
   setInterval(prune, HOUR_MS);
@@ -128,8 +133,10 @@ export async function main(): Promise<void> {
 
   const whatsapp = await startWhatsApp({
     baileysLogLevel: config.baileysLogLevel,
+    fileStore,
     logger,
     maxChars: config.maxMessageChars,
+    maxFileBytes: config.maxFileBytes,
     onConnect: () => pipeline.handleConnect(),
     onMessages: (messages) => pipeline.handleInbound(messages),
     whatsappDir: config.whatsappDir,

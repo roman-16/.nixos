@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 
-import type { ImageContent } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { Database } from "bun:sqlite";
 
+import { type Attachment, imageBlock } from "./attachments";
 import { type ImageBytes, imageFromLine } from "./chat";
 
 /**
@@ -40,12 +40,12 @@ export interface SkillMessage {
 }
 
 export interface ChatStore {
-  /** Record an out-of-band skill message (a fired reminder, a macros reply, a rendered diagram) as a chat entry, with any image it delivered. */
+  /** Record an out-of-band skill message (a fired reminder, a macros reply, a rendered diagram, a file) as a chat entry, with whatever it delivered alongside. */
   appendSkillMessage(
     sessionId: string,
     source: string,
     text: string,
-    images?: ImageContent[],
+    attachments?: Attachment[],
   ): void;
   image(sessionId: string, entryId: string, index: number): ImageBytes | undefined;
   /** The `count` entries just older than `beforeEntryId`; empty at the start of the conversation. */
@@ -78,12 +78,23 @@ export function createChatStore(db: Database): ChatStore {
   const cursors = new Map<string, number>();
 
   return {
-    appendSkillMessage(sessionId, source, text, images = []) {
+    appendSkillMessage(sessionId, source, text, attachments = []) {
       const timestamp = new Date().toISOString();
       const id = `skill-${randomUUID()}`;
+      const images = attachments.flatMap((one) => (one.kind === "image" ? [imageBlock(one)] : []));
+      // A file is recorded by what it was, never by its bytes: this database is snapshotted off the
+      // machine every night, and the file itself is already on disk.
+      const files = attachments.flatMap((one) =>
+        one.kind === "file" ? [{ mimeType: one.mimeType, name: one.name, size: one.size }] : [],
+      );
       const entry = {
         customType: "skill_message",
-        data: images.length > 0 ? { images, source, text } : { source, text },
+        data: {
+          ...(files.length > 0 ? { files } : {}),
+          ...(images.length > 0 ? { images } : {}),
+          source,
+          text,
+        },
         id,
         parentId: null,
         timestamp,
