@@ -211,33 +211,38 @@ let
       source = "host";
       heartbeat = "45m";
       priority = 3;
-      description = "the machine froze and reset itself (the watchdog, most likely)";
+      description = "the machine restarted without shutting down first";
       probeInputs = with pkgs; [
         coreutils
-        jq
-        smartmontools
+        gnugrep
+        systemd
       ];
-      # The drive counts every stop it was not told about, which a scheduled reboot
-      # is not and a watchdog reset is. Once the watchdog turns a lockup into a
-      # sixty-second blip, nothing else notices one happened at all: too short for
-      # the dead man's switch, too short for the service checks. This is what keeps
-      # count, and therefore what says whether a future mitigation worked.
+      # Once the watchdog turns a lockup into a ninety-second blip, nothing else
+      # notices it happened: too short for the dead man's switch, too short for the
+      # service checks, and a warm reset never cuts power to the drive, so the SMART
+      # counter this used to read stays put. What does distinguish them is that a
+      # shutdown writes something before it goes and a reset writes nothing - so the
+      # question is whether the previous boot ended, or simply stopped.
       #
-      # The lifetime total means nothing on its own, so the delta is the signal and
-      # the first run only records where the count stands.
+      # This reports once per unexpected boot: the boot ID is remembered, and only a
+      # change to it asks the question.
       probe = ''
-        state="''${STATE_DIRECTORY:-/var/lib/gatus-collect}/unsafe-shutdowns"
-        current=$(smartctl --json --all /dev/nvme0 2>/dev/null \
-          | jq --exit-status '.nvme_smart_health_information_log.unsafe_shutdowns') \
-          || { echo "smartctl reported no shutdown count for /dev/nvme0"; exit 1; }
-
+        state="''${STATE_DIRECTORY:-/var/lib/gatus-collect}/last-boot"
+        current=$(cat /proc/sys/kernel/random/boot_id)
         previous=$(cat "$state" 2>/dev/null || echo "$current")
         printf '%s' "$current" >"$state"
 
-        [ "$current" -le "$previous" ] || {
-          echo "$((current - previous)) unexpected reset(s) since the last check (lifetime total $current)"
-          exit 1
-        }
+        if [ "$current" = "$previous" ]; then
+          exit 0
+        fi
+
+        if journalctl --boot -1 --lines 30 --no-pager | grep --quiet systemd-shutdown; then
+          exit 0
+        fi
+
+        booted=$(date --date "-$(cut --delimiter=. --fields=1 /proc/uptime) seconds" "+%H:%M")
+        echo "restarted at $booted without shutting down first"
+        exit 1
       '';
     };
 
