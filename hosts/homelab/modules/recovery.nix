@@ -38,9 +38,9 @@
   # The PCH timer counts down independently of the cores it watches, so a kernel that
   # can no longer feed it is exactly the kernel it is there to catch. systemd takes
   # /dev/watchdog0 unless told otherwise, and on this board that is a different timer.
-  systemd.watchdog = {
-    device = "/dev/watchdog1";
-    rebootTime = "10m";
-    runtimeTime = "60s";
+  systemd.settings.Manager = {
+    RebootWatchdogSec = "10m";
+    RuntimeWatchdogSec = "60s";
+    WatchdogDevice = "/dev/watchdog1";
   };
 }
