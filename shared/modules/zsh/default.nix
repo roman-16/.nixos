@@ -30,7 +30,13 @@
 
     programs = {
       nix-index-database.comma.enable = true;
-      zsh.enable = true;
+
+      zsh = {
+        enable = true;
+        # home-manager extends fpath and oh-my-zsh runs compinit, so the
+        # /etc/zshrc call only builds a dump that is then thrown away.
+        enableGlobalCompInit = false;
+      };
     };
 
     security = {
@@ -228,8 +234,16 @@
           ];
           oh-my-zsh = {
             enable = true;
+
+            # compinit reuses its dump whenever the number of completion files in
+            # fpath is unchanged, which on NixOS misses every rename behind a
+            # stable profile path. The generation is the honest cache key.
+            extraConfig = ''
+              ZSH_COMPDUMP="$ZSH_CACHE_DIR/zcompdump-''${''${:-/run/current-system}:A:t}"
+              [[ -f $ZSH_COMPDUMP ]] || rm --force $ZSH_CACHE_DIR/zcompdump-*(N)
+            '';
+
             plugins = [
-              "direnv"
               "git"
               "git-auto-fetch"
             ];
