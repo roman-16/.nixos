@@ -1,0 +1,19 @@
+# The toolchain the skill tests run in, and nothing more. The skill scripts themselves
+# import only the standard library, because on the VM the agent runs them under bare
+# pkgs.python3 with no venv on PATH - so `dependencies` stays empty and anything a test
+# needs goes in the dev group. uv.lock is the single source of truth: nix builds the
+# check's venv from it (tests.nix), and `uv sync` builds the local one from it too.
+[project]
+name = "apollo-skills"
+version = "0.1.0"
+description = "Test toolchain for Apollo's agent skill scripts"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=9"]
+
+# Nothing here is built or installed: the skills are scripts the agent runs by path, and
+# the tests reach each one through its own conftest, so there is no package to make.
+[tool.uv]
+package = false

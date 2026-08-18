@@ -1,13 +1,16 @@
 {
   "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.17.5/.schema/devbox.schema.json",
   "packages": {
-    "bun": "latest"
+    "bun": "latest",
+    "python": "3.14",
+    "uv": "latest"
   },
   "shell": {
     "init_hook": [
       "export LD_LIBRARY_PATH=\"${NIX_LD_LIBRARY_PATH}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\"",
       "if [ -f .env ]; then set -a; . ./.env; set +a; fi",
-      "bun install"
+      "bun install",
+      "uv sync"
     ]
   }
 }

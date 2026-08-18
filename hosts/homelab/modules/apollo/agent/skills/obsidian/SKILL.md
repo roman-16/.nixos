@@ -31,10 +31,12 @@ Its output is for **you**, not the user - nothing is sent to them, so tell them 
 
 | Report                                             | What it means                                                                                                                                                                          |
 | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `the vault is in sync with the remote`             | Nothing was owed. It may name files it `pulled`.                                                                                                                                       |
+| `the vault is in sync with the remote`             | Nothing was owed. It may name what it `pulled`.                                                                                                                                        |
 | `pushed - the vault is in sync`                    | Your work is committed and on its way to their devices.                                                                                                                                |
 | `⚠️ could not reach the remote` / `could not push` | Nothing is lost, but nothing arrived either. What you wrote is committed here and the next sync pushes it - so tell them it isn't on their phone yet rather than claiming it is saved. |
 | `⚠️ conflict`                                      | They changed the same note you did. See below.                                                                                                                                         |
+
+Every line that names notes says what became of them: a `file` is in the vault now, a `deletion` is gone from it, and a `rename` names the old path and then the new one. So a path listed as a file is a path you can open, and one listed as a deletion is one to stop looking for - if the user asks about a note in neither list, it was never there.
 
 A conflict is not a failure and never needs git: the script leaves the vault clean and holding **their** version, writes **your** version of each clashing note to a file it names, and keeps your commits on a local branch. Read their version in the vault, read yours from that file, write the merged note into the vault, and sync again. Don't discard their edit silently - if the two genuinely disagree, say so and ask.
 

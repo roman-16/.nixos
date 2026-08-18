@@ -1,4 +1,5 @@
 import re
+import shutil
 import subprocess
 
 import obsidian
@@ -49,8 +50,24 @@ class Vault:
         target = self.phone / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text)
+        self.phone_commit(f"phone {relative}")
+
+    def phone_delete(self, relative):
+        """A note or a whole folder removed the way the user removes one: in the app, which deletes
+        the file and leaves the plugin to commit it."""
+        target = self.phone / relative
+        shutil.rmtree(target) if target.is_dir() else target.unlink()
+        self.phone_commit(f"phone deleted {relative}")
+
+    def phone_rename(self, old, new):
+        target = self.phone / new
+        target.parent.mkdir(parents=True, exist_ok=True)
+        (self.phone / old).rename(target)
+        self.phone_commit(f"phone renamed {old}")
+
+    def phone_commit(self, message):
         git(self.phone, "add", "--all")
-        git(self.phone, "commit", "--quiet", "--message", f"phone {relative}")
+        git(self.phone, "commit", "--quiet", "--message", message)
         git(self.phone, "push", "--quiet")
 
     def status(self):
@@ -136,15 +153,52 @@ class TestHasConflictMarkers:
 
 class TestDescribe:
     def test_one_file_reads_singular(self):
-        assert obsidian.describe("committed", ["Car.md"]) == "committed 1 file: Car.md"
+        assert obsidian.describe("committed", "file", ["Car.md"]) == "committed 1 file: Car.md"
 
     def test_several_are_listed(self):
-        assert obsidian.describe("pulled", ["a.md", "b.md"]) == "pulled 2 files: a.md, b.md"
+        assert obsidian.describe("pulled", "file", ["a.md", "b.md"]) == "pulled 2 files: a.md, b.md"
+
+    def test_each_kind_reads_as_itself(self):
+        assert obsidian.describe("pulled", "deletion", ["Salary.md"]) == "pulled 1 deletion: Salary.md"
+        assert obsidian.describe("committed", "rename", ["a.md -> b.md", "c.md -> d.md"]) == (
+            "committed 2 renames: a.md -> b.md, c.md -> d.md"
+        )
 
     def test_a_long_list_starts_counting(self):
-        line = obsidian.describe("committed", [f"n{i}.md" for i in range(20)])
+        line = obsidian.describe("committed", "file", [f"n{i}.md" for i in range(20)])
         assert "committed 20 files" in line
         assert "… and 8 more" in line
+
+
+class TestChangedLines:
+    def changes(self, written=(), deleted=(), renamed=()):
+        return obsidian.Changes(list(written), list(deleted), list(renamed))
+
+    def test_a_diff_that_did_nothing_says_nothing(self):
+        assert obsidian.changed_lines("pulled", self.changes()) == []
+
+    def test_one_line_per_kind_that_holds_anything(self):
+        lines = obsidian.changed_lines(
+            "pulled", self.changes(["Steak.md"], ["Salary.md"], [("Old.md", "New.md")])
+        )
+        assert lines == [
+            "pulled 1 file: Steak.md",
+            "pulled 1 deletion: Salary.md",
+            "pulled 1 rename: Old.md -> New.md",
+        ]
+
+    def test_only_the_kinds_that_happened_are_named(self):
+        assert obsidian.changed_lines("committed", self.changes(["Steak.md"])) == [
+            "committed 1 file: Steak.md"
+        ]
+
+    def test_a_deletion_is_never_crowded_out_by_arrivals(self):
+        # Each kind gets its own line and its own cap, so a long run of new notes cannot push the one
+        # thing that is gone past the truncation and out of sight.
+        lines = obsidian.changed_lines(
+            "pulled", self.changes([f"n{i}.md" for i in range(40)], ["Salary.md"])
+        )
+        assert lines[-1] == "pulled 1 deletion: Salary.md"
 
 
 class TestSyncNothingOwed:
@@ -190,6 +244,88 @@ class TestSyncLocalWork:
         (vault.path / "Journal.md").unlink()
         run("sync")
         assert "Journal.md" not in vault.origin_files()
+
+    def test_a_deleted_note_is_committed_as_a_deletion(self, vault, capsys):
+        (vault.path / "Journal.md").unlink()
+        run("sync")
+        out = capsys.readouterr().out
+        assert "committed 1 deletion: Journal.md" in out
+        assert "committed 1 file" not in out
+
+    def test_a_moved_note_is_committed_as_a_rename(self, vault, capsys):
+        vault.write("Recipes/Butter Chicken.md", "# Butter Chicken\n")
+        run("sync")
+        capsys.readouterr()
+        (vault.path / "Work" / "Recipes").mkdir(parents=True)
+        (vault.path / "Recipes" / "Butter Chicken.md").rename(
+            vault.path / "Work" / "Recipes" / "Butter Chicken.md"
+        )
+        run("sync")
+        assert (
+            "committed 1 rename: Recipes/Butter Chicken.md -> Work/Recipes/Butter Chicken.md"
+            in capsys.readouterr().out
+        )
+
+
+class TestWhatBecameOfEachFile:
+    """A report is only worth reading if it is true about the vault as it now stands, so a folder the
+    user deleted on their phone must never come back as a list of notes to go and open."""
+
+    def stock(self, vault):
+        """A folder on the remote, already pulled into the vault."""
+        vault.phone_push("Blue Tomato/Salary.md", "# Salary\n")
+        vault.phone_push("Blue Tomato/IT-Support.md", "# IT-Support\n")
+        run("sync")
+
+    def test_a_folder_the_user_deleted_reads_as_deletions(self, vault, capsys):
+        self.stock(vault)
+        capsys.readouterr()
+        vault.phone_delete("Blue Tomato")
+        run("sync")
+        assert capsys.readouterr().out.splitlines() == [
+            "nothing to commit",
+            "pulled 2 deletions: Blue Tomato/IT-Support.md, Blue Tomato/Salary.md",
+            "the vault is in sync with the remote",
+        ]
+
+    def test_and_the_report_agrees_with_what_is_left_on_disk(self, vault, capsys):
+        self.stock(vault)
+        vault.phone_delete("Blue Tomato")
+        run("sync")
+        capsys.readouterr()
+        assert not (vault.path / "Blue Tomato").exists()
+
+    def test_arrivals_and_deletions_in_one_sync_are_told_apart(self, vault, capsys):
+        self.stock(vault)
+        capsys.readouterr()
+        vault.phone_delete("Blue Tomato/Salary.md")
+        vault.phone_push("Recipes/Steak.md", "# Steak\n")
+        run("sync")
+        out = capsys.readouterr().out
+        assert "pulled 1 file: Recipes/Steak.md" in out
+        assert "pulled 1 deletion: Blue Tomato/Salary.md" in out
+
+    def test_a_renamed_note_names_the_old_path_and_then_the_new(self, vault, capsys):
+        self.stock(vault)
+        capsys.readouterr()
+        vault.phone_rename("Blue Tomato/Salary.md", "Work/Blue Tomato/Salary.md")
+        run("sync")
+        assert (
+            "pulled 1 rename: Blue Tomato/Salary.md -> Work/Blue Tomato/Salary.md"
+            in capsys.readouterr().out
+        )
+
+    def test_a_note_moved_and_rewritten_at_once_still_reads_truthfully(self, vault, capsys):
+        # git calls it a rename only when enough of the content survives the move, so this one arrives
+        # as a deletion and an arrival. Both are true, which is the whole of what the report promises.
+        self.stock(vault)
+        capsys.readouterr()
+        vault.phone_delete("Blue Tomato/Salary.md")
+        vault.phone_push("Work/Salary.md", "nothing whatever in common with the note it replaces\n")
+        run("sync")
+        out = capsys.readouterr().out
+        assert "pulled 1 file: Work/Salary.md" in out
+        assert "pulled 1 deletion: Blue Tomato/Salary.md" in out
 
 
 class TestSyncRemoteWork:
@@ -347,6 +483,27 @@ class TestPushRace:
             run("sync")
         assert exit_info.value.code == 1
         assert "could not push" in capsys.readouterr().out
+
+    def test_a_note_the_remote_added_and_then_deleted_is_never_called_an_arrival(
+        self, vault, capsys, monkeypatch
+    ):
+        vault.phone_push("Recipes/Steak.md", "# Steak\n")
+        vault.write("Car.md", "notes\n")
+        real_push = obsidian.push
+        raced = []
+
+        def racing_push():
+            if not raced:
+                raced.append(True)  # the note lived only between the two attempts
+                vault.phone_delete("Recipes/Steak.md")
+            return real_push()
+
+        monkeypatch.setattr(obsidian, "push", racing_push)
+        run("sync")
+        out = capsys.readouterr().out
+        assert raced == [True]
+        assert "pushed - the vault is in sync" in out
+        assert "Steak" not in out
 
 
 class TestHealing:

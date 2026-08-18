@@ -8,6 +8,7 @@ After any code change, run all of the following and make sure they pass before c
 - `bun run typecheck` - type-checks the project with `tsc --noEmit`.
 - `bun run build` - bundles with `bun build` to verify the app compiles.
 - `bun run test` - runs the test suite with `bun test`.
+- `bun run test:skills` - runs the skills' Python tests (`uv run -- pytest`), the same suite `nix flake check`'s `apollo-pytest` runs.
 
 ## Dashboard
 

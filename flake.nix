@@ -106,6 +106,11 @@
       let
         apollo = ./hosts/homelab/modules/apollo;
         pkgs = inputs.nixpkgs.legacyPackages.x86_64-linux;
+        apolloTests = import ./hosts/homelab/modules/apollo/tests.nix {
+          inherit pkgs;
+          inherit (inputs.nixpkgs) lib;
+          inherit (inputs) pyproject-build-systems pyproject-nix uv2nix;
+        };
         traderBot = ./hosts/homelab/modules/trader/bot;
         traderNeh = import ./hosts/homelab/modules/trader/neh.nix {
           inherit pkgs;
@@ -114,17 +119,18 @@
         };
       in
       {
-        # Unit tests for the Apollo skills (pytest). The skill scripts are
-        # stdlib-only, so the test closure is python3 + pytest plus git, which the
-        # obsidian tests drive over throwaway repos in temp dirs (no network); the
-        # tests live under tests/skills and import each skill's script via its
-        # conftest, so the whole module is copied to preserve that relative layout.
+        # Unit tests for the Apollo skills. Runs in the uv2nix venv, so pytest is the
+        # version apollo/uv.lock pins and the interpreter is the pkgs.python3 the agent
+        # runs the skill scripts with on the VM. Hermetic: the obsidian tests drive
+        # throwaway git repos in temp dirs (no network), which is what git is here for. The
+        # tests live under tests/skills and import each skill's script via its conftest, so
+        # the whole module is copied to preserve that relative layout.
         apollo-pytest =
           pkgs.runCommand "apollo-pytest"
             {
               nativeBuildInputs = [
+                apolloTests.testEnv
                 pkgs.git
-                (pkgs.python3.withPackages (ps: [ ps.pytest ]))
               ];
             }
             ''

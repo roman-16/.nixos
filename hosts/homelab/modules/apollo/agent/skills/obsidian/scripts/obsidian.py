@@ -30,6 +30,7 @@ import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from typing import NamedTuple
 
 VAULT = Path(
     os.environ.get("OBSIDIAN_DIR")
@@ -143,13 +144,47 @@ def has_conflict_markers(path: Path) -> bool:
     )
 
 
-def staged_paths() -> list:
-    """What the next commit would record."""
-    return sorted(git_paths("diff", "--cached", "--name-only"))
+class Changes(NamedTuple):
+    """What a diff did to the vault: what it left in it, what it took out of it, and what it moved.
+
+    A path that was written and a path that was deleted are the same string, so a report built from
+    names alone claims that everything it lists can be opened - which is how a folder the user deleted
+    on their phone comes back as eight notes to go looking for. Whether a path is still there is one
+    bit, and this is where it is kept.
+    """
+
+    written: list
+    deleted: list
+    renamed: list
 
 
-def changed_between(old: str, new: str) -> list:
-    return git_paths("diff", "--name-only", f"{old}..{new}")
+def changes(*args: str) -> Changes:
+    """The change set a --name-status listing describes. R and C carry two paths and every other
+    status one, so the letter decides the stride: counting fields instead would let a single
+    unfamiliar status desync the rest of the walk."""
+    fields = git_paths(*args, "--name-status")
+    written, deleted, renamed = [], [], []
+    index = 0
+    while index < len(fields):
+        status = fields[index]
+        if status[0] == "R":
+            renamed.append((fields[index + 1], fields[index + 2]))
+            index += 3
+        elif status[0] == "C":
+            written.append(fields[index + 2])
+            index += 3
+        elif status[0] == "D":
+            deleted.append(fields[index + 1])
+            index += 2
+        else:
+            written.append(fields[index + 1])
+            index += 2
+    return Changes(sorted(written), sorted(deleted), sorted(renamed))
+
+
+def in_tree(changed: Changes) -> list:
+    """The paths a change set leaves in the vault, which are the only ones there is anything to read."""
+    return [*changed.written, *(target for _, target in changed.renamed)]
 
 
 def unmerged_paths() -> list:
@@ -160,13 +195,13 @@ def ahead(upstream: str) -> int:
     return int(git("rev-list", "--count", f"{upstream}..HEAD") or 0)
 
 
-def commit_local() -> list:
-    """Record whatever is in the vault, and return the files it covered."""
+def commit_local() -> Changes:
+    """Record whatever is in the vault, and return what the commit covered."""
     git("add", "--all")
-    paths = staged_paths()
-    if not paths:
-        return []
-    broken = [path for path in paths if has_conflict_markers(VAULT / path)]
+    staged = changes("diff", "--cached")
+    if not any(staged):
+        return staged
+    broken = [path for path in in_tree(staged) if has_conflict_markers(VAULT / path)]
     if broken:
         git("reset", "--quiet")  # the notes stay exactly as they are, just unstaged
         die("not committing: these notes still hold an unresolved merge, so resolve them first:\n  "
@@ -174,7 +209,7 @@ def commit_local() -> list:
     # Committed as whoever the clone is configured as, which is the user: it is their vault, the
     # identity is set on it in one place, and a commit made from here should read like any other.
     git("commit", "--quiet", "--message", datetime.now().strftime(MESSAGE_FORMAT))
-    return paths
+    return staged
 
 
 def fetch() -> str | None:
@@ -239,14 +274,26 @@ def plural(count: int) -> str:
     return "" if count == 1 else "s"
 
 
-def describe(verb: str, paths: list) -> str:
-    shown = paths[:LIST_CAP]
-    more = f", … and {len(paths) - len(shown)} more" if len(paths) > len(shown) else ""
-    return f"{verb} {len(paths)} file{plural(len(paths))}: {', '.join(shown)}{more}"
+def describe(verb: str, noun: str, items: list) -> str:
+    shown = items[:LIST_CAP]
+    more = f", … and {len(items) - len(shown)} more" if len(items) > len(shown) else ""
+    return f"{verb} {len(items)} {noun}{plural(len(items))}: {', '.join(shown)}{more}"
 
 
-def owed(committed: list) -> str:
-    return ("the commit is safe here and the next sync will push it" if committed
+def changed_lines(verb: str, changed: Changes) -> list:
+    """A change set as the report says it: one line per kind that holds anything. The kinds are never
+    folded into a single line, so a deletion can never be pushed out of the listing by a run of
+    arrivals, and every path the report names carries which of the two it is."""
+    kinds = (
+        ("file", changed.written),
+        ("deletion", changed.deleted),
+        ("rename", [f"{source} -> {target}" for source, target in changed.renamed]),
+    )
+    return [describe(verb, noun, items) for noun, items in kinds if items]
+
+
+def owed(committed: Changes) -> str:
+    return ("the commit is safe here and the next sync will push it" if any(committed)
             else "the vault may be out of date")
 
 
@@ -262,10 +309,8 @@ def conflict_report(conflicting: list, branch: str, saved: dict) -> list:
     ]
 
 
-def report(lines: list, incoming: list, *tail: str):
-    out = [*lines]
-    if incoming:
-        out.append(describe("pulled", incoming))
+def report(lines: list, pulled: Changes, *tail: str):
+    out = [*lines, *changed_lines("pulled", pulled)]
     out += [line for line in tail if line]
     print("\n".join(out))
 
@@ -281,38 +326,46 @@ def cmd_sync(args):
         lines.append(healed)
 
     committed = commit_local()
-    lines.append(describe("committed", committed) if committed else "nothing to commit")
+    lines += changed_lines("committed", committed) or ["nothing to commit"]
 
     upstream = upstream_ref()
-    incoming: list = []
+    # Where the remote stood when this sync began, and where it last stood after a fetch. Both are
+    # resolved to commits rather than left as the branch name, because a push moves the
+    # remote-tracking ref: read off the name afterwards, the report would hand Apollo its own commits
+    # back as the remote's work.
+    started = latest = git("rev-parse", upstream)
+
+    def finish(*tail: str):
+        """The report as it stands. What came from the remote is one diff from where the remote was
+        when this began, rather than a union of per-attempt diffs, so a note the user added and then
+        deleted between two attempts reads as gone rather than as new."""
+        report(lines, changes("diff", f"{started}..{latest}"), *tail)
+
     for attempt in range(PUSH_ATTEMPTS):
-        before = git("rev-parse", upstream)
         error = fetch()
         if error:
-            report(lines, incoming, f"⚠️ could not reach the remote ({error}) - {owed(committed)}")
+            finish(f"⚠️ could not reach the remote ({error}) - {owed(committed)}")
             raise SystemExit(1)
-        after = git("rev-parse", upstream)
-        if after != before:
-            incoming += [path for path in changed_between(before, after) if path not in incoming]
+        latest = git("rev-parse", upstream)
 
         conflicting = rebase_onto(upstream)
         if conflicting is not None:
             branch, saved = park(conflicting, upstream)
-            report(lines, incoming, *conflict_report(conflicting, branch, saved))
+            finish(*conflict_report(conflicting, branch, saved))
             return
 
         if ahead(upstream) == 0:
-            report(lines, incoming, "the vault is in sync with the remote")
+            finish("the vault is in sync with the remote")
             return
         error = push()
         if error is None:
-            report(lines, incoming, "pushed - the vault is in sync")
+            finish("pushed - the vault is in sync")
             return
         if attempt == PUSH_ATTEMPTS - 1:
-            report(lines, incoming, f"⚠️ could not push ({error}) - {owed(committed)}")
+            finish(f"⚠️ could not push ({error}) - {owed(committed)}")
             raise SystemExit(1)
         # The remote moved between the fetch and the push, which is ordinary with a device
-        # committing every few minutes: fold in what landed and run the cycle again.
+        # committing every few minutes: run the cycle again.
 
 
 def build_parser() -> argparse.ArgumentParser:

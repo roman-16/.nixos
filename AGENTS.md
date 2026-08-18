@@ -4,7 +4,7 @@ Multi-host NixOS flake with home-manager. Formatter: nixfmt.
 
 ## Layout
 
-- `flake.nix` - inputs (nixpkgs-unstable, home-manager, stylix, microvm, nix-flatpak, nix-index-database, nixos-wsl, llm-agents, uv2nix + pyproject-nix) + host configs + `checks` (nixfmt, trader ruff lint & pytest).
+- `flake.nix` - inputs (nixpkgs-unstable, home-manager, stylix, microvm, nix-flatpak, nix-index-database, nixos-wsl, llm-agents, uv2nix + pyproject-nix) + host configs + `checks` (apollo skill pytest, nixfmt, trader ruff lint & pytest).
 - `shared/modules/` - modules shared across desktop hosts (git, zsh, stylix, pi, proton-cli, fonts, nix, ...).
 - `hosts/<host>/configuration.nix` - per-host entry; auto-imports its `modules/` (+ `hardware-configuration.nix`).
 - `hosts/<host>/modules/` - host-specific modules.
@@ -43,7 +43,7 @@ SSH into a VM jumps through homelab, e.g. trader:
 ## Commands
 
 - Format: `nix fmt` (alias `nx-fmt`)
-- Check: `nix flake check` (must pass before committing) - runs nixfmt, trader ruff lint + pytest, and evaluates every host config
+- Check: `nix flake check` (must pass before committing) - runs nixfmt, the apollo skill tests (pytest), trader ruff lint + pytest, and evaluates every host config
 - Switch local: `nx-update` (`nh os switch --update --hostname $(hostname)`)
 - Deploy homelab: `nx-deploy`
 - Update inputs: `nix flake update`

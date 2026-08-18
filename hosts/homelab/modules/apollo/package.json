@@ -11,6 +11,7 @@
     "lint": "oxfmt && oxlint",
     "start": "bun run ./src/index.ts",
     "test": "bun test",
+    "test:skills": "uv run -- pytest tests/skills",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
