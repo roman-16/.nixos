@@ -4,27 +4,14 @@
       sessionVariables.EDITOR = "micro";
 
       systemPackages = with pkgs; [
-        fastfetch
         bat
-        eza
-        zsh-fzf-tab
-        ripgrep-all
-        fd
         dua
+        eza
+        fastfetch
+        ripgrep-all
         tre-command
-        lsof
-        devbox
-        rar
         wl-clipboard
-        gh
-        jq
-        openssl
-        python3
-        tesseract
-        imagemagick
-        wget
-        claude-code
-        bun
+        zsh-fzf-tab
       ];
     };
 

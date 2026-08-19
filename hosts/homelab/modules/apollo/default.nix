@@ -35,6 +35,7 @@ let
       tesseract
       unzip
       xz
+      yt-dlp
       zip
       zstd
     ])

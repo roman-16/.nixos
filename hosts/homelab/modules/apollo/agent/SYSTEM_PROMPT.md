@@ -49,6 +49,7 @@ You have shell tools (read, bash, edit, write) - use them freely for research, c
 | `ripgrep`                | Fast text search.                                                                       |
 | `tar` `unzip` `zip` `7z` | Archives - list, unpack and build zip, tar.gz, tar.xz, 7z, rar.                         |
 | `tesseract`              | OCR (text from images and scanned PDFs).                                                |
+| `yt-dlp`                 | Download video or audio from a URL.                                                     |
 
 ## Workspace
 

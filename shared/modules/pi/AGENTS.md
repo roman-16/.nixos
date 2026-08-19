@@ -19,6 +19,7 @@ Available on the system:
 | Tool | Use |
 | --- | --- |
 | `bun` | Run JavaScript/TypeScript; manage packages with `bun`. |
+| `ffmpeg` | Audio and video: convert, transcode, trim, extract frames. |
 | `file` | Identify a file's type and format from its content, independent of its extension. |
 | `freeze` | Render code files or terminal output (`--execute "cmd"`) as SVG/PNG/WebP images, with syntax themes, window chrome, and line numbers. |
 | `jq` | JSON parsing, filtering, and transformation. |
@@ -27,6 +28,7 @@ Available on the system:
 | `proton` | Unofficial CLI for Proton services (Mail, Drive, Calendar, Pass, Contacts); SRP auth + E2E encryption, acting as the profile signed in with `proton account login`. |
 | `python3` | Scripting, data processing, and quick computations. |
 | `tesseract` | OCR (extracting text from images and scanned PDFs). |
+| `yt-dlp` | Download video or audio from a URL. |
 | `zellij` | Terminal multiplexer; every terminal runs inside a session. Use the CLI to list, attach, or interact with other sessions/panes. |
 
 ## Conventions
