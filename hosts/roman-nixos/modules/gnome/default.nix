@@ -1,38 +1,6 @@
 {
   nixos =
-    { pkgs, ... }:
-    let
-      murmur =
-        let
-          uuid = "murmur@roman-16.github.io";
-          version = "1.3.2";
-        in
-        # Murmur is written in TypeScript, so take the built extension from the
-        # release asset rather than compiling the checkout.
-        pkgs.stdenvNoCC.mkDerivation {
-          pname = "gnome-shell-extension-murmur";
-          inherit version;
-          src = pkgs.fetchurl {
-            url = "https://github.com/roman-16/murmur/releases/download/v${version}/${uuid}.shell-extension.zip";
-            hash = "sha256-rNKA6vq8aiYZfPqbB2gO8EDFf3wUuOpXmE3RuE0G8fo=";
-          };
-          nativeBuildInputs = [
-            pkgs.glib
-            pkgs.unzip
-          ];
-          dontUnpack = true;
-          dontConfigure = true;
-          dontBuild = true;
-          installPhase = ''
-            runHook preInstall
-            dir="$out/share/gnome-shell/extensions/${uuid}"
-            mkdir -p "$dir"
-            unzip -q "$src" -d "$dir"
-            glib-compile-schemas "$dir/schemas"
-            runHook postInstall
-          '';
-        };
-    in
+    { inputs, pkgs, ... }:
     {
       environment = {
         gnome.excludePackages = with pkgs; [
@@ -55,7 +23,6 @@
           dconf-editor
           dotool
           gnome-tweaks
-          murmur
           gnome49Extensions."lockkeys@vaina.lt"
           gnomeExtensions.alphabetical-app-grid
           gnomeExtensions.appindicator
@@ -69,6 +36,7 @@
           gnomeExtensions.smile-complementary-extension
           gnomeExtensions.user-themes
           gnomeExtensions.vitals
+          inputs.murmur.packages.${pkgs.stdenv.hostPlatform.system}.default
           smile
         ];
       };
@@ -86,8 +54,9 @@
   home =
     {
       config,
-      pkgs,
+      inputs,
       lib,
+      pkgs,
       ...
     }:
     let
@@ -241,8 +210,7 @@
           disable-extension-version-validation = true;
           disable-user-extensions = false;
           enabled-extensions = with pkgs; [
-            "lockkeys@vaina.lt"
-            "murmur@roman-16.github.io"
+            gnome49Extensions."lockkeys@vaina.lt".extensionUuid
             gnomeExtensions.alphabetical-app-grid.extensionUuid
             gnomeExtensions.appindicator.extensionUuid
             gnomeExtensions.blur-my-shell.extensionUuid
@@ -255,6 +223,7 @@
             gnomeExtensions.smile-complementary-extension.extensionUuid
             gnomeExtensions.user-themes.extensionUuid
             gnomeExtensions.vitals.extensionUuid
+            inputs.murmur.packages.${pkgs.stdenv.hostPlatform.system}.default.extensionUuid
           ];
           favorite-apps = [
             "brave-browser.desktop"

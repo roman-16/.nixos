@@ -339,6 +339,26 @@
         "type": "github"
       }
     },
+    "murmur": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1787148684,
+        "narHash": "sha256-QyDgtXmAPCz0y9CrvUEXL3QOtV/eGgo7XRH2ALZi0NI=",
+        "owner": "roman-16",
+        "repo": "murmur",
+        "rev": "04a524a454ba8e5bae0f4bbf3ff65724aebf8d69",
+        "type": "github"
+      },
+      "original": {
+        "owner": "roman-16",
+        "repo": "murmur",
+        "type": "github"
+      }
+    },
     "nix-flatpak": {
       "locked": {
         "lastModified": 1767983141,
@@ -526,6 +546,7 @@
         "home-manager": "home-manager",
         "llm-agents": "llm-agents",
         "microvm": "microvm",
+        "murmur": "murmur",
         "nix-flatpak": "nix-flatpak",
         "nix-index-database": "nix-index-database",
         "nixos-wsl": "nixos-wsl",
