@@ -267,7 +267,6 @@ in
           ]);
           text = ''
             src=/var/lib/apollo/apollo.sqlite
-            remote_parent="/backups"
             remote="/backups/apollo"
             keep=8
 
@@ -277,13 +276,14 @@ in
 
             # Exit 3 is "no such path". Anything else (network, auth) is a real
             # failure, and answering it by creating a folder that already exists
-            # would only trade it for a confusing one.
+            # would only trade it for a confusing one. `items create` makes the
+            # folders above its path too, so the leaf is the whole request.
             ensure_folder() {
               local path="$1" status=0
               proton drive items get "$path" >/dev/null 2>&1 || status=$?
               case "$status" in
                 0) ;;
-                3) proton drive folders create "$path" >/dev/null ;;
+                3) proton drive items create "$path" >/dev/null ;;
                 *) echo "cannot reach Drive ($path, exit $status)" >&2; exit "$status" ;;
               esac
             }
@@ -297,16 +297,16 @@ in
             [ -s "$snap" ] || { echo "snapshot is empty: $src" >&2; exit 1; }
             zstd --quiet --threads=0 --force -o "$comp" "$snap"
 
-            ensure_folder "$remote_parent"
             ensure_folder "$remote"
             echo "uploading $(basename "$comp") ($(stat --format=%s "$comp") bytes)"
             proton drive items upload "$comp" "$remote"
 
             # Newest-first by name (UTC timestamps sort lexicographically); keep the
             # newest $keep, delete the rest in one call. Runs only after the upload
-            # succeeds.
+            # succeeds. --page-size 0 is the whole folder; a listing is otherwise
+            # the first 50 of it.
             stale="$(
-              proton drive items list "$remote" --output json \
+              proton drive items list "$remote" --output json --page-size 0 \
                 | jq --raw-output '[.items[].name | select(startswith("apollo-"))] | sort | reverse | .[]' \
                 | tail --lines=+$((keep + 1))
             )"
