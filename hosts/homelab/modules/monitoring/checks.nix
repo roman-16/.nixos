@@ -162,6 +162,17 @@ let
       '';
     };
 
+    market-data-seal = {
+      group = "Jobs";
+      name = "Market Data Seal";
+      source = "trader";
+      unit = "marketdata-seal";
+      heartbeat = "26h";
+      priority = 4;
+      click = "https://trader.${facts.domain}";
+      description = "a finished month of market data is not reaching Proton Drive, which is the only place the months the VM has dropped still exist";
+    };
+
     market-data-sweep = {
       group = "Jobs";
       name = "Market Data Sweep";
