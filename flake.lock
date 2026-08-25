@@ -281,11 +281,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1787661347,
-        "narHash": "sha256-THmnBAdAIV+jT348f3r/vyoeb6ilhcVLwVXkBU7Pai8=",
+        "lastModified": 1787680808,
+        "narHash": "sha256-9168tNt0NZdtlx5RM5huEuc9NCWMLACJA9O4UK/l2Zc=",
         "owner": "nix-community",
         "repo": "home-manager",
-        "rev": "52c3a5881c821ad7367bbde075e52b76cdb378ab",
+        "rev": "6840c9a8f50722944eb106ce8bb237c138584f2a",
         "type": "github"
       },
       "original": {
@@ -305,11 +305,11 @@
         "treefmt-nix": "treefmt-nix_2"
       },
       "locked": {
-        "lastModified": 1787660833,
-        "narHash": "sha256-4R2DeS9btVaawjYmkfA9c1QHYCwg0TM2PjlFOSlKk0Y=",
+        "lastModified": 1787685817,
+        "narHash": "sha256-p0OeLu0T5RCjJBEzIn8oqXS3x8Ax+sy3VyUj8YUrLdA=",
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "60e7fc4eab599ae19f53818784955f2f5aab72ec",
+        "rev": "75d0500bdfd718c5cc4b11b3c1d06821194db711",
         "type": "github"
       },
       "original": {
@@ -346,11 +346,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1787500119,
-        "narHash": "sha256-7Kg3Nhl+p1tyKveG5mhh0+i4cXliH8h+m/0EA/eWzF4=",
+        "lastModified": 1787687125,
+        "narHash": "sha256-Aceo2k5hGDe8rkSZQh979+cP/3TywUsVyrUfT07lh0M=",
         "owner": "roman-16",
         "repo": "murmur",
-        "rev": "52d999756954763b6e39007d2d38f600ec505e2b",
+        "rev": "1d7d539b1585964f0df572488abd9a4a2bafbb01",
         "type": "github"
       },
       "original": {
