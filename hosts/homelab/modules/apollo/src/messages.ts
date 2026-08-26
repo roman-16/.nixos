@@ -145,28 +145,28 @@ export function fileContextNote(file: ReceivedFile, retentionDays: number): Cont
 }
 
 /**
- * WhatsApp notice when a Claude/agent run fails terminally (any provider error). Only the first line
+ * WhatsApp notice when a model run fails terminally (any provider error). Only the first line
  * of the reason is worth sending: a provider's detail carries a stack trace behind it, and a wall of
  * source paths tells the user nothing they can act on.
  */
-export function claudeErrorNotice(detail: string): string {
+export function errorNotice(detail: string): string {
   const [first = ""] = detail.trim().split("\n");
   const reason = first.trim();
-  return `⚠️ I couldn't reach Claude just now${
+  return `⚠️ I couldn't reach the model just now${
     reason ? `: ${truncate(reason, 300)}` : ""
   }. Your message didn't go through - try again in a bit.`;
 }
 
 /**
- * WhatsApp notice for a Claude sign-in that has expired. Retrying cannot fix it and only the user
- * can, so this names the one action that will, and says their messages are being kept rather than
- * lost while they get to it.
+ * WhatsApp notice for a credential that can no longer be used. Retrying cannot fix it and only the
+ * user can, so this names the one action that will, and says their messages are being kept rather
+ * than lost while they get to it.
  */
-export function claudeAuthNotice(dashboardUrl: string): string {
+export function authNotice(dashboardUrl: string): string {
   const where = dashboardUrl ? `the dashboard (${dashboardUrl})` : "the dashboard";
   return (
-    `⚠️ My Claude sign-in expired, so I can't answer until it's renewed: open ${where}, ` +
-    `then Claude -> Authorize. I'll keep whatever you send me and catch up once it's back.`
+    `⚠️ My model credentials are invalid, so I can't answer until they're renewed: open ${where}, ` +
+    `then sign in. I'll keep whatever you send me and catch up once it's back.`
   );
 }
 

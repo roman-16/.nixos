@@ -1,46 +1,60 @@
 import { barColor } from "./format";
 
-export interface UsageLimit {
-  resets_at: string | null;
-  utilization: number;
+export interface CreditUsage {
+  used: number;
+  limit: number | null;
+  remaining: number | null;
+  reset: string | null;
 }
 
-export interface ExtraUsage {
-  is_enabled: boolean;
-  monthly_limit: number | null;
-  used_credits: number;
-  utilization: number | null;
+const ENDPOINT = "https://openrouter.ai/api/v1/auth/key";
+
+function numberAt(data: Record<string, unknown>, keys: string[]): number | undefined {
+  for (const key of keys) {
+    if (typeof data[key] === "number") return data[key] as number;
+  }
+  return undefined;
 }
 
-export interface UsageData {
-  extra_usage?: ExtraUsage;
-  five_hour?: UsageLimit;
-  seven_day?: UsageLimit;
-  seven_day_sonnet?: UsageLimit;
+function stringAt(data: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    if (typeof data[key] === "string") return data[key] as string;
+  }
+  return undefined;
 }
 
-/** Fetch Anthropic subscription usage with the OAuth token (same endpoint pi uses). */
-export async function fetchUsage(token: string): Promise<UsageData | null> {
+/** Fetch the OpenRouter key's credit usage with the API key (GET /auth/key). */
+export async function fetchUsage(token: string): Promise<CreditUsage | null> {
   try {
-    const res = await fetch("https://api.anthropic.com/api/oauth/usage", {
-      headers: {
-        "anthropic-beta": "oauth-2025-04-20",
-        authorization: `Bearer ${token}`,
-        "content-type": "application/json",
-      },
+    const res = await fetch(ENDPOINT, {
+      headers: { authorization: `Bearer ${token}` },
     });
     if (!res.ok) return null;
-    return (await res.json()) as UsageData;
+    const body = (await res.json()) as { data?: Record<string, unknown> };
+    const data = body.data;
+    if (!data) return null;
+
+    const used = numberAt(data, ["usage"]) ?? 0;
+    const limit = numberAt(data, ["limit", "usage_limit"]) ?? null;
+    const remaining =
+      numberAt(data, ["limit_remaining", "limitRemaining", "usage_remaining"]) ??
+      (typeof limit === "number" ? Math.max(0, limit - used) : null);
+    const reset = stringAt(data, ["limit_reset", "limitReset"]) ?? null;
+
+    return { used, limit, remaining, reset };
   } catch {
     return null;
   }
 }
 
-/** Human "resets in ..." label for a limit's reset timestamp. */
-export function resetLabel(resetsAt: string | null): string {
-  if (!resetsAt) return "";
-  const ms = new Date(resetsAt).getTime() - Date.now();
-  if (ms <= 0) return "resets now";
+function money(value: number): string {
+  return `$${value.toFixed(2)}`;
+}
+
+function resetLabel(resetAt: string | null): string {
+  if (!resetAt) return "";
+  const ms = new Date(resetAt).getTime() - Date.now();
+  if (Number.isNaN(ms) || ms <= 0) return "resets now";
   const minutes = Math.floor(ms / 60000);
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
@@ -49,23 +63,21 @@ export function resetLabel(resetsAt: string | null): string {
   return `resets in ${minutes}m`;
 }
 
-/** Extra usage (per-token overage) spend as a short value string. */
-export function extraUsageValue(extra: ExtraUsage): string {
-  if (!extra.is_enabled) return "not enabled";
-  const spent = `$${(extra.used_credits / 100).toFixed(2)}`;
-  return extra.monthly_limit == null
-    ? `${spent} · no limit`
-    : `${spent} / $${(extra.monthly_limit / 100).toFixed(2)}`;
-}
-
-/** A labelled progress bar for a resettable limit (session / weekly). */
-function bar(title: string, limit: UsageLimit | undefined): string {
-  if (!limit) return "";
-  const pct = Math.min(100, Math.max(0, Math.round(limit.utilization)));
-  const reset = resetLabel(limit.resets_at);
+/** The credit balance bar: a used-vs-limit bar and the amount left, plus when it resets. */
+function creditBar(usage: CreditUsage): string {
+  const { limit } = usage;
+  if (limit == null || limit <= 0) {
+    return `<div class="flex justify-between text-xs text-neutral-400">
+      <span>Credits used</span><span>${money(usage.used)}</span>
+    </div>`;
+  }
+  const pct = Math.min(100, Math.max(0, Math.round((usage.used / limit) * 100)));
+  const remaining =
+    usage.remaining == null ? money(Math.max(0, limit - usage.used)) : money(usage.remaining);
+  const reset = resetLabel(usage.reset);
   return `<div>
     <div class="mb-1.5 flex items-baseline justify-between gap-2 text-xs">
-      <span class="text-neutral-400">${title}</span><span class="text-neutral-500">${pct}%${reset ? ` · ${reset}` : ""}</span>
+      <span class="text-neutral-400">Credits</span><span class="text-neutral-500">${remaining}${reset ? ` · ${reset}` : ""}</span>
     </div>
     <div class="h-1.5 overflow-hidden rounded-full bg-white/5">
       <div class="h-full rounded-full ${barColor(pct)}" style="width:${pct}%"></div>
@@ -73,22 +85,8 @@ function bar(title: string, limit: UsageLimit | undefined): string {
   </div>`;
 }
 
-function extraRow(extra: ExtraUsage | undefined): string {
-  if (!extra) return "";
-  return `<div class="flex justify-between text-xs text-neutral-400"><span>Extra usage</span><span>${extraUsageValue(extra)}</span></div>`;
-}
-
-/** Render the usage fragment for the dashboard: limit bars plus the extra-usage value. */
-export function renderUsage(data: UsageData | null): string {
-  if (!data) return `<p class="text-xs text-neutral-500">Usage data unavailable.</p>`;
-
-  const rows = [
-    bar("Session (5h)", data.five_hour),
-    bar("Weekly (all models)", data.seven_day),
-    bar("Weekly (Sonnet)", data.seven_day_sonnet),
-    extraRow(data.extra_usage),
-  ].filter(Boolean);
-
-  if (rows.length === 0) return `<p class="text-xs text-neutral-500">No usage limits reported.</p>`;
-  return `<div class="space-y-3">${rows.join("")}</div>`;
+/** Render the dashboard's model usage section: the OpenRouter credit balance bar. */
+export function renderUsage(data: CreditUsage | null): string {
+  if (!data) return `<p class="text-xs text-neutral-500">Usage data unavailable right now.</p>`;
+  return `<div class="space-y-3">${creditBar(data)}</div>`;
 }

@@ -1,11 +1,11 @@
 import type { ContextUsage } from "@earendil-works/pi-coding-agent";
 import QRCode from "qrcode";
 
-import type { AnthropicStatus } from "./anthropic";
+import type { CredentialStatus } from "./credentials";
 import { barColor, escapeHtml, humanTokens, truncate } from "./format";
 import type { LogRecord } from "./logs";
 import { RANGE_LABELS } from "./tokens";
-import { renderUsage, type UsageData } from "./usage";
+import { renderUsage, type CreditUsage } from "./usage";
 import type { WhatsAppState } from "./whatsapp";
 
 const SURFACE = "rounded-2xl border border-white/10 bg-neutral-900/60 shadow-xl";
@@ -38,7 +38,7 @@ function filterChip(name: string, value: string, label: string, checked = false)
 }
 
 /**
- * Full page shell: sticky glass header, the WhatsApp and Claude status sections
+ * Full page shell: sticky glass header, the WhatsApp and model status sections
  * (#summary, side by side on desktop), the conversation with its context footer, and
  * the logs - one flowing column that scrolls as a page. Each region polls its fragment
  * endpoint and swaps its own contents.
@@ -247,13 +247,13 @@ export function renderPage(version: string): string {
 }
 
 export interface SummaryArgs {
-  /** When the sign-in expired (ISO), shown with the `expired` status. */
-  anthropicExpiredAt?: string;
-  anthropicStatus: AnthropicStatus;
+  /** When the credential was retired (ISO), shown with the `invalid` status. */
+  invalidAt?: string;
+  status: CredentialStatus;
   authUrl: string;
   connectError?: string;
   linking: boolean;
-  usage: UsageData | null;
+  usage: CreditUsage | null;
   whatsapp: WhatsAppState;
 }
 
@@ -307,8 +307,8 @@ function shortStamp(iso: string | undefined): string {
 }
 
 /** The authorize link and paste-code form: the one way back, whichever way the sign-in is absent. */
-function claudeConnect(args: SummaryArgs): string {
-  return `<a href="${args.authUrl}" target="_blank" rel="noreferrer" class="${PRIMARY_BUTTON}">Authorize with Anthropic</a>
+function connect(args: SummaryArgs): string {
+  return `<a href="${args.authUrl}" target="_blank" rel="noreferrer" class="${PRIMARY_BUTTON}">Sign in with OpenRouter</a>
     <form hx-post="/connect" hx-target="#summary" hx-swap="innerHTML" class="flex gap-2">
       <input name="code" placeholder="Paste code or redirect URL" autocomplete="off" spellcheck="false"
         class="min-w-0 flex-1 rounded-xl border border-white/10 bg-neutral-950/60 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus:border-indigo-400 focus:outline-none" />
@@ -317,33 +317,33 @@ function claudeConnect(args: SummaryArgs): string {
     ${args.connectError ? `<p class="text-xs text-red-400">${args.connectError}</p>` : ""}`;
 }
 
-function claudeBody(args: SummaryArgs): string {
-  if (args.anthropicStatus === "connected") {
+function modelBody(args: SummaryArgs): string {
+  if (args.status === "connected") {
     return `<div class="space-y-4">
-      ${statusRow("bg-emerald-400", "Connected to Anthropic")}
+      ${statusRow("bg-emerald-400", "Connected to OpenRouter")}
       ${args.usage ? renderUsage(args.usage) : `<p class="text-xs text-neutral-500">Usage data unavailable right now.</p>`}
     </div>`;
   }
-  // An expired sign-in reads as broken rather than as never set up: it stopped Apollo answering at a
-  // knowable moment, and what is waiting on the other side of renewing it is a whole conversation.
-  if (args.anthropicStatus === "expired") {
-    const at = shortStamp(args.anthropicExpiredAt);
+  // An invalid credential reads as broken rather than as never set up: it stopped Apollo answering
+  // at a knowable moment, and what is waiting on the other side of renewing it is a whole conversation.
+  if (args.status === "invalid") {
+    const at = shortStamp(args.invalidAt);
     return `<div class="space-y-4">
-      ${statusRow("bg-red-500", `Sign-in expired${at ? ` · ${at}` : ""}`)}
-      <p class="text-xs leading-relaxed text-neutral-400">Apollo can't reach Claude until you authorize again, and is holding every message you send until then. Your conversation is untouched.</p>
-      ${claudeConnect(args)}
+      ${statusRow("bg-red-500", `Credentials invalid${at ? ` · ${at}` : ""}`)}
+      <p class="text-xs leading-relaxed text-neutral-400">Apollo can't reach the model until you sign in again, and is holding every message you send until then. Your conversation is untouched.</p>
+      ${connect(args)}
     </div>`;
   }
   return `<div class="space-y-4">
-    ${statusRow("bg-neutral-600", "Not connected to Anthropic")}
-    <p class="text-xs leading-relaxed text-neutral-400">Authorize with your Claude account. You'll be redirected to a localhost page that won't load - that's expected: copy that URL (or the code in it) and paste it below.</p>
-    ${claudeConnect(args)}
+    ${statusRow("bg-neutral-600", "Not connected to OpenRouter")}
+    <p class="text-xs leading-relaxed text-neutral-400">Sign in with your OpenRouter account. You'll be redirected to a localhost page that won't load - that's expected: copy that URL (or the code in it) and paste it below.</p>
+    ${connect(args)}
   </div>`;
 }
 
 /**
  * Render the #summary fragment: the WhatsApp section (link state, or the link/QR flow)
- * and the Claude section (usage bars, or the authorize + paste-code flow), side by side
+ * and the model section (credit usage, or the authorize + paste-code flow), side by side
  * on desktop and stacked on mobile.
  */
 export async function renderSummary(args: SummaryArgs): Promise<string> {
@@ -359,8 +359,8 @@ export async function renderSummary(args: SummaryArgs): Promise<string> {
       <div class="${SURFACE} p-5">${whatsappBody}</div>
     </section>
     <section>
-      ${headingRow("claude")}
-      <div class="${SURFACE} p-5">${claudeBody(args)}</div>
+      ${headingRow("model")}
+      <div class="${SURFACE} p-5">${modelBody(args)}</div>
     </section>
   </div>`;
 }

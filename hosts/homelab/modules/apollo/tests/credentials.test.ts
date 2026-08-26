@@ -1,21 +1,20 @@
 import { describe, expect, it } from "bun:test";
 
 import {
-  type Anthropic,
-  type AnthropicRuntime,
-  createAnthropic,
+  type Credentials,
+  type CredentialRuntime,
+  createCredentials,
   deadGrant,
-} from "../src/anthropic";
+} from "../src/credentials";
 import type { Kv } from "../src/kv";
 
-const AUTH_URL = "https://claude.ai/oauth/authorize?code=true";
+const AUTH_URL = "https://openrouter.ai/auth?code=true";
 
-/** The refusal Apollo actually got, verbatim from the journal, stack and all. */
+/** The refusal Apollo actually got: an API key OpenRouter rejects. */
 const DEAD =
-  'OAuth refresh failed for anthropic: Anthropic token refresh request failed. url=https://platform.claude.com/v1/oauth/token; details=Error: HTTP request failed. status=400; url=https://platform.claude.com/v1/oauth/token; body={"error": "invalid_grant", "error_description": "Refresh token expired"}\n    at postJson (/nix/store/x/anthropic.js:155:19)';
+  'OpenRouter request failed. status=401; url=https://openrouter.ai/api/v1/chat/completions; body={"error": {"message": "Invalid API key"}}\n    at postJson (/nix/store/x/openrouter.js:155:19)';
 
-const TRANSIENT =
-  "OAuth refresh failed for anthropic: Anthropic token refresh request failed. url=https://platform.claude.com/v1/oauth/token; details=Error: connect ETIMEDOUT";
+const TRANSIENT = "OpenRouter request failed. details=Error: connect ETIMEDOUT";
 
 function memoryKv(): Kv {
   const store = new Map<string, string>();
@@ -31,7 +30,7 @@ function memoryKv(): Kv {
 }
 
 interface Harness {
-  anthropic: Anthropic;
+  credentials: Credentials;
   state: {
     codes: string[];
     logins: number;
@@ -63,8 +62,8 @@ function harness(
       state.logouts += 1;
       state.stored = false;
     },
-  } as unknown as AnthropicRuntime;
-  return { anthropic: createAnthropic(runtime, memoryKv()), state };
+  } as unknown as CredentialRuntime;
+  return { credentials: createCredentials(runtime, memoryKv()), state };
 }
 
 /** Let the background retirement land. */
@@ -73,43 +72,47 @@ function settle(): Promise<void> {
 }
 
 describe("deadGrant", () => {
-  it("recognizes the refusal that ends a sign-in", () => {
+  it("recognizes the refusal that ends a credential", () => {
     expect(deadGrant(DEAD)).toBe(true);
   });
 
-  it("reads the OAuth code wherever it sits in the message", () => {
+  it("reads the auth failure wherever it sits in the message", () => {
+    expect(deadGrant('body={"error":"Invalid API key"}')).toBe(true);
+    expect(deadGrant("INVALID API KEY")).toBe(true);
+    expect(deadGrant("Unauthorized")).toBe(true);
     expect(deadGrant('body={"error":"invalid_grant"}')).toBe(true);
-    expect(deadGrant("INVALID_GRANT")).toBe(true);
+    expect(deadGrant("no auth credentials found")).toBe(true);
   });
 
   it("leaves a transient failure alone, since a retry may well fix it", () => {
     expect(deadGrant(TRANSIENT)).toBe(false);
     expect(deadGrant("Overloaded")).toBe(false);
     expect(deadGrant("HTTP request failed. status=500")).toBe(false);
+    expect(deadGrant("HTTP request failed. status=429")).toBe(false);
     expect(deadGrant("")).toBe(false);
   });
 });
 
 describe("status", () => {
   it("is connected while a credential is stored", () => {
-    expect(harness().anthropic.status()).toBe("connected");
+    expect(harness().credentials.status()).toBe("connected");
   });
 
   it("is missing when there has never been one", () => {
-    expect(harness({ stored: false }).anthropic.status()).toBe("missing");
+    expect(harness({ stored: false }).credentials.status()).toBe("missing");
   });
 
-  it("is expired once a refusal has retired one", async () => {
-    const { anthropic } = harness();
-    anthropic.observe(DEAD);
+  it("is invalid once a refusal has retired one", async () => {
+    const { credentials } = harness();
+    credentials.observe(DEAD);
     await settle();
-    expect(anthropic.status()).toBe("expired");
+    expect(credentials.status()).toBe("invalid");
   });
 
-  it("is expired in the same tick the refusal was seen, before the delete lands", () => {
-    const { anthropic } = harness();
-    anthropic.observe(DEAD);
-    expect(anthropic.status()).toBe("expired");
+  it("is invalid in the same tick the refusal was seen, before the delete lands", () => {
+    const { credentials } = harness();
+    credentials.observe(DEAD);
+    expect(credentials.status()).toBe("invalid");
   });
 
   it("survives a restart, since the retirement is recorded", async () => {
@@ -120,52 +123,52 @@ describe("status", () => {
       logout: async () => {
         stored = false;
       },
-    } as unknown as AnthropicRuntime;
-    createAnthropic(runtime, kv).observe(DEAD);
+    } as unknown as CredentialRuntime;
+    createCredentials(runtime, kv).observe(DEAD);
     await settle();
-    // A fresh instance over the same store: no credential, but the expiry is remembered.
-    expect(createAnthropic(runtime, kv).status()).toBe("expired");
+    // A fresh instance over the same store: no credential, but the invalidation is remembered.
+    expect(createCredentials(runtime, kv).status()).toBe("invalid");
   });
 });
 
 describe("observe", () => {
   it("deletes a credential a refusal has proven dead", async () => {
-    const { anthropic, state } = harness();
-    anthropic.observe(DEAD);
+    const { credentials, state } = harness();
+    credentials.observe(DEAD);
     await settle();
     expect(state.logouts).toBe(1);
     expect(state.stored).toBe(false);
   });
 
-  it("records when the sign-in expired", async () => {
-    const { anthropic } = harness();
-    anthropic.observe(DEAD);
+  it("records when the credential was retired", async () => {
+    const { credentials } = harness();
+    credentials.observe(DEAD);
     await settle();
-    expect(Date.parse(anthropic.expiredAt()!)).toBeGreaterThan(0);
+    expect(Date.parse(credentials.invalidAt()!)).toBeGreaterThan(0);
   });
 
   it("never spends a working credential on a transient failure", async () => {
-    const { anthropic, state } = harness();
-    anthropic.observe(TRANSIENT);
+    const { credentials, state } = harness();
+    credentials.observe(TRANSIENT);
     await settle();
     expect(state.logouts).toBe(0);
-    expect(anthropic.status()).toBe("connected");
+    expect(credentials.status()).toBe("connected");
   });
 
   it("has nothing to retire when nothing is stored", async () => {
-    const { anthropic, state } = harness({ stored: false });
-    anthropic.observe(DEAD);
+    const { credentials, state } = harness({ stored: false });
+    credentials.observe(DEAD);
     await settle();
     expect(state.logouts).toBe(0);
-    expect(anthropic.status()).toBe("missing");
+    expect(credentials.status()).toBe("missing");
   });
 
   it("retires once, however many failures follow", async () => {
-    const { anthropic, state } = harness();
-    anthropic.observe(DEAD);
-    anthropic.observe(DEAD);
+    const { credentials, state } = harness();
+    credentials.observe(DEAD);
+    credentials.observe(DEAD);
     await settle();
-    anthropic.observe(DEAD);
+    credentials.observe(DEAD);
     await settle();
     expect(state.logouts).toBe(1);
   });
@@ -173,88 +176,88 @@ describe("observe", () => {
   it("goes back to connected when the credential could not be deleted", async () => {
     // Better to keep answering with a credential that may work than to go mute over a file that
     // would not unlink.
-    const { anthropic } = harness({ logoutFails: true });
-    anthropic.observe(DEAD);
+    const { credentials } = harness({ logoutFails: true });
+    credentials.observe(DEAD);
     await settle();
-    expect(anthropic.status()).toBe("connected");
-    expect(anthropic.expiredAt()).toBeUndefined();
+    expect(credentials.status()).toBe("connected");
+    expect(credentials.invalidAt()).toBeUndefined();
   });
 });
 
 describe("token", () => {
   it("resolves the access token", async () => {
-    expect(await harness().anthropic.token()).toBe("sk-live");
+    expect(await harness().credentials.token()).toBe("sk-live");
   });
 
   it("retires the credential when resolving it is refused for good", async () => {
-    const { anthropic, state } = harness({
+    const { credentials, state } = harness({
       resolve: async () => {
         throw new Error(DEAD);
       },
     });
-    expect(await anthropic.token()).toBeUndefined();
-    expect(anthropic.status()).toBe("expired");
+    expect(await credentials.token()).toBeUndefined();
+    expect(credentials.status()).toBe("invalid");
     await settle();
     expect(state.logouts).toBe(1);
   });
 
   it("keeps the credential when resolving it merely failed", async () => {
-    const { anthropic } = harness({
+    const { credentials } = harness({
       resolve: async () => {
         throw new Error(TRANSIENT);
       },
     });
-    expect(await anthropic.token()).toBeUndefined();
-    expect(anthropic.status()).toBe("connected");
+    expect(await credentials.token()).toBeUndefined();
+    expect(credentials.status()).toBe("connected");
   });
 
   it("never throws, so a poll can lean on it", async () => {
-    const { anthropic } = harness({
+    const { credentials } = harness({
       resolve: async () => {
         throw "not even an error";
       },
     });
-    expect(await anthropic.token()).toBeUndefined();
+    expect(await credentials.token()).toBeUndefined();
   });
 
   it("reports nothing when the provider is unconfigured", async () => {
-    expect(await harness({ resolve: async () => undefined }).anthropic.token()).toBeUndefined();
+    expect(await harness({ resolve: async () => undefined }).credentials.token()).toBeUndefined();
   });
 });
 
 describe("login", () => {
   it("starts the flow and resolves the published authorize url", async () => {
-    expect(await harness().anthropic.url()).toContain("claude.ai/oauth/authorize");
+    expect(await harness().credentials.url()).toContain("openrouter.ai/auth");
   });
 
   it("keeps one flow across repeated url() calls", async () => {
-    const { anthropic, state } = harness();
-    const [first, second] = await Promise.all([anthropic.url(), anthropic.url()]);
+    const { credentials, state } = harness();
+    const [first, second] = await Promise.all([credentials.url(), credentials.url()]);
     expect(first).toBe(second);
     expect(state.logins).toBe(1);
   });
 
   it("hands the pasted code to the parked prompt", async () => {
-    const { anthropic, state } = harness();
-    await anthropic.url();
-    await anthropic.submit("code#state");
+    const { credentials, state } = harness();
+    await credentials.url();
+    await credentials.submit("code#state");
     expect(state.codes).toEqual(["code#state"]);
   });
 
   it("starts the flow on submit even if no url was requested", async () => {
-    const { anthropic, state } = harness();
-    await anthropic.submit("abc");
+    const { credentials, state } = harness();
+    await credentials.submit("abc");
     expect(state.logins).toBe(1);
     expect(state.codes).toEqual(["abc"]);
   });
 
-  it("brings an expired sign-in back, expiry record and all", async () => {
-    const { anthropic } = harness();
-    anthropic.observe(DEAD);
+  it("brings an invalid credential back, invalidation record and all", async () => {
+    const { credentials } = harness();
+    credentials.observe(DEAD);
     await settle();
-    await anthropic.submit("fresh-code");
-    expect(anthropic.status()).toBe("connected");
-    expect(anthropic.expiredAt()).toBeUndefined();
+    await credentials.submit("fresh-code");
+    expect(credentials.status()).toBe("connected");
+    expect(credentials.invalidAt()).toBeUndefined();
   });
 
   it("rejects submit when the code is refused, and authorizes afresh next time", async () => {
@@ -265,18 +268,18 @@ describe("login", () => {
         await interaction.prompt({ message: "code?", type: "manual_code" });
         throw new Error("invalid code");
       },
-    } as unknown as AnthropicRuntime;
-    const anthropic = createAnthropic(runtime, memoryKv());
-    const first = await anthropic.url();
-    expect(anthropic.submit("wrong")).rejects.toThrow("invalid code");
-    await anthropic.submit("wrong").catch(() => {});
-    expect(await anthropic.url()).toBe(first);
+    } as unknown as CredentialRuntime;
+    const credentials = createCredentials(runtime, memoryKv());
+    const first = await credentials.url();
+    expect(credentials.submit("wrong")).rejects.toThrow("invalid code");
+    await credentials.submit("wrong").catch(() => {});
+    expect(await credentials.url()).toBe(first);
   });
 
   it("starts a new flow for the next code once one succeeded", async () => {
-    const { anthropic, state } = harness();
-    await anthropic.submit("one");
-    await anthropic.submit("two");
+    const { credentials, state } = harness();
+    await credentials.submit("one");
+    await credentials.submit("two");
     expect(state.codes).toEqual(["one", "two"]);
     expect(state.logins).toBe(2);
   });
@@ -287,8 +290,8 @@ describe("login", () => {
       login: async () => {
         throw new Error("port busy");
       },
-    } as unknown as AnthropicRuntime;
-    expect(createAnthropic(runtime, memoryKv()).url()).rejects.toThrow("port busy");
+    } as unknown as CredentialRuntime;
+    expect(createCredentials(runtime, memoryKv()).url()).rejects.toThrow("port busy");
   });
 
   it("retries after such a failure", async () => {
@@ -301,9 +304,9 @@ describe("login", () => {
         interaction.notify({ type: "auth_url", url: AUTH_URL });
         return new Promise(() => {});
       },
-    } as unknown as AnthropicRuntime;
-    const anthropic = createAnthropic(runtime, memoryKv());
-    await anthropic.url().catch(() => {});
-    expect(await anthropic.url()).toBe(AUTH_URL);
+    } as unknown as CredentialRuntime;
+    const credentials = createCredentials(runtime, memoryKv());
+    await credentials.url().catch(() => {});
+    expect(await credentials.url()).toBe(AUTH_URL);
   });
 });

@@ -3,49 +3,49 @@ import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { Kv } from "./kv";
 
 /**
- * Apollo's access to Claude: whether it has any, how it is regained, and the one thing about it that
- * cannot be derived.
+ * Apollo's access to the model: whether it has any, how it is regained, and the one thing about it
+ * that cannot be derived.
  *
- * An OAuth credential that can no longer be refreshed is not a credential. Keeping one is what lets
- * a dashboard report a green "Connected to Anthropic" while every message fails, because
- * `hasConfiguredAuth` only asks whether something is stored. So a credential a refusal has proven
- * dead is deleted: the store's own answer becomes true again, and the authorize-and-paste flow that
- * was always there comes back on screen with no second state to keep in step.
+ * A credential that can no longer be used is not a credential. Keeping one is what lets a dashboard
+ * report a green "Connected to OpenRouter" while every message fails, because `hasConfiguredAuth`
+ * only asks whether something is stored. So a credential a refusal has proven dead is deleted: the
+ * store's own answer becomes true again, and the authorize-and-paste flow that was always there
+ * comes back on screen with no second state to keep in step.
  *
  * pi offers no side-effect-free validity check - `checkAuth` reports a credential's type, not
  * whether it works - so the truth is only ever learned by resolving it: at startup, on the
- * dashboard's usage poll, and wherever a model call fails.
+ * dashboard's poll, and wherever a model call fails.
  *
  * Renewing fixes a running Apollo. pi's login writes straight over whatever is stored and auth is
  * re-read on every call, so nothing here needs a restart.
  */
 
-const PROVIDER = "anthropic";
+const PROVIDER = "openrouter";
 
 /** Where the fact that there used to be a working sign-in lives, since deleting it erases that. */
-const EXPIRED_AT_KEY = "claudeSignInExpiredAt";
+const INVALID_AT_KEY = "credentialsInvalidAt";
 
-/** OAuth's own code for a grant that is gone. */
-const DEAD_GRANT = /invalid_grant/i;
+/** Everything that means the credential itself is dead, not the network being unkind. */
+const DEAD_AUTH = /invalid_grant|\b401\b|unauthorized|invalid api key|no auth credentials/i;
 
-export type AnthropicStatus = "connected" | "expired" | "missing";
+export type CredentialStatus = "connected" | "invalid" | "missing";
 
 /**
- * Whether a failure means the sign-in itself is finished, rather than the network being unkind. pi
- * flattens the provider's response into the message, so the OAuth error code is read out of it:
- * every other refresh failure (a timeout, a 500, DNS) is transient and must not cost a credential
- * that still works.
+ * Whether a failure means the credential itself is finished, rather than the network being unkind.
+ * pi flattens the provider's response into the message, so the auth code is read out of it: every
+ * other failure (a timeout, a 500, a 429, DNS) is transient and must not cost a credential that
+ * still works.
  */
 export function deadGrant(detail: string): boolean {
-  return DEAD_GRANT.test(detail);
+  return DEAD_AUTH.test(detail);
 }
 
-export interface Anthropic {
-  /** When the sign-in expired (ISO), or undefined when it has not. */
-  expiredAt(): string | undefined;
-  /** Judge a failure, condemning the credential when the sign-in itself is finished. */
+export interface Credentials {
+  /** When the credential was retired (ISO), or undefined when it has not been. */
+  invalidAt(): string | undefined;
+  /** Judge a failure, condemning the credential when the credential itself is finished. */
   observe(detail: string): void;
-  status(): AnthropicStatus;
+  status(): CredentialStatus;
   /** Hand pi the pasted code (or redirect URL); resolves once the credential is stored. */
   submit(input: string): Promise<void>;
   /** An access token, or undefined. Proves the credential resolves and retires it when it cannot. */
@@ -61,7 +61,7 @@ interface Flow {
 }
 
 /** The runtime surface this needs: the credential's whole lifecycle, and nothing else. */
-export type AnthropicRuntime = Pick<
+export type CredentialRuntime = Pick<
   ModelRuntime,
   "getAuth" | "hasConfiguredAuth" | "login" | "logout"
 >;
@@ -70,11 +70,11 @@ function reason(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function createAnthropic(runtime: AnthropicRuntime, kv: Kv): Anthropic {
+export function createCredentials(runtime: CredentialRuntime, kv: Kv): Credentials {
   /**
    * Set the moment a refusal proves the credential dead, so every reader sees it in the tick the
    * failure was seen rather than once the delete has landed - which is what lets a turn that died
-   * with the sign-in be told apart from one that merely failed. Reconciled by retire().
+   * with the credential be told apart from one that merely failed. Reconciled by retire().
    */
   let condemned = false;
   let flow: Flow | undefined;
@@ -89,7 +89,7 @@ export function createAnthropic(runtime: AnthropicRuntime, kv: Kv): Anthropic {
       condemned = false;
       return;
     }
-    kv.set(EXPIRED_AT_KEY, new Date().toISOString());
+    kv.set(INVALID_AT_KEY, new Date().toISOString());
   }
 
   function observe(detail: string): void {
@@ -98,10 +98,10 @@ export function createAnthropic(runtime: AnthropicRuntime, kv: Kv): Anthropic {
     void retire();
   }
 
-  function status(): AnthropicStatus {
-    if (condemned) return "expired";
+  function status(): CredentialStatus {
+    if (condemned) return "invalid";
     if (runtime.hasConfiguredAuth(PROVIDER)) return "connected";
-    return kv.get(EXPIRED_AT_KEY) ? "expired" : "missing";
+    return kv.get(INVALID_AT_KEY) ? "invalid" : "missing";
   }
 
   /**
@@ -136,8 +136,8 @@ export function createAnthropic(runtime: AnthropicRuntime, kv: Kv): Anthropic {
   }
 
   return {
-    expiredAt() {
-      return kv.get(EXPIRED_AT_KEY);
+    invalidAt() {
+      return kv.get(INVALID_AT_KEY);
     },
     observe,
     status,
@@ -150,7 +150,7 @@ export function createAnthropic(runtime: AnthropicRuntime, kv: Kv): Anthropic {
       // A stored credential is the whole of being connected, so the record of the last expiry goes
       // with the one it replaces.
       condemned = false;
-      kv.remove(EXPIRED_AT_KEY);
+      kv.remove(INVALID_AT_KEY);
     },
     async token() {
       try {

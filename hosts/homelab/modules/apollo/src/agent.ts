@@ -29,7 +29,7 @@ function readTextIfExists(file: string): string | undefined {
 
 /**
  * Models plus their resolved auth. Built before the session and handed to it, because what Apollo
- * may ask of Claude is also asked about outside a session: by the dashboard, and by the maintenance
+ * may ask of the model is also asked about outside a session: by the dashboard, and by the maintenance
  * that runs when there is no turn in flight.
  */
 export function createModelRuntime(config: Config): Promise<ModelRuntime> {
@@ -153,7 +153,7 @@ export function onAssistantText(session: AgentSession, onText: (text: string) =>
 /**
  * The errorMessage of a run that ended in a terminal LLM error, else undefined. Every pi
  * provider funnels a failed stream to a final assistant message with stopReason "error"
- * (never a thrown rejection), so this is how any Claude/transport error surfaces. Filters
+ * (never a thrown rejection), so this is how any provider/transport error surfaces. Filters
  * to the terminal `agent_end` (willRetry false, after pi's built-in retries) and skips
  * "aborted" (an intentional stop), so it fires once per genuinely failed turn.
  */

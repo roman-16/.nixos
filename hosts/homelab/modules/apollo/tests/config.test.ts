@@ -12,7 +12,7 @@ describe("loadConfig", () => {
     const config = loadConfig({ HOME: "/tmp/apollo" });
     expect(config.allowFrom).toEqual([]);
     expect(config.baileysLogLevel).toBe("silent");
-    expect(config.model).toBe("anthropic/claude-sonnet-5");
+    expect(config.model).toBe("openrouter/deepseek/deepseek-v4-flash-vision-exp");
     expect(config.thinkingLevel).toBe("medium");
     expect(config.port).toBe(8080);
     expect(config.profilePicturePath).toBe("");
@@ -37,12 +37,12 @@ describe("loadConfig", () => {
   it("reads overrides from the environment", () => {
     const config = loadConfig({
       APOLLO_DASHBOARD_URL: "https://apollo.halerc.xyz",
-      APOLLO_MODEL: "anthropic/claude-opus-4-8",
+      APOLLO_MODEL: "openrouter/deepseek/deepseek-v4-flash-vision-exp",
       APOLLO_THINKING: "high",
       PORT: "9090",
     });
     expect(config.dashboardUrl).toBe("https://apollo.halerc.xyz");
-    expect(config.model).toBe("anthropic/claude-opus-4-8");
+    expect(config.model).toBe("openrouter/deepseek/deepseek-v4-flash-vision-exp");
     expect(config.thinkingLevel).toBe("high");
     expect(config.port).toBe(9090);
   });

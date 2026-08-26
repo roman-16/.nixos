@@ -533,14 +533,14 @@ in
               environment = {
                 APOLLO_ALLOW_FROM = secrets.mainNumber;
                 APOLLO_BACKUP_SCRIPT = lib.getExe workspaceBackupScript;
-                # Where the user renews a Claude sign-in only they can renew; named in the WhatsApp
+                # Where the user renews credentials only they can renew; named in the WhatsApp
                 # notice that tells them to, since that message is Apollo's only way to ask.
                 APOLLO_DASHBOARD_URL = "https://apollo.halerc.xyz";
                 APOLLO_DB_PATH = "%S/apollo/apollo.sqlite";
                 # Where a file the user sends lands: beside the database, so it is neither
                 # committed to the workspace repo nor carried into the nightly database backup.
                 APOLLO_FILE_DIR = "%S/apollo/files";
-                APOLLO_MODEL = "anthropic/claude-sonnet-5";
+                APOLLO_MODEL = "openrouter/deepseek/deepseek-v4-flash-vision-exp";
                 APOLLO_PROFILE_PICTURE = "${profilePicture}";
                 APOLLO_THINKING = "high";
                 APOLLO_WORKSPACE = "%S/apollo/workspace";
@@ -557,7 +557,7 @@ in
                 CHROME_PATH = "${chromeWrapper}";
                 HOME = "%S/apollo";
                 MISTRAL_API_KEY = secrets.mistralApiKey;
-                # Opt pi into Anthropic's 1h prompt-cache TTL (default is 5min). The assistant is
+                # Opt pi into the provider's 1h prompt-cache TTL (default is 5min). The assistant is
                 # messaged in bursts separated by idle gaps, so a return within the hour reuses the
                 # cached conversation (cheap cache reads) instead of re-priming the whole prefix
                 # (expensive cache writes) as a 5min cache would after every gap.

@@ -13,7 +13,7 @@ import {
 } from "../src/dashboard";
 
 const summary = (over: Partial<SummaryArgs>): SummaryArgs => ({
-  anthropicStatus: "connected",
+  status: "connected",
   authUrl: "",
   linking: false,
   usage: null,
@@ -115,7 +115,7 @@ describe("renderPage", () => {
     expect(html).not.toContain("dataset.stick");
   });
 
-  it("orders sections conversation, tokens, skills, WhatsApp/Claude, then logs", () => {
+  it("orders sections conversation, tokens, skills, WhatsApp/model, then logs", () => {
     const html = renderPage("v");
     const order = ['id="chat"', 'id="tokens"', 'id="skills"', 'id="summary"', 'id="log-list"'].map(
       (marker) => html.indexOf(marker),
@@ -126,36 +126,24 @@ describe("renderPage", () => {
 });
 
 describe("renderSummary", () => {
-  it("shows the linked account and usage bars when everything is connected", async () => {
+  it("shows the linked account and the credit balance when everything is connected", async () => {
     const html = await renderSummary(
       summary({
-        usage: {
-          extra_usage: {
-            is_enabled: true,
-            monthly_limit: 1000,
-            used_credits: 250,
-            utilization: 25,
-          },
-          five_hour: { resets_at: null, utilization: 63 },
-          seven_day: { resets_at: null, utilization: 43 },
-        },
+        usage: { used: 25.5, limit: 100, remaining: 74.5, reset: null },
       }),
     );
     expect(html).toContain("Linked");
     expect(html).toContain("+4369912345678");
-    expect(html).toContain("Connected to Anthropic");
-    expect(html).toContain("Session (5h)");
-    expect(html).toContain("63%");
-    expect(html).toContain("Weekly (all models)");
-    expect(html).toContain("43%");
-    expect(html).toContain("$2.50 / $10.00");
+    expect(html).toContain("Connected to OpenRouter");
+    expect(html).toContain("$74.50");
+    expect(html).toContain("Credits");
     expect(html).not.toContain(`hx-post="/link"`);
     expect(html).not.toContain(`hx-post="/connect"`);
   });
 
   it("stays connected even when usage data is unavailable", async () => {
     const html = await renderSummary(summary({ usage: null }));
-    expect(html).toContain("Connected to Anthropic");
+    expect(html).toContain("Connected to OpenRouter");
     expect(html).toContain("unavailable");
   });
 
@@ -190,64 +178,64 @@ describe("renderSummary", () => {
     expect(html).not.toContain("<svg");
   });
 
-  it("offers the claude connect flow when disconnected", async () => {
+  it("offers the connect flow when disconnected", async () => {
     const html = await renderSummary(
-      summary({ anthropicStatus: "missing", authUrl: "https://claude.ai/oauth/authorize?x=1" }),
+      summary({ status: "missing", authUrl: "https://openrouter.ai/auth?x=1" }),
     );
-    expect(html).toContain("Not connected to Anthropic");
-    expect(html).toContain("https://claude.ai/oauth/authorize?x=1");
+    expect(html).toContain("Not connected to OpenRouter");
+    expect(html).toContain("https://openrouter.ai/auth?x=1");
     expect(html).toContain(`hx-post="/connect"`);
     expect(html).toContain(`name="code"`);
   });
 
-  it("offers the very same flow when the sign-in expired, and says so", async () => {
+  it("offers the very same flow when the credentials are invalid, and says so", async () => {
     const html = await renderSummary(
-      summary({ anthropicStatus: "expired", authUrl: "https://claude.ai/oauth/authorize?x=1" }),
+      summary({ status: "invalid", authUrl: "https://openrouter.ai/auth?x=1" }),
     );
-    expect(html).toContain("Sign-in expired");
+    expect(html).toContain("Credentials invalid");
     expect(html).toContain("bg-red-500");
-    expect(html).toContain("https://claude.ai/oauth/authorize?x=1");
+    expect(html).toContain("https://openrouter.ai/auth?x=1");
     expect(html).toContain(`hx-post="/connect"`);
     expect(html).toContain(`name="code"`);
-    expect(html).not.toContain("Connected to Anthropic");
+    expect(html).not.toContain("Connected to OpenRouter");
   });
 
   it("says the messages are being kept, so a quiet Apollo is not a lost one", async () => {
-    const html = await renderSummary(summary({ anthropicStatus: "expired", authUrl: "u" }));
+    const html = await renderSummary(summary({ status: "invalid", authUrl: "u" }));
     expect(html).toContain("holding every message");
   });
 
-  it("dates the expiry when it knows it, and omits it when it does not", async () => {
+  it("dates the invalidation when it knows it, and omits it when it does not", async () => {
     const html = await renderSummary(
       summary({
-        anthropicExpiredAt: new Date(2026, 7, 10, 10, 38).toISOString(),
-        anthropicStatus: "expired",
+        invalidAt: new Date(2026, 7, 10, 10, 38).toISOString(),
+        status: "invalid",
         authUrl: "u",
       }),
     );
     expect(html).toContain("10.08 10:38");
-    expect(
-      await renderSummary(summary({ anthropicStatus: "expired", authUrl: "u" })),
-    ).not.toContain(" \u00b7 ");
+    expect(await renderSummary(summary({ status: "invalid", authUrl: "u" }))).not.toContain(
+      " \u00b7 ",
+    );
   });
 
-  it("ignores an unparseable expiry rather than rendering Invalid Date", async () => {
+  it("ignores an unparseable invalidation rather than rendering Invalid Date", async () => {
     const html = await renderSummary(
-      summary({ anthropicExpiredAt: "whenever", anthropicStatus: "expired", authUrl: "u" }),
+      summary({ invalidAt: "whenever", status: "invalid", authUrl: "u" }),
     );
-    expect(html).toContain("Sign-in expired");
+    expect(html).toContain("Credentials invalid");
     expect(html).not.toContain("Invalid");
   });
 
   it("never offers the flow while connected", async () => {
-    const html = await renderSummary(summary({ anthropicStatus: "connected" }));
+    const html = await renderSummary(summary({ status: "connected" }));
     expect(html).not.toContain(`hx-post="/connect"`);
-    expect(html).not.toContain("Sign-in expired");
+    expect(html).not.toContain("Credentials invalid");
   });
 
   it("surfaces a connect error", async () => {
     const html = await renderSummary(
-      summary({ anthropicStatus: "missing", authUrl: "u", connectError: "nope" }),
+      summary({ status: "missing", authUrl: "u", connectError: "nope" }),
     );
     expect(html).toContain("nope");
   });

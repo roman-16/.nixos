@@ -77,6 +77,7 @@
         images.autoResize = true;
         steeringMode = "all";
         theme = "dark";
+        tuiMode = "fullscreen";
         warnings.anthropicExtraUsage = false;
       };
       settingsJson = builtins.toJSON settings;

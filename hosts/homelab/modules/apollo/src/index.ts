@@ -2,7 +2,7 @@ import type { Usage } from "@earendil-works/pi-ai";
 import { pino } from "pino";
 
 import { createApolloSession, createModelRuntime } from "./agent";
-import { createAnthropic } from "./anthropic";
+import { createCredentials } from "./credentials";
 import { runWorkspaceBackup } from "./backup";
 import { createChatStore } from "./chat-store";
 import { loadConfig } from "./config";
@@ -65,16 +65,16 @@ export async function main(): Promise<void> {
   };
 
   const modelRuntime = await createModelRuntime(config);
-  const anthropic = createAnthropic(modelRuntime, kv);
+  const credentials = createCredentials(modelRuntime, kv);
   // Prove the credential at startup rather than inheriting the assumption that it still works: a
-  // sign-in that died while Apollo was down would otherwise read as connected until the first
-  // message spent itself discovering otherwise. Not awaited, so a slow Anthropic cannot keep the
+  // credential that died while Apollo was down would otherwise read as connected until the first
+  // message spent itself discovering otherwise. Not awaited, so a slow provider cannot keep the
   // assistant off WhatsApp.
-  void anthropic.token();
+  void credentials.token();
 
   const session = await createApolloSession(config, logger, modelRuntime, {
     delivered: (fromMs, toMs) => chatStore.skillMessagesBetween(session.sessionId, fromMs, toMs),
-    observe: anthropic.observe,
+    observe: credentials.observe,
     recordUsage,
   });
   logger.info({ model: config.model, workspace: config.workspace }, "pi session ready");
@@ -85,7 +85,7 @@ export async function main(): Promise<void> {
     logger,
     model: () => session.model,
     modelRuntime,
-    observe: anthropic.observe,
+    observe: credentials.observe,
     path: config.memoryFile,
     promptFile: config.memoryPromptFile,
     readCursor: () => Number(kv.get(MEMORY_CURSOR_KEY) ?? 0),
@@ -94,7 +94,7 @@ export async function main(): Promise<void> {
   });
 
   const pipeline = createPipeline({
-    anthropic,
+    credentials,
     chatStore,
     config,
     inbox,
@@ -151,7 +151,7 @@ export async function main(): Promise<void> {
   }).start();
 
   startServer({
-    anthropic,
+    credentials,
     chatStore,
     config,
     logStore,
