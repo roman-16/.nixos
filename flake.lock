@@ -346,11 +346,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1787687125,
-        "narHash": "sha256-Aceo2k5hGDe8rkSZQh979+cP/3TywUsVyrUfT07lh0M=",
+        "lastModified": 1787735977,
+        "narHash": "sha256-3nqk8mj+vMj1pJGZ/JsLbPkCoLL9cUUgjvAlNwG8wtQ=",
         "owner": "roman-16",
         "repo": "murmur",
-        "rev": "1d7d539b1585964f0df572488abd9a4a2bafbb01",
+        "rev": "d79100b032eafd368c659c80916ce9f162c88e37",
         "type": "github"
       },
       "original": {
@@ -480,11 +480,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1787699034,
-        "narHash": "sha256-0AftLfrw3tiTKLm1ofwPTKY47AJE+JQOOmqgGP+9Tkk=",
+        "lastModified": 1787735017,
+        "narHash": "sha256-cDir46ZU7fgfYWJd+f5rTKGa6vHosy+nfoEyUoRF5M4=",
         "owner": "roman-16",
         "repo": "proton-cli",
-        "rev": "76a479bfe030ae27ddfb833cd31d5843658c7b26",
+        "rev": "7d8b1002a4ac9530fbf0fc25ad95942f354cf33e",
         "type": "github"
       },
       "original": {
