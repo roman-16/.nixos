@@ -542,7 +542,7 @@ in
                 APOLLO_FILE_DIR = "%S/apollo/files";
                 APOLLO_MODEL = "openrouter/deepseek/deepseek-v4-flash-vision-exp";
                 APOLLO_PROFILE_PICTURE = "${profilePicture}";
-                APOLLO_THINKING = "high";
+                APOLLO_THINKING = "xhigh";
                 APOLLO_WORKSPACE = "%S/apollo/workspace";
                 # The browser skill runs `browse` via bunx (`bunx --bun browse@latest`). bunx
                 # caches the download under BUN_INSTALL_CACHE_DIR and stages the runnable tree
