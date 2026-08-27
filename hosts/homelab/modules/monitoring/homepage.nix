@@ -1,10 +1,21 @@
+{ lib, ... }:
 let
   facts = import ../../facts.nix;
 in
 {
   services.homepage-dashboard = {
     enable = true;
-    allowedHosts = "localhost:${toString facts.ports.homepage},127.0.0.1:${toString facts.ports.homepage},${facts.ips.homelab}:${toString facts.ports.homepage},${facts.domain}";
+    # Every host this is reached under, or it answers 400. Caddy passes on the Host it
+    # was given rather than its own, so its address counts as one of them: a request to
+    # the proxy arrives here still addressed to the proxy.
+    allowedHosts = lib.concatStringsSep "," [
+      "127.0.0.1:${toString facts.ports.caddy}"
+      "127.0.0.1:${toString facts.ports.homepage}"
+      "localhost:${toString facts.ports.homepage}"
+      "${facts.ips.homelab}:${toString facts.ports.caddy}"
+      "${facts.ips.homelab}:${toString facts.ports.homepage}"
+      facts.domain
+    ];
     listenPort = facts.ports.homepage;
 
     services = [
