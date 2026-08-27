@@ -30,6 +30,7 @@
         text = ''
           ${proton} mail messages watch --output json | while IFS= read -r message; do
             id=$(jq --raw-output '.id' <<<"$message")
+            conversation=$(jq --raw-output '.conversation_id' <<<"$message")
             sender=$(jq --raw-output 'if (.from_name // "") == "" then .from_address else .from_name end' <<<"$message")
             subject=$(jq --raw-output '.subject' <<<"$message")
 
@@ -42,7 +43,6 @@
 
               [ "$clicked" = default ] || exit 0
 
-              conversation=$(${proton} api GET /mail/v4/messages --query "ID=$id" | jq --raw-output '.Messages[0].ConversationID')
               gio open "https://mail.proton.me/all-mail/$conversation/$id"
             ) &
           done
@@ -56,17 +56,20 @@
           ${proton} calendar reminders watch --output json | while IFS= read -r reminder; do
             title=$(jq --raw-output '.title' <<<"$reminder")
             says=$(jq --raw-output '.says' <<<"$reminder")
+            location=$(jq --raw-output '.location // ""' <<<"$reminder")
             event=$(jq --raw-output '"EventID=\(.id | @uri)&CalendarID=\(.calendar_id | @uri)"' <<<"$reminder")
             occurrence=$(date --date="$(jq --raw-output '.start' <<<"$reminder")" +%s)
 
             when=''${says#"$title" }
+            body=''${when^}
+            [ -z "$location" ] || body="$body · $location"
 
             (
               clicked=$(notify-send \
                 --app-name "Proton Calendar" \
                 --hint "string:desktop-entry:proton-calendar" \
                 --action "default=Open" \
-                -- "$title" "''${when^}")
+                -- "$title" "$body")
 
               [ "$clicked" = default ] || exit 0
 

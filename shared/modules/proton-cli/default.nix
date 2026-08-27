@@ -29,6 +29,7 @@ in
           ExecStart = "${proton} account login --no-input --password-file ${password} --user ${account.email}";
           RemainAfterExit = true;
           Restart = "on-failure";
+          RestartPreventExitStatus = 2;
           RestartSec = 60;
           Type = "oneshot";
         };
