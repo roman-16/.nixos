@@ -248,7 +248,16 @@ in
 
         protonCredential = "proton-password:${protonPassword}";
 
-        # Nightly off-box backup of Apollo's SQLite DB to Proton Drive (mirrors the
+        # Written once a run has fully succeeded, and read by the job itself to tell an
+        # hour that still owes the day's copy from one that does not.
+        dbBackupStatus = "/var/lib/apollo-db-backup/status.json";
+
+        dbBackupDue = import ../../backup-due.nix { inherit pkgs; } {
+          name = "apollo-db-backup";
+          statusFile = dbBackupStatus;
+        };
+
+        # The day's off-box copy of Apollo's SQLite DB to Proton Drive (mirrors the
         # trader VM): online-snapshot the live DB, zstd-compress, upload, keep the
         # newest N. Runs as root to read the apollo-owned DB. Restore: download a
         # *.sqlite.zst, `zstd -d` it, stop apollo.service, drop it in as
@@ -318,6 +327,15 @@ in
               done <<<"$stale"
               proton drive items delete --yes "''${paths[@]}"
             fi
+
+            # The heartbeat is written last and only here, so a run that died anywhere
+            # above still owes the day's copy and the next hour takes it. Renamed into
+            # place so a reader never sees a half-written file.
+            jq --null-input --compact-output \
+              --arg ts "$(date --utc --iso-8601=seconds)" \
+              --argjson bytes "$(stat --format=%s "$comp")" \
+              '{ts: $ts, bytes: $bytes}' >"$work/status.json"
+            mv "$work/status.json" ${dbBackupStatus}
             echo "backup complete"
           '';
         };
@@ -629,7 +647,14 @@ in
             };
 
             # Runs as root (no DynamicUser) so it can read the apollo-owned DB; its
-            # own StateDirectory doubles as proton's HOME for the session cache.
+            # own StateDirectory doubles as proton's HOME for the session cache and
+            # holds the heartbeat.
+            #
+            # The timer asks once an hour through the quiet hours and ExecCondition
+            # answers, so the hour that finds the day's copy already taken skips without
+            # pushing or paging anything, and a Proton that answered with a bad gateway
+            # at 01:00 costs an hour rather than the day. A page therefore means all
+            # four attempts failed.
             apollo-db-backup = {
               description = "Back up the Apollo SQLite database to Proton Drive";
 
@@ -643,6 +668,7 @@ in
               };
 
               serviceConfig = {
+                ExecCondition = lib.getExe dbBackupDue;
                 ExecStart = lib.getExe dbBackupScript;
                 ExecStartPost = checks.pushSuccess checks.registry.apollo-db-backup;
                 # This unit exists to talk to Proton, so a sign-in it cannot complete
@@ -682,10 +708,12 @@ in
             };
 
             apollo-db-backup = {
-              description = "Back up the Apollo SQLite database daily at 01:00";
+              description = "Ask hourly from 01:00 whether the day's database backup is owed";
 
               timerConfig = {
-                OnCalendar = "*-*-* 01:00:00";
+                OnCalendar = "*-*-* 01,02,03,04:00:00";
+                # A guest that was down over an attempt asks the moment it is up, rather
+                # than waiting out the rest of the window.
                 Persistent = true;
               };
 

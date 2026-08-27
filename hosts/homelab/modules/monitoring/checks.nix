@@ -53,7 +53,7 @@ let
       heartbeat = "26h";
       priority = 4;
       click = "https://apollo.${facts.domain}";
-      description = "Apollo's database has not reached Proton Drive in over a day";
+      description = "an Apollo database backup attempt failed; the night's later attempts try again, and a night of them means the database is not reaching Proton Drive";
     };
 
     apollo-disk = {
@@ -264,7 +264,7 @@ let
       heartbeat = "26h";
       priority = 3;
       click = "https://trader.${facts.domain}";
-      description = "the nightly trader backup did not run (its freshness is watched separately)";
+      description = "a trader backup attempt failed; the night's later attempts try again, and the copy's own freshness is watched separately";
     };
 
     trader-disk = {
