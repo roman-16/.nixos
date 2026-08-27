@@ -86,9 +86,13 @@
         };
 
         Unit = {
-          After = [ "graphical-session.target" ];
+          After = [
+            "graphical-session.target"
+            "proton-login.service"
+          ];
           Description = description;
           PartOf = [ "graphical-session.target" ];
+          Wants = [ "proton-login.service" ];
         };
       };
     in

@@ -4,7 +4,7 @@
   home =
     { ... }:
     let
-      secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
+      account = builtins.fromJSON (builtins.readFile ../../../shared/modules/proton-cli/secrets.json);
     in
     {
       programs.rclone = {
@@ -13,8 +13,8 @@
         remotes.proton = {
           config = {
             type = "protondrive";
-            username = "roman@lerchster.dev";
-            password = secrets.protonPassword;
+            username = account.email;
+            password = account.password;
           };
 
           mounts."." = {
