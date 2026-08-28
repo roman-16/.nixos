@@ -346,11 +346,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1787851489,
-        "narHash": "sha256-QewbDeC6nOuBmT21YmQ5tJTpuTN4O3OxzzRvAZwg/24=",
+        "lastModified": 1787910084,
+        "narHash": "sha256-sbzNkodon9J7Gz3S3SmbfRalUW+pIy8mnOzJXabGOCk=",
         "owner": "roman-16",
         "repo": "murmur",
-        "rev": "91928ccb44d151bfb8bc615d0778e16492d7faf0",
+        "rev": "e20aee829f9172626da03c384df2ee538aaed0af",
         "type": "github"
       },
       "original": {
