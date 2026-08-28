@@ -298,6 +298,7 @@
         };
 
         "org/gnome/shell/extensions/murmur" = {
+          gemini-api-key = secrets.geminiApiKey;
           mistral-api-key = secrets.mistralApiKey;
         };
 
