@@ -92,7 +92,13 @@ function parseUsage(body: unknown): PlanUsage {
 	};
 }
 
-async function fetchUsage(token: string): Promise<PlanUsage | null> {
+/**
+ * The endpoint rate-limits hard, and every open session polls it on its own timer, so being turned
+ * away is ordinary rather than broken - and worth saying so, since waiting is the whole fix.
+ */
+type UsageResult = { usage: PlanUsage } | { retry: boolean };
+
+async function fetchUsage(token: string): Promise<UsageResult> {
 	try {
 		const res = await fetch("https://api.anthropic.com/api/oauth/usage", {
 			headers: {
@@ -101,10 +107,11 @@ async function fetchUsage(token: string): Promise<PlanUsage | null> {
 				"anthropic-beta": "oauth-2025-04-20",
 			},
 		});
-		if (!res.ok) return null;
-		return parseUsage(await res.json());
+		if (res.status === 429) return { retry: true };
+		if (!res.ok) return { retry: false };
+		return { usage: parseUsage(await res.json()) };
 	} catch {
-		return null;
+		return { retry: false };
 	}
 }
 
@@ -163,10 +170,11 @@ export default function usage(pi: ExtensionAPI) {
 		const token = await ctx.modelRegistry.getApiKeyForProvider("anthropic");
 		if (epoch !== generation || !token || !token.includes("sk-ant-oat")) return;
 
-		const data = await fetchUsage(token);
-		if (epoch !== generation || !data) return;
+		const result = await fetchUsage(token);
+		// Whatever went wrong, the numbers already on screen are the best ones there are.
+		if (epoch !== generation || !("usage" in result)) return;
 
-		ctx.ui.setStatus("usage", formatStatusBar(data, ctx.ui.theme));
+		ctx.ui.setStatus("usage", formatStatusBar(result.usage, ctx.ui.theme));
 	}
 
 	function startRefreshLoop(ctx: { modelRegistry: any; ui: any }) {
@@ -202,11 +210,13 @@ export default function usage(pi: ExtensionAPI) {
 				return;
 			}
 
-			const data = await fetchUsage(token);
-			if (!data) {
-				ctx.ui.notify("Failed to fetch usage data", "error");
+			const result = await fetchUsage(token);
+			if (!("usage" in result)) {
+				if (result.retry) ctx.ui.notify("Anthropic is rate-limiting usage checks, try again shortly", "warning");
+				else ctx.ui.notify("Failed to fetch usage data", "error");
 				return;
 			}
+			const data = result.usage;
 
 			ctx.ui.setStatus("usage", formatStatusBar(data, ctx.ui.theme));
 
