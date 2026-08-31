@@ -19,9 +19,9 @@ To the user this is just "the weather" - never name the provider the data comes 
 
 **`show` is written for the user**: the script posts its output straight to them on WhatsApp (as a "via weather" message) and prints `[weather: delivered to the user ✓ ...]`. When you see that line, **stay silent** - they already have it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet.
 
-Add `--quiet` when you need the numbers in order to answer something in your own words ("should I cycle to work?", "is it jacket weather?"). The output is then printed here, nothing is sent, and the last line is `[weather: quiet - not sent to the user]`. Run it plain only when they asked to _see_ the weather, and then say nothing after.
+Add `--quiet` when you need the numbers in order to answer something in your own words ("should I cycle to work?", "is it jacket weather?"). The output is then printed here, nothing is sent, and the last line is `[weather: quiet - not sent to the user]`. A forecast is the world's rather than the user's, so summarizing one is fair game; run `show` plain when they asked to _see_ the weather, and then say nothing after. It is the only command that takes the flag.
 
-**`config` and `config-set` are machinery for you** - nothing is sent, so say whatever needs saying in your own words.
+**`config-set` reports to the user**, since where their weather comes from is theirs to see. `config` is a read for you alone - nothing is sent, so say whatever needs saying in your own words.
 
 If the script prints `[weather: delivery FAILED ...]`, the send didn't happen: relay that output yourself, just this once.
 

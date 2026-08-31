@@ -353,13 +353,10 @@ in
           briefing = {
             description = "Send the day's briefing: sky, calendar and offers";
             # The composer owns no data: it asks the weather and offers skills for their text, so it
-            # needs their scripts by path (siblings do not exist between store paths) and their
-            # directories in the workspace.
+            # needs their scripts by path - siblings do not exist between store paths.
             environment = {
               APOLLO_OFFERS_SCRIPT = "${./agent/skills/offers/scripts/offers.py}";
               APOLLO_WEATHER_SCRIPT = "${./agent/skills/weather/scripts/weather.py}";
-              OFFERS_DIR = "%S/apollo/workspace/offers";
-              WEATHER_DIR = "%S/apollo/workspace/weather";
             };
             exec = "${./agent/skills/briefing/scripts/briefing.py} show";
             onCalendar = "*-*-* 08:00:00";
@@ -399,6 +396,9 @@ in
           wants = [ "network-online.target" ];
 
           environment = {
+            # A job runs from the state directory, not the workspace, so the skill scripts it
+            # invokes are told where the user's data is rather than left to infer it.
+            APOLLO_WORKSPACE = "%S/apollo/workspace";
             HOME = "%S/apollo";
             PORT = toString port;
             SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";

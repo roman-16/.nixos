@@ -2,8 +2,8 @@
 """Daily nutrition tracker.
 
 Owns all storage, arithmetic, the rolling balance ledger, and output rendering,
-so none of it is ever done in-model. JSON lives under $MACROS_DIR (default
-./macros, relative to the working directory) and must only ever be changed
+so none of it is ever done in-model. JSON lives under macros/ in the workspace,
+found from there wherever this is run from, and must only ever be changed
 through this script.
 """
 
@@ -25,7 +25,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import NamedTuple
 
-MACROS_DIR = Path(os.environ.get("MACROS_DIR", "macros"))
+# The one place the user's data lives. Anchored to the workspace rather than the working directory,
+# because where this script is run from says nothing about where their ledger is - and a store looked
+# for in the wrong place reads exactly like a store with nothing in it.
+WORKSPACE = Path(os.environ.get("APOLLO_WORKSPACE") or Path.home() / "workspace")
+MACROS_DIR = WORKSPACE / "macros"
 DAYS_DIR = MACROS_DIR / "days"
 GOAL_FILE = MACROS_DIR / "goal.json"
 FOOD_FILE = MACROS_DIR / "food.json"
@@ -66,11 +70,6 @@ def die(msg: str):
 # and written after it, outside that buffer: same stream, never part of what the user receives.
 NOTES: list = []
 
-# The opposite audience: a change to the user's own catalog. That is news about their data rather
-# than a report about a question they asked, so it reaches them however the run was invoked - which
-# is what makes an entry nobody asked for impossible to accumulate unseen.
-ANNOUNCEMENTS: list = []
-
 
 def hint(msg: str):
     """Tell the caller something the user has no reason to read."""
@@ -78,9 +77,7 @@ def hint(msg: str):
 
 
 def announce(msg: str):
-    """State a change to the user's catalog: part of the reply as usual, and delivered even under
-    --quiet."""
-    ANNOUNCEMENTS.append(msg)
+    """State a change to the user's catalog, as part of the reply they get either way."""
     print(msg)
 
 
@@ -1762,13 +1759,13 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="macros.py", description="daily nutrition tracker")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    # Every command answers to someone: by default the user, or the caller alone under --quiet.
-    shared = argparse.ArgumentParser(add_help=False)
-    shared.add_argument("--quiet", action="store_true",
-                        help="print the result here instead of sending it to the user")
-
-    def command(name: str) -> argparse.ArgumentParser:
-        return sub.add_parser(name, parents=[shared])
+    # Every command's audience is settled here, not per run: `delivers` marks the ones whose output
+    # is written for the user, which is all of them but the ledger repair - every number this script
+    # prints is a record it keeps on their behalf, so it is never read or changed out of their sight.
+    def command(name: str, *, delivers: bool = True) -> argparse.ArgumentParser:
+        parser = sub.add_parser(name)
+        parser.set_defaults(delivers=delivers)
+        return parser
 
     command("goal").set_defaults(func=cmd_goal)
 
@@ -1981,18 +1978,11 @@ def build_parser() -> argparse.ArgumentParser:
     pl.set_defaults(func=cmd_prep_list)
     pl.add_argument("--all", action="store_true")
 
-    rc = command("recompute")
+    rc = command("recompute", delivers=False)
     rc.set_defaults(func=cmd_recompute)
     rc.add_argument("--from", dest="from_")
 
     return p
-
-
-def should_deliver(dry_run: bool, quiet: bool) -> bool:
-    """Who this run is for. Output reaches the user by default, because these numbers should arrive
-    exactly as computed rather than retold - unless it is a preview, or the caller asked to read it
-    privately in order to answer something itself."""
-    return not (dry_run or quiet)
 
 
 DELIVERY_FAILED = "\n[macros: delivery FAILED - relay the output above to the user yourself]\n"
@@ -2020,6 +2010,8 @@ def deliver_to_user(text: str) -> str | None:
 
 def main():
     args = build_parser().parse_args()
+    if not WORKSPACE.is_dir():
+        die(f"no workspace at {WORKSPACE} - this is not where the user's data is")
     # Capture the command's output so it can be delivered to the user directly, while still writing
     # it to stdout so the agent sees it (for its reasoning and to detect delivery success/failure).
     buffer = io.StringIO()
@@ -2029,19 +2021,9 @@ def main():
     finally:
         sys.stdout.write(buffer.getvalue())
     output = buffer.getvalue()
-    quiet = getattr(args, "quiet", False)
-    if should_deliver(getattr(args, "dry_run", False), quiet):
-        sent = output if output.strip() else None
-    else:
-        # A run the caller wanted to itself still owes the user anything it changed about their
-        # catalog, so that goes on its own - the report it came with stays private.
-        sent = "\n".join(ANNOUNCEMENTS) if ANNOUNCEMENTS else None
-    if sent is not None:
-        marker = deliver_to_user(sent)
+    if output.strip() and args.delivers:
+        marker = deliver_to_user(output)
         sys.stdout.write(marker if marker is not None else DELIVERY_FAILED)
-    elif quiet and output.strip():
-        # Say so explicitly: without a marker the caller cannot tell a silent run from a sent one.
-        sys.stdout.write("\n[macros: quiet - not sent to the user]\n")
     for note in NOTES:
         sys.stdout.write(f"{note}\n")
 

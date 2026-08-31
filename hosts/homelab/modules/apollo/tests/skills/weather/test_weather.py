@@ -18,6 +18,7 @@ def run(*argv):
 @pytest.fixture
 def store(tmp_path, monkeypatch):
     root = tmp_path / "weather"
+    monkeypatch.setattr(weather, "WORKSPACE", tmp_path)
     monkeypatch.setattr(weather, "WEATHER_DIR", root)
     monkeypatch.setattr(weather, "CONFIG_FILE", root / "config.json")
     return root
@@ -69,6 +70,12 @@ def canned(monkeypatch):
 
     monkeypatch.setattr(weather, "fetch", fake)
     return calls
+
+
+class TestStore:
+    def test_the_place_is_kept_in_the_workspace_not_wherever_this_ran(self):
+        assert weather.WEATHER_DIR == weather.WORKSPACE / "weather"
+        assert weather.WORKSPACE.is_absolute()
 
 
 class TestWmo:
@@ -308,13 +315,26 @@ class TestAudience:
         assert "Graz" in out
         assert "quiet - not sent to the user" in out
 
-    def test_the_settings_behind_it_are_never_sent(self, store, monkeypatch, capsys):
+    def test_the_place_it_is_set_to_reaches_the_user(self, store, monkeypatch):
         sent = self.spy(monkeypatch)
         self.invoke(monkeypatch, "config-set", "--place", "Graz", "--lat", "47.06", "--lon", "15.44")
+        assert len(sent) == 1
+        assert "Graz" in sent[0]
+
+    def test_reading_the_settings_back_is_for_the_caller(self, store, monkeypatch, capsys):
+        configured()
+        sent = self.spy(monkeypatch)
+        capsys.readouterr()
+        self.invoke(monkeypatch, "config")
         assert sent == []
         assert "Graz" in capsys.readouterr().out
 
-    def test_every_command_accepts_quiet(self):
+    def test_only_the_forecast_can_be_read_without_sending_it(self):
         parser = weather.build_parser()
-        for argv in (["show"], ["config"], ["config-set", "--place", "x"]):
-            assert hasattr(parser.parse_args([*argv, "--quiet"]), "quiet"), argv
+        assert parser.parse_args(["show", "--quiet"]).quiet is True
+        for argv in (["config"], ["config-set", "--place", "x"]):
+            assert parser.parse_args(argv).quiet is False, argv
+            with pytest.raises(SystemExit):
+                parser.parse_args([*argv, "--quiet"])
+
+

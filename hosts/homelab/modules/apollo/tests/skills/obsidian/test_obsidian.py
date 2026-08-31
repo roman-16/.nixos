@@ -134,6 +134,12 @@ def leave_a_conflicted_rebase(vault):
     assert (vault.path / ".git" / "rebase-merge").exists()
 
 
+class TestStore:
+    def test_the_vault_is_in_the_workspace_not_wherever_this_ran(self):
+        assert obsidian.VAULT == obsidian.WORKSPACE / "obsidian"
+        assert obsidian.WORKSPACE.is_absolute()
+
+
 class TestHasConflictMarkers:
     def test_an_unresolved_merge_is_recognised(self, tmp_path):
         note = tmp_path / "Note.md"

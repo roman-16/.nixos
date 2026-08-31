@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Reminders for Apollo.
 
-Each pending reminder is a JSON file <id>.json in the spool directory (APOLLO_REMINDERS_DIR,
-default <workspace>/reminders) that the Apollo process watches and fires at its time. This
-script creates, reads, reschedules, and removes them; firing a due reminder is Apollo's job.
+Each pending reminder is a JSON file <id>.json under reminders/ in the workspace, which the Apollo
+process watches and fires at its time. This script creates, reads, reschedules, and removes them;
+firing a due reminder is Apollo's job.
 
 A reminder that fires happened, so Apollo moves it to archive/ with the time it went out and
 `list --all` reads it back. One that never fired is nothing to keep, so removing it drops it. Every
@@ -29,8 +29,11 @@ from contextlib import redirect_stdout
 from datetime import datetime
 from pathlib import Path
 
-_DEFAULT_DIR = Path(os.environ.get("APOLLO_WORKSPACE") or os.getcwd()) / "reminders"
-REMINDERS_DIR = Path(os.environ.get("APOLLO_REMINDERS_DIR") or _DEFAULT_DIR)
+# Anchored to the workspace rather than the working directory, because where this script is run from
+# says nothing about where the user's reminders are - and a spool looked for in the wrong place reads
+# exactly like a spool with nothing in it.
+WORKSPACE = Path(os.environ.get("APOLLO_WORKSPACE") or Path.home() / "workspace")
+REMINDERS_DIR = WORKSPACE / "reminders"
 
 # How many fired reminders `list --all` shows. It is delivered to the user, so it stays skimmable;
 # anything older is in the chat archive, which the recall skill searches.
@@ -243,13 +246,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="reminders.py", description="reminder CRUD")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    # Every command answers to someone: by default the user, or the caller alone under --quiet.
-    shared = argparse.ArgumentParser(add_help=False)
-    shared.add_argument("--quiet", action="store_true",
-                        help="print the result here instead of sending it to the user")
-
+    # Every command here answers to the user: each one reads or changes reminders this keeps on their
+    # behalf, so none of it happens out of their sight.
     def command(name: str) -> argparse.ArgumentParser:
-        return sub.add_parser(name, parents=[shared])
+        return sub.add_parser(name)
 
     a = command("add")
     a.set_defaults(func=cmd_add)
@@ -298,6 +298,8 @@ def deliver_to_user(text: str) -> str | None:
 
 def main():
     args = build_parser().parse_args()
+    if not WORKSPACE.is_dir():
+        die(f"no workspace at {WORKSPACE} - this is not where the user's data is")
     # Capture the command's output so it can be delivered to the user directly, while still writing
     # it to stdout so the agent sees it (for its reasoning and to detect delivery success/failure).
     buffer = io.StringIO()
@@ -308,10 +310,6 @@ def main():
         sys.stdout.write(buffer.getvalue())
     output = buffer.getvalue()
     if not output.strip():
-        return
-    if getattr(args, "quiet", False):
-        # Say so explicitly: without a marker the caller cannot tell a silent run from a sent one.
-        sys.stdout.write("\n[reminders: quiet - not sent to the user]\n")
         return
     marker = deliver_to_user(output)
     sys.stdout.write(

@@ -14,8 +14,15 @@ def run(*argv):
 
 @pytest.fixture
 def spool(tmp_path, monkeypatch):
+    monkeypatch.setattr(reminders, "WORKSPACE", tmp_path)
     monkeypatch.setattr(reminders, "REMINDERS_DIR", tmp_path)
     return tmp_path
+
+
+class TestStore:
+    def test_the_spool_is_in_the_workspace_not_wherever_this_ran(self):
+        assert reminders.REMINDERS_DIR == reminders.WORKSPACE / "reminders"
+        assert reminders.WORKSPACE.is_absolute()
 
 
 @pytest.fixture
@@ -378,21 +385,16 @@ class TestAudience:
         assert len(sent) == 1
         assert "call the dentist" in sent[0]
 
-    def test_quiet_sends_nothing_and_says_so(self, spool, monkeypatch, capsys):
-        sent = self.spy(monkeypatch)
-        self.invoke(monkeypatch, "add", "--text", "call the dentist", "--in", "1h", "--quiet")
-        out = capsys.readouterr().out
-        assert sent == []
-        assert "call the dentist" in out
-        assert "quiet - not sent to the user" in out
-
-    def test_quiet_still_does_the_work(self, spool, monkeypatch):
-        self.spy(monkeypatch)
-        self.invoke(monkeypatch, "add", "--text", "buy milk", "--in", "1h", "--quiet")
-        assert [r["text"] for r in reminders.load_all()] == ["buy milk"]
-
-    def test_every_command_accepts_quiet(self):
+    def test_nothing_can_be_read_or_changed_out_of_the_users_sight(self):
         parser = reminders.build_parser()
         for argv in (["add", "--text", "x", "--in", "1h"], ["list"], ["list", "--all"],
                      ["update", "x", "--text", "y"], ["remove", "--all"]):
-            assert hasattr(parser.parse_args([*argv, "--quiet"]), "quiet"), argv
+            with pytest.raises(SystemExit):
+                parser.parse_args([*argv, "--quiet"])
+
+    def test_a_workspace_that_is_not_there_is_an_error_not_an_empty_spool(self, monkeypatch,
+                                                                         tmp_path, capsys):
+        monkeypatch.setattr(reminders, "WORKSPACE", tmp_path / "nope")
+        with pytest.raises(SystemExit):
+            self.invoke(monkeypatch, "list")
+        assert "No reminders." not in capsys.readouterr().out

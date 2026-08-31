@@ -1,5 +1,7 @@
 import argparse
 import io
+import os
+import subprocess
 import sys
 from datetime import datetime, timedelta
 
@@ -24,8 +26,8 @@ def run(*argv):
 @pytest.fixture
 def store(tmp_path, monkeypatch):
     macros.NOTES.clear()
-    macros.ANNOUNCEMENTS.clear()
     root = tmp_path / "macros"
+    monkeypatch.setattr(macros, "WORKSPACE", tmp_path)
     monkeypatch.setattr(macros, "MACROS_DIR", root)
     monkeypatch.setattr(macros, "DAYS_DIR", root / "days")
     monkeypatch.setattr(macros, "GOAL_FILE", root / "goal.json")
@@ -1248,7 +1250,6 @@ class TestFoodAddDoor:
         set_goal()
         add_skyr()
         assert '📌 Saved "Skyr, plain"' in capsys.readouterr().out
-        assert any("Skyr, plain" in line for line in macros.ANNOUNCEMENTS)
 
     def test_removing_one_is_stated_too(self, store, capsys):
         set_goal()
@@ -1532,16 +1533,40 @@ class TestPastDayCascade:
         assert capsys.readouterr().out.count("Today (") == 1
 
 
+class TestStore:
+    """Where the script looks for the user's data is only observable from outside the process, so
+    these run it - from a directory that is not the workspace, which is the whole point."""
+
+    def script(self, workspace, *argv, cwd):
+        return subprocess.run(
+            [sys.executable, macros.__file__, *argv],
+            capture_output=True,
+            text=True,
+            cwd=str(cwd),
+            # Nothing listens here, so a delivering command fails to send instead of posting a test
+            # fixture at whatever is on the default port.
+            env={**os.environ, "APOLLO_WORKSPACE": str(workspace), "PORT": "1"},
+        )
+
+    def test_the_store_is_found_from_the_workspace_not_the_directory_it_runs_in(self, tmp_path):
+        workspace = tmp_path / "workspace"
+        (workspace / "macros").mkdir(parents=True)
+        (workspace / "macros" / "goal.json").write_text(
+            '{"phase": "bulk", "tdee": 2400, "dailyGoal": 2600, "proteinGoal": 150}'
+        )
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        result = self.script(workspace, "goal", cwd=elsewhere)
+        assert "Phase: bulk" in result.stdout
+
+    def test_a_workspace_that_is_not_there_is_an_error_not_an_empty_ledger(self, tmp_path):
+        result = self.script(tmp_path / "nope", "show", cwd=tmp_path)
+        assert result.returncode == 1
+        assert "no workspace at" in result.stderr
+        assert "Today" not in result.stdout
+
+
 class TestDelivery:
-    def test_output_goes_to_the_user_by_default(self):
-        assert macros.should_deliver(False, False) is True
-
-    def test_dry_run_does_not_deliver(self):
-        assert macros.should_deliver(True, False) is False
-
-    def test_quiet_does_not_deliver(self):
-        assert macros.should_deliver(False, True) is False
-
     def test_deliver_to_user_posts_and_returns_the_marker(self, monkeypatch):
         seen = {}
 
@@ -1607,22 +1632,27 @@ class TestAudience:
         assert "Target:" in sent[0]
         assert "delivered to the user" in capsys.readouterr().out
 
-    def test_quiet_sends_nothing_and_says_so(self, store, monkeypatch, capsys):
+    def test_a_preview_reaches_the_user_too(self, store, monkeypatch):
         set_goal()
         sent = self.deliver_spy(monkeypatch)
-        self.invoke(monkeypatch, "show", "--quiet")
-        out = capsys.readouterr().out
-        assert sent == []
-        assert "Target:" in out                      # the caller still sees everything
-        assert "quiet - not sent to the user" in out
+        self.invoke(monkeypatch, "log", "--item", "Second helping", "--kcal", "600", "--dry-run")
+        assert len(sent) == 1
+        assert "Second helping" in sent[0]
 
-    def test_every_command_accepts_quiet(self):
+    def test_nothing_can_be_read_out_of_the_users_sight(self):
         parser = macros.build_parser()
         for name in ("goal", "log", "eat", "show", "summary", "weight", "rm", "entries", "edit",
                      "food-get", "food-add", "food-list", "food-eat", "food-edit", "food-rm",
-                     "prep-add", "prep-eat", "prep-get", "prep-list", "recompute"):
+                     "prep-add", "prep-eat", "prep-get", "prep-list"):
             args = parser.parse_args(macros_args(name))
-            assert hasattr(args, "quiet"), name
+            assert args.delivers is True, name
+            assert not hasattr(args, "quiet"), name
+
+    def test_the_ledger_repair_reports_to_the_caller(self, store, monkeypatch, capsys):
+        sent = self.deliver_spy(monkeypatch)
+        self.invoke(monkeypatch, "recompute")
+        assert sent == []
+        assert "recomputed" in capsys.readouterr().out
 
     def test_a_note_never_reaches_the_user(self, store, monkeypatch, capsys):
         set_goal()
@@ -1632,34 +1662,25 @@ class TestAudience:
         assert "private note" not in sent[0]
         assert "private note" in capsys.readouterr().out
 
-    def test_a_catalog_change_reaches_the_user_even_when_the_run_was_quiet(self, store, monkeypatch):
+    def test_a_catalog_change_reaches_the_user(self, store, monkeypatch):
         # The catalog is the user's data, so an entry can never arrive unseen.
         set_goal()
         sent = self.deliver_spy(monkeypatch)
         self.invoke(monkeypatch, "food-add", "--name", "Skyr, plain", "--kcal100", "64",
                     "--protein100", "11", "--fat100", "0.1", "--carbs100", "4",
-                    "--serving", "500", "--asked", "--quiet")
+                    "--serving", "500", "--asked")
         assert len(sent) == 1
         assert 'Saved "Skyr, plain"' in sent[0]
 
-    def test_only_the_change_is_sent_not_the_report_it_came_with(self, store, monkeypatch):
-        set_goal()
-        sent = self.deliver_spy(monkeypatch)
-        self.invoke(monkeypatch, "food-add", "--name", "Skyr, plain", "--kcal100", "64",
-                    "--protein100", "11", "--fat100", "0.1", "--carbs100", "4",
-                    "--serving", "500", "--asked", "--quiet")
-        assert "per 100g" not in sent[0]
-
-    def test_a_food_the_script_saves_is_sent_while_the_day_stays_private(self, store, monkeypatch):
+    def test_a_food_the_script_saves_by_itself_reaches_the_user(self, store, monkeypatch):
         set_goal()
         sent = self.deliver_spy(monkeypatch)
         for ago in reversed(range(macros.DAYS_TO_SAVE)):
             self.invoke(monkeypatch, "eat", "--item", "Kinder", "--kcal100", "579",
                         "--protein100", "8.5", "--fat100", "35", "--carbs100", "55",
-                        "--amount", "100", "--date", days_ago(ago), "--quiet")
-        assert len(sent) == 1
-        assert 'Saved "Kinder"' in sent[0]
-        assert "Target:" not in sent[0]
+                        "--amount", "100", "--date", days_ago(ago))
+        assert len(sent) == macros.DAYS_TO_SAVE
+        assert 'Saved "Kinder"' in sent[-1]
 
 
 def macros_args(name):
@@ -1978,7 +1999,6 @@ class TestPrepIngredientsCount:
         capsys.readouterr()
         self.into("Brownies")
         assert '📌 Saved "Butter"' in capsys.readouterr().out
-        assert any("Butter" in line for line in macros.ANNOUNCEMENTS)
 
     def test_afterwards_the_batch_command_is_the_one_suggested(self, store):
         set_goal()

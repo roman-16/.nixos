@@ -2,8 +2,8 @@
 """Watch supermarket products and report the offers running on them.
 
 Owns storage, the provider calls, all date arithmetic, and output rendering, so none of it
-is ever done in-model. JSON lives under $OFFERS_DIR (default ./offers, relative to the
-working directory) and must only ever be changed through this script.
+is ever done in-model. JSON lives under offers/ in the workspace, found from there wherever
+this is run from, and must only ever be changed through this script.
 
 The digest goes out inside the daily briefing, sent by a timer with no agent in the loop,
 which is why the postcode lives in config.json here rather than in the agent's MEMORY.md: the
@@ -33,7 +33,11 @@ from pathlib import Path
 from typing import NamedTuple
 from zoneinfo import ZoneInfo
 
-OFFERS_DIR = Path(os.environ.get("OFFERS_DIR", "offers"))
+# Anchored to the workspace rather than the working directory, because where this script is run from
+# says nothing about where the user's watches are - and a watchlist looked for in the wrong place
+# reads exactly like a watchlist with nothing in it.
+WORKSPACE = Path(os.environ.get("APOLLO_WORKSPACE") or Path.home() / "workspace")
+OFFERS_DIR = WORKSPACE / "offers"
 CONFIG_FILE = OFFERS_DIR / "config.json"
 WATCH_FILE = OFFERS_DIR / "watchlist.json"
 
@@ -617,21 +621,23 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="offers.py", description="watch products for offers")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    # Every command takes --quiet so asking for a private read is never the thing that fails;
-    # `delivers` marks the ones whose output is written for the user in the first place - anything
-    # that describes their watches or the offers on them, as against the ids and settings behind it.
-    shared = argparse.ArgumentParser(add_help=False)
-    shared.add_argument("--quiet", action="store_true",
-                        help="print the result here instead of sending it to the user")
-
-    def command(name: str, *, delivers: bool = False) -> argparse.ArgumentParser:
-        parser = sub.add_parser(name, parents=[shared])
-        parser.set_defaults(delivers=delivers)
+    # `delivers` marks the commands whose output is written for the user - anything that describes
+    # their watches or the offers on them, as against the ids behind it. Two of them also take
+    # --quiet: an offer in a shop is the world's, not the user's, so the agent may read one to answer
+    # in its own words - and the briefing composes the digest into a single morning message. A watch
+    # is theirs, so nothing can read or change one out of their sight.
+    def command(name: str, *, delivers: bool = False,
+                silenceable: bool = False) -> argparse.ArgumentParser:
+        parser = sub.add_parser(name)
+        parser.set_defaults(delivers=delivers, quiet=False)
+        if silenceable:
+            parser.add_argument("--quiet", action="store_true",
+                                help="print the result here instead of sending it to the user")
         return parser
 
     command("config").set_defaults(func=cmd_config)
 
-    cs = command("config-set")
+    cs = command("config-set", delivers=True)
     cs.set_defaults(func=cmd_config_set)
     cs.add_argument("--zip", required=True)
 
@@ -664,7 +670,7 @@ def build_parser() -> argparse.ArgumentParser:
     wr.set_defaults(func=cmd_watch_rm)
     wr.add_argument("--label", required=True)
 
-    se = command("search", delivers=True)
+    se = command("search", delivers=True, silenceable=True)
     se.set_defaults(func=cmd_search)
     group = se.add_mutually_exclusive_group(required=True)
     group.add_argument("--query")
@@ -673,13 +679,15 @@ def build_parser() -> argparse.ArgumentParser:
     se.add_argument("--retailers", type=id_list, default=[])
     se.add_argument("--limit", type=int, default=CAP)
 
-    command("digest", delivers=True).set_defaults(func=cmd_digest)
+    command("digest", delivers=True, silenceable=True).set_defaults(func=cmd_digest)
 
     return p
 
 
 def main():
     args = build_parser().parse_args()
+    if not WORKSPACE.is_dir():
+        die(f"no workspace at {WORKSPACE} - this is not where the user's data is")
     # Capture the command's output so it can be delivered to the user directly, while still writing
     # it to stdout so the caller sees it (for its reasoning and to detect delivery success/failure).
     buffer = io.StringIO()
@@ -689,10 +697,9 @@ def main():
     finally:
         sys.stdout.write(buffer.getvalue())
     output = buffer.getvalue()
-    quiet = getattr(args, "quiet", False)
     failed = False
-    if output.strip() and getattr(args, "delivers", False):
-        if quiet:
+    if output.strip() and args.delivers:
+        if args.quiet:
             # Say so explicitly: without a marker the caller cannot tell a silent run from a sent one.
             sys.stdout.write("\n[offers: quiet - not sent to the user]\n")
         else:

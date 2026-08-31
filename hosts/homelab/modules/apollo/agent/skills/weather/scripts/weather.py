@@ -4,9 +4,9 @@
 Owns the sky: what it will be like today, and how much light the day has. Both come from one
 call against one coordinate pair, which is why they live in one skill rather than two.
 
-The place is stored in $WEATHER_DIR/config.json (default ./weather, relative to the working
-directory) and is set once through config-set, the same way the offers skill is told a postcode:
-nothing is hardcoded, so the answer is never quietly about the wrong town.
+The place is stored in weather/config.json in the workspace and is set once through config-set, the
+same way the offers skill is told a postcode: nothing is hardcoded, so the answer is never quietly
+about the wrong town.
 
 Forecasts come from Open-Meteo, which needs no API key and serves the national models - for
 central Europe DWD's ICON-D2 at 2 km. That is an implementation detail of fetch() and never
@@ -30,7 +30,11 @@ from contextlib import redirect_stdout
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-WEATHER_DIR = Path(os.environ.get("WEATHER_DIR", "weather"))
+# Anchored to the workspace rather than the working directory, because where this script is run from
+# says nothing about where the user's location is kept - and a config looked for in the wrong place
+# reads exactly like a location nobody ever set.
+WORKSPACE = Path(os.environ.get("APOLLO_WORKSPACE") or Path.home() / "workspace")
+WEATHER_DIR = WORKSPACE / "weather"
 CONFIG_FILE = WEATHER_DIR / "config.json"
 
 API = "https://api.open-meteo.com/v1/forecast"
@@ -356,25 +360,25 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="weather.py", description="weather and daylight")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    # Every command takes --quiet; `delivers` marks the one whose output is written for the user.
-    shared = argparse.ArgumentParser(add_help=False)
-    shared.add_argument("--quiet", action="store_true",
-                        help="print the result here instead of sending it to the user")
-
+    # `delivers` marks the commands whose output is written for the user.
     def command(name: str, *, delivers: bool = False) -> argparse.ArgumentParser:
-        parser = sub.add_parser(name, parents=[shared])
-        parser.set_defaults(delivers=delivers)
+        parser = sub.add_parser(name)
+        parser.set_defaults(delivers=delivers, quiet=False)
         return parser
 
     sh = command("show", delivers=True)
     sh.set_defaults(func=cmd_show)
+    # A forecast is the world's, not the user's, so the agent may read one to answer in its own words
+    # - and the briefing composes this one into a single morning message.
+    sh.add_argument("--quiet", action="store_true",
+                    help="print the result here instead of sending it to the user")
     group = sh.add_mutually_exclusive_group()
     group.add_argument("--date", help="a day from today onwards (YYYY-MM-DD)")
     group.add_argument("--days", type=int, help="a compact outlook over this many days")
 
     command("config").set_defaults(func=cmd_config)
 
-    cs = command("config-set")
+    cs = command("config-set", delivers=True)
     cs.set_defaults(func=cmd_config_set)
     cs.add_argument("--place")
     cs.add_argument("--lat", type=latitude)
@@ -385,6 +389,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main():
     args = build_parser().parse_args()
+    if not WORKSPACE.is_dir():
+        die(f"no workspace at {WORKSPACE} - this is not where the user's data is")
     # Capture the command's output so it can be delivered to the user directly, while still writing
     # it to stdout so the caller sees it (for its reasoning and to detect delivery success/failure).
     buffer = io.StringIO()
@@ -394,9 +400,9 @@ def main():
     finally:
         sys.stdout.write(buffer.getvalue())
     output = buffer.getvalue()
-    if not output.strip() or not getattr(args, "delivers", False):
+    if not output.strip() or not args.delivers:
         return
-    if getattr(args, "quiet", False):
+    if args.quiet:
         # Say so explicitly: without a marker the caller cannot tell a silent run from a sent one.
         sys.stdout.write("\n[weather: quiet - not sent to the user]\n")
         return

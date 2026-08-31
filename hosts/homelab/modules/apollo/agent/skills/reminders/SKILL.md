@@ -17,9 +17,9 @@ The script owns all time math, storage, and the reply: you pass what the user wa
 
 ## Replying
 
-Every command has an audience. **By default it is the user**: the script posts its printed output straight to them on WhatsApp (as a "via reminders" message) and prints `[reminders: delivered to the user ✓ ...]`. When you see that line, **stay silent** - the user already got it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet.
+**Every command here reads or changes the user's own reminders, so every one of them reports to the user.** The script posts what it printed straight to them on WhatsApp (as a "via reminders" message) and prints `[reminders: delivered to the user ✓ ...]`. When you see that line, **stay silent** - they already got it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet.
 
-**`--quiet` makes the audience you.** Every command takes it: the output is printed here, nothing is sent, and the last line is `[reminders: quiet - not sent to the user]`. Use it when you need to know something rather than show it - `list --quiet` to check what is already set before answering, for instance - and then reply once in your own words. Silencing a change makes the news yours to deliver: if you set or cancel something quietly, say so.
+The output is printed here too, so you always see what was sent. If the user asked something the output doesn't answer, add one short line after it - never a restatement of it.
 
 If the script prints `[reminders: delivery FAILED ...]` instead, the send didn't happen: relay that output yourself, just this once (the reminder was still saved - don't re-run the command).
 
@@ -39,10 +39,9 @@ Give the reminder text plus when. Use `--in` for a delay (you don't know the cur
 ```bash
 {baseDir}/scripts/reminders.py list
 {baseDir}/scripts/reminders.py list --all      # plus the ones that have fired
-{baseDir}/scripts/reminders.py list --quiet    # for your eyes only
 ```
 
-Shows each pending reminder with its id, when it fires (absolute + relative), and text. `--all` adds the reminders that have already fired, newest first with the time each went out - the 10 most recent, since older ones are in the chat and the recall skill searches it. Without `--quiet` it goes to the user, so run it plain when they actually want to see their reminders. You never need it just to find an id - `update`/`remove` resolve reminders themselves.
+Shows each pending reminder with its id, when it fires (absolute + relative), and text. `--all` adds the reminders that have already fired, newest first with the time each went out - the 10 most recent, since older ones are in the chat and the recall skill searches it. You never need it just to find an id - `update`/`remove` resolve reminders themselves.
 
 ## Update
 

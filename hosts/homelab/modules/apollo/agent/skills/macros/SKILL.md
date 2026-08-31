@@ -5,7 +5,7 @@ description: Track daily nutrition - calories and macros (protein, fat, carbs). 
 
 # Macros
 
-Tracks daily nutrition as JSON under `macros/` in the working directory. Every read and write goes through the CLI; never edit the JSON by hand and never do the arithmetic yourself - the script owns all totals and the rolling balance.
+Tracks daily nutrition as JSON under `macros/` in the workspace, which the script finds from there whatever directory you run it in. Every read and write goes through the CLI; never edit the JSON by hand and never do the arithmetic yourself - the script owns all totals and the rolling balance.
 
 `{baseDir}` is this skill's directory. Resolve it to an absolute path before running the script.
 
@@ -20,17 +20,16 @@ Tracks daily nutrition as JSON under `macros/` in the working directory. Every r
 
 ## Replying
 
-Every command has an audience. **By default it is the user**: the script posts its printed output straight to them on WhatsApp (as a "via macros" message) and prints `[macros: delivered to the user ✓ ...]`. When you see that line, **stay silent** - don't repeat, summarize, rephrase, or comment on it. The user already has it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet.
+**Every number here is the user's own record, so every command's output goes to them.** The script posts what it printed straight to them on WhatsApp (as a "via macros" message) and prints `[macros: delivered to the user ✓ ...]`. When you see that line, **stay silent** - don't repeat, summarize, rephrase, or comment on it. They already have it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet.
 
-**`--quiet` makes the audience you.** Every command takes it. The output is printed here, nothing is sent, and the last line is `[macros: quiet - not sent to the user]`. Reach for it whenever you need a number in order to answer something, so your reply is one message in your own words instead of a raw block followed by your commentary.
+The output is printed here too, so you always see what was sent. That is the only reading there is: **never re-run a command in order to look at something again**, and never retype its numbers into a message of your own - a rate, a total or a portion the user reads must be one the script computed.
 
-- **Answering a question** ("how far over am I?", "what did I have yesterday?"): `summary --quiet`, `show --quiet`, `entries --quiet`, `food-get --quiet`. Read as much as you need - it costs the user nothing - then reply once.
-- **Showing the user their data** ("show me today"): run it without `--quiet` and say nothing after.
-- **Logging several things at once**: log each with `--quiet`, then one plain `show` at the end. One summary instead of one per entry.
+- **A question the output answers** ("how far over am I?", "what did I have yesterday?"): run the one command that answers it, and say nothing after.
+- **A question it doesn't** ("should I have a beer tonight?"): the block goes out, and you add one short line - never a restatement of it.
+- **Several things at once**: log each one. Every reply carries the whole day, so the last is the day as it now stands.
+- **A `--dry-run`** goes to the user as well; it changes nothing, so add your one line after it (e.g. "Want me to log it?").
 
-Silencing a write makes the news yours to deliver: if you log something quietly, tell the user what you logged. A `--dry-run` is never sent either (it changes nothing); relay it yourself when the user asked "what if", and you may add one short line after, e.g. "Want me to log it?".
-
-One thing `--quiet` cannot hide: **a change to the saved foods**. `food-add`, `food-edit`, `food-rm`, and a food the script saves by itself each state that change to the user whatever else the run kept private - the catalog is their data, so an entry can never arrive unseen. You'll see the line in the output and a delivered marker under it; don't repeat it.
+`recompute` is the one command written for you rather than them: it repairs the ledger and reports here only.
 
 If the script prints `[macros: delivery FAILED ...]`, the send didn't happen: relay that command's output yourself, just this once (the data was still saved - don't re-run the command).
 
@@ -116,7 +115,7 @@ Each saved food stores its macros per 100 of a **unit** - grams by default, or `
 
 `--fit-kcal` and `--target-kcal` size by calories the same way. Amounts and the logged label read in the food's unit (`500ml`, `4 pieces`, `500g`). `food-eat` prints the day summary; the script sends it to the user.
 
-`food-get` looks a food up (`--quiet` when you just need the numbers yourself; `food-eat` resolves names itself, so it is never needed as a pre-check); `food-add` saves one and refuses without `--asked`, which says the user asked for this food to be saved, in their own words; `food-edit` corrects a saved food's numbers, unit, or name; `food-rm` deletes one. `--unit` defaults to `g`; set it for liquids/countables and the per-100 values are then per 100 of that unit.
+`food-get` looks a food up (`food-eat` resolves names itself, so it is never needed as a pre-check); `food-add` saves one and refuses without `--asked`, which says the user asked for this food to be saved, in their own words; `food-edit` corrects a saved food's numbers, unit, or name; `food-rm` deletes one. `--unit` defaults to `g`; set it for liquids/countables and the per-100 values are then per 100 of that unit.
 
 **An entry is only worth having if the food comes back.** A one-off needs no entry - `eat` logs it and scales it just the same - and the catalog fills itself from what actually repeats: once the same food has been written out by hand on **three separate days**, the script saves it. Writing it out means either logging it with `eat` or weighing it into a batch with `prep-ingredient-add --kcal100`, since both are the same act - a rate typed in because the catalog has no entry for it. So there are exactly two ways a food gets in, and neither of them is your judgement - the script decided it had earned it, or the user asked and you passed `--asked`. Saving on first sight is a guess about the future, and those guesses are what fill a catalog with entries nobody ever uses again.
 

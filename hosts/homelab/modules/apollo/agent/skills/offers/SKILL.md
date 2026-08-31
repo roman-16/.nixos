@@ -19,9 +19,11 @@ To the user this is just "offers" - never name the platform the data comes from,
 
 ## Replying
 
-**Anything describing the user's watches or the offers on them is written for the user** - `digest`, `search`, `watch-list`, `watch-add`, `watch-edit`, `watch-rm`. The script posts the output straight to them on WhatsApp (as a "via offers" message) and prints `[offers: delivered to the user ✓ ...]`. When you see that line, **stay silent** - they already have it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet. Add `--quiet` when you need the numbers in order to answer something yourself; the output is then printed here, nothing is sent, and the last line is `[offers: quiet - not sent to the user]`.
+**Anything describing the user's watches or the offers on them is written for the user** - `config-set`, `digest`, `search`, `watch-list`, `watch-add`, `watch-edit`, `watch-rm`. The script posts the output straight to them on WhatsApp (as a "via offers" message) and prints `[offers: delivered to the user ✓ ...]`. When you see that line, **stay silent** - they already have it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet.
 
-**The ids and settings behind them are machinery for you** - `config`, `config-set`, `brands`, `retailers`. Nothing is sent, because a brand id is not something the user should receive. Say whatever needs saying in your own words.
+**`search` and `digest` take `--quiet`**, and nothing else does: an offer running in a shop is the world's rather than the user's, so reading one to answer in your own words is fair game. The output is then printed here, nothing is sent, and the last line is `[offers: quiet - not sent to the user]`. **A watch is theirs**, so `watch-list`, `watch-add`, `watch-edit` and `watch-rm` always reach them - nothing about their watchlist is read or changed out of sight.
+
+**The ids behind them are machinery for you** - `config`, `brands`, `retailers`. Nothing is sent, because a brand id is not something the user should receive. Say whatever needs saying in your own words.
 
 If the script prints `[offers: delivery FAILED ...]`, the send didn't happen: relay that output yourself, just this once (the data was still saved - don't re-run the command). It also exits non-zero in that case, because a send that silently never happened would be worse than a loud one - so treat the failure as already explained, not as something to investigate.
 

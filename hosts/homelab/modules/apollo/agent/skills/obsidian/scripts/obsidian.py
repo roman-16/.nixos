@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Keep Apollo's Obsidian vault in step with its remote.
 
-The vault at $OBSIDIAN_DIR (default <workspace>/obsidian) is a git repo the user also edits from
+The vault at obsidian/ in the workspace is a git repo the user also edits from
 Obsidian on their phone and laptop, where a plugin commits and pulls every few minutes. So the
 remote moves on its own: the vault is the one place Apollo works in that somebody else is writing
 to at the same time.
@@ -32,10 +32,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple
 
-VAULT = Path(
-    os.environ.get("OBSIDIAN_DIR")
-    or Path(os.environ.get("APOLLO_WORKSPACE") or os.getcwd()) / "obsidian"
-)
+# Anchored to the workspace rather than the working directory, because where this script is run from
+# says nothing about where the user's notes are.
+WORKSPACE = Path(os.environ.get("APOLLO_WORKSPACE") or Path.home() / "workspace")
+VAULT = WORKSPACE / "obsidian"
 
 # Every commit in this vault is a timestamp, because that is what the Obsidian plugin on the user's
 # devices writes and a history reads better uniform than half-annotated. What changed is in the diff.

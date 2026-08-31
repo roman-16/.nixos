@@ -45,6 +45,9 @@ class FakeProvider:
     def name_of(self, kind, ident):
         return f"{kind}-{ident}" if ident in self.known else None
 
+    def search(self, _watch, _code):
+        return list(self.found)
+
     def survey(self, _watch, _code):
         return (self.found, {"brands": self.brands})
 
@@ -69,6 +72,7 @@ def run(*argv):
 def store(tmp_path, monkeypatch):
     offers.NOTES.clear()
     root = tmp_path / "offers"
+    monkeypatch.setattr(offers, "WORKSPACE", tmp_path)
     monkeypatch.setattr(offers, "OFFERS_DIR", root)
     monkeypatch.setattr(offers, "CONFIG_FILE", root / "config.json")
     monkeypatch.setattr(offers, "WATCH_FILE", root / "watchlist.json")
@@ -82,6 +86,12 @@ def wired(store, monkeypatch):
     monkeypatch.setattr(offers, "Provider", lambda: provider)
     run("config-set", "--zip", "8010")
     return provider
+
+
+class TestStore:
+    def test_the_watchlist_is_in_the_workspace_not_wherever_this_ran(self):
+        assert offers.OFFERS_DIR == offers.WORKSPACE / "offers"
+        assert offers.WORKSPACE.is_absolute()
 
 
 class TestLocal:
@@ -587,19 +597,26 @@ class TestAudience:
                      ["watch-rm", "--label", "x"]):
             assert parser.parse_args(argv).delivers is True, argv
 
-    def test_the_ids_and_settings_behind_them_are_not_sent(self):
+    def test_the_ids_behind_them_are_not_sent(self):
         parser = offers.build_parser()
-        for argv in (["config"], ["config-set", "--zip", "1010"], ["brands", "--query", "x"],
-                     ["retailers", "--query", "x"]):
+        for argv in (["config"], ["brands", "--query", "x"], ["retailers", "--query", "x"]):
             assert parser.parse_args(argv).delivers is False, argv
 
-    def test_every_command_accepts_quiet(self):
+    def test_the_postcode_it_is_set_to_reaches_the_user(self):
+        assert offers.build_parser().parse_args(["config-set", "--zip", "1010"]).delivers is True
+
+    def test_only_offers_in_a_shop_can_be_read_without_sending_them(self):
         parser = offers.build_parser()
-        for argv in (["config"], ["config-set", "--zip", "1010"], ["brands", "--query", "x"],
-                     ["retailers", "--query", "x"], ["watch-add", "--label", "x"],
-                     ["watch-list"], ["watch-edit", "--label", "x", "--query", "y"],
-                     ["watch-rm", "--label", "x"], ["search", "--query", "x"], ["digest"]):
-            assert hasattr(parser.parse_args([*argv, "--quiet"]), "quiet"), argv
+        for argv in (["search", "--query", "x"], ["digest"]):
+            assert parser.parse_args([*argv, "--quiet"]).quiet is True, argv
+
+    def test_a_watch_is_the_users_so_nothing_reads_one_out_of_their_sight(self):
+        parser = offers.build_parser()
+        for argv in (["watch-add", "--label", "x"], ["watch-list"],
+                     ["watch-edit", "--label", "x", "--query", "y"], ["watch-rm", "--label", "x"]):
+            assert parser.parse_args(argv).quiet is False, argv
+            with pytest.raises(SystemExit):
+                parser.parse_args([*argv, "--quiet"])
 
     def test_search_needs_a_query_or_a_watch(self):
         with pytest.raises(SystemExit):
@@ -635,13 +652,15 @@ class TestDelivery:
         assert "Red Bull" in sent[0]
         assert "delivered to the user" in capsys.readouterr().out
 
-    def test_quiet_sends_nothing_and_says_so(self, wired, monkeypatch, capsys):
-        run("watch-add", "--label", "Red Bull")
+    def test_a_quiet_digest_sends_nothing_and_says_so(self, wired, monkeypatch, capsys):
+        run("watch-add", "--label", "Red Bull", "--brands", "5693")
+        wired.found = [offer(advertisers=[{"name": "BILLA"}])]
         sent = self.spy(monkeypatch)
-        self.invoke(monkeypatch, "watch-list", "--quiet")
+        capsys.readouterr()
+        self.invoke(monkeypatch, "digest", "--quiet")
         out = capsys.readouterr().out
         assert sent == []
-        assert "Red Bull" in out
+        assert "BILLA" in out
         assert "quiet - not sent to the user" in out
 
     def test_an_undeliverable_send_fails_loudly(self, wired, monkeypatch, capsys):
@@ -654,10 +673,10 @@ class TestDelivery:
 
     def test_machinery_never_sends_and_still_succeeds(self, wired, monkeypatch, capsys):
         sent = self.spy(monkeypatch, reachable=False)
-        self.invoke(monkeypatch, "config-set", "--zip", "4020")
+        self.invoke(monkeypatch, "config")
         out = capsys.readouterr().out
         assert sent == []
-        assert "4020" in out
+        assert "8010" in out
         assert "FAILED" not in out
 
     def test_a_digest_with_nothing_to_say_sends_nothing_and_succeeds(self, wired, monkeypatch, capsys):

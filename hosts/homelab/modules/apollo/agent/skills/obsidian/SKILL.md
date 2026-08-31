@@ -5,7 +5,7 @@ description: Read and write the user's Obsidian vault - notes, recipes, the jour
 
 # Obsidian
 
-The user's vault is a git repo of Markdown notes at `obsidian/` in the working directory. They also edit it from Obsidian on their phone and laptop, where a plugin commits and pulls every few minutes - so it is the one place you work in that somebody else is writing to at the same time.
+The user's vault is a git repo of Markdown notes at `obsidian/` in the workspace. They also edit it from Obsidian on their phone and laptop, where a plugin commits and pulls every few minutes - so it is the one place you work in that somebody else is writing to at the same time.
 
 Writing the notes is your job. Keeping the two sides in step is this skill's, and it is the only thing it does:
 
@@ -67,7 +67,7 @@ An image the user sent is in the chat archive, not in the vault: find the messag
 ## Notes
 
 - `.obsidian/` is the app's own configuration. Never touch it.
-- The vault is a separate repo from the working directory, so the 3-hourly workspace backup does **not** cover it. `sync` is the only thing that gets a note off this machine.
+- The vault is a separate repo from the workspace, so the 3-hourly workspace backup does **not** cover it. `sync` is the only thing that gets a note off this machine.
 - Some folders are frozen or hold raw drafts, and their briefs say so. Respect that over your instinct to tidy.
 
 `{baseDir}` = this skill's directory. Always resolve to the absolute path before executing.
