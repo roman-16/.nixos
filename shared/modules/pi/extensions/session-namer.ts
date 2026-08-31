@@ -5,7 +5,6 @@ import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-wor
 const AUTHORSHIP_ENTRY = "session-namer";
 const MAX_MESSAGES = 64;
 const QUESTIONNAIRE_TOOL = "questionnaire";
-const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
 interface Authorship {
 	digest: string;
@@ -149,13 +148,14 @@ export default function (pi: ExtensionAPI) {
 	let ownName: string | undefined;
 	let namedDigest: string | undefined;
 	let naming = false;
-	let refreshTimer: ReturnType<typeof setInterval> | undefined;
+
+	const namedByUser = () => {
+		const name = pi.getSessionName();
+		return !!name && name !== ownName;
+	};
 
 	const refresh = async (ctx: ExtensionContext, pendingPrompt?: string) => {
-		if (naming || !ctx.hasUI) return;
-
-		const currentName = pi.getSessionName();
-		if (currentName && currentName !== ownName) return;
+		if (naming || !ctx.hasUI || namedByUser()) return;
 
 		const prompt = buildPrompt(userTexts(ctx, pendingPrompt));
 		if (!prompt) return;
@@ -167,8 +167,8 @@ export default function (pi: ExtensionAPI) {
 		try {
 			const name = await generateName(ctx, prompt);
 			namedDigest = digest;
-			if (!name) return;
-			if (name !== currentName) {
+			if (!name || namedByUser()) return;
+			if (name !== pi.getSessionName()) {
 				ownName = name;
 				pi.setSessionName(name);
 			}
@@ -182,20 +182,13 @@ export default function (pi: ExtensionAPI) {
 		const authored = authorship(ctx.sessionManager.getEntries());
 		ownName = authored?.name;
 		namedDigest = authored?.digest;
-		clearInterval(refreshTimer);
-		refreshTimer = setInterval(() => {
-			void refresh(ctx).catch(() => {});
-		}, REFRESH_INTERVAL_MS);
-		refreshTimer.unref?.();
-	});
-
-	pi.on("session_shutdown", () => {
-		clearInterval(refreshTimer);
-		refreshTimer = undefined;
 	});
 
 	pi.on("before_agent_start", (event, ctx) => {
-		if (pi.getSessionName()) return;
 		void refresh(ctx, event.prompt).catch(() => {});
+	});
+
+	pi.on("agent_settled", (_event, ctx) => {
+		void refresh(ctx).catch(() => {});
 	});
 }
