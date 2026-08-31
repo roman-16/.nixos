@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 
 import {
-  authNotice,
-  errorNotice,
+  claudeAuthNotice,
+  claudeErrorNotice,
   deliveredMarker,
   failedMarker,
   fileContextNote,
@@ -203,50 +203,50 @@ describe("voiceText", () => {
   });
 });
 
-describe("errorNotice", () => {
+describe("claudeErrorNotice", () => {
   it("includes the detail and the retry hint", () => {
-    const notice = errorNotice("Overloaded");
+    const notice = claudeErrorNotice("Overloaded");
     expect(notice).toContain("Overloaded");
     expect(notice).toContain("try again");
   });
 
   it("omits the detail clause when empty", () => {
-    expect(errorNotice("   ")).toBe(
-      "⚠️ I couldn't reach the model just now. Your message didn't go through - try again in a bit.",
+    expect(claudeErrorNotice("   ")).toBe(
+      "⚠️ I couldn't reach Claude just now. Your message didn't go through - try again in a bit.",
     );
   });
 
   it("truncates a very long detail", () => {
-    expect(errorNotice("x".repeat(500))).toContain("more chars");
+    expect(claudeErrorNotice("x".repeat(500))).toContain("more chars");
   });
 
   it("keeps the reason and leaves the stack behind it out", () => {
-    const notice = errorNotice(
-      "Overloaded\n    at postJson (/nix/store/x/provider.js:155:19)\n    at async refresh",
+    const notice = claudeErrorNotice(
+      "Overloaded\n    at postJson (/nix/store/x/anthropic.js:155:19)\n    at async refresh",
     );
     expect(notice).toContain("Overloaded");
     expect(notice).not.toContain("nix/store");
   });
 });
 
-describe("authNotice", () => {
+describe("claudeAuthNotice", () => {
   it("names the one action that fixes it, and where", () => {
-    const notice = authNotice("https://apollo.halerc.xyz");
-    expect(notice).toContain("invalid");
+    const notice = claudeAuthNotice("https://apollo.halerc.xyz");
+    expect(notice).toContain("expired");
     expect(notice).toContain("https://apollo.halerc.xyz");
-    expect(notice).toContain("sign in");
+    expect(notice).toContain("Authorize");
   });
 
   it("never tells the user to try again, because retrying cannot work", () => {
-    expect(authNotice("u")).not.toContain("try again");
+    expect(claudeAuthNotice("u")).not.toContain("try again");
   });
 
   it("promises the messages are kept rather than lost", () => {
-    expect(authNotice("u")).toContain("catch up");
+    expect(claudeAuthNotice("u")).toContain("catch up");
   });
 
   it("still reads as an instruction without a configured address", () => {
-    const notice = authNotice("");
+    const notice = claudeAuthNotice("");
     expect(notice).toContain("the dashboard,");
     expect(notice).not.toContain("()");
   });

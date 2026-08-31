@@ -126,24 +126,28 @@ describe("renderPage", () => {
 });
 
 describe("renderSummary", () => {
-  it("shows the linked account and the credit balance when everything is connected", async () => {
+  it("shows the linked account and the plan's limits when everything is connected", async () => {
     const html = await renderSummary(
       summary({
-        usage: { used: 25.5, limit: 100, remaining: 74.5, reset: null },
+        usage: {
+          limits: [{ label: "Session", percent: 25, resetsAt: null }],
+          spend: { enabled: false, limit: null, used: { amount: 0, currency: "EUR" } },
+        },
       }),
     );
     expect(html).toContain("Linked");
     expect(html).toContain("+4369912345678");
-    expect(html).toContain("Connected to OpenRouter");
-    expect(html).toContain("$74.50");
-    expect(html).toContain("Credits");
+    expect(html).toContain("Connected to Anthropic");
+    expect(html).toContain("Session");
+    expect(html).toContain("25%");
+    expect(html).toContain("Extra usage");
     expect(html).not.toContain(`hx-post="/link"`);
     expect(html).not.toContain(`hx-post="/connect"`);
   });
 
   it("stays connected even when usage data is unavailable", async () => {
     const html = await renderSummary(summary({ usage: null }));
-    expect(html).toContain("Connected to OpenRouter");
+    expect(html).toContain("Connected to Anthropic");
     expect(html).toContain("unavailable");
   });
 
@@ -180,57 +184,57 @@ describe("renderSummary", () => {
 
   it("offers the connect flow when disconnected", async () => {
     const html = await renderSummary(
-      summary({ status: "missing", authUrl: "https://openrouter.ai/auth?x=1" }),
+      summary({ status: "missing", authUrl: "https://claude.ai/oauth/authorize?x=1" }),
     );
-    expect(html).toContain("Not connected to OpenRouter");
-    expect(html).toContain("https://openrouter.ai/auth?x=1");
+    expect(html).toContain("Not connected to Anthropic");
+    expect(html).toContain("https://claude.ai/oauth/authorize?x=1");
     expect(html).toContain(`hx-post="/connect"`);
     expect(html).toContain(`name="code"`);
   });
 
-  it("offers the very same flow when the credentials are invalid, and says so", async () => {
+  it("offers the very same flow when the sign-in expired, and says so", async () => {
     const html = await renderSummary(
-      summary({ status: "invalid", authUrl: "https://openrouter.ai/auth?x=1" }),
+      summary({ status: "expired", authUrl: "https://claude.ai/oauth/authorize?x=1" }),
     );
-    expect(html).toContain("Credentials invalid");
+    expect(html).toContain("Sign-in expired");
     expect(html).toContain("bg-red-500");
-    expect(html).toContain("https://openrouter.ai/auth?x=1");
+    expect(html).toContain("https://claude.ai/oauth/authorize?x=1");
     expect(html).toContain(`hx-post="/connect"`);
     expect(html).toContain(`name="code"`);
-    expect(html).not.toContain("Connected to OpenRouter");
+    expect(html).not.toContain("Connected to Anthropic");
   });
 
   it("says the messages are being kept, so a quiet Apollo is not a lost one", async () => {
-    const html = await renderSummary(summary({ status: "invalid", authUrl: "u" }));
+    const html = await renderSummary(summary({ status: "expired", authUrl: "u" }));
     expect(html).toContain("holding every message");
   });
 
-  it("dates the invalidation when it knows it, and omits it when it does not", async () => {
+  it("dates the expiry when it knows it, and omits it when it does not", async () => {
     const html = await renderSummary(
       summary({
-        invalidAt: new Date(2026, 7, 10, 10, 38).toISOString(),
-        status: "invalid",
+        expiredAt: new Date(2026, 7, 10, 10, 38).toISOString(),
+        status: "expired",
         authUrl: "u",
       }),
     );
     expect(html).toContain("10.08 10:38");
-    expect(await renderSummary(summary({ status: "invalid", authUrl: "u" }))).not.toContain(
+    expect(await renderSummary(summary({ status: "expired", authUrl: "u" }))).not.toContain(
       " \u00b7 ",
     );
   });
 
-  it("ignores an unparseable invalidation rather than rendering Invalid Date", async () => {
+  it("ignores an unparseable expiry rather than rendering Invalid Date", async () => {
     const html = await renderSummary(
-      summary({ invalidAt: "whenever", status: "invalid", authUrl: "u" }),
+      summary({ expiredAt: "whenever", status: "expired", authUrl: "u" }),
     );
-    expect(html).toContain("Credentials invalid");
+    expect(html).toContain("Sign-in expired");
     expect(html).not.toContain("Invalid");
   });
 
   it("never offers the flow while connected", async () => {
     const html = await renderSummary(summary({ status: "connected" }));
     expect(html).not.toContain(`hx-post="/connect"`);
-    expect(html).not.toContain("Credentials invalid");
+    expect(html).not.toContain("Sign-in expired");
   });
 
   it("surfaces a connect error", async () => {

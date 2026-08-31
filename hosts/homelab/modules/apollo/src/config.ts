@@ -106,7 +106,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     memoryFile: env.APOLLO_MEMORY_FILE ?? join(workspace, "MEMORY.md"),
     memoryPromptFile: join(agentDir, "MEMORY_PROMPT.md"),
     mistralApiKey: env.MISTRAL_API_KEY ?? "",
-    model: env.APOLLO_MODEL ?? "openrouter/deepseek/deepseek-v4-flash-vision-exp",
+    model: env.APOLLO_MODEL ?? "anthropic/claude-sonnet-5",
     notifyLevel: parseLevel(env.APOLLO_NOTIFY_LEVEL ?? "warn"),
     notifyThrottleMs: Number(env.APOLLO_NOTIFY_THROTTLE_MS ?? 60_000),
     port: Number(env.PORT ?? 8080),

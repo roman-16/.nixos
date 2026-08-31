@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it } from "bun:test";
 
-import type { Credentials } from "../src/credentials";
+import type { Anthropic } from "../src/anthropic";
 import type { Config } from "../src/config";
 import type { Pipeline } from "../src/pipeline";
 import { fragmentCache, isLoopback, type ServerDeps, startServer } from "../src/server";
 
 type Server = ReturnType<typeof startServer>;
 
-const AUTH_URL = "https://openrouter.ai/auth?code=true";
+const AUTH_URL = "https://claude.ai/oauth/authorize?code=true";
 
 /** The smallest real PNG there is, so the image hook can be exercised against actual bytes. */
 const PNG_1X1 = Buffer.from(
@@ -70,13 +70,13 @@ describe("isLoopback", () => {
 });
 
 /** A credential store in whatever state a test needs; connected unless it says otherwise. */
-function stubCredentials(over: Partial<Credentials> = {}): Credentials {
+function stubAnthropic(over: Partial<Anthropic> = {}): Anthropic {
   return {
-    invalidAt: () => undefined,
+    expiredAt: () => undefined,
     observe: () => {},
     status: () => "connected",
     submit: async () => {},
-    token: async () => "sk-live",
+    token: async () => "sk-ant-oat-live",
     url: async () => AUTH_URL,
     ...over,
   };
@@ -86,7 +86,7 @@ function stubCredentials(over: Partial<Credentials> = {}): Credentials {
 function stubDeps(over: Partial<ServerDeps> = {}): ServerDeps {
   const noop = () => {};
   return {
-    credentials: stubCredentials(),
+    anthropic: stubAnthropic(),
     chatStore: {
       image: () => undefined,
       older: () => ({ boundaryTime: undefined, entries: [] }),
@@ -153,15 +153,15 @@ describe("startServer routing", () => {
     expect((await get(base, "/health")).status).toBe(200);
   });
 
-  it("reports unhealthy while the credentials are invalid, however happily it serves pages", async () => {
-    const base = boot({ credentials: stubCredentials({ status: () => "invalid" }) });
+  it("reports unhealthy while the sign-in is expired, however happily it serves pages", async () => {
+    const base = boot({ anthropic: stubAnthropic({ status: () => "expired" }) });
     const res = await get(base, "/health");
     expect(res.status).toBe(503);
-    expect(await res.text()).toBe("credentials invalid");
+    expect(await res.text()).toBe("claude sign-in expired");
   });
 
   it("reports unhealthy when there has never been a credential", async () => {
-    const base = boot({ credentials: stubCredentials({ status: () => "missing" }) });
+    const base = boot({ anthropic: stubAnthropic({ status: () => "missing" }) });
     expect((await get(base, "/health")).status).toBe(503);
   });
 
@@ -229,31 +229,31 @@ describe("startServer routing", () => {
   });
 
   it("offers pi's authorize url while not connected", async () => {
-    const base = boot({ credentials: stubCredentials({ status: () => "missing" }) });
+    const base = boot({ anthropic: stubAnthropic({ status: () => "missing" }) });
     expect(await (await get(base, "/summary")).text()).toContain(AUTH_URL);
   });
 
-  it("renders the section rather than failing when the credentials are invalid", async () => {
-    // It used to resolve the token inline, so a dead credential threw and the poll 500d: htmx kept
-    // the stale green section, and the one screen that could fix it never appeared.
+  it("renders the section rather than failing when the sign-in is expired", async () => {
+    // A credential that refuses to resolve must not take the poll down with it: a 500 would leave
+    // htmx showing the stale green section, and the one screen that can fix it would never appear.
     const base = boot({
-      credentials: stubCredentials({
-        invalidAt: () => new Date(2026, 7, 10, 10, 38).toISOString(),
-        status: () => "invalid",
+      anthropic: stubAnthropic({
+        expiredAt: () => new Date(2026, 7, 10, 10, 38).toISOString(),
+        status: () => "expired",
         token: async () => undefined,
       }),
     });
     const res = await get(base, "/summary");
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("Credentials invalid");
+    expect(html).toContain("Sign-in expired");
     expect(html).toContain(AUTH_URL);
   });
 
   it("hands a pasted code to the parked sign-in and reports a rejected one", async () => {
     let pasted: string | undefined;
     const base = boot({
-      credentials: stubCredentials({
+      anthropic: stubAnthropic({
         status: () => "missing",
         submit: async (code: string) => {
           pasted = code;

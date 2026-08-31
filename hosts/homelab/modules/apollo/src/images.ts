@@ -1,8 +1,8 @@
 import type { ImageContent } from "@earendil-works/pi-ai";
 
 /**
- * WhatsApp hands over photos at full phone resolution, and a vision model rejects a request carrying
- * many images if any one of them exceeds the size it accepts. That failure is not local to the
+ * WhatsApp hands over photos at full phone resolution, and Anthropic rejects a request carrying many
+ * images if any one of them exceeds 2000px in either dimension. That failure is not local to the
  * offending message: once such an image sits in the conversation, every later turn that still
  * carries it is rejected too, so a single oversized photo can silently take the assistant down until
  * the context is compacted away.
