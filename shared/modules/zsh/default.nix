@@ -1,7 +1,10 @@
 {
   nixos = { pkgs, ... }: {
     environment = {
-      sessionVariables.EDITOR = "micro";
+      sessionVariables = {
+        DO_NOT_TRACK = "1";
+        EDITOR = "micro";
+      };
 
       systemPackages = with pkgs; [
         bat
