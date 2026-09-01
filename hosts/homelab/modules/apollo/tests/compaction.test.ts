@@ -6,7 +6,49 @@ import {
   continuesBlock,
   deliveredLedger,
   keptMessages,
+  readSummary,
 } from "../src/compaction";
+
+describe("readSummary", () => {
+  it("takes the text of a finished reply", () => {
+    expect(
+      readSummary({
+        content: [{ text: "They asked about the bike.", type: "text" }],
+        stopReason: "stop",
+      }),
+    ).toBe("They asked about the bike.");
+  });
+
+  it("leaves out thinking", () => {
+    expect(
+      readSummary({
+        content: [
+          { thinking: "weighing what matters", thinkingSignature: "", type: "thinking" },
+          { text: "They asked about the bike.", type: "text" },
+        ],
+        stopReason: "stop",
+      }),
+    ).toBe("They asked about the bike.");
+  });
+
+  it("drops a summary the provider never finished sending", () => {
+    expect(
+      readSummary({
+        content: [{ text: "They asked about the bi", type: "text" }],
+        stopReason: "aborted",
+      }),
+    ).toBe("");
+  });
+
+  it("drops a summary that ran into the token ceiling", () => {
+    expect(
+      readSummary({
+        content: [{ text: "They asked about the bike.", type: "text" }],
+        stopReason: "length",
+      }),
+    ).toBe("");
+  });
+});
 
 describe("buildCompactionPrompt", () => {
   it("places instructions before the wrapped conversation", () => {

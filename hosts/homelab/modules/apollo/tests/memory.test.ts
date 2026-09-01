@@ -1,8 +1,18 @@
 import { describe, expect, it } from "bun:test";
 
-import { buildFoldPrompt, memoryBlock, readFoldOutput, renderEvidence } from "../src/memory";
+import {
+  buildFoldPrompt,
+  type FoldReply,
+  memoryBlock,
+  readFoldOutput,
+  renderEvidence,
+} from "../src/memory";
 
 const PATH = "/var/lib/apollo/workspace/MEMORY.md";
+
+function reply(text: string, rest: Partial<FoldReply> = {}): FoldReply {
+  return { content: [{ text, type: "text" }], stopReason: "stop", ...rest };
+}
 
 describe("memoryBlock", () => {
   it("wraps the file in an element naming where it lives", () => {
@@ -204,42 +214,77 @@ describe("buildFoldPrompt", () => {
 
 describe("readFoldOutput", () => {
   it("takes a file as the new memory", () => {
-    expect(readFoldOutput("## Who\n- Lives in Austria")).toEqual({
+    expect(readFoldOutput(reply("## Who\n- Lives in Austria"))).toEqual({
       content: "## Who\n- Lives in Austria\n",
       kind: "content",
     });
   });
 
   it("accepts a title-only heading level and bullet stars", () => {
-    expect(readFoldOutput("# Memory\n* a fact").kind).toBe("content");
+    expect(readFoldOutput(reply("# Memory\n* a fact")).kind).toBe("content");
   });
 
   it("unwraps a code fence the model added", () => {
-    expect(readFoldOutput("```markdown\n## Who\n- a fact\n```")).toEqual({
+    expect(readFoldOutput(reply("```markdown\n## Who\n- a fact\n```"))).toEqual({
       content: "## Who\n- a fact\n",
       kind: "content",
     });
   });
 
   it("reads the no-op sentinel", () => {
-    expect(readFoldOutput("UNCHANGED").kind).toBe("unchanged");
-    expect(readFoldOutput(" unchanged. \n").kind).toBe("unchanged");
+    expect(readFoldOutput(reply("UNCHANGED")).kind).toBe("unchanged");
+    expect(readFoldOutput(reply(" unchanged. \n")).kind).toBe("unchanged");
   });
 
   it("refuses an empty reply rather than wiping months of profile", () => {
-    expect(readFoldOutput("   ").kind).toBe("invalid");
+    expect(readFoldOutput(reply("   "))).toEqual({ kind: "invalid", reason: "empty reply" });
   });
 
   it("refuses prose that is not a file", () => {
-    expect(readFoldOutput("I could not find anything worth remembering.").kind).toBe("invalid");
+    expect(readFoldOutput(reply("I could not find anything worth remembering.")).kind).toBe(
+      "invalid",
+    );
+  });
+
+  it("refuses a stream cut short, however much of a file arrived", () => {
+    const cut = reply("## Who\n- Lives in Austria\n- Goes to festivals (e.g. Fr", {
+      stopReason: "aborted",
+    });
+    expect(readFoldOutput(cut)).toEqual({
+      kind: "invalid",
+      reason: "incomplete reply (aborted)",
+    });
+  });
+
+  it("refuses a reply that ran into the token ceiling", () => {
+    expect(readFoldOutput(reply("## Who\n- a fact", { stopReason: "length" })).kind).toBe(
+      "invalid",
+    );
+  });
+
+  it("carries what the provider said about a failed call", () => {
+    expect(
+      readFoldOutput({
+        content: [],
+        errorMessage: "OAuth token expired",
+        stopReason: "error",
+      }),
+    ).toEqual({ kind: "invalid", reason: "OAuth token expired" });
+  });
+
+  it("names a failed call even when the provider said nothing", () => {
+    expect(readFoldOutput({ content: [], stopReason: "error" })).toEqual({
+      kind: "invalid",
+      reason: "provider error",
+    });
   });
 
   it("allows a pass to shrink the file, which is the mechanism working", () => {
-    expect(readFoldOutput("## Who\n- one line left").kind).toBe("content");
+    expect(readFoldOutput(reply("## Who\n- one line left")).kind).toBe("content");
   });
 
   it("ends the file with a newline", () => {
-    const output = readFoldOutput("## Who\n- a fact");
+    const output = readFoldOutput(reply("## Who\n- a fact"));
     expect(output.kind === "content" && output.content.endsWith("\n")).toBe(true);
   });
 });

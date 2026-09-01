@@ -1,4 +1,4 @@
-import type { Api, Model, Usage } from "@earendil-works/pi-ai";
+import type { Api, AssistantMessage, Model, Usage } from "@earendil-works/pi-ai";
 import {
   convertToLlm,
   type ExtensionAPI,
@@ -9,6 +9,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { Logger } from "pino";
 
+import { messageText } from "./messages";
 import { condense } from "./tool-output";
 
 const MAX_SUMMARY_TOKENS = 8192;
@@ -49,6 +50,18 @@ export interface CompactionExtensionOptions {
 function clock(at: number): string {
   const date = new Date(at);
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+/**
+ * The summary a reply carries, empty when there is none to take.
+ *
+ * A summary replaces the messages it was made from, so one the provider never finished sending
+ * would stand in for a conversation it only read half of. Dropping it costs a fallback to pi's own
+ * compaction, which reads all of them - the better half of that trade, and the same answer for a
+ * compaction the user interrupted by writing mid-summary.
+ */
+export function readSummary(reply: Pick<AssistantMessage, "content" | "stopReason">): string {
+  return reply.stopReason === "stop" ? messageText(reply.content) : "";
 }
 
 /** Keep both ends of every tool result, so the outcome of a command survives into the summary. */
@@ -180,11 +193,7 @@ export function createCompactionExtension(options: CompactionExtensionOptions): 
           { maxTokens: MAX_SUMMARY_TOKENS, signal },
         );
         if (response.usage) recordUsage?.(response.usage, model.id);
-        const summary = response.content
-          .filter((block): block is { text: string; type: "text" } => block.type === "text")
-          .map((block) => block.text)
-          .join("\n")
-          .trim();
+        const summary = readSummary(response);
         if (!summary) return undefined;
         return {
           compaction: {

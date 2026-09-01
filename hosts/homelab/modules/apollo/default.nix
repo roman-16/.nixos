@@ -204,10 +204,12 @@ in
           fi
         '';
 
-        # The workspace backup itself: commit everything and push, printing the one-line outcome. It
-        # runs server-side only - by the 3h timer (apollo-backup.service) and, on demand, spawned by
-        # the app from /internal/backup. The agent triggers it over HTTP and relays the outcome; the
-        # backup skill never runs git itself.
+        # The workspace backup itself: commit whatever changed, then push whenever GitHub does not
+        # already have this commit - so a push that failed, or a commit made by hand, is carried out
+        # by the next run instead of sitting on the box while every run reports there is nothing to
+        # do. It runs server-side only - by the 3h timer (apollo-backup.service) and, on demand,
+        # spawned by the app from /internal/backup. The agent triggers it over HTTP and relays the
+        # outcome; the backup skill never runs git itself.
         workspaceBackupScript = pkgs.writeShellApplication {
           name = "apollo-workspace-backup";
           runtimeInputs = with pkgs; [
@@ -223,10 +225,12 @@ in
 
             cd "''${APOLLO_WORKSPACE:-/var/lib/apollo/workspace}"
             git add -A
-            if git diff --cached --quiet; then
+            git diff --cached --quiet || git commit -q -m "$(date '+%Y-%m-%d %H:%M:%S')"
+
+            if [ "$(git rev-parse --verify --quiet HEAD || true)" \
+               = "$(git rev-parse --verify --quiet origin/main || true)" ]; then
               echo "Nothing to back up."
             else
-              git commit -q -m "$(date '+%Y-%m-%d %H:%M:%S')"
               git push -q -u origin main
               echo "Backed up and pushed."
             fi

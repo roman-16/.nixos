@@ -11,6 +11,7 @@ import {
   isAllowed,
   jidForNumber,
   linkGapNote,
+  messageText,
   numberFromJid,
   skillContextNote,
   splitInternal,
@@ -18,6 +19,28 @@ import {
   splitUserContext,
   voiceText,
 } from "../src/messages";
+
+describe("messageText", () => {
+  it("reads a bare string", () => {
+    expect(messageText("  logged it  ")).toBe("logged it");
+  });
+
+  it("joins the text blocks and leaves the machinery out", () => {
+    expect(
+      messageText([
+        { thinking: "weighing it", type: "thinking" },
+        { text: "first", type: "text" },
+        { name: "bash", type: "toolCall" },
+        { text: "second", type: "text" },
+      ]),
+    ).toBe("first\nsecond");
+  });
+
+  it("reads nothing out of content that holds no text", () => {
+    expect(messageText([{ type: "thinking" }])).toBe("");
+    expect(messageText(undefined)).toBe("");
+  });
+});
 
 describe("splitInternal", () => {
   it("leaves an ordinary message untouched", () => {

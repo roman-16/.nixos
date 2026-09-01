@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
-import type { Api, Model, Usage } from "@earendil-works/pi-ai";
+import type { Api, AssistantMessage, Model, Usage } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
   ExtensionFactory,
@@ -10,7 +10,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { Logger } from "pino";
 
-import { splitInternal, splitUserContext } from "./messages";
+import { messageText, splitInternal, splitUserContext } from "./messages";
 import type { FoldReason } from "./memory-schedule";
 import { shortStamp } from "./temporal";
 import { condense } from "./tool-output";
@@ -47,8 +47,12 @@ const MESSAGE_TAIL_CHARS = 500;
  */
 const MAX_FOLD_TOKENS = 16384;
 
-/** A fold must not hang the maintenance tick, however unresponsive the provider is. */
-const FOLD_TIMEOUT_MS = 60_000;
+/**
+ * A fold must not hang the maintenance tick, however unresponsive the provider is. Nobody is
+ * waiting on it, and the reply is a whole file rather than a sentence, so the ceiling is generous:
+ * it is there to break a dead call, not to hurry a slow one.
+ */
+const FOLD_TIMEOUT_MS = 5 * 60_000;
 
 /** The block appended to the system prompt, in the same element vocabulary as the rest. */
 export function memoryBlock(path: string, content: string): string {
@@ -86,17 +90,6 @@ export interface Evidence {
   text: string;
 }
 
-/** The plain text of a message's content: a bare string, or its text blocks joined. */
-function textOf(content: unknown): string {
-  if (typeof content === "string") return content.trim();
-  if (!Array.isArray(content)) return "";
-  return (content as { text?: string; type?: string }[])
-    .filter((block) => block?.type === "text" && typeof block.text === "string")
-    .map((block) => block.text!)
-    .join("\n")
-    .trim();
-}
-
 /**
  * The conversation as WhatsApp saw it, newer than `sinceMs`, oldest line last-written first.
  *
@@ -125,10 +118,10 @@ export function renderEvidence(
     let said: string;
     if (message.role === "user") {
       who = "You";
-      said = splitUserContext(textOf(message.content)).message.trim();
+      said = splitUserContext(messageText(message.content)).message.trim();
     } else if (message.role === "assistant") {
       who = "Apollo";
-      said = splitInternal(textOf(message.content)).delivered;
+      said = splitInternal(messageText(message.content)).delivered;
     } else {
       continue;
     }
@@ -166,15 +159,29 @@ export type FoldOutput =
   | { kind: "invalid"; reason: string }
   | { kind: "unchanged" };
 
+/** What the fold reads of the model's answer. */
+export type FoldReply = Pick<AssistantMessage, "content" | "errorMessage" | "stopReason">;
+
 const FENCE = /^```[^\n]*\n([\s\S]*?)\n?```$/;
 
 /**
- * Read the fold's reply. Anything that isn't a file is refused rather than written: an empty answer
- * or a prose apology would otherwise wipe a profile that took months to learn. Shrinking is not
- * refused - a pass that halves the file is the mechanism working, and git keeps every version.
+ * Read the fold's reply, which is either the whole file or nothing usable.
+ *
+ * A stream the provider did not end itself carries a prefix of the file, and writing a prefix
+ * destroys the rest of it - so "stop" is the only stop reason that yields a file, rather than the
+ * few ways of ending early that happen to have been seen. Past that, anything that isn't a file is
+ * refused rather than written: an empty answer or a prose apology would wipe a profile that took
+ * months to learn. Shrinking is not refused - a pass that halves the file is the mechanism working,
+ * and git keeps every version.
  */
-export function readFoldOutput(raw: string): FoldOutput {
-  let text = raw.trim();
+export function readFoldOutput(reply: FoldReply): FoldOutput {
+  if (reply.stopReason === "error") {
+    return { kind: "invalid", reason: reply.errorMessage?.trim() || "provider error" };
+  }
+  if (reply.stopReason !== "stop") {
+    return { kind: "invalid", reason: `incomplete reply (${reply.stopReason})` };
+  }
+  let text = messageText(reply.content);
   const fenced = FENCE.exec(text);
   if (fenced) text = fenced[1]!.trim();
   if (!text) return { kind: "invalid", reason: "empty reply" };
@@ -218,6 +225,20 @@ function write(path: string, content: string): void {
 
 export function createMemoryFolder(options: MemoryFolderOptions): MemoryFolder {
   const { entries, evidenceMaxChars, logger, modelRuntime, path, promptFile } = options;
+  let consecutiveFailures = 0;
+
+  /**
+   * A fold that came to nothing is retried within minutes, and a profile that lands late costs
+   * nothing, so the first one is a log line rather than a message on the user's phone in the middle
+   * of the night (warn is what reaches WhatsApp). A second in a row means the retry is not fixing
+   * it, and by then memory is going stale, which is worth the interruption.
+   */
+  function failed(detail: string, reason: FoldReason): false {
+    consecutiveFailures += 1;
+    const level = consecutiveFailures > 1 ? "warn" : "info";
+    logger[level]({ attempts: consecutiveFailures, detail, reason }, "memory fold failed");
+    return false;
+  }
 
   return {
     async fold(reason) {
@@ -253,41 +274,23 @@ export function createMemoryFolder(options: MemoryFolderOptions): MemoryFolder {
           { maxTokens: MAX_FOLD_TOKENS, signal: AbortSignal.timeout(FOLD_TIMEOUT_MS) },
         );
       } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
         // Judged before the log line, so a dead sign-in is already known by the time the notifier
         // decides whether this warning is worth the user's attention.
-        options.observe?.(error instanceof Error ? error.message : String(error));
-        logger.warn({ error, reason }, "memory fold failed");
-        return false;
+        options.observe?.(detail);
+        return failed(detail, reason);
       }
       if (reply.usage) options.recordUsage?.(reply.usage, model.id);
-      // Every provider funnels a failed stream into a message with stopReason "error" rather than
-      // throwing, so this is the only place a refused call shows up.
-      if (reply.stopReason === "error") {
-        options.observe?.(reply.errorMessage ?? "");
-        logger.warn({ detail: reply.errorMessage, reason }, "memory fold failed");
-        return false;
-      }
-      // The reply is the entire file, so one cut short is half a file - and writing half a file
-      // would destroy the other half. Refuse it rather than trusting that it looks well-formed.
-      if (reply.stopReason === "length") {
-        logger.warn(
-          { reason },
-          "memory fold hit the reply ceiling; refusing to write a partial file",
-        );
-        return false;
-      }
 
-      const output = readFoldOutput(
-        reply.content
-          .filter((block): block is { text: string; type: "text" } => block.type === "text")
-          .map((block) => block.text)
-          .join("\n"),
-      );
+      const output = readFoldOutput(reply);
       if (output.kind === "invalid") {
-        logger.warn({ reason, refused: output.reason }, "memory fold refused");
-        return false;
+        // Every provider funnels a refused call into a message with stopReason "error" rather than
+        // throwing, so this is the only place a dead sign-in shows up on a fold.
+        if (reply.stopReason === "error") options.observe?.(output.reason);
+        return failed(output.reason, reason);
       }
       if (output.kind === "unchanged" || output.content === current) {
+        consecutiveFailures = 0;
         options.writeCursor(evidence.newestMs);
         // Declining to engage and engaging to conclude nothing moved look identical in the file and
         // mean opposite things about the doctrine, so the verdict says which one this was.
@@ -307,9 +310,9 @@ export function createMemoryFolder(options: MemoryFolderOptions): MemoryFolder {
       try {
         write(path, output.content);
       } catch (error) {
-        logger.warn({ error, reason }, "memory write failed");
-        return false;
+        return failed(error instanceof Error ? error.message : String(error), reason);
       }
+      consecutiveFailures = 0;
       options.writeCursor(evidence.newestMs);
       logger.info(
         {

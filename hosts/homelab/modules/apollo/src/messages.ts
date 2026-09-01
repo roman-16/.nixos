@@ -21,6 +21,20 @@ const INTERNAL_BODY = /^<internal>([\s\S]*?)(?:<\/internal>|$)$/;
 const CONTEXT_ELEMENT =
   /^<context source="([^"]*)" info="([^"]*)"(?:\s*\/>|>([\s\S]*?)<\/context>)/;
 
+/**
+ * The plain text of a message's content: a bare string, or its text blocks joined. Thinking, tool
+ * calls and images are machinery rather than words, so none of them appear here.
+ */
+export function messageText(content: unknown): string {
+  if (typeof content === "string") return content.trim();
+  if (!Array.isArray(content)) return "";
+  return (content as { text?: string; type?: string }[])
+    .filter((block) => block?.type === "text" && typeof block.text === "string")
+    .map((block) => block.text!)
+    .join("\n")
+    .trim();
+}
+
 export interface SplitText {
   /** What reaches the user: the block with every internal span removed. */
   delivered: string;
