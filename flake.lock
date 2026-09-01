@@ -305,11 +305,11 @@
         "treefmt-nix": "treefmt-nix_2"
       },
       "locked": {
-        "lastModified": 1788255105,
-        "narHash": "sha256-qMWy66QS+rvWzT2V/5YruM1TPW4H/wAGPH6SzLcILIk=",
+        "lastModified": 1788258647,
+        "narHash": "sha256-eRtZ4oKZ9/We8qfuqUoISAuqeaJnsIKYPW9JDXqPjHA=",
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "1b4ad00f3706d037655092d72d49e944255b3304",
+        "rev": "68c363aaa0acf2337a8e8b311bc780bcb184019c",
         "type": "github"
       },
       "original": {
@@ -355,6 +355,7 @@
       },
       "original": {
         "owner": "roman-16",
+        "ref": "develop",
         "repo": "murmur",
         "type": "github"
       }
@@ -480,11 +481,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1788256447,
-        "narHash": "sha256-hh6l0V+zD36HlGuFDFw6S5Uhv11Vj5H+Ou/0mZoDAIs=",
+        "lastModified": 1788259601,
+        "narHash": "sha256-RrGlznIJj1KQ21IiKTyM5tMe/uNkjdaLxSs1jZ2ma3o=",
         "owner": "roman-16",
         "repo": "proton-cli",
-        "rev": "3f48e5a3f1bbd32bccf6a1c5443f8de9938b709d",
+        "rev": "349ac1939ff84ab49c25c2882cb7f4bf71ec325d",
         "type": "github"
       },
       "original": {
