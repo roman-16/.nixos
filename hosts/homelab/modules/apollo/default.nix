@@ -252,6 +252,24 @@ in
 
         protonCredential = "proton-password:${protonPassword}";
 
+        # What every unit holding the session shares. Nobody is there to answer a
+        # prompt, so a missing credential or an unanswerable question is an error
+        # rather than a wait; and the handful of commands that would take the account
+        # apart at a stroke are refused by proton itself (exit 6), which no --yes and
+        # no flag can answer. An assistant asked to tidy up has no business emptying a
+        # trash, exporting every password or ending its own session, and a rule the
+        # binary enforces is worth more here than one a prompt asks for.
+        protonEnvironment = {
+          PROTON_CONFIRM = lib.concatMapStringsSep ", " (command: "${command}:all=deny") [
+            "account logout"
+            "drive trash empty"
+            "mail messages empty"
+            "pass export"
+            "pass trash empty"
+          ];
+          PROTON_NO_INPUT = "1";
+        };
+
         # Written once a run has fully succeeded, and read by the job itself to tell an
         # hour that still owes the day's copy from one that does not.
         dbBackupStatus = "/var/lib/apollo-db-backup/status.json";
@@ -407,7 +425,7 @@ in
             PORT = toString port;
             SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
           }
-          // lib.optionalAttrs (job.protonSession or false) { PROTON_NO_INPUT = "1"; }
+          // lib.optionalAttrs (job.protonSession or false) protonEnvironment
           // (job.environment or { });
 
           path = job.packages or [ ];
@@ -585,11 +603,9 @@ in
                 # (expensive cache writes) as a 5min cache would after every gap.
                 PI_CACHE_RETENTION = "long";
                 PORT = toString port;
-                # A missing credential or an unanswerable question becomes an error
-                # instead of a prompt nobody is there to see.
-                PROTON_NO_INPUT = "1";
                 SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
-              };
+              }
+              // protonEnvironment;
 
               # writeBunApplication's runtimeInputs only populate the build
               # closure, not the unit's PATH, so the tools the agent shells out
@@ -666,9 +682,8 @@ in
               onFailure = [ "${checks.failureUnitName checks.registry.apollo-db-backup}.service" ];
               wants = [ "network-online.target" ];
 
-              environment = {
+              environment = protonEnvironment // {
                 HOME = "%S/apollo-db-backup";
-                PROTON_NO_INPUT = "1";
               };
 
               serviceConfig = {
