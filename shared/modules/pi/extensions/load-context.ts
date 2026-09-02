@@ -1,10 +1,23 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { Glob } from "bun";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, relative, resolve } from "node:path";
-import { type ExtensionAPI, estimateTokens } from "@earendil-works/pi-coding-agent";
+import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
+import {
+  convertToPng,
+  detectSupportedImageMimeTypeFromFile,
+  estimateTokens,
+  type ExtensionAPI,
+  formatDimensionNote,
+  resizeImage,
+} from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 
-type ExclusionReason = "generated" | "oversized" | "secret";
+type ExclusionReason = "binary" | "generated" | "image" | "oversized" | "secret" | "unsupported";
+
+type ContentBlock = ImageContent | TextContent;
+
+type LoadedFile = LoadedImage | LoadedText;
 
 interface ExcludedFile {
   reason: ExclusionReason;
@@ -12,13 +25,39 @@ interface ExcludedFile {
   tokens?: number;
 }
 
+interface Exclusion {
+  display: string;
+  matches: (path: string) => boolean;
+}
+
 interface LoadContextDetails {
   excluded: ExcludedFile[];
   excludedPaths: string[];
   fileCount: number;
   files: string[];
+  imageCount: number;
   paths: string[];
   tokens: number;
+}
+
+interface LoadedImage {
+  data: string;
+  kind: "image";
+  mimeType: string;
+  note?: string;
+  rel: string;
+}
+
+interface LoadedText {
+  kind: "text";
+  rel: string;
+  text: string;
+}
+
+interface Source {
+  display: string;
+  files: string[];
+  walked: boolean;
 }
 
 const BINARY_SCAN_BYTES = 8192;
@@ -26,6 +65,8 @@ const BINARY_SCAN_BYTES = 8192;
 const BULKY_FORMATS = ["*.csv", "*.geojson", "*.ipynb", "*.snap", "*.sql", "*.svg", "*.tsv"];
 
 const BULKY_FORMAT_TOKEN_LIMIT = 2000;
+
+const BYPASSABLE_REASONS = new Set<ExclusionReason>(["generated", "image", "oversized", "secret"]);
 
 const ESTIMATED_CHARS_PER_TOKEN = 4;
 
@@ -49,6 +90,12 @@ const GENERATED_FILES = [
   "pnpm-lock.yaml",
 ];
 
+const GLOB_MAGIC = /[*?[\]{}]/;
+
+const PRIVATE_KEY_RE = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----/;
+
+const PROVIDER_IMAGE_MIME_TYPES = new Set(["image/gif", "image/jpeg", "image/png", "image/webp"]);
+
 const SECRET_FILES = [
   "*.jks",
   "*.key",
@@ -65,22 +112,22 @@ const SECRET_FILES = [
   "secrets.json",
 ];
 
-function globMatcher(globs: string[]): (name: string) => boolean {
-  const patterns = globs.map(
-    (g) => new RegExp(`^${g.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`),
-  );
-  return (name) => patterns.some((re) => re.test(name));
+const SKIPPED_REASON_LIMIT = 10;
+
+function nameMatcher(patterns: string[]): (name: string) => boolean {
+  const globs = patterns.map((pattern) => new Glob(pattern));
+  return (name) => globs.some((glob) => glob.match(name));
 }
 
-const isBulkyFormat = globMatcher(BULKY_FORMATS);
-const isGenerated = globMatcher(GENERATED_FILES);
-const isSecret = globMatcher(SECRET_FILES);
+const isBulkyFormat = nameMatcher(BULKY_FORMATS);
+const isGenerated = nameMatcher(GENERATED_FILES);
+const isSecret = nameMatcher(SECRET_FILES);
 
 function estimateFileTokens(path: string): number {
   return Math.ceil(statSync(path).size / ESTIMATED_CHARS_PER_TOKEN);
 }
 
-function exclusionFor(path: string): Omit<ExcludedFile, "rel"> | null {
+function nameExclusionFor(path: string): Omit<ExcludedFile, "rel"> | null {
   const name = basename(path);
   if (isSecret(name)) return { reason: "secret" };
   if (isGenerated(name)) return { reason: "generated" };
@@ -91,18 +138,10 @@ function exclusionFor(path: string): Omit<ExcludedFile, "rel"> | null {
   return null;
 }
 
-const PRIVATE_KEY_RE = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----/;
-
-// A PEM / OpenSSH / PGP private-key block must never reach the transcript,
-// whatever the file is named. Detected by content (not extension) so an
-// arbitrarily named key (deploy_key, id_ed25519, notes.txt, ...) is caught too.
-// Unlike the name excludes this also blocks an explicitly named file; --all
-// still bypasses it.
 function containsPrivateKey(buf: Buffer): boolean {
   return PRIVATE_KEY_RE.test(buf.toString("utf8", 0, BINARY_SCAN_BYTES));
 }
 
-// A NUL byte in the first few KB is git's own heuristic for "binary".
 function isBinary(buf: Buffer): boolean {
   const end = Math.min(buf.length, BINARY_SCAN_BYTES);
   for (let i = 0; i < end; i++) {
@@ -111,8 +150,6 @@ function isBinary(buf: Buffer): boolean {
   return false;
 }
 
-// Shell-like split: whitespace separates paths, but "double" and 'single'
-// quotes group spaces, so @"tests 1/" stays a single path.
 function tokenize(input: string): string[] {
   const tokens: string[] = [];
   let cur = "";
@@ -138,82 +175,158 @@ function tokenize(input: string): string[] {
     }
   }
   if (started) tokens.push(cur);
-  return tokens.filter((t) => t.length > 0);
+  return tokens.filter((token) => token.length > 0);
 }
 
-function estimateTextTokens(text: string): number {
+function estimateContentTokens(content: ContentBlock[]): number {
   return estimateTokens({
     role: "user",
-    content: [{ type: "text", text }],
+    content,
     timestamp: Date.now(),
   } as Parameters<typeof estimateTokens>[0]);
 }
 
 function expandPath(raw: string, cwd: string): string {
-  let p = raw.replace(/^@/, "");
-  if (p === "~" || p.startsWith("~/")) p = join(homedir(), p.slice(1));
-  return isAbsolute(p) ? p : resolve(cwd, p);
+  let path = raw.replace(/^@/, "");
+  if (path === "~" || path.startsWith("~/")) path = join(homedir(), path.slice(1));
+  return isAbsolute(path) ? path : resolve(cwd, path);
 }
 
-function walk(dir: string, out: string[]): void {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === ".git") continue;
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) walk(full, out);
-    else if (entry.isFile()) out.push(full);
+function displayPath(cwd: string, path: string): string {
+  const rel = relative(cwd, path);
+  return !rel || rel.startsWith("..") ? path : rel;
+}
+
+function hasGlobMagic(token: string): boolean {
+  return GLOB_MAGIC.test(token);
+}
+
+function splitPattern(pattern: string): { pattern: string; root: string } {
+  const segments = pattern.split("/");
+  const rootSegments: string[] = [];
+  while (segments.length > 1 && !hasGlobMagic(segments[0] as string)) {
+    rootSegments.push(segments.shift() as string);
   }
+  return { pattern: segments.join("/"), root: rootSegments.join("/") || "/" };
 }
 
-// Enumerate non-ignored files in a directory via git so .gitignore (including
-// nested ignores, negations, and global excludes) is honored for free. Falls
-// back to a plain walk when the path is not inside a git repository.
-async function listFiles(pi: ExtensionAPI, dir: string): Promise<string[]> {
+async function listFiles(pi: ExtensionAPI, root: string, pattern?: string): Promise<string[]> {
   const result = await pi.exec(
     "git",
     ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "."],
-    { cwd: dir },
+    { cwd: root },
   );
 
   if (result.code === 0) {
+    const glob = pattern ? new Glob(pattern) : undefined;
     return result.stdout
       .split("\0")
-      .filter(Boolean)
-      .map((rel) => resolve(dir, rel))
-      .filter((abs) => existsSync(abs));
+      .filter((rel) => rel && (!glob || glob.match(rel)))
+      .map((rel) => resolve(root, rel))
+      .filter((path) => existsSync(path));
   }
 
-  const out: string[] = [];
-  walk(dir, out);
-  return out;
+  return [
+    ...new Glob(pattern ?? "**/*").scanSync({
+      absolute: true,
+      cwd: root,
+      dot: true,
+      followSymlinks: true,
+      onlyFiles: true,
+    }),
+  ].filter((path) => !path.split("/").includes(".git"));
+}
+
+async function toPng(bytes: Buffer, mimeType: string): Promise<{ bytes: Buffer; mimeType: string } | null> {
+  const png = await convertToPng(bytes.toString("base64"), mimeType);
+  return png && { bytes: Buffer.from(png.data, "base64"), mimeType: png.mimeType };
+}
+
+async function imageContent(path: string, mimeType: string): Promise<Omit<LoadedImage, "kind" | "rel"> | null> {
+  const bytes = readFileSync(path);
+  const normalized = PROVIDER_IMAGE_MIME_TYPES.has(mimeType)
+    ? { bytes, mimeType }
+    : await toPng(bytes, mimeType);
+  if (!normalized) return null;
+
+  const resized = await resizeImage(normalized.bytes, normalized.mimeType);
+  if (!resized) return null;
+
+  return { data: resized.data, mimeType: resized.mimeType, note: formatDimensionNote(resized) };
+}
+
+function fileLabel(file: LoadedFile): string {
+  const label = `===== ${file.rel} =====`;
+  return file.kind === "image" && file.note ? `${label}\n${file.note}` : label;
+}
+
+function textSection(file: LoadedText): string {
+  return `${fileLabel(file)}\n${file.text}`;
+}
+
+function blocksFor(file: LoadedFile): ContentBlock[] {
+  return file.kind === "text"
+    ? [{ text: textSection(file), type: "text" }]
+    : [
+        { text: fileLabel(file), type: "text" },
+        { data: file.data, mimeType: file.mimeType, type: "image" },
+      ];
+}
+
+function groupByReason(excluded: ExcludedFile[]): Map<ExclusionReason, ExcludedFile[]> {
+  const groups = new Map<ExclusionReason, ExcludedFile[]>();
+  for (const file of excluded) {
+    const group = groups.get(file.reason);
+    if (group) group.push(file);
+    else groups.set(file.reason, [file]);
+  }
+  return groups;
+}
+
+function formatImageCount(count: number): string {
+  return count > 0 ? ` · ${count} image${count === 1 ? "" : "s"}` : "";
 }
 
 function formatSkipped(excluded: ExcludedFile[]): string {
-  const width = Math.max(...excluded.map((e) => e.reason.length));
-  const lines = excluded.map(
-    (e) =>
-      `  ${e.reason.padEnd(width)}  ${e.rel}${e.tokens ? ` (~${e.tokens.toLocaleString()} tokens)` : ""}`,
-  );
-  return `\n\nskipped ${excluded.length} file(s) (use --all to include):\n${lines.join("\n")}`;
+  const width = Math.max(...excluded.map((file) => file.reason.length));
+  const lines: string[] = [];
+  for (const [reason, group] of groupByReason(excluded)) {
+    for (const file of group.slice(0, SKIPPED_REASON_LIMIT)) {
+      const tokens = file.tokens ? ` (~${file.tokens.toLocaleString()} tokens)` : "";
+      lines.push(`  ${reason.padEnd(width)}  ${file.rel}${tokens}`);
+    }
+    const hidden = group.length - SKIPPED_REASON_LIMIT;
+    if (hidden > 0) lines.push(`  ${" ".repeat(width)}  ... and ${hidden} more`);
+  }
+  const hint = excluded.some((file) => BYPASSABLE_REASONS.has(file.reason)) ? " (use --all to include)" : "";
+  return `\n\nskipped ${excluded.length} file(s)${hint}:\n${lines.join("\n")}`;
+}
+
+function summarizeReasons(excluded: ExcludedFile[]): string {
+  return [...groupByReason(excluded)].map(([reason, group]) => `${group.length} ${reason}`).join(", ");
 }
 
 export default function (pi: ExtensionAPI) {
   pi.registerMessageRenderer<LoadContextDetails>("load-context", (message, { expanded }, theme) => {
     const details = message.details;
-    if (!details) return new Text(message.content as string, 0, 0);
+    if (!details) return undefined;
 
     let text =
       theme.fg("accent", "📎 ") +
       theme.fg("toolTitle", theme.bold("load-context ")) +
-      theme.fg("muted", `${details.fileCount} file(s) · ~${details.tokens.toLocaleString()} tokens`) +
-      (details.excluded?.length ? theme.fg("muted", ` · ${details.excluded.length} skipped`) : "") +
+      theme.fg(
+        "muted",
+        `${details.fileCount} file(s)${formatImageCount(details.imageCount)} · ~${details.tokens.toLocaleString()} tokens`,
+      ) +
+      (details.excluded.length ? theme.fg("muted", ` · ${details.excluded.length} skipped`) : "") +
       theme.fg("dim", ` from ${details.paths.join(", ")}`) +
-      (details.excludedPaths?.length ? theme.fg("dim", ` excluding ${details.excludedPaths.join(", ")}`) : "");
+      (details.excludedPaths.length ? theme.fg("dim", ` excluding ${details.excludedPaths.join(", ")}`) : "");
 
     if (expanded && details.files.length > 0) {
-      text += "\n" + details.files.map((f) => theme.fg("dim", `  ${f}`)).join("\n");
+      text += "\n" + details.files.map((file) => theme.fg("dim", `  ${file}`)).join("\n");
     }
-    if (expanded && details.excluded?.length) {
-      text += "\n" + details.excluded.map((e) => theme.fg("dim", `  - ${e.rel} (${e.reason})`)).join("\n");
+    if (expanded && details.excluded.length > 0) {
+      text += "\n" + details.excluded.map((file) => theme.fg("dim", `  - ${file.rel} (${file.reason})`)).join("\n");
     }
 
     return new Text(text, 0, 0);
@@ -221,7 +334,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerCommand("load-context", {
     description:
-      "Recursively load a path's files into context (gitignore-aware, skips secrets/generated/oversized files, !path to exclude, with confirmation)",
+      "Load paths, globs and images into context (gitignore-aware, skips secrets/generated/oversized/binary files, !glob to exclude, with confirmation)",
     handler: async (args, ctx) => {
       if (!ctx.hasUI) {
         ctx.ui.notify("load-context requires interactive mode", "error");
@@ -229,81 +342,127 @@ export default function (pi: ExtensionAPI) {
       }
 
       const argTokens = tokenize(args);
-      const includeAll = argTokens.some((t) => t === "--all" || t === "--no-exclude");
-      const showTop = argTokens.some((t) => t === "--top");
-      const rawTokens = argTokens.filter((t) => !["--all", "--no-exclude", "--top"].includes(t));
-      const rawExcludes = rawTokens.filter((t) => t.startsWith("!")).map((t) => t.slice(1));
-      const rawPaths = rawTokens.filter((t) => !t.startsWith("!"));
-      if (rawPaths.length === 0) rawPaths.push(".");
+      const includeAll = argTokens.some((token) => token === "--all" || token === "--no-exclude");
+      const showTop = argTokens.some((token) => token === "--top");
+      const pathTokens = argTokens.filter((token) => !["--all", "--no-exclude", "--top"].includes(token));
+      const excludeTokens = pathTokens.filter((token) => token.startsWith("!")).map((token) => token.slice(1));
+      const includeTokens = pathTokens.filter((token) => !token.startsWith("!"));
+      if (includeTokens.length === 0) includeTokens.push(".");
 
-      const resolvedPaths: string[] = [];
-      for (const rp of rawPaths) {
-        const abs = expandPath(rp, ctx.cwd);
-        if (existsSync(abs)) resolvedPaths.push(abs);
-        else ctx.ui.notify(`Path not found: ${rp}`, "error");
+      const sources: Source[] = [];
+      for (const token of includeTokens) {
+        const expanded = expandPath(token, ctx.cwd);
+        if (existsSync(expanded)) {
+          const walked = statSync(expanded).isDirectory();
+          sources.push({
+            display: displayPath(ctx.cwd, expanded),
+            files: walked ? await listFiles(pi, expanded) : [expanded],
+            walked,
+          });
+          continue;
+        }
+        if (!hasGlobMagic(token)) {
+          ctx.ui.notify(`Path not found: ${token}`, "error");
+          continue;
+        }
+        const { pattern, root } = splitPattern(expanded);
+        const files = existsSync(root) ? await listFiles(pi, root, pattern) : [];
+        if (files.length === 0) {
+          ctx.ui.notify(`No files matched: ${token}`, "error");
+          continue;
+        }
+        sources.push({ display: token, files, walked: false });
       }
-      if (resolvedPaths.length === 0) return;
+      if (sources.length === 0) return;
 
-      const excludePaths: string[] = [];
-      for (const rp of rawExcludes) {
-        const abs = expandPath(rp, ctx.cwd);
-        if (!existsSync(abs)) ctx.ui.notify(`Exclude path not found: ${rp}`, "warning");
-        excludePaths.push(abs);
-      }
-      const isUserExcluded = (f: string) => excludePaths.some((p) => f === p || f.startsWith(`${p}/`));
+      const exclusions: Exclusion[] = excludeTokens.map((token) => {
+        const expanded = expandPath(token, ctx.cwd);
+        if (hasGlobMagic(token)) {
+          const glob = new Glob(expanded);
+          return { display: token, matches: (path: string) => glob.match(path) };
+        }
+        if (!existsSync(expanded)) ctx.ui.notify(`Exclude path not found: ${token}`, "warning");
+        return {
+          display: token,
+          matches: (path: string) => path === expanded || path.startsWith(`${expanded}/`),
+        };
+      });
 
+      const modelReadsImages = ctx.model?.input.includes("image") ?? false;
       const seen = new Set<string>();
-      const files: string[] = [];
       const excluded: ExcludedFile[] = [];
+      const loaded: LoadedFile[] = [];
       let userExcludedCount = 0;
-      for (const p of resolvedPaths) {
-        const isDir = statSync(p).isDirectory();
-        const candidates = isDir ? await listFiles(pi, p) : [p];
-        for (const f of candidates) {
-          if (seen.has(f)) continue;
-          seen.add(f);
-          if (isUserExcluded(f)) {
+
+      for (const source of sources) {
+        for (const path of source.files) {
+          if (seen.has(path)) continue;
+          seen.add(path);
+          if (exclusions.some((exclusion) => exclusion.matches(path))) {
             userExcludedCount++;
             continue;
           }
-          const exclusion = isDir && !includeAll ? exclusionFor(f) : null;
-          if (exclusion) {
-            excluded.push({ ...exclusion, rel: relative(ctx.cwd, f) || f });
+
+          const rel = displayPath(ctx.cwd, path);
+          const filtered = source.walked && !includeAll;
+          const nameExclusion = filtered ? nameExclusionFor(path) : null;
+          if (nameExclusion) {
+            excluded.push({ ...nameExclusion, rel });
             continue;
           }
-          files.push(f);
-        }
-      }
 
-      const entries: { rel: string; content: string }[] = [];
-      for (const file of files) {
-        try {
-          const buf = readFileSync(file);
-          if (isBinary(buf)) continue;
-          const rel = relative(ctx.cwd, file) || file;
+          const mimeType = await detectSupportedImageMimeTypeFromFile(path).catch(() => null);
+          if (mimeType) {
+            if (filtered) {
+              excluded.push({ reason: "image", rel });
+              continue;
+            }
+            const image = modelReadsImages ? await imageContent(path, mimeType) : null;
+            if (!image) {
+              excluded.push({ reason: "unsupported", rel });
+              continue;
+            }
+            loaded.push({ ...image, kind: "image", rel });
+            continue;
+          }
+
+          let buf: Buffer;
+          try {
+            buf = readFileSync(path);
+          } catch {
+            continue;
+          }
+          if (isBinary(buf)) {
+            excluded.push({ reason: "binary", rel });
+            continue;
+          }
           if (!includeAll && containsPrivateKey(buf)) {
             excluded.push({ reason: "secret", rel });
             continue;
           }
-          entries.push({ rel, content: buf.toString("utf8") });
-        } catch {
-          // skip unreadable
+          loaded.push({ kind: "text", rel, text: buf.toString("utf8") });
         }
       }
       excluded.sort((a, b) => a.reason.localeCompare(b.reason) || a.rel.localeCompare(b.rel));
 
-      if (entries.length === 0) {
-        ctx.ui.notify("No readable (non-binary, non-ignored) files found", "warning");
+      if (loaded.length === 0) {
+        const reasons = excluded.length > 0 ? ` (${summarizeReasons(excluded)})` : "";
+        ctx.ui.notify(`No loadable files found${reasons}`, "warning");
         return;
       }
 
-      const displayPaths = resolvedPaths.map((p) => relative(ctx.cwd, p) || p);
-      const displayExcludes = excludePaths.map((p) => relative(ctx.cwd, p) || p);
+      const displayPaths = sources.map((source) => source.display);
+      const displayExcludes = exclusions.map((exclusion) => exclusion.display);
       const excludeSuffix = displayExcludes.length > 0 ? ` (excluding ${displayExcludes.join(", ")})` : "";
-      const body = entries.map((e) => `===== ${e.rel} =====\n${e.content}`).join("\n\n");
-      const content = `Loaded ${entries.length} file(s) into context from ${displayPaths.join(", ")}${excludeSuffix} at the user's request:\n\n${body}`;
+      const textFiles = loaded.filter((file): file is LoadedText => file.kind === "text");
+      const imageFiles = loaded.filter((file): file is LoadedImage => file.kind === "image");
+      const header = `Loaded ${loaded.length} file(s) into context from ${displayPaths.join(", ")}${excludeSuffix} at the user's request:`;
+      const content: ContentBlock[] = [
+        { text: [header, ...textFiles.map(textSection)].join("\n\n"), type: "text" },
+        ...imageFiles.flatMap(blocksFor),
+      ];
 
-      const estimated = estimateTextTokens(content);
+      const estimated = estimateContentTokens(content);
 
       const contextWindow = ctx.getContextUsage()?.contextWindow ?? ctx.model?.contextWindow;
       const pctStr = contextWindow ? ` (~${Math.round((estimated / contextWindow) * 100)}% of context)` : "";
@@ -311,24 +470,24 @@ export default function (pi: ExtensionAPI) {
 
       let topNote = "";
       if (showTop) {
-        const largest = entries
-          .map((e) => ({ rel: e.rel, tokens: estimateTextTokens(e.content) }))
+        const largest = loaded
+          .map((file) => ({ rel: file.rel, tokens: estimateContentTokens(blocksFor(file)) }))
           .sort((a, b) => b.tokens - a.tokens)
           .slice(0, 10);
-        const width = Math.max(...largest.map((e) => e.tokens.toLocaleString().length)) + 1;
+        const width = Math.max(...largest.map((file) => file.tokens.toLocaleString().length)) + 1;
         topNote = `\n\nlargest ${largest.length} file(s) by tokens:\n${largest
-          .map((e) => `  ${`~${e.tokens.toLocaleString()}`.padStart(width)} ${e.rel}`)
+          .map((file) => `  ${`~${file.tokens.toLocaleString()}`.padStart(width)} ${file.rel}`)
           .join("\n")}`;
       }
 
       const excludeNote =
-        excludePaths.length > 0
-          ? `\n\nexcluded ${userExcludedCount} file(s) via ${displayExcludes.map((p) => `!${p}`).join(", ")}`
+        exclusions.length > 0
+          ? `\n\nexcluded ${userExcludedCount} file(s) via ${displayExcludes.map((path) => `!${path}`).join(", ")}`
           : "";
 
       const ok = await ctx.ui.confirm(
         "Load into context?",
-        `${entries.length} file(s) · ~${estimated.toLocaleString()} tokens${pctStr}\n${displayPaths.join("\n")}${excludeNote}${topNote}${skippedNote}`,
+        `${loaded.length} file(s)${formatImageCount(imageFiles.length)} · ~${estimated.toLocaleString()} tokens${pctStr}\n${displayPaths.join("\n")}${excludeNote}${topNote}${skippedNote}`,
       );
       if (!ok) {
         ctx.ui.notify("Cancelled", "info");
@@ -343,8 +502,9 @@ export default function (pi: ExtensionAPI) {
           details: {
             excluded,
             excludedPaths: displayExcludes,
-            fileCount: entries.length,
-            files: entries.map((e) => e.rel),
+            fileCount: loaded.length,
+            files: loaded.map((file) => file.rel),
+            imageCount: imageFiles.length,
             paths: displayPaths,
             tokens: estimated,
           },
@@ -353,7 +513,7 @@ export default function (pi: ExtensionAPI) {
       );
 
       const skippedSuffix = excluded.length > 0 ? `, skipped ${excluded.length}` : "";
-      ctx.ui.notify(`Loaded ${entries.length} file(s) (~${estimated.toLocaleString()} tokens${skippedSuffix})`, "info");
+      ctx.ui.notify(`Loaded ${loaded.length} file(s) (~${estimated.toLocaleString()} tokens${skippedSuffix})`, "info");
     },
   });
 }
