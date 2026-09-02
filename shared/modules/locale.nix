@@ -1,6 +1,11 @@
+let
+  timeZone = "Europe/Vienna";
+in
 {
   nixos = { ... }: {
-    time.timeZone = "Europe/Vienna";
+    time.timeZone = timeZone;
+
+    environment.sessionVariables.TZ = timeZone;
 
     i18n = {
       defaultLocale = "en_US.UTF-8";
