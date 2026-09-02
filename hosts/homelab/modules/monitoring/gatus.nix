@@ -173,8 +173,11 @@ in
           group = "Services";
           url = "http://${facts.ips.apollo}:8080/health";
           interval = "5m";
+          # /health answers with what is wrong, and a condition on the body is what carries that
+          # into the alert - so the push says "whatsapp link down for 42m" rather than only "503".
           conditions = [
             "[STATUS] == 200"
+            "[BODY] == ok"
             "[RESPONSE_TIME] < 5000"
           ];
 

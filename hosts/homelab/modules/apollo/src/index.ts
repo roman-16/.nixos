@@ -139,6 +139,7 @@ export async function main(): Promise<void> {
     maxFileBytes: config.maxFileBytes,
     onConnect: () => pipeline.handleConnect(),
     onMessages: (messages) => pipeline.handleInbound(messages),
+    wantsMessage: (waId, sentAt) => inbox.wants(waId, sentAt),
     whatsappDir: config.whatsappDir,
   });
   pipeline.attach(whatsapp);

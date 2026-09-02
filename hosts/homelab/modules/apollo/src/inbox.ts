@@ -48,6 +48,11 @@ export interface Inbox {
   pending(limit: number): InboxEntry[];
   /** Forget handled messages older than `before`; pending ones are owed until delivered. */
   prune(before: number): void;
+  /**
+   * Whether a message offered now would be taken in. The same answer `admit` gives, without the
+   * message: it is what lets a bulk offering be sifted before its media is fetched.
+   */
+  wants(waId: string, sentAt: number): boolean;
 }
 
 interface PendingRow {
@@ -70,10 +75,12 @@ export function createInbox(db: Database, horizonMs: number): Inbox {
   );
   const handle = db.query("UPDATE inbound SET handled_at = ?, payload = '' WHERE wa_id = ?");
   const deleteOld = db.query("DELETE FROM inbound WHERE handled_at IS NOT NULL AND sent_at < ?");
+  const known = db.query("SELECT 1 FROM inbound WHERE wa_id = ?");
+  const expired = (sentAt: number) => sentAt < Date.now() - horizonMs;
 
   return {
     admit(entry) {
-      if (entry.sentAt < Date.now() - horizonMs) return "expired";
+      if (expired(entry.sentAt)) return "expired";
       // Metadata only, never the bytes: a file lives on disk, and this row outlives the turn.
       const payload = JSON.stringify({
         contexts: entry.contexts,
@@ -112,6 +119,9 @@ export function createInbox(db: Database, horizonMs: number): Inbox {
     },
     prune(before) {
       deleteOld.run(before);
+    },
+    wants(waId, sentAt) {
+      return !expired(sentAt) && known.get(waId) === null;
     },
   };
 }

@@ -162,6 +162,27 @@ describe("createInbox", () => {
     expect(inbox.pending(10).map((row) => row.waId)).toEqual(["owed"]);
   });
 
+  it("wants a message it has never been offered from inside the horizon", () => {
+    const { inbox } = freshInbox();
+    expect(inbox.wants("A1", Date.now())).toBe(true);
+  });
+
+  it("does not want one it is already holding, nor one it has answered and dropped", () => {
+    const { inbox } = freshInbox();
+    inbox.admit(entry({ waId: "owed" }));
+    inbox.admit(entry({ waId: "answered" }));
+    inbox.markHandled(["answered"]);
+    expect(inbox.wants("owed", Date.now())).toBe(false);
+    expect(inbox.wants("answered", Date.now())).toBe(false);
+  });
+
+  it("does not want one from beyond the horizon, which it would refuse anyway", () => {
+    const { inbox } = freshInbox();
+    const sentAt = Date.now() - HORIZON_MS - 1000;
+    expect(inbox.wants("ancient", sentAt)).toBe(false);
+    expect(inbox.admit(entry({ sentAt, waId: "ancient" }))).toBe("expired");
+  });
+
   it("delivers whatever is pending regardless of age, so a message can be placed out of band", () => {
     const { db, inbox } = freshInbox();
     // A one-off recovery writes straight to the table: days old, never offered by WhatsApp, still owed.

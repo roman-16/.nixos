@@ -124,7 +124,15 @@ export interface WhatsAppOptions {
   onConnect?: () => void;
   /** One delivery from WhatsApp, which may carry a whole queue's worth of messages at once. */
   onMessages: (messages: InboundMessage[]) => Promise<void> | void;
+  /** Whether a message the phone's history carries is still worth downloading and answering. */
+  wantsMessage: (waId: string, sentAt: number) => boolean;
   whatsappDir: string;
+}
+
+/** When the user sent it, per WhatsApp's second-resolution clock; unstamped means now. */
+export function whenSent(message: Pick<WAMessage, "messageTimestamp">): number {
+  const stamped = toNumber(message.messageTimestamp) * 1000;
+  return stamped > 0 ? stamped : Date.now();
 }
 
 /** Unwrap the common Baileys envelope messages down to the real content. */
@@ -389,8 +397,6 @@ async function toInbound(
     : undefined;
 
   if (!text && images.length === 0 && !audio && !quoted && files.length === 0) return undefined;
-  // WhatsApp stamps the send time in seconds; a message with none is happening now.
-  const stamped = toNumber(message.messageTimestamp) * 1000;
   return {
     audio,
     files,
@@ -400,7 +406,7 @@ async function toInbound(
     number,
     offline,
     quoted,
-    sentAt: stamped > 0 ? stamped : Date.now(),
+    sentAt: whenSent(message),
     text,
     waId: message.key.id,
   };
@@ -540,6 +546,22 @@ export async function startWhatsApp(options: WhatsAppOptions): Promise<WhatsApp>
         { accepted: inbound.length, offline, received: messages.length },
         "inbound delivery",
       );
+      if (inbound.length > 0) await options.onMessages(inbound);
+    });
+
+    // Pairing is not reconnecting: a freshly linked device has its own keys, so WhatsApp replays no
+    // queue to it - the phone pushes its recent history instead, and everything written while the
+    // link was down is in there or nowhere. Sifting by what the inbox still wants is what keeps the
+    // history that was already answered from being downloaded, let alone answered twice.
+    socket.ev.on("messaging-history.set", async ({ messages }) => {
+      const inbound: InboundMessage[] = [];
+      for (const message of messages) {
+        const waId = message.key.id;
+        if (!waId || !options.wantsMessage(waId, whenSent(message))) continue;
+        const one = await toInbound(receiving, message, true);
+        if (one) inbound.push(one);
+      }
+      options.logger.info({ accepted: inbound.length, received: messages.length }, "history sync");
       if (inbound.length > 0) await options.onMessages(inbound);
     });
   }

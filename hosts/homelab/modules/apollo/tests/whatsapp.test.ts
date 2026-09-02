@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { isVoiceNote, mediaName, reconnectDelay } from "../src/whatsapp";
+import { isVoiceNote, mediaName, reconnectDelay, whenSent } from "../src/whatsapp";
 
 describe("isVoiceNote", () => {
   it("reads a voice note by the flag WhatsApp sets on it", () => {
@@ -39,6 +39,19 @@ describe("mediaName", () => {
 
   it("still produces a name when nothing is known about the file", () => {
     expect(mediaName(null, "", "document")).toBe("document.bin");
+  });
+});
+
+describe("whenSent", () => {
+  it("reads WhatsApp's stamp, which counts seconds, as milliseconds", () => {
+    expect(whenSent({ messageTimestamp: 1_788_359_685 })).toBe(1_788_359_685_000);
+  });
+
+  it("treats a message WhatsApp never stamped as happening now", () => {
+    const before = Date.now();
+    expect(whenSent({})).toBeGreaterThanOrEqual(before);
+    expect(whenSent({ messageTimestamp: 0 })).toBeGreaterThanOrEqual(before);
+    expect(whenSent({ messageTimestamp: null })).toBeGreaterThanOrEqual(before);
   });
 });
 
