@@ -40,7 +40,9 @@ A job that only *reads* the file is the opposite case, not the same one. Where C
 
 Read it end to end before touching it. The file, not the specification, decides every question it already answers: bullet marker (`-` or `*`), whether entries end with a period, whether they carry issue or PR links, sentence voice, heading style, blank-line pattern, whether the bottom link-reference block exists, and even non-standard category names.
 
-A new entry must be indistinguishable from the entries already there. Where the file is silent, follow [the format rules](#format-rules). Where the file contradicts them, follow the file and mention the deviation once - consistency within one changelog matters more than conformance, and silently mixing two conventions is worse than either.
+A new entry must be indistinguishable in form from the entries already there. Where the file is silent, follow [the format rules](#format-rules). Where the file contradicts them, follow the file and mention the deviation once - consistency within one changelog matters more than conformance, and silently mixing two conventions is worse than either.
+
+Form is all the file gets to decide. How much an entry says is set by [Word it](#word-it) alone, and never by its neighbours: chatty entries above are no licence to be chatty, and an entry shorter than the ones around it is right, not inconsistent.
 
 ### 3. Establish what changed
 
@@ -98,7 +100,8 @@ One change per bullet. A single piece of work may owe entries in several categor
 - One line per entry, stating the effect, not the mechanism.
 - Open on the surface element you named, never on the file, function, class or module behind it. No "refactored X into Y", no commit hashes.
 - `Added` reads as the thing gained. `Changed`, `Deprecated`, `Removed`, `Fixed` read as a verb on the observable behavior.
-- Short and easy to read. Take the room the reader needs to know what moved and what to do about it, and no more - the background, the mechanism and the reasoning belong in the commit, the issue or the docs.
+- Only what the reader must know: what moved, and what they have to do about it. Nothing more - the mechanism, the motivation, the alternatives considered and the edge case they will never hit belong in the commit, the issue or the docs.
+- Then the shortest wording that still carries it. Strike every clause the reader would not miss, and any sentence that only restates the one before it.
 - Issue or PR references only when the file already carries them, in the file's own format.
 - Hyphens only, never em-dashes or en-dashes.
 

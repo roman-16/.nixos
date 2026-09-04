@@ -4,6 +4,7 @@ import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-wor
 
 const AUTHORSHIP_ENTRY = "session-namer";
 const MAX_MESSAGES = 64;
+const MAX_NAME_LENGTH = 64;
 const QUESTIONNAIRE_TOOL = "questionnaire";
 
 interface Authorship {
@@ -21,6 +22,7 @@ const INSTRUCTIONS = [
 	"Generate a concise title for a coding assistant session based on the user's latest messages, given in chronological order.",
 	"Rules:",
 	"- 3 to 8 words.",
+	`- At most ${MAX_NAME_LENGTH} characters, including spaces.`,
 	"- Title Case.",
 	"- Plain text only: no markdown, no backticks, asterisks, underscores, brackets or other formatting.",
 	'- No surrounding quotes, no trailing punctuation, no leading label such as "Title:".',
@@ -42,16 +44,22 @@ function stripMarkdown(text: string): string {
 	return result.replace(/[*`~]/g, "");
 }
 
+function truncateToWordBoundary(name: string): string {
+	if (name.length <= MAX_NAME_LENGTH) return name;
+	const clipped = name.slice(0, MAX_NAME_LENGTH);
+	const lastSpace = clipped.lastIndexOf(" ");
+	return (lastSpace > 0 ? clipped.slice(0, lastSpace) : clipped).trim();
+}
+
 function cleanName(raw: string): string {
 	const firstLine = raw.trim().split(/\r?\n/)[0] ?? "";
-	return stripMarkdown(firstLine)
+	const normalized = stripMarkdown(firstLine)
 		.replace(/^["'“”‘’]+|["'“”‘’]+$/g, "")
 		.replace(/^\s*title\s*[:-]\s*/i, "")
 		.replace(/\.+$/, "")
 		.replace(/\s+/g, " ")
-		.trim()
-		.slice(0, 60)
 		.trim();
+	return truncateToWordBoundary(normalized);
 }
 
 function authorship(entries: SessionEntry[]): Authorship | undefined {
