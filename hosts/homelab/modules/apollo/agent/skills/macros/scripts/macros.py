@@ -108,25 +108,54 @@ def numify(value) -> float | int:
     return int(x) if x == int(x) else x
 
 
-def nonneg(value) -> float | int:
-    """argparse type: a number that must be >= 0 (0 is allowed, e.g. black coffee)."""
-    x = numify(value)
-    if x < 0:
-        raise argparse.ArgumentTypeError("must be >= 0")
-    return x
-
-
-def positive(value) -> float | int:
-    """argparse type: a number that must be > 0."""
-    x = numify(value)
-    if x <= 0:
-        raise argparse.ArgumentTypeError("must be > 0")
-    return x
-
-
 def r1(x) -> float | int:
     x = round(float(x), 1)
     return int(x) if x == int(x) else x
+
+
+def tidy_amount(x) -> float | int:
+    """An amount as it reads: whole from 10 up, one decimal below - so half an egg stays half an egg
+    and 234.6g of passata reads as 235g. Applied where an amount is settled as well as where one is
+    printed, so the amount stored is always the amount shown."""
+    x = float(x)
+    return round(x) if x >= 10 else r1(x)
+
+
+def quantity(resolve, *, positive: bool = False):
+    """An argparse type for a number at its own quantity's resolution.
+
+    A kilocalorie has no fractional part here: labels are whole, and nothing distinguishes 257 from
+    257.4. That matters more than tidiness, because this store keeps a ledger - a fraction logged
+    once lands in that day's cumulative, is inherited by every later day through prev_cumulative,
+    and comes back out as "Tomorrow's target: 2775.6000000000004 kcal". Rounding it at the print
+    site would only hide it, and recompute cannot lift it out again, since it re-derives from the
+    same entry. So the unit is settled here at the door - whole for kcal, a tenth for grams, as-read
+    for amounts - and everything derived from it downstream is exact by construction, with no print
+    site left to remember anything.
+
+    The sign is judged before the value is resolved, so a slip like --kcal -0.4 still errors out
+    instead of arriving as a harmless-looking 0.
+    """
+
+    def parse(value) -> float | int:
+        x = numify(value)
+        if x < 0 or (positive and x <= 0):
+            raise argparse.ArgumentTypeError("must be > 0" if positive else "must be >= 0")
+        x = resolve(x)
+        if positive and x <= 0:
+            raise argparse.ArgumentTypeError(f"{value} is too small to record")
+        return x
+
+    return parse
+
+
+# The quantities this store deals in, named after the resolution they keep: a flag's name says what
+# it measures, its type says what a number in it means.
+AMOUNT = quantity(tidy_amount, positive=True)
+TENTH = quantity(r1)
+TENTH_POSITIVE = quantity(r1, positive=True)
+WHOLE = quantity(round)
+WHOLE_POSITIVE = quantity(round, positive=True)
 
 
 def load(path: Path, default):
@@ -653,7 +682,8 @@ def cmd_goal(args):
     print(f"TDEE: {g.get('tdee')} kcal")
     print(f"Daily goal: {g.get('dailyGoal')} kcal")
     print(f"Protein: {g.get('proteinGoal')} g")
-    print(f"Weight goal: {g.get('weightGoal')} kg")
+    weight = g.get("weightGoal")
+    print(f"Weight goal: {weight} kg" if weight else "Weight goal: not set")
 
 
 def cmd_goal_set(args):
@@ -696,7 +726,9 @@ def cmd_eat(args):
         amount = args.amount
     else:
         die("give an amount: --amount, --fit-protein/--fit-kcal, or --target-protein/--target-kcal")
-    amount = round(amount)
+    amount = tidy_amount(amount)
+    if amount <= 0:
+        die("amount must be positive")
     kcal = round(rate["kcal"] * amount)
     protein = r1(rate["protein"] * amount)
     entry = make_entry(now_time(), f"{args.item} ({fmt_amount(amount, unit)})",
@@ -1026,9 +1058,9 @@ def cmd_food_eat(args):
         amount = args.servings * food["serving"]
     else:
         amount = food["serving"]
+    amount = tidy_amount(amount)
     if amount <= 0:
         die("amount must be positive")
-    amount = round(amount)
     kcal = round(rate["kcal"] * amount)
     protein = r1(rate["protein"] * amount)
     entry = make_entry(now_time(), f"{food['name']} ({fmt_amount(amount, unit)})",
@@ -1137,8 +1169,9 @@ TIGHT_UNITS = {"cl", "dl", "g", "kg", "l", "mg", "ml"}
 
 
 def fmt_amount(amount: float, unit: str) -> str:
-    value = round(amount) if amount >= 10 else r1(amount)
-    return f"{value}{'' if unit in TIGHT_UNITS else ' '}{unit}"
+    """An amount with its unit. Amounts arrive tidied from the door, so the only ones this has
+    anything left to tidy are the ones worked out here - a share of a batch's size."""
+    return f"{tidy_amount(amount)}{'' if unit in TIGHT_UNITS else ' '}{unit}"
 
 
 def portion_size(batch: dict, frac: float) -> str | None:
@@ -1214,7 +1247,12 @@ def remaining_note(batch: dict, frac: float, left: float, *, dry_run: bool) -> s
 
 def make_event(kind: str, date: str, macros: dict, label: str) -> dict:
     """One consumption event: a portion that left the batch, eaten (logged to your day)
-    or removed (unlogged). Macros are snapshotted, so past days never shift under it."""
+    or removed (unlogged). Macros are snapshotted, so past days never shift under it.
+
+    They are also the one thing here left unrounded, because they are shares of a whole rather than
+    figures in their own right: they have to sum back to the batch, and rounded thirds of an 1801
+    kcal batch leave 0.06% of it behind - enough to stop a finished batch archiving itself. Every
+    reader rounds them, and the day entry a portion produces is rounded on its way out."""
     return {
         "id": secrets.token_hex(4), "kind": kind, "date": date, "time": now_time(),
         "macros": {k: macros[k] for k in MACROS}, "label": label,
@@ -1749,8 +1787,8 @@ def add_amount_flags(sp, *extra):
         group.add_argument(name, **kwargs)
     group.add_argument("--fit-protein", action="store_true")
     group.add_argument("--fit-kcal", action="store_true")
-    group.add_argument("--target-protein", type=positive)
-    group.add_argument("--target-kcal", type=positive)
+    group.add_argument("--target-protein", type=TENTH_POSITIVE)
+    group.add_argument("--target-kcal", type=WHOLE_POSITIVE)
     sp.add_argument("--dry-run", action="store_true")
     sp.add_argument("--date")
 
@@ -1772,18 +1810,18 @@ def build_parser() -> argparse.ArgumentParser:
     g = command("goal-set")
     g.set_defaults(func=cmd_goal_set)
     g.add_argument("--phase", choices=["cut", "maintenance", "bulk"])
-    g.add_argument("--tdee", type=positive)
-    g.add_argument("--daily-goal", type=positive)
-    g.add_argument("--protein", type=positive)
-    g.add_argument("--weight-goal", type=positive)
+    g.add_argument("--tdee", type=WHOLE_POSITIVE)
+    g.add_argument("--daily-goal", type=WHOLE_POSITIVE)
+    g.add_argument("--protein", type=TENTH_POSITIVE)
+    g.add_argument("--weight-goal", type=TENTH_POSITIVE)
 
     lo = command("log")
     lo.set_defaults(func=cmd_log)
     lo.add_argument("--item", required=True)
-    lo.add_argument("--kcal", type=nonneg, required=True)
-    lo.add_argument("--protein", type=nonneg, default=0)
-    lo.add_argument("--fat", type=nonneg, default=0)
-    lo.add_argument("--carbs", type=nonneg, default=0)
+    lo.add_argument("--kcal", type=WHOLE, required=True)
+    lo.add_argument("--protein", type=TENTH, default=0)
+    lo.add_argument("--fat", type=TENTH, default=0)
+    lo.add_argument("--carbs", type=TENTH, default=0)
     lo.add_argument("--note")
     lo.add_argument("--time")
     lo.add_argument("--date")
@@ -1792,13 +1830,13 @@ def build_parser() -> argparse.ArgumentParser:
     ea = command("eat")
     ea.set_defaults(func=cmd_eat)
     ea.add_argument("--item", required=True)
-    ea.add_argument("--kcal100", type=nonneg, required=True)
-    ea.add_argument("--protein100", type=nonneg, default=0)
-    ea.add_argument("--fat100", type=nonneg, default=0)
-    ea.add_argument("--carbs100", type=nonneg, default=0)
+    ea.add_argument("--kcal100", type=WHOLE, required=True)
+    ea.add_argument("--protein100", type=TENTH, default=0)
+    ea.add_argument("--fat100", type=TENTH, default=0)
+    ea.add_argument("--carbs100", type=TENTH, default=0)
     ea.add_argument("--unit")
     ea.add_argument("--note")
-    add_amount_flags(ea, ("--amount", {"type": positive}))
+    add_amount_flags(ea, ("--amount", {"type": AMOUNT}))
 
     sh = command("show")
     sh.set_defaults(func=cmd_show)
@@ -1813,7 +1851,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     w = command("weight")
     w.set_defaults(func=cmd_weight)
-    w.add_argument("--kg", type=positive, required=True)
+    w.add_argument("--kg", type=TENTH_POSITIVE, required=True)
     w.add_argument("--at")
     w.add_argument("--date")
 
@@ -1831,12 +1869,12 @@ def build_parser() -> argparse.ArgumentParser:
     ed.set_defaults(func=cmd_edit)
     ed.add_argument("--last", action="store_true")
     ed.add_argument("--index", type=int)
-    ed.add_argument("--amount", type=positive)
+    ed.add_argument("--amount", type=AMOUNT)
     ed.add_argument("--item")
-    ed.add_argument("--kcal", type=nonneg)
-    ed.add_argument("--protein", type=nonneg)
-    ed.add_argument("--fat", type=nonneg)
-    ed.add_argument("--carbs", type=nonneg)
+    ed.add_argument("--kcal", type=WHOLE)
+    ed.add_argument("--protein", type=TENTH)
+    ed.add_argument("--fat", type=TENTH)
+    ed.add_argument("--carbs", type=TENTH)
     ed.add_argument("--note")
     ed.add_argument("--date")
 
@@ -1847,11 +1885,11 @@ def build_parser() -> argparse.ArgumentParser:
     fa = command("food-add")
     fa.set_defaults(func=cmd_food_add)
     fa.add_argument("--name", required=True)
-    fa.add_argument("--kcal100", type=nonneg, required=True)
-    fa.add_argument("--protein100", type=nonneg, required=True)
-    fa.add_argument("--fat100", type=nonneg, required=True)
-    fa.add_argument("--carbs100", type=nonneg, required=True)
-    fa.add_argument("--serving", type=positive, required=True)
+    fa.add_argument("--kcal100", type=WHOLE, required=True)
+    fa.add_argument("--protein100", type=TENTH, required=True)
+    fa.add_argument("--fat100", type=TENTH, required=True)
+    fa.add_argument("--carbs100", type=TENTH, required=True)
+    fa.add_argument("--serving", type=AMOUNT, required=True)
     fa.add_argument("--unit")
     fa.add_argument("--aliases")
     fa.add_argument("--asked", action="store_true",
@@ -1862,16 +1900,16 @@ def build_parser() -> argparse.ArgumentParser:
     fe = command("food-eat")
     fe.set_defaults(func=cmd_food_eat)
     fe.add_argument("--name", required=True)
-    add_amount_flags(fe, ("--amount", {"type": positive}), ("--servings", {"type": positive}))
+    add_amount_flags(fe, ("--amount", {"type": AMOUNT}), ("--servings", {"type": AMOUNT}))
 
     fed = command("food-edit")
     fed.set_defaults(func=cmd_food_edit)
     fed.add_argument("--name", required=True)
-    fed.add_argument("--kcal100", type=nonneg)
-    fed.add_argument("--protein100", type=nonneg)
-    fed.add_argument("--fat100", type=nonneg)
-    fed.add_argument("--carbs100", type=nonneg)
-    fed.add_argument("--serving", type=positive)
+    fed.add_argument("--kcal100", type=WHOLE)
+    fed.add_argument("--protein100", type=TENTH)
+    fed.add_argument("--fat100", type=TENTH)
+    fed.add_argument("--carbs100", type=TENTH)
+    fed.add_argument("--serving", type=AMOUNT)
     fed.add_argument("--unit")
     fed.add_argument("--rename")
     fed.add_argument("--aliases")
@@ -1883,14 +1921,14 @@ def build_parser() -> argparse.ArgumentParser:
     pa = command("prep-add")
     pa.set_defaults(func=cmd_prep_add)
     pa.add_argument("--name", required=True)
-    pa.add_argument("--size", type=positive)
+    pa.add_argument("--size", type=AMOUNT)
     pa.add_argument("--unit")
 
     psz = command("prep-size")
     psz.set_defaults(func=cmd_prep_size)
     psz.add_argument("--name", required=True)
     grp = psz.add_mutually_exclusive_group(required=True)
-    grp.add_argument("--size", type=positive)
+    grp.add_argument("--size", type=AMOUNT)
     grp.add_argument("--clear", action="store_true")
     psz.add_argument("--unit")
 
@@ -1901,16 +1939,16 @@ def build_parser() -> argparse.ArgumentParser:
     # One rate basis per ingredient: a saved food, a packet's per-100, or the total typed out.
     basis = ping.add_mutually_exclusive_group()
     basis.add_argument("--food")
-    basis.add_argument("--kcal100", type=nonneg)
-    basis.add_argument("--kcal", type=nonneg)
-    ping.add_argument("--amount", type=positive)
+    basis.add_argument("--kcal100", type=WHOLE)
+    basis.add_argument("--kcal", type=WHOLE)
+    ping.add_argument("--amount", type=AMOUNT)
     ping.add_argument("--unit")
-    ping.add_argument("--protein100", type=nonneg, default=0)
-    ping.add_argument("--fat100", type=nonneg, default=0)
-    ping.add_argument("--carbs100", type=nonneg, default=0)
-    ping.add_argument("--protein", type=nonneg, default=0)
-    ping.add_argument("--fat", type=nonneg, default=0)
-    ping.add_argument("--carbs", type=nonneg, default=0)
+    ping.add_argument("--protein100", type=TENTH, default=0)
+    ping.add_argument("--fat100", type=TENTH, default=0)
+    ping.add_argument("--carbs100", type=TENTH, default=0)
+    ping.add_argument("--protein", type=TENTH, default=0)
+    ping.add_argument("--fat", type=TENTH, default=0)
+    ping.add_argument("--carbs", type=TENTH, default=0)
     ping.add_argument("--later", action="store_true")
     ping.add_argument("--no-log-eaten", action="store_true")
     ping.add_argument("--date")
@@ -1920,12 +1958,12 @@ def build_parser() -> argparse.ArgumentParser:
     pied.add_argument("--name", required=True)
     pied.add_argument("--last", action="store_true")
     pied.add_argument("--index", type=int)
-    pied.add_argument("--amount", type=positive)
+    pied.add_argument("--amount", type=AMOUNT)
     pied.add_argument("--label")
-    pied.add_argument("--kcal", type=nonneg)
-    pied.add_argument("--protein", type=nonneg)
-    pied.add_argument("--fat", type=nonneg)
-    pied.add_argument("--carbs", type=nonneg)
+    pied.add_argument("--kcal", type=WHOLE)
+    pied.add_argument("--protein", type=TENTH)
+    pied.add_argument("--fat", type=TENTH)
+    pied.add_argument("--carbs", type=TENTH)
     pied.add_argument("--no-log-eaten", action="store_true")
     pied.add_argument("--date")
 
@@ -1946,7 +1984,7 @@ def build_parser() -> argparse.ArgumentParser:
     pe.set_defaults(func=cmd_prep_eat)
     pe.add_argument("--name", required=True)
     add_amount_flags(pe, ("--of-rest", {"nargs": "?", "const": "1", "default": None}),
-                     ("--of-batch", {}), ("--size", {"type": positive}))
+                     ("--of-batch", {}), ("--size", {"type": AMOUNT}))
 
     prem = command("prep-remove")
     prem.set_defaults(func=cmd_prep_remove)
@@ -1954,7 +1992,7 @@ def build_parser() -> argparse.ArgumentParser:
     grp = prem.add_mutually_exclusive_group()
     grp.add_argument("--of-rest", nargs="?", const="1", default=None)
     grp.add_argument("--of-batch")
-    grp.add_argument("--size", type=positive)
+    grp.add_argument("--size", type=AMOUNT)
     prem.add_argument("--date")
 
     pun = command("prep-uneat")

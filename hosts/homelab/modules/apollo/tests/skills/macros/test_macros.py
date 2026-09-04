@@ -1,6 +1,7 @@
 import argparse
 import io
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timedelta
@@ -110,29 +111,105 @@ class TestNumify:
         assert macros.numify("2.5") == 2.5
 
 
-class TestNonneg:
-    def test_allows_zero(self):
-        assert macros.nonneg("0") == 0
+class TestQuantities:
+    """What a number means is settled at the door, because this store keeps a ledger: a fraction
+    logged once is folded into every later day's cumulative and target, where no amount of rounding
+    at the print site can reach it again."""
 
-    def test_allows_positive(self):
-        assert macros.nonneg("42") == 42
+    def test_kcal_are_whole(self):
+        assert macros.WHOLE("257.4") == 257
+        assert macros.WHOLE("257") == 257
+        assert macros.WHOLE_POSITIVE("2400.5") == 2400
 
-    def test_rejects_negative(self):
+    def test_no_calories_is_a_real_figure_but_not_a_real_goal(self):
+        assert macros.WHOLE("0") == 0  # black coffee
         with pytest.raises(argparse.ArgumentTypeError):
-            macros.nonneg("-1")
+            macros.WHOLE_POSITIVE("0")
 
-
-class TestPositive:
-    def test_allows_positive(self):
-        assert macros.positive("5") == 5
-
-    def test_rejects_zero(self):
+    def test_a_negative_is_refused_before_it_can_round_away(self):
+        # -0.4 must not arrive as a harmless-looking 0: a slip errors out rather than quietly
+        # costing a total.
+        for slip in ("-1", "-0.4"):
+            with pytest.raises(argparse.ArgumentTypeError):
+                macros.WHOLE(slip)
         with pytest.raises(argparse.ArgumentTypeError):
-            macros.positive("0")
+            macros.TENTH("-0.04")
 
-    def test_rejects_negative(self):
+    def test_grams_keep_one_decimal(self):
+        assert macros.TENTH("11.55") == 11.6
+        assert macros.TENTH("0") == 0
+        assert macros.TENTH_POSITIVE("66.42") == 66.4
+
+    def test_an_amount_is_kept_as_it_reads(self):
+        assert macros.AMOUNT("0.5") == 0.5
+        assert macros.AMOUNT("9.94") == 9.9
+        assert macros.AMOUNT("234.6") == 235
+
+    def test_an_amount_that_rounds_away_to_nothing_is_refused(self):
         with pytest.raises(argparse.ArgumentTypeError):
-            macros.positive("-3")
+            macros.AMOUNT("0.04")
+
+    def test_a_label_written_with_a_thousands_separator_still_reads(self):
+        assert macros.WHOLE("1,000") == 1000
+
+
+class TestFlagUnits:
+    """A flag's name says what it measures, so its type has to agree - which is what stops a flag
+    added later from quietly reopening the door the ledger's fraction came through."""
+
+    UNITS = {
+        "--amount": {"AMOUNT"},
+        "--carbs": {"TENTH"},
+        "--carbs100": {"TENTH"},
+        "--daily-goal": {"WHOLE_POSITIVE"},
+        "--fat": {"TENTH"},
+        "--fat100": {"TENTH"},
+        "--kcal": {"WHOLE"},
+        "--kcal100": {"WHOLE"},
+        "--kg": {"TENTH_POSITIVE"},
+        "--protein": {"TENTH", "TENTH_POSITIVE"},  # a logged gram figure, and the daily goal
+        "--protein100": {"TENTH"},
+        "--serving": {"AMOUNT"},
+        "--servings": {"AMOUNT"},
+        "--size": {"AMOUNT"},
+        "--target-kcal": {"WHOLE_POSITIVE"},
+        "--target-protein": {"TENTH_POSITIVE"},
+        "--tdee": {"WHOLE_POSITIVE"},
+        "--weight-goal": {"TENTH_POSITIVE"},
+    }
+
+    # Counting flags means walking the parser, which argparse only exposes privately.
+    def commands(self):
+        parser = macros.build_parser()
+        sub = next(a for a in parser._actions if isinstance(a, argparse._SubParsersAction))
+        for name, command in sub.choices.items():
+            for action in command._actions:
+                for flag in action.option_strings:
+                    yield name, flag, action.type
+
+    def quantities(self) -> dict:
+        return {getattr(macros, name): name
+                for name in ("AMOUNT", "TENTH", "TENTH_POSITIVE", "WHOLE", "WHOLE_POSITIVE")}
+
+    def measured(self):
+        quantities = self.quantities()
+        return [(command, flag, quantities[kind])
+                for command, flag, kind in self.commands() if kind in quantities]
+
+    def test_there_are_measured_flags_to_check(self):
+        assert len(self.measured()) > 30
+
+    def test_every_measured_flag_parses_the_quantity_its_name_names(self):
+        wrong = [f"{command} {flag} is {quantity}"
+                 for command, flag, quantity in self.measured()
+                 if quantity not in self.UNITS.get(flag, set())]
+        assert wrong == []
+
+    def test_nothing_measured_is_parsed_as_a_bare_number(self):
+        # int is for indexes and day counts; anything measured names its quantity instead.
+        loose = [f"{command} {flag}" for command, flag, kind in self.commands()
+                 if kind is float or (kind is int and flag not in ("--index", "--days"))]
+        assert loose == []
 
 
 class TestParseFraction:
@@ -1531,6 +1608,106 @@ class TestPastDayCascade:
         capsys.readouterr()
         run("log", "--item", "E", "--kcal", "300", "--protein", "20")
         assert capsys.readouterr().out.count("Today (") == 1
+
+
+class TestWholeKcal:
+    """A kcal figure handed over rather than scaled was the one door a fraction could come through,
+    and the ledger carried it forward from there: one 257.4 two days back printed today as
+    "Tomorrow's target: 2775.6000000000004 kcal"."""
+
+    def test_a_handed_over_figure_is_stored_whole(self, store):
+        set_goal()
+        run("log", "--item", "Egg (165g)", "--kcal", "257.4", "--protein", "21")
+        assert day_entries()[-1]["kcal"] == 257
+
+    def test_the_ledger_it_folds_into_stays_whole(self, store):
+        set_goal()
+        for ago in (2, 1, 0):
+            run("log", "--item", "Egg", "--kcal", "257.4", "--date", days_ago(ago))
+        for path in sorted(macros.DAYS_DIR.glob("*.json")):
+            day = macros.load(path, {})
+            assert day["cumulative"] == int(day["cumulative"])
+            assert day["target"] == int(day["target"])
+
+    def test_the_day_it_prints_holds_no_fractional_kcal(self, store, capsys):
+        set_goal()
+        run("log", "--item", "Egg", "--kcal", "257.4", "--date", days_ago(1))
+        run("log", "--item", "Toast", "--kcal", "180.6")
+        capsys.readouterr()
+        run("show")
+        out = capsys.readouterr().out
+        assert re.search(r"\d\.\d+ kcal", out) is None
+        assert re.search(r"^Tomorrow's target: \d+ kcal\.$", out, re.MULTILINE)
+
+    def test_a_kcal_goal_is_whole_too(self, store, capsys):
+        # A day is seeded from the goal and keeps its own copy, so a fractional goal would ride the
+        # ledger exactly as far as a fractional entry.
+        run("goal-set", "--phase", "cut", "--tdee", "2400.5", "--daily-goal", "2100.5",
+            "--protein", "150")
+        out = capsys.readouterr().out
+        assert "TDEE: 2400 kcal" in out
+        assert "Daily goal: 2100 kcal" in out
+
+
+class TestGoalReadBack:
+    def test_an_unset_weight_goal_says_so_rather_than_printing_none(self, store, capsys):
+        set_goal()
+        capsys.readouterr()
+        run("goal")
+        out = capsys.readouterr().out
+        assert "Weight goal: not set" in out
+        assert "None" not in out
+
+    def test_a_weight_goal_reads_with_its_unit(self, store, capsys):
+        run("goal-set", "--phase", "cut", "--tdee", "2400", "--daily-goal", "2100",
+            "--protein", "150", "--weight-goal", "66")
+        assert "Weight goal: 66 kg" in capsys.readouterr().out
+
+
+class TestAmounts:
+    """An amount is stored exactly as it is shown, so a portion can neither round away to nothing
+    nor disagree with the rate it was scaled from."""
+
+    def test_half_a_portion_stays_half_a_portion(self, store):
+        set_goal()
+        run("eat", "--item", "Egg", "--unit", "pieces", "--kcal100", "7800",
+            "--protein100", "630", "--amount", "0.5")
+        entry = day_entries()[-1]
+        assert entry["item"] == "Egg (0.5 pieces)"
+        assert entry["kcal"] == 39
+
+    def test_a_saved_food_can_be_eaten_by_halves_too(self, store):
+        set_goal()
+        run("food-add", "--name", "Egg", "--unit", "pieces", "--kcal100", "7800",
+            "--protein100", "630", "--fat100", "1100", "--carbs100", "60", "--serving", "2",
+            "--asked")
+        run("food-eat", "--name", "egg", "--amount", "0.5")
+        assert day_entries()[-1]["item"] == "Egg (0.5 pieces)"
+
+    def test_a_weighed_amount_reads_back_as_it_was_stored(self, store):
+        set_goal()
+        run("eat", "--item", "Rice", "--kcal100", "130", "--amount", "234.6")
+        entry = day_entries()[-1]
+        assert entry["item"] == "Rice (235g)"
+        assert entry["source"]["amount"] == 235
+
+    def test_a_prep_ingredients_label_and_its_rate_agree(self, store):
+        # They diverged: the label rounded the amount while the stored rate kept it, so re-weighing
+        # scaled from a number the user had never been shown.
+        set_goal()
+        run("prep-add", "--name", "Sauce")
+        run("prep-ingredient-add", "--name", "sauce", "--label", "Passata",
+            "--kcal100", "35", "--amount", "234.6")
+        ingredient = one_named("sauce")["ingredients"][0]
+        assert ingredient["label"] == "Passata (235g)"
+        assert ingredient["source"]["amount"] == 235
+
+    def test_a_fitted_portion_still_reads_as_something_weighable(self, store, capsys):
+        set_goal()
+        capsys.readouterr()
+        run("eat", "--item", "Whey", "--kcal100", "375", "--protein100", "80",
+            "--fit-protein", "--dry-run")
+        assert "188g to reach your protein goal" in capsys.readouterr().out
 
 
 class TestStore:

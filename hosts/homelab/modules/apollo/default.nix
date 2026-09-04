@@ -505,6 +505,7 @@ in
           curl
           git
           jq
+          python3
           ripgrep
         ];
 
