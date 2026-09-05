@@ -29,7 +29,7 @@ Tool output in `<conversation>` is shortened, so it shows the beginning and the 
 
 `<conversation>` is only the older half. The conversation carries on past its last line, and `<continues>` shows you where: the first messages after the cut, then the most recent ones. **It is not yours to summarize** - Apollo keeps all of it, word for word, right beside your note. Read it for two things only. Anything already answered or settled there is not an open loop, however unfinished it looks at the end of `<conversation>`. And where things stand means where `<continues>` leaves off, not where `<conversation>` ends; those can be hours apart.
 
-If you still cannot tell whether something finished, **write it as a check, never as a task**: "confirm 30.07 is fully logged (`macros.py show --date 2026-07-30 --quiet`)", not "log the 30.07 items". A wrong task gets done twice; a check costs one command.
+If you still cannot tell whether something finished, **write it as a check, never as a task**: "confirm 30.07 is fully logged (`macros.py show --date 2026-07-30`)", not "log the 30.07 items". A wrong task gets done twice; a check costs one command.
 
 ## Form
 
