@@ -6,7 +6,6 @@ import {
 	type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 
-const LONG_CACHE_WRITE_MULTIPLIER = 2;
 const PLANNING_MODEL = { id: "claude-fable-5-1", provider: "anthropic" };
 const PRUNED = "[pruned]";
 const STATE = "plan";
@@ -17,32 +16,20 @@ interface ModelRef {
 	provider: string;
 }
 
-interface PrunedRange {
-	from: number;
-	to: number;
-}
-
 interface State {
 	implementationModel?: ModelRef;
-	planningSince?: number;
-	pruned: PrunedRange[];
+	planning: boolean;
+	prunedBefore: number;
 }
 
 function prunedContent(): TextContent[] {
 	return [{ text: PRUNED, type: "text" }];
 }
 
-function withinPruned(timestamp: number, ranges: PrunedRange[]): boolean {
-	return ranges.some((range) => timestamp >= range.from && timestamp <= range.to);
-}
+function prune(message: AgentMessage, prunedBefore: number): AgentMessage {
+	if (message.timestamp > prunedBefore) return message;
 
-function prune(message: AgentMessage, ranges: PrunedRange[]): AgentMessage {
-	if (!withinPruned(message.timestamp, ranges)) return message;
-
-	if (message.role === "toolResult") {
-		return { ...message, content: prunedContent() };
-	}
-
+	if (message.role === "toolResult") return { ...message, content: prunedContent() };
 	if (message.role !== "assistant") return message;
 
 	const content = message.content.filter((block) => block.type !== "thinking");
@@ -51,17 +38,19 @@ function prune(message: AgentMessage, ranges: PrunedRange[]): AgentMessage {
 	return { ...message, content: content.length > 0 ? content : prunedContent() };
 }
 
-function prunedTokens(ctx: ExtensionContext, range: PrunedRange): number {
-	const ranges = [range];
-	let saved = 0;
+function prunableTokens(ctx: ExtensionContext, from: number, to: number): number {
+	let prunable = 0;
 
 	for (const entry of ctx.sessionManager.getBranch()) {
 		if (entry.type !== "message") continue;
-		const pruned = prune(entry.message, ranges);
-		if (pruned !== entry.message) saved += estimateTokens(entry.message) - estimateTokens(pruned);
+		const { timestamp } = entry.message;
+		if (timestamp <= from || timestamp > to) continue;
+
+		const pruned = prune(entry.message, to);
+		if (pruned !== entry.message) prunable += estimateTokens(entry.message) - estimateTokens(pruned);
 	}
 
-	return Math.max(0, saved);
+	return Math.max(0, prunable);
 }
 
 function kickoff(notes: string): string {
@@ -75,18 +64,15 @@ function kickoff(notes: string): string {
 }
 
 export default function (pi: ExtensionAPI) {
-	let state: State = { pruned: [] };
+	let state: State = { planning: false, prunedBefore: 0 };
 
 	const persist = () => pi.appendEntry(STATE, state);
 
 	const showStatus = (ctx: ExtensionContext) =>
-		ctx.ui.setStatus(
-			STATE,
-			state.planningSince === undefined ? undefined : ctx.ui.theme.fg("warning", "✎ plan"),
-		);
+		ctx.ui.setStatus(STATE, state.planning ? ctx.ui.theme.fg("warning", "✎ plan") : undefined);
 
 	pi.on("session_start", (_event, ctx) => {
-		state = { pruned: [] };
+		state = { planning: false, prunedBefore: 0 };
 		for (const entry of ctx.sessionManager.getBranch()) {
 			if (entry.type === "custom" && entry.customType === STATE) state = entry.data as State;
 		}
@@ -94,8 +80,8 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("context", (event) => {
-		if (state.pruned.length === 0) return;
-		return { messages: event.messages.map((message) => prune(message, state.pruned)) };
+		if (state.prunedBefore === 0) return;
+		return { messages: event.messages.map((message) => prune(message, state.prunedBefore)) };
 	});
 
 	pi.registerCommand("plan", {
@@ -113,12 +99,15 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			const tokens = ctx.getContextUsage()?.tokens ?? 0;
-			if (ctx.hasUI && tokens > WARN_ABOVE_TOKENS) {
-				const rewrite = (tokens * model.cost.input * LONG_CACHE_WRITE_MULTIPLIER) / 1_000_000;
+			await ctx.waitForIdle();
+
+			const cut = Date.now();
+			const prunable = prunableTokens(ctx, state.prunedBefore, cut);
+
+			if (ctx.hasUI && prunable > WARN_ABOVE_TOKENS) {
 				const proceed = await ctx.ui.confirm(
-					`Switch to ${model.name}?`,
-					`This session holds ~${tokens.toLocaleString()} tokens. Switching re-reads all of it (~$${rewrite.toFixed(2)}).`,
+					`Prune ${prunable.toLocaleString()} tokens of prior context?`,
+					"Tool output and reasoning from this session stop being sent to the model. Text and file paths stay.",
 				);
 				if (!proceed) return;
 			}
@@ -129,13 +118,20 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			state.implementationModel = implementationModel && {
-				id: implementationModel.id,
-				provider: implementationModel.provider,
+			state = {
+				implementationModel: implementationModel && {
+					id: implementationModel.id,
+					provider: implementationModel.provider,
+				},
+				planning: true,
+				prunedBefore: cut,
 			};
-			state.planningSince ??= Date.now();
 			persist();
 			showStatus(ctx);
+
+			if (prunable > 0) {
+				ctx.ui.notify(`Dropped ~${prunable.toLocaleString()} tokens of prior context`, "info");
+			}
 
 			pi.sendUserMessage(`/skill:plan ${task}`, { expandPromptTemplates: true });
 		},
@@ -144,18 +140,17 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("go", {
 		description: "Implement the plan, dropping the planning research from context",
 		handler: async (args, ctx) => {
-			if (state.planningSince === undefined) {
+			if (!state.planning) {
 				ctx.ui.notify("Nothing to implement. Start with /plan <task>.", "warning");
 				return;
 			}
 
 			await ctx.waitForIdle();
 
-			const range = { from: state.planningSince, to: Date.now() };
-			const saved = prunedTokens(ctx, range);
+			const cut = Date.now();
+			const prunable = prunableTokens(ctx, state.prunedBefore, cut);
 
-			state.planningSince = undefined;
-			state.pruned = [...state.pruned, range];
+			state = { ...state, planning: false, prunedBefore: cut };
 
 			const model =
 				state.implementationModel &&
@@ -165,8 +160,8 @@ export default function (pi: ExtensionAPI) {
 			persist();
 			showStatus(ctx);
 
-			if (saved > 0) {
-				ctx.ui.notify(`Dropped ~${saved.toLocaleString()} tokens of planning research`, "info");
+			if (prunable > 0) {
+				ctx.ui.notify(`Dropped ~${prunable.toLocaleString()} tokens of planning research`, "info");
 			}
 
 			pi.sendUserMessage(kickoff(args.trim()));
