@@ -75,6 +75,7 @@
         followUpMode = "all";
         hideThinkingBlock = false;
         images.autoResize = true;
+        showCacheMissNotices = true;
         steeringMode = "all";
         theme = "dark";
         warnings.anthropicExtraUsage = false;
