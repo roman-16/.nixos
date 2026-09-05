@@ -75,15 +75,19 @@ Make your reasoning visible in the plan: state the fundamentals you identified a
 The plan is a decision document: it holds what the user needs to answer yes, no, or differently, and nothing else. Default shape:
 
 ```markdown
-# What changes for the user   ← one before/after transcript per moved element, no retelling
+# What changes for the user   ← numbered: one before/after transcript per moved element, no retelling
 # Why this shape              ← the fundamentals that decide it
 # The edits                   ← what each file gets
-# Found on the way            ← one line each
+# Found on the way            ← numbered, one line each, ending in your call
 ```
+
+Number everything the user will answer to - the elements, the findings, the options (A, B) - so a reply like `1: fold in, 3: no, B` is unambiguous.
 
 Depart from it when the task genuinely needs another shape, never to make room for more. Never draft the artifact inside the plan - no full file bodies, no target file trees, no finished implementation the user has not approved - unless the exact text is itself the decision being made. Offer it on request.
 
-Iterate with the user across turns. Stay read-only the entire time, even when the user asks follow-up questions or requests refinements.
+Hyphens only, never em-dashes or en-dashes - in headings, transcripts and prose alike.
+
+Stay read-only across every turn, including follow-up questions and refinements.
 
 ### Lead with what the user will see
 
@@ -118,7 +122,7 @@ Continue? [y/N]
 
 **Keep it true.** Take the before from the thing itself - `--help`, the strings in the source, golden files, docs, a screenshot, a read-only run - never from memory or plausibility, and never by running anything that mutates. Mark whatever could not be verified.
 
-**Keep it complete.** Every surface element that moves gets its own rendered before/after - never a summary in place of a transcript, never "and similar for the other commands". Completeness is paid in transcripts, not in prose about them: the transcript carries the change, so a line of framing is all it gets. When many move, a one-line list up front helps orientation, but it never replaces the transcripts below it. When the plan changes across turns, update this section with it: it is the part that gets re-read.
+**Keep it complete.** Every surface element that moves gets its own rendered before/after - never a summary in place of a transcript, never "and similar for the other commands". Completeness is paid in transcripts, not in prose about them: the transcript carries the change, so a line of framing is all it gets. When many move, a one-line list up front helps orientation, but it never replaces the transcripts below it. A refinement that moves an element re-renders that element alone - see [Refinements](#refinements).
 
 ### Found on the way
 
@@ -130,13 +134,30 @@ First decide which kind it is:
 - **Adjacent.** The change touches the same code, so fixing it now costs a fraction of a separate pass. Propose it, with what it adds to the diff.
 - **Merely walked past.** Unrelated to the change. One line, and no design work on it.
 
-List the last two at the end of the plan under **Found on the way**: what is wrong, what it risks, what fixing it would take, and your call - fold in, separate change, or leave it. The user decides, and silence is not consent: anything not explicitly folded in stays out of the implementation.
+List the last two at the end of the plan under **Found on the way**, numbered: what is wrong, what it risks, what fixing it would take, and your call - fold in, separate change, or leave it. The user decides by number, and silence is not consent: anything not explicitly folded in stays out of the implementation. When the user delegates the call ("fold in what you see fit"), your calls stand, and the reply names what went in and what stayed out.
 
 Keep the bar high and the list short. Report what you would act on - a correctness risk, a trap for the next reader, a duplicated definition that will drift - never style, taste, or a name you would have picked differently. Never go hunting: this holds what research walked into, not the findings of an audit. Twenty blemishes in one module is one finding about the module, not twenty. Nothing found is a normal outcome; say nothing rather than pad the section.
 
+### Refinements
+
+The full plan is shown once. The user holds it; every later turn shows only what that turn moved, so they never re-read a plan to find the three lines that changed.
+
+A refinement reply is the delta and nothing else:
+
+- Open with the disposition of what the user said, item by item, in their numbering: folded in, dropped, answered, unchanged - one line each, with the reason where the answer is no.
+- Then each part of the plan that moved, under the heading it has in the plan, complete enough to substitute 1:1: a moved surface element gets its new transcript, a changed edit gets its row, a resolved finding leaves the list, a new fundamental gets its line. Nothing unmoved is repeated, and "the rest stands" is said once, never section by section.
+- A question gets its answer, then one line on whether the plan moves with it.
+- A chosen option is a pointer to what the plan already shows, not a re-render.
+
+The whole plan is rendered again only when the user asks for it ("show me the full plan", "plan it all again"), and then consolidated: every refinement folded in as if planned that way from the start - no "restated", no "now also", no trace of the turns that shaped it.
+
 ## Hand-off
 
-When the user says `implement`, `start`, `go`, `do it`, `apply`, `make the changes`, `execute the plan`, or any phrase clearly authorizing implementation: re-state in one sentence what the user will be able to do differently once it is done, then build it.
+When the user says `implement`, `start`, `go`, `do it`, `apply`, `make the changes`, `execute the plan`, or any phrase clearly authorizing implementation: re-state in one sentence what the user will be able to do differently once it is done, then build it. What you build is the plan as it stands after every refinement: the first version plus each delta the user accepted.
+
+### Build all of it
+
+The plan is one piece of work, and the report comes once, at the end. No progress report between slices, no "phase 1 done", no stopping to ask whether to carry on - the user said go once and should not have to say it again. Stop early only for what genuinely needs the user: a decision the plan left open, a manual step only they can do, a gate that will not go green, or the plan proving wrong.
 
 ### Build it as if it had always been there
 

@@ -45,7 +45,17 @@ SSH into a VM jumps through homelab, e.g. trader:
 - Format: `nix fmt` (alias `nx-fmt`)
 - Check: `nix flake check` (must pass before committing) - runs nixfmt, the apollo skill tests (pytest), trader ruff lint + pytest, and evaluates every host config
 - Switch local: `nx-update` (`nh os switch --update --hostname $(hostname)`)
-- Deploy homelab: `nx-deploy`
+- Deploy homelab: `nx-deploy` (`nh os switch --hostname homelab --target-host roman@192.168.70.70`)
 - Update inputs: `nix flake update`
 
-Note: `nx-push`, `nx-sync`, `nx-sync-all` auto-commit and push - treat them as git operations (need approval).
+Composite aliases commit and push, so they are git operations (need approval); in practice the user runs them, not you:
+
+| Alias | Runs |
+| --- | --- |
+| `nx-push` | commit everything with a timestamp message, then push |
+| `nx-sync` | `nx-fmt` → `git pull` → `git add .` → `nx-update` → `nx-push` |
+| `nx-sync-all` | `nx-sync` with `nx-deploy` after the local switch |
+
+## Deploying
+
+The user deploys and says so ("i deployed", "i ran nx-sync-all"). Then verify on the target instead of taking it on faith: the unit is active on the new build (`systemctl show <unit> --property=ActiveState,ExecMainStartTimestamp`), its log since the switch is clean, and the behavior the change was for is observable. Report as a table, one row per thing checked.
