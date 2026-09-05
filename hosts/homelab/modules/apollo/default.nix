@@ -89,6 +89,8 @@ in
 
         protonCli = inputs.proton-cli.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
+        protonSkill = import ./proton-skill.nix { inherit pkgs protonCli; };
+
         # Chromium for the browser skill's managed-local sessions. chrome-launcher (inside
         # `browse`) picks it up via CHROME_PATH; the flags are the standard headless-in-a-VM
         # pair - no user-namespace sandbox, and no reliance on a large /dev/shm.
@@ -146,7 +148,7 @@ in
           ln -sfn ${./agent/skills/macros} "$agentDir/skills/macros"
           ln -sfn ${./agent/skills/obsidian} "$agentDir/skills/obsidian"
           ln -sfn ${./agent/skills/offers} "$agentDir/skills/offers"
-          ln -sfn ${./agent/skills/proton} "$agentDir/skills/proton"
+          ln -sfn ${protonSkill} "$agentDir/skills/proton"
           ln -sfn ${./agent/skills/recall} "$agentDir/skills/recall"
           ln -sfn ${./agent/skills/reminders} "$agentDir/skills/reminders"
           ln -sfn ${./agent/skills/weather} "$agentDir/skills/weather"

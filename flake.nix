@@ -145,6 +145,13 @@
               touch $out
             '';
 
+        # The proton skill Apollo reads, composed from the installed proton. Built here
+        # so a section renamed upstream is caught before a deploy carries it onto the VM.
+        apollo-proton-skill = import ./hosts/homelab/modules/apollo/proton-skill.nix {
+          inherit pkgs;
+          protonCli = inputs.proton-cli.packages.x86_64-linux.default;
+        };
+
         # Formatting gate for all Nix files (nixfmt).
         nixfmt-check = pkgs.runCommand "nixfmt-check" { nativeBuildInputs = [ pkgs.nixfmt ]; } ''
           find ${./.} -name '*.nix' -print0 | xargs -0 nixfmt --check

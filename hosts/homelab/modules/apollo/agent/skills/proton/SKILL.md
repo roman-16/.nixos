@@ -5,19 +5,9 @@ description: Use whenever ANY Proton action is taken - reading or changing Proto
 
 # Proton
 
-`proton` drives the user's Proton account (Mail, Drive, Calendar, Contacts, Pass, settings). It is already signed in as that account and handles SRP login plus end-to-end encryption itself - there is nothing to set up, and the session is saved across restarts. Add `--output json` (or `yaml`) when you want to parse a result rather than just read it.
+`proton` drives the user's Proton account (Mail, Drive, Calendar, Contacts, Pass, settings). The service signs it in and keeps the session alive, so there is nothing to set up and nobody to ask. Add `--output json` to anything you are going to parse.
 
-Every command reads the same way: `proton <app> <collection> <verb>`, one word per idea. `get` is the only way to look one thing up, `update` the only way to change a field, and anywhere a command wants an ID a subject, name, title or URL works too.
-
-## Discover the commands
-
-Use `--help` to see what's available - `proton --help` for the top-level areas, and `--help` on any subcommand for its exact usage and flags:
-
-```bash
-proton --help
-proton mail --help
-proton mail messages --help
-```
+From [`proton`](#proton) to the end of this file is the tool's own account of itself: how a command is built, what each listing can be narrowed by, where every command lives. It speaks to any agent anywhere. What comes before it is this account on this machine, and where the two disagree, this part is right.
 
 ## The one rule: say what you changed
 
@@ -42,7 +32,7 @@ proton calendar events create --title Dentist --start 2026-04-16T15:00 --duratio
 
 - **Exact.** The command as you actually ran it, flags, filters and `--yes` included. Not tidied, not shortened, not described in words.
 - **All of it.** Several changes in one turn make one receipt listing every command, in the order they ran, never one for the first and silence for the rest.
-- **Even when it failed.** A command that failed changed nothing, and "done" would be a lie: say it didn't work, show the command anyway, and say what you need to put it right.
+- **Even when it went wrong.** Say what did not work, show the command anyway, and say what you need to put it right. Exit `5` is the one you cannot call from the exit code alone - read the item back first (see below) and report what you found.
 - **Never internal.** The receipt is the user's, so it is delivered. It never sits inside `<internal>…</internal>`, and no other skill sends it for you.
 
 A command that takes its content from stdin (`--body -`) does not describe itself, so either the receipt carries what went in, or you pass the content as a flag and let the command carry it. A secret is the exception: `--secret-stdin password` says enough on its own, and the password itself is never quoted in the receipt - it goes to the user as its own line, outside the block.
@@ -61,15 +51,11 @@ proton mail messages delete --from newsletter@example.com --all --dry-run
 
 A removal the user named themselves ("delete that Hetzner invoice") is not this: run it and report it. Everything else runs on the request alone, sending mail included - when the words going out are yours rather than the user's, the receipt carries the body, so a correction is one message away.
 
-## Good to know
+## What holds here
 
-- **Collections come back in an envelope:** `--output json` keys every list by its plural name and always carries a `count`, so it is `.messages[]`, `.items[]`, `.events[]`, `.vaults[]`, never a bare array. A listing is a page of 50 and says so (`total`, `has_more`), so counting or scanning everything wants `--page-size 0`. Keys are `snake_case`, values are names rather than numbers (`"type": "file"`), timestamps are `<verb>_time` in Unix seconds, and sizes are bytes. `create` prints the new ID to stdout, so `id=$(proton ... create ...)` captures it. `api` is the one exception: it passes Proton's own response through unchanged.
-- **Settings live with their product:** `settings` is the account, `mail settings` / `drive settings` / `calendar settings` / `pass settings` each carry their own, and folders, labels, filters, addresses and calendars sit under those (`mail settings labels`, `calendar settings calendars`).
-- **Calendar ranges are whole days in the user's own zone:** `--start`/`--end` are the first and last day included, so one day is that date twice, and nothing outside them is listed. An event is on a day when it touches any part of it, so a query for one day inside a three-day event returns it, and an event that merely ends at midnight belongs to the day before. Times in JSON carry the user's offset (what the event is anchored to is its own `zone` field), and an all-day event ends at the midnight after its last day, so `end` is never part of it.
-- **IDs or search terms:** most commands that take an ID also accept a search term (subject, name, title, URL). An ambiguous term lists the candidates and exits `4`, so narrow it; one that matches nothing exits `3`. A mistyped command is an error, never a silent success.
-- **Removals and bulk changes prompt, so they need `--yes`:** `delete` and `empty` always prompt, and `trash` prompts whenever a filter rather than a name chose what to remove; nothing here can answer a prompt, so such a command fails without `--yes`. Many mutating commands also take filters (`--older-than`, `--unread`, `--pattern`, `--all`, `--recursive`), so one command can change a great many items - which is what `--dry-run` is for, and why a permanent one is [shown before it runs](#the-one-thing-shown-before-it-runs).
-- **Five commands are refused outright:** emptying Drive's, Mail's or Pass's trash, exporting Pass, and signing the session out are turned off by a confirmation policy this environment sets. Such a command exits `6` and says so; nothing answers it, `--yes` included. Report that back and leave it with the user - they can do it in the app - rather than looking for another way round.
-- **Pass keeps secrets out of listings and out of argv:** `pass items list` says what an item is and where it lives, never its password, in any format - reading one is `pass items get`, or `pass links get` for a share link. Writing one is `--secret-stdin password` piped in, or `--generate-password`, which makes the password itself and prints it beside the new ID; a secret is never a flag value.
-- **Nothing ever waits for input:** this environment runs with `PROTON_NO_INPUT`, so a missing credential, an unanswerable question, or a CAPTCHA at login fails immediately instead of hanging. Report the failure rather than retrying.
-- **Eventual consistency:** a listing reads a server-side index that lags a few seconds, so a just-changed item may still show (or not yet); confirm a change by reading the specific item by ID rather than listing again.
-- **Streaming:** `-` means stdin or stdout, e.g. `mail messages send --body -`, `drive items upload - /path`, `drive items download /path --dest -`. Bytes written to disk go where `--dest` (one path, or `-` for stdout) and `--dest-dir` (a directory) say; `--output` is only the response format. And `proton api GET <path>` reaches endpoints the subcommands don't cover.
+- **Nothing waits for input.** `PROTON_NO_INPUT` is set, so a missing credential or a question nobody can answer is an error rather than a wait. `delete` and `empty` always ask before they act, and `trash` asks whenever a filter rather than a name chose what to remove, so those commands need `--yes` or they fail on the asking. Every command that changes something also takes `--dry-run`, which resolves the references and applies the filters and then touches nothing.
+- **Five commands are refused outright.** Emptying Drive's, Mail's or Pass's trash, exporting Pass, and signing the session out are turned off by a confirmation policy this environment sets. Such a command exits `6` and says so; `--yes` does not answer it. Report that back and leave it with the user - they can do it in the app - rather than looking for another way round.
+- **Exit `2` is the session, not you.** The service holds the sign-in and renews it, so a `2` means it has lapsed and nothing you can run brings it back. Say the Proton session needs restarting, carry on with the rest of the turn, and never ask the user for a password or run `account login` yourself.
+- **A change that ended in exit `5` may still have happened.** Proton or the network gave out somewhere in the middle. Read the item back - `get`, or the `list` beside it - before doing anything else, and never send, upload or create again on the strength of the error alone.
+- **`--page-size 0` is the whole collection**, for Drive, Contacts, Pass and everything else proton pages itself. Mail is paged by Proton, where `0` is one page like any other, so narrow the listing and walk `--page` when you truly need all of it.
+- **An all-day event ends at the midnight after its last day**, so its `end` is never a day it occupies (`"all_day": true` marks one).
