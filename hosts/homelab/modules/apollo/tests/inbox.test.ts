@@ -14,6 +14,7 @@ function entry(over: Partial<InboxEntry> = {}): InboxEntry {
   return {
     contexts: [],
     files: [],
+    from: "4369912345678@s.whatsapp.net",
     images: [],
     sentAt: Date.now(),
     text: "hello",
@@ -123,6 +124,12 @@ describe("createInbox", () => {
     expect(inbox.pending(2).map((row) => row.waId)).toEqual(["m1", "m2"]);
     inbox.markHandled(["m1", "m2"]);
     expect(inbox.pending(2).map((row) => row.waId)).toEqual(["m3"]);
+  });
+
+  it("hands back who sent it, so a re-delivered message can still be answered", () => {
+    const { db, inbox } = freshInbox();
+    inbox.admit(entry({ from: "4369987654321@s.whatsapp.net" }));
+    expect(createInbox(db, HORIZON_MS).pending(10)[0]!.from).toBe("4369987654321@s.whatsapp.net");
   });
 
   it("keeps a message pending until it is marked handled - a crash re-delivers it", () => {

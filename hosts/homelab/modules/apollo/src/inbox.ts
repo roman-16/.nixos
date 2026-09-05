@@ -8,7 +8,8 @@ import type { ContextNote } from "./temporal";
  * The durable seam between WhatsApp and the agent. Every inbound message is normalized (voice
  * transcribed, media downloaded, reply resolved) and written here *before* the agent sees it, so a
  * crash or a restart re-delivers it instead of dropping it, and a burst can be handed over as one
- * catch-up turn instead of racing through the session.
+ * catch-up turn instead of racing through the session. Its sender travels with it, so the answer has
+ * an address even when the process that sends it never saw the message arrive.
  *
  * Identity is WhatsApp's own message id, so admission is idempotent: the same message may be offered
  * by the live socket, by the server's offline queue after an outage, or by a history sync, and is
@@ -27,6 +28,11 @@ export interface InboxEntry {
   contexts: ContextNote[];
   /** What came with it that is not for reading: where each file landed, or why it did not. */
   files: ReceivedFile[];
+  /**
+   * The JID the answer goes to. A row placed here out of band names no sender, and is answered to
+   * the primary allowlisted number.
+   */
+  from?: string;
   images: ImageContent[];
   sentAt: number;
   text: string;
@@ -85,6 +91,7 @@ export function createInbox(db: Database, horizonMs: number): Inbox {
       const payload = JSON.stringify({
         contexts: entry.contexts,
         files: entry.files,
+        from: entry.from,
         images: entry.images,
         text: entry.text,
       });
@@ -104,12 +111,14 @@ export function createInbox(db: Database, horizonMs: number): Inbox {
         const payload = JSON.parse(row.payload) as {
           contexts?: ContextNote[];
           files?: ReceivedFile[];
+          from?: string;
           images?: ImageContent[];
           text?: string;
         };
         return {
           contexts: payload.contexts ?? [],
           files: payload.files ?? [],
+          from: payload.from,
           images: payload.images ?? [],
           sentAt: row.sent_at,
           text: payload.text ?? "",

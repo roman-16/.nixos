@@ -129,11 +129,13 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   };
 
   let socket: WhatsApp | undefined;
-  let target: string | undefined;
-  // A proactive notice can fire before any inbound sets `target` (e.g. a compaction right after a
-  // restart), so fall back to the primary allowlisted number.
-  const fallbackTarget = config.allowFrom[0] ? jidForNumber(config.allowFrom[0]) : undefined;
-  const recipient = () => target ?? fallbackTarget;
+  // Whoever wrote the message being answered, learnt from the live delivery or, for a turn the inbox
+  // hands over after a restart, from the message itself. A proactive notice can fire before any
+  // message at all (a compaction right after a restart), so fall back to the primary allowlisted
+  // number.
+  let replyTo: string | undefined;
+  const primaryTarget = config.allowFrom[0] ? jidForNumber(config.allowFrom[0]) : undefined;
+  const recipient = () => replyTo ?? primaryTarget;
   const connected = () => Boolean(socket) && socket!.getState().status === "connected";
 
   // Only one drain runs at a time, and a failed delivery pauses the next one until `retryAfter`.
@@ -152,7 +154,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   let typingTimer: ReturnType<typeof setInterval> | undefined;
 
   function sendComposing(): void {
-    if (socket && target) void socket.presence(target, "composing");
+    const to = recipient();
+    if (socket && to) void socket.presence(to, "composing");
   }
 
   function stopTyping(): void {
@@ -160,16 +163,17 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       clearInterval(typingTimer);
       typingTimer = undefined;
     }
-    if (socket && target) void socket.presence(target, "paused");
+    const to = recipient();
+    if (socket && to) void socket.presence(to, "paused");
   }
 
   function startTyping(): void {
     stopTyping();
-    if (!socket || !target) return;
+    if (!socket || !recipient()) return;
     sendComposing();
     let ticks = 0;
     typingTimer = setInterval(() => {
-      if (!socket || !target || (ticks += 1) > TYPING_MAX_TICKS) {
+      if (!socket || !recipient() || (ticks += 1) > TYPING_MAX_TICKS) {
         stopTyping();
         return;
       }
@@ -321,9 +325,14 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   // nothing: that is how a turn ends in silence.
   onAssistantText(session, (text) => {
     const { delivered } = splitInternal(text);
-    if (!socket || !target || !delivered) return;
+    if (!delivered) return;
+    const to = recipient();
+    if (!socket || !to) {
+      logger.error({ chars: delivered.length }, "an answer had nowhere to go");
+      return;
+    }
     void socket
-      .send(target, delivered)
+      .send(to, delivered)
       .then(() => {
         if (typingTimer) sendComposing();
       })
@@ -566,6 +575,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       for (;;) {
         const batch = inbox.pending(config.backlogMax);
         if (batch.length === 0) return;
+        replyTo = batch[batch.length - 1]!.from;
         const { images, prompt } = buildTurn(batch);
         logger.info(
           { chars: prompt.length, count: batch.length, images: images.length },
@@ -638,7 +648,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       }
       if (allowed.length === 0) return;
       lastActivityAt = Date.now();
-      target = allowed[allowed.length - 1]!.from;
+      replyTo = allowed[allowed.length - 1]!.from;
       for (const message of allowed) void socket?.read(message.key); // blue checkmarks
       startTyping();
 
@@ -679,6 +689,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         const admission = inbox.admit({
           contexts,
           files: message.files,
+          from: message.from,
           images,
           sentAt: message.sentAt,
           text,
