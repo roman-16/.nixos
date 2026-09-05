@@ -59,6 +59,9 @@ MACRO_TOLERANCE = 0.5
 # Everything in a name that does not identify the food: case, punctuation and spacing.
 NAME_NOISE = re.compile(r"[^a-z0-9]+")
 
+# A weight or volume written into a name, which is how a rate multiplied in-model arrives here.
+AMOUNT_IN_TEXT = re.compile(r"\d+(?:[.,]\d+)?\s*(?:kg|dl|cl|ml|l|g)\b", re.IGNORECASE)
+
 
 def die(msg: str):
     print(f"error: {msg}", file=sys.stderr)
@@ -189,6 +192,53 @@ def rest_fraction(value: str) -> float:
         die("an --of-rest amount is a share of what's left, so it can't exceed 1 "
             "(use --of-rest on its own to take all of it)")
     return frac
+
+
+# --- provenance ----------------------------------------------------------
+
+ESTIMATE_UNDECLARED = ("say where the numbers come from: --exact (read off a label, a pack or an "
+                       "app, or given by the user) or --estimated (your own figure)")
+
+
+def declared_estimate(args) -> bool:
+    """Whether the numbers typed on this command are the caller's own figure.
+
+    Nothing here can tell the two apart: a rate read off a label and one recalled from memory arrive
+    as the same four numbers, and only the caller knows which it was. So it is declared rather than
+    inferred, and declared every time - an optional marker is the one left off exactly when there is
+    no time for it, and a guess that reads as label data is worse than no figure at all.
+    """
+    if not (args.exact or args.estimated):
+        die(ESTIMATE_UNDECLARED)
+    return args.estimated
+
+
+def estimate_change(args):
+    """What a correction says the record's numbers rest on, or None when it says nothing."""
+    if args.estimated:
+        return True
+    if args.exact:
+        return False
+    return None
+
+
+def refuse_estimate_note(note: str | None):
+    """A note is prose kept beside an entry, so nothing is ever read out of it. A guess written
+    there is a fact the store cannot count, total or mark - which is what the flag is for."""
+    if note and "estimat" in note.lower():
+        die("a note is prose, so nothing is read out of it - mark the guess with --estimated "
+            "instead, and keep --note for what it says beyond that")
+
+
+def refuse_amount_in(text: str | None, *, taker: str, instead: str):
+    """An amount written into a name whose numbers are a final total: the rate was multiplied by
+    hand, which is the one thing this script exists to do instead. Caught at the door, because
+    afterwards nothing distinguishes a scaled total from a transcribed one - the entry cannot be
+    re-weighed, and the arithmetic behind it is gone."""
+    found = AMOUNT_IN_TEXT.search(text or "")
+    if found:
+        die(f'"{found.group(0)}" is an amount, and {taker} takes a final total with nothing to '
+            f"scale - so the scaling happened in your head. {instead}")
 
 
 class Match(NamedTuple):
@@ -339,9 +389,14 @@ def compute_day(date: str, extra_entries=()) -> dict | None:
     return _apply_ledger(day)
 
 
+def estimated_kcal(entries) -> float | int:
+    """The calories in these entries that rest on a guess."""
+    return sum(e["kcal"] for e in entries if e["estimated"])
+
+
 def day_macros(date: str) -> dict | None:
-    """A logged day's summed macros plus its protein goal, or None when the day
-    has no entries (so unlogged days never count toward an average)."""
+    """A logged day's summed macros, how many of its calories are estimated, and its protein goal,
+    or None when the day has no entries (so unlogged days never count toward an average)."""
     path = day_path(date)
     if not path.exists():
         return None
@@ -349,7 +404,8 @@ def day_macros(date: str) -> dict | None:
     entries = day.get("entries", [])
     if not entries:
         return None
-    return {"macros": {k: sum(e[k] for e in entries) for k in MACROS}, "proteinGoal": day.get("proteinGoal")}
+    return {"macros": {k: sum(e[k] for e in entries) for k in MACROS},
+            "estimated": estimated_kcal(entries), "proteinGoal": day.get("proteinGoal")}
 
 
 def day_weight(date: str) -> float | int | None:
@@ -371,14 +427,15 @@ def ensure_day(date: str):
     refresh_ledger(date)
 
 
-def make_entry(time, item, kcal, protein, fat, carbs, note, *, source) -> dict:
+def make_entry(time, item, kcal, protein, fat, carbs, note, *, estimated, source) -> dict:
     """One logged entry. `source` records how it was produced - the per-100 rate and amount behind
     it, the food or batch it came from - so an entry stays re-scalable, and so repeats of the same
-    label are recognisable later. Without it the numbers survive but their derivation is lost."""
+    label are recognisable later. Without it the numbers survive but their derivation is lost.
+    `estimated` says whether they were read or guessed, which no later reader could work out."""
     return {
         "time": time, "item": item, "kcal": kcal,
         "protein": protein, "fat": fat, "carbs": carbs, "note": note or None,
-        "source": source,
+        "estimated": estimated, "source": source,
     }
 
 
@@ -481,10 +538,12 @@ def saved_food_named(item: str):
     return match.value if match.kind in ("exact", "substring") else None
 
 
-def keep_food(use: dict, amount):
+def keep_food(use: dict, amount, estimated: bool):
     """Take a hand-written food into the catalog, on the use that earned it. Named, measured and
     portioned after what was actually written out, and aliased only by its own name, because nothing
-    here is guessing at how the food might be referred to later."""
+    here is guessing at how the food might be referred to later. A food written out from a guess is
+    kept as one: produce and restaurant meals never carry a label, and an entry whose numbers claim
+    more certainty than they have would hand that claim to every later use of it."""
     food = load(FOOD_FILE, {})
     name, unit = use["name"], use.get("unit", "g")
     key = name.lower()
@@ -493,16 +552,18 @@ def keep_food(use: dict, amount):
         "per100": {k: use["per100"][k] for k in MACROS},
         "serving": amount,
         "unit": unit,
+        "estimated": estimated,
         "aliases": [key],
         "added": today(),
     }
     save(FOOD_FILE, food)
-    announce(f'📌 Saved "{name}" to your foods: used on {DAYS_TO_SAVE} separate days now, default '
-             f"serving {fmt_amount(amount, unit)}. food-rm to drop it.")
+    basis = " (estimated figures)" if estimated else ""
+    announce(f'📌 Saved "{name}" to your foods{basis}: used on {DAYS_TO_SAVE} separate days now, '
+             f"default serving {fmt_amount(amount, unit)}. food-rm to drop it.")
     hint(f'[macros] saved from repeats - from now on: food-eat --name "{name}"')
 
 
-def reconcile_catalog(use: dict, amount, date: str, use_saved):
+def reconcile_catalog(use: dict, amount, date: str, estimated: bool, use_saved):
     """What the catalog makes of a food written out by hand, whether that was a one-off meal or an
     ingredient weighed into a batch: it is already saved, so the wrong command was used; a different
     food already answers to this name, so the numbers were guessed over real label data; or it has now
@@ -523,6 +584,15 @@ def reconcile_catalog(use: dict, amount, date: str, use_saved):
     named = saved_food_named(use["name"])
     if named:
         saved_unit = named.get("unit", "g")
+        # Which of the two to keep follows which one is the guess, and a label arriving for a food
+        # the catalog only ever guessed at is the entry finally getting its real numbers.
+        if named["estimated"] and not estimated:
+            hint(f'[macros] the saved "{named["name"]}" is an estimate at '
+                 f'{named["per100"]["kcal"]} kcal/100{saved_unit} and these numbers are read, so '
+                 f"put them on it:\n  food-edit --name \"{named['name']}\" "
+                 f'--kcal100 {use["per100"]["kcal"]} --protein100 {use["per100"]["protein"]} '
+                 f'--fat100 {use["per100"]["fat"]} --carbs100 {use["per100"]["carbs"]} --exact')
+            return
         hint(f'[macros] a saved food "{named["name"]}" already exists at '
              f'{named["per100"]["kcal"]} kcal/100{saved_unit}, but this was written out at '
              f'{use["per100"]["kcal"]}. Its numbers come off the label, so prefer it unless this '
@@ -531,7 +601,7 @@ def reconcile_catalog(use: dict, amount, date: str, use_saved):
     # >= rather than ==, so a food that somehow passed the threshold unsaved is taken in on its next
     # use instead of being missed for good.
     if typed_days(use, date) >= DAYS_TO_SAVE:
-        keep_food(use, amount)
+        keep_food(use, amount, estimated)
 
 
 def append_entry(date: str, entry: dict):
@@ -605,6 +675,12 @@ def dm(date: str) -> str:
     return f"{date[8:10]}.{date[5:7]}"
 
 
+def approx(value, estimated: bool) -> str:
+    """A figure marked where it is read, when what it rests on is a guess. Only the macros carry the
+    mark: a share, a percentage, an amount or a serving size is not a claim about what a food is."""
+    return f"~{value}" if estimated else f"{value}"
+
+
 def weight_goal():
     """The configured goal weight in kg, or "?" when none is set."""
     return load(GOAL_FILE, {}).get("weightGoal", "?")
@@ -639,12 +715,18 @@ def render_day_dict(day: dict, *, preview: bool = False):
     lines = [f"{label}:", ""]
     for e in entries:
         note = f" [{e['note']}]" if e.get("note") else ""
-        lines.append(f"- {e['item']} - {e['kcal']} kcal, {round(e['protein'])}g P{note}")
+        est = e["estimated"]
+        lines.append(f"- {e['item']} - {approx(e['kcal'], est)} kcal, "
+                     f"{approx(round(e['protein']), est)}g P{note}")
     kcal_part = f"{round(left)} kcal left" if left >= 0 else f"{round(-left)} kcal over"
     protein_part = "protein hit ✅" if tp >= protein_goal else f"{round(protein_goal - tp)}g protein to go"
+    # How much of the day rests on a guess, in the unit the day is judged in - so a total that is
+    # half estimated never reads as solidly as one taken off labels.
+    guessed = estimated_kcal(entries)
+    guessed_part = f" (~{round(guessed)} estimated)" if guessed else ""
     lines += [
         "",
-        f"Total: {round(tk)} kcal | {round(tp)}g protein, {round(tf)}g fat, {round(tc)}g carbs",
+        f"Total: {round(tk)} kcal{guessed_part} | {round(tp)}g protein, {round(tf)}g fat, {round(tc)}g carbs",
         f"Target: {day['target']} kcal, {protein_goal}g+ protein",
         f"Left: {kcal_part}, {protein_part}",
     ]
@@ -700,11 +782,19 @@ def cmd_goal_set(args):
 
 
 def cmd_log(args):
+    refuse_estimate_note(args.note)
+    for text in (args.item, args.note):
+        refuse_amount_in(
+            text, taker="log",
+            instead="Give eat the rate and the amount instead (--kcal100 <per 100> --amount <how "
+                    "much>, --unit for anything but grams), with --exact off a label or --estimated "
+                    "when the rate is your own figure, and the script scales it.")
+    estimated = declared_estimate(args)
     date = args.date or today()
     # No rate behind it: `log` transcribes final macros, which is exactly what "kind": "log" records.
     entry = make_entry(args.time or now_time(), args.item,
                        args.kcal, args.protein, args.fat, args.carbs, args.note,
-                       source={"kind": "log"})
+                       estimated=estimated, source={"kind": "log"})
     emit(date, entry, dry_run=args.dry_run, commit=lambda: append_entry(date, entry))
 
 
@@ -712,6 +802,8 @@ def cmd_eat(args):
     """Log a one-off food from a per-100 nutrition label (a photo), scaling it by the amount
     here so that multiplication never happens in-model. Saves nothing by itself; the catalog decides
     that afterwards, from how often the food has been written out."""
+    refuse_estimate_note(args.note)
+    estimated = declared_estimate(args)
     unit = args.unit or "g"
     per100 = {k: getattr(args, f"{k}100") for k in MACROS}
     rate = {k: v / 100 for k, v in per100.items()}
@@ -733,12 +825,12 @@ def cmd_eat(args):
     protein = r1(rate["protein"] * amount)
     entry = make_entry(now_time(), f"{args.item} ({fmt_amount(amount, unit)})",
                        kcal, protein, r1(rate["fat"] * amount), r1(rate["carbs"] * amount), args.note,
-                       source=rate_source("eat", args.item, per100, amount, unit))
-    lead = (f"🍽️ {args.item}: {fmt_amount(amount, unit)} {why} - {kcal} kcal, {protein}g P"
-            if why else None)
+                       estimated=estimated, source=rate_source("eat", args.item, per100, amount, unit))
+    lead = (f"🍽️ {args.item}: {fmt_amount(amount, unit)} {why} - {approx(kcal, estimated)} kcal, "
+            f"{approx(protein, estimated)}g P" if why else None)
     emit(date, entry, dry_run=args.dry_run, lead=lead, commit=lambda: append_entry(date, entry))
     if not args.dry_run:
-        reconcile_catalog(entry["source"], amount, date,
+        reconcile_catalog(entry["source"], amount, date, estimated,
                           use_saved=lambda name: f'food-eat --name "{name}" --amount {amount}')
 
 
@@ -803,6 +895,12 @@ def cmd_summary(args):
         if goaled:
             hits = sum(1 for r in goaled if r["macros"]["protein"] >= r["proteinGoal"])
             extras.append(f"protein goal hit {hits}/{len(goaled)} days")
+        # An average is only as solid as what it averages, so the range says how much of it was
+        # guessed rather than read.
+        guessed = sum(r["estimated"] for r in completed)
+        if guessed:
+            extras.append(f"{round(guessed / sum(r['macros']['kcal'] for r in completed) * 100)}% "
+                          "of kcal estimated")
         if extras:
             joined = "; ".join(extras)
             lines.append(joined[0].upper() + joined[1:])
@@ -878,8 +976,9 @@ def cmd_entries(args):
         return
     for i, e in enumerate(entries, 1):
         note = f" [{e['note']}]" if e.get("note") else ""
+        est = e["estimated"]
         print(f"{i}. {e.get('time') or '--:--'}  {e['item']} - "
-              f"{e['kcal']} kcal, {round(e['protein'])}g P{note}")
+              f"{approx(e['kcal'], est)} kcal, {approx(round(e['protein']), est)}g P{note}")
 
 
 def cmd_edit(args):
@@ -893,6 +992,7 @@ def cmd_edit(args):
     if entry_locked(entry):
         die("that entry comes from a prep batch - correct it with prep-ingredient-edit "
             "or reverse it with prep-uneat, not edit.")
+    refuse_estimate_note(args.note)
     changed = False
     # A new amount re-scales from the entry's own rate, so "make that 300g" is a correction rather
     # than a delete-and-retype. Applied first, so any explicit macro passed alongside still wins.
@@ -902,7 +1002,7 @@ def cmd_edit(args):
         if not per100:
             die("that entry has no per-100 rate to re-scale from - rm it and log it again")
         unit = source.get("unit", "g")
-        amount = round(args.amount)
+        amount = args.amount
         entry["kcal"] = round(per100["kcal"] / 100 * amount)
         for m in ("protein", "fat", "carbs"):
             entry[m] = r1(per100[m] / 100 * amount)
@@ -914,8 +1014,13 @@ def cmd_edit(args):
         if value is not None:
             entry[flag] = value
             changed = True
+    basis = estimate_change(args)
+    if basis is not None:
+        entry["estimated"] = basis
+        changed = True
     if not changed:
-        die("give at least one field to change (--amount/--item/--kcal/--protein/--fat/--carbs/--note)")
+        die("give at least one field to change "
+            "(--amount/--item/--kcal/--protein/--fat/--carbs/--note/--exact/--estimated)")
     save(path, day)
     recompute_from(date)
     render_after_change(date)
@@ -924,8 +1029,10 @@ def cmd_edit(args):
 def food_line(food: dict) -> str:
     p = food["per100"]
     unit = food.get("unit", "g")
-    return (f"{food['name']}: per {fmt_amount(100, unit)} {p['kcal']} kcal, {p['protein']}g P, "
-            f"{p['fat']}g F, {p['carbs']}g C; default serving {fmt_amount(food['serving'], unit)}")
+    est = food["estimated"]
+    return (f"{food['name']}: per {fmt_amount(100, unit)} {approx(p['kcal'], est)} kcal, "
+            f"{approx(p['protein'], est)}g P, {approx(p['fat'], est)}g F, {approx(p['carbs'], est)}g C; "
+            f"default serving {fmt_amount(food['serving'], unit)}")
 
 
 def cmd_food_get(args):
@@ -953,6 +1060,7 @@ def cmd_food_add(args):
             "asked for it. A one-off needs no entry - `eat` logs and scales it just the same, and "
             f"the catalog saves it here by itself once the same food has been written out on "
             f"{DAYS_TO_SAVE} separate days, in a meal or as an ingredient.")
+    estimated = declared_estimate(args)
     food = load(FOOD_FILE, {})
     key = args.name.lower()
     aliases = [a.strip().lower() for a in (args.aliases or "").split(",") if a.strip()]
@@ -963,6 +1071,7 @@ def cmd_food_add(args):
         "per100": per100,
         "serving": args.serving,
         "unit": unit,
+        "estimated": estimated,
         "aliases": sorted(set(aliases) | {key}),
         "added": today(),
     }
@@ -1035,7 +1144,10 @@ def cmd_food_list(args):
     print(f"{len(order)} saved food(s), most used first:")
     for v in order:
         extra = [a for a in v.get("aliases", []) if a != v["name"].lower()]
-        also = f"  \u00b7  {', '.join(extra)}" if extra else ""
+        tags = ["estimated"] if v["estimated"] else []
+        if extra:
+            tags.append(", ".join(extra))
+        also = "".join(f"  \u00b7  {tag}" for tag in tags)
         print(f"- {v['name']}  {usage_line(v, used[v['name']])}{also}")
 
 
@@ -1063,14 +1175,18 @@ def cmd_food_eat(args):
         die("amount must be positive")
     kcal = round(rate["kcal"] * amount)
     protein = r1(rate["protein"] * amount)
+    # A guessed rate is guessed however carefully it is portioned, and a guessed amount makes a read
+    # rate no better - so either one makes the entry an estimate.
+    estimated = food["estimated"] or args.estimated
     entry = make_entry(now_time(), f"{food['name']} ({fmt_amount(amount, unit)})",
                        kcal, protein, r1(rate["fat"] * amount), r1(rate["carbs"] * amount), None,
-                       source=rate_source("food", food["name"], per100, amount, unit))
+                       estimated=estimated, source=rate_source("food", food["name"], per100, amount, unit))
     leads = []
     if assumed:
         leads.append(f'📝 read "{args.name}" as {assumed}')
     if why:
-        leads.append(f"🍽️ {food['name']}: {fmt_amount(amount, unit)} {why} - {kcal} kcal, {protein}g P")
+        leads.append(f"🍽️ {food['name']}: {fmt_amount(amount, unit)} {why} - "
+                     f"{approx(kcal, estimated)} kcal, {approx(protein, estimated)}g P")
     emit(date, entry, dry_run=args.dry_run, lead="\n".join(leads) or None,
          commit=lambda: append_entry(date, entry))
 
@@ -1088,6 +1204,9 @@ def cmd_food_edit(args):
         entry["unit"] = args.unit
     if args.aliases is not None:
         entry["aliases"] = [a.strip().lower() for a in args.aliases.split(",") if a.strip()]
+    basis = estimate_change(args)
+    if basis is not None:
+        entry["estimated"] = basis
     if args.rename:
         entry["name"] = args.rename
     newkey = entry["name"].lower()
@@ -1131,6 +1250,12 @@ def prep_total(batch: dict) -> dict:
     for ingredient in batch["ingredients"]:
         out = macro_add(out, ingredient)
     return out
+
+
+def prep_estimated(batch: dict) -> bool:
+    """Whether the batch's numbers rest on a guess. One guessed ingredient is enough: every portion
+    is a share of the whole, so the guess is in all of them and in whatever is left."""
+    return any(i["estimated"] for i in batch["ingredients"])
 
 
 def consumed(batch: dict, kind: str | None = None) -> dict:
@@ -1185,10 +1310,12 @@ def prep_line(batch: dict) -> str:
     if not batch["ingredients"]:
         return f"{batch['name']}: empty (no ingredients yet){tag}"
     rem = prep_remaining(batch)
+    est = prep_estimated(batch)
     size = portion_size(batch, frac_left(batch))
     size_txt = f"{size}, " if size else ""
     return (f"{batch['name']}: {round(frac_left(batch) * 100)}% left "
-            f"({size_txt}{round(rem['kcal'])} kcal, {r1(rem['protein'])}g P){tag}")
+            f"({size_txt}{approx(round(rem['kcal']), est)} kcal, "
+            f"{approx(r1(rem['protein']), est)}g P){tag}")
 
 
 def portion_desc(batch: dict, frac: float, left: float) -> str:
@@ -1260,7 +1387,7 @@ def make_event(kind: str, date: str, macros: dict, label: str) -> dict:
 
 
 def apply_delta(batch: dict, key: str, delta: dict, *, date: str, label: str, verb: str,
-                leads: list, log_eaten: bool):
+                estimated: bool, leads: list, log_eaten: bool):
     """Fold a composition change into the consumption log by how much has already left
     the batch: the eaten fraction of `delta` becomes an eaten adjustment event (your
     intake), the removed fraction a removed one, the rest is just composition (it flows
@@ -1278,6 +1405,7 @@ def apply_delta(batch: dict, key: str, delta: dict, *, date: str, label: str, ve
             append_entry(date, make_entry(
                 now_time(), f"{batch['name']} - {verb} {label} (already-eaten share)",
                 kcal, r1(mine["protein"]), r1(mine["fat"]), r1(mine["carbs"]), "prep-fix",
+                estimated=estimated,
                 source={"kind": "prep", "prepId": key, "eventId": event["id"]}))
             leads.append(f"logged the {kcal} kcal you'd already eaten from it (today)" if kcal > 0
                          else f"un-logged the {-kcal} kcal of it you'd already eaten (today)")
@@ -1390,7 +1518,8 @@ def cmd_prep_size(args):
     print(prep_line(batch))
 
 
-def scaled_ingredient(label: str, per100: dict, amount, unit: str, kind: str, name: str) -> dict:
+def scaled_ingredient(label: str, per100: dict, amount, unit: str, kind: str, name: str,
+                      *, estimated: bool) -> dict:
     """An ingredient weighed out against a per-100 rate, scaled here and labelled with what went in.
     Its rate is snapshotted the way a day entry's is, so "make that 500g" stays one flag later."""
     rate = {k: per100[k] / 100 for k in MACROS}
@@ -1400,6 +1529,7 @@ def scaled_ingredient(label: str, per100: dict, amount, unit: str, kind: str, na
         "protein": r1(rate["protein"] * amount),
         "fat": r1(rate["fat"] * amount),
         "carbs": r1(rate["carbs"] * amount),
+        "estimated": estimated,
         "source": rate_source(kind, name, per100, amount, unit),
     }
 
@@ -1419,7 +1549,8 @@ def ingredient_from(args) -> tuple:
         _, food, assumed = resolve(load(FOOD_FILE, {}), args.food,
                                    noun="saved food", listing="food-list", strict=False)
         return scaled_ingredient(args.label or food["name"], food["per100"], args.amount,
-                                 food.get("unit", "g"), "food", food["name"]), assumed
+                                 food.get("unit", "g"), "food", food["name"],
+                                 estimated=food["estimated"] or args.estimated), assumed
     if args.kcal100 is not None:
         if args.amount is None:
             die("give --amount as well: how much of it went in")
@@ -1427,14 +1558,20 @@ def ingredient_from(args) -> tuple:
             die("give --label as well: what to call the ingredient")
         per100 = {k: getattr(args, f"{k}100") for k in MACROS}
         return scaled_ingredient(args.label, per100, args.amount, args.unit or "g",
-                                 "eat", args.label), None
+                                 "eat", args.label, estimated=declared_estimate(args)), None
     if args.kcal is None:
         die("give the ingredient's macros: --food NAME --amount N for something saved, "
             "--kcal100 N --amount N off a packet, or --kcal N when you only have the total")
     if not args.label:
         die("give --label as well: what to call the ingredient")
+    refuse_amount_in(
+        args.label, taker="--kcal",
+        instead="Give the rate and the amount instead (--kcal100 <per 100> --amount <how much>, "
+                "--unit for anything but grams), with --exact off a packet or --estimated when the "
+                "rate is your own figure, and the script scales it.")
     return {"label": args.label, "kcal": args.kcal, "protein": args.protein, "fat": args.fat,
-            "carbs": args.carbs, "source": {"kind": "log"}}, None
+            "carbs": args.carbs, "estimated": declared_estimate(args),
+            "source": {"kind": "log"}}, None
 
 
 def cmd_prep_ingredient_add(args):
@@ -1456,11 +1593,13 @@ def cmd_prep_ingredient_add(args):
     leads = [f'📝 read "{args.name}" as {assumed}'] if assumed else []
     if food_assumed:
         leads.append(f'📝 read "{args.food}" as {food_assumed}')
+    estimated = ingredient["estimated"]
     leads.append(f"added to {batch['name']}{mode}: {label} - "
-                 f"{round(ingredient['kcal'])} kcal, {r1(ingredient['protein'])}g P")
+                 f"{approx(round(ingredient['kcal']), estimated)} kcal, "
+                 f"{approx(r1(ingredient['protein']), estimated)}g P")
     if forgotten:
         apply_delta(batch, key, ingredient, date=date, label=label, verb="forgotten",
-                    leads=leads, log_eaten=not args.no_log_eaten)
+                    estimated=estimated, leads=leads, log_eaten=not args.no_log_eaten)
     batch["ingredients"].append(ingredient)
     save(PREP_FILE, prep)
     leads.append(prep_line(batch))
@@ -1471,7 +1610,7 @@ def cmd_prep_ingredient_add(args):
     source = ingredient.get("source") or {}
     if source.get("kind") == "eat":
         reconcile_catalog(
-            source, source["amount"], date,
+            source, source["amount"], date, estimated,
             use_saved=lambda name: (f'prep-ingredient-add --name "{batch["name"]}" '
                                     f'--food "{name}" --amount {source["amount"]}'),
         )
@@ -1502,16 +1641,21 @@ def cmd_prep_ingredient_edit(args):
         value = getattr(args, m)
         if value is not None:
             new[m] = value
+    basis = estimate_change(args)
+    estimated = ingredient["estimated"] if basis is None else basis
     label = args.label or relabel or ingredient["label"]
     leads = [f'📝 read "{args.name}" as {assumed}'] if assumed else []
     leads.append(f"updated {batch['name']} ingredient {idx + 1}: {label} - "
-                 f"{round(new['kcal'])} kcal, {r1(new['protein'])}g P")
+                 f"{approx(round(new['kcal']), estimated)} kcal, "
+                 f"{approx(r1(new['protein']), estimated)}g P")
     # Correct the macro delta like a forgotten add; computed before the ingredient is
     # updated, so `total` still reflects the old values.
     apply_delta(batch, key, macro_sub(new, old), date=args.date or today(), label=label,
-                verb="corrected", leads=leads, log_eaten=not args.no_log_eaten)
+                verb="corrected", estimated=estimated, leads=leads,
+                log_eaten=not args.no_log_eaten)
     ingredient.update(new)
     ingredient["label"] = label
+    ingredient["estimated"] = estimated
     save(PREP_FILE, prep)
     leads.append(prep_line(batch))
     print("\n".join(leads))
@@ -1523,13 +1667,14 @@ def cmd_prep_ingredient_rm(args):
     idx = pick_index(batch["ingredients"], args, "ingredient")
     ingredient = batch["ingredients"][idx]
     label, kcal = ingredient["label"], round(ingredient["kcal"])
+    estimated = ingredient["estimated"]
     leads = [f'📝 read "{args.name}" as {assumed}'] if assumed else []
-    leads.append(f"removed from {batch['name']}: {label} ({kcal} kcal)")
+    leads.append(f"removed from {batch['name']}: {label} ({approx(kcal, estimated)} kcal)")
     # A removal is a negative delta, corrected in reverse; computed before dropping the
     # ingredient so `total` still includes it.
     apply_delta(batch, key, macro_scale({k: ingredient[k] for k in MACROS}, -1),
                 date=args.date or today(), label=label, verb="removed",
-                leads=leads, log_eaten=not args.no_log_eaten)
+                estimated=estimated, leads=leads, log_eaten=not args.no_log_eaten)
     batch["ingredients"].pop(idx)
     save(PREP_FILE, prep)
     leads.append(prep_line(batch))
@@ -1553,11 +1698,14 @@ def cmd_prep_get(args):
     if not batch["ingredients"]:
         print("  empty - no ingredients yet")
     for i, ingredient in enumerate(batch["ingredients"], 1):
-        print(f"{i}. {ingredient['label']} - {ingredient['kcal']} kcal, {r1(ingredient['protein'])}g P, "
-              f"{r1(ingredient['fat'])}g F, {r1(ingredient['carbs'])}g C")
+        one = ingredient["estimated"]
+        print(f"{i}. {ingredient['label']} - {approx(ingredient['kcal'], one)} kcal, "
+              f"{approx(r1(ingredient['protein']), one)}g P, {approx(r1(ingredient['fat']), one)}g F, "
+              f"{approx(r1(ingredient['carbs']), one)}g C")
     total = prep_total(batch)
-    print(f"Total: {round(total['kcal'])} kcal, {r1(total['protein'])}g P, "
-          f"{r1(total['fat'])}g F, {r1(total['carbs'])}g C")
+    est = prep_estimated(batch)
+    print(f"Total: {approx(round(total['kcal']), est)} kcal, {approx(r1(total['protein']), est)}g P, "
+          f"{approx(r1(total['fat']), est)}g F, {approx(r1(total['carbs']), est)}g C")
     if not batch["ingredients"]:
         return
     if batch["consumption"]:
@@ -1568,14 +1716,14 @@ def cmd_prep_get(args):
             verb = "ate" if event["kind"] == "eaten" else "removed"
             tag = "" if event["kind"] == "eaten" else " [unlogged]"
             print(f"{i}. {dm(event['date'])} {event['time']} - {verb} {round(frac * 100)}%"
-                  f"{size_part} ({round(event['macros']['kcal'])} kcal){tag}")
+                  f"{size_part} ({approx(round(event['macros']['kcal']), est)} kcal){tag}")
     rem = prep_remaining(batch)
     fr = frac_removed(batch)
     split = f" - you {round(frac_eaten(batch) * 100)}%, others {round(fr * 100)}%" if fr > 0.0001 else ""
     left_size = portion_size(batch, frac_left(batch))
     left_txt = f"{left_size}, " if left_size else ""
-    print(f"Left: {round(frac_left(batch) * 100)}% ({left_txt}{round(rem['kcal'])} kcal, "
-          f"{r1(rem['protein'])}g P){split}")
+    print(f"Left: {round(frac_left(batch) * 100)}% ({left_txt}{approx(round(rem['kcal']), est)} kcal, "
+          f"{approx(r1(rem['protein']), est)}g P){split}")
 
 
 def cmd_prep_eat(args):
@@ -1610,11 +1758,12 @@ def cmd_prep_eat(args):
             f"({round(total['kcal'] * left)} kcal); cannot eat "
             f"{round(frac * 100)}%. Use --of-rest to finish it.")
     portion = macro_scale(total, frac)
+    estimated = prep_estimated(batch) or args.estimated
     size_part = portion_size(batch, frac)
     item = f"{batch['name']} ({round(frac * 100)}% of batch{f', {size_part}' if size_part else ''})"
     entry = make_entry(now_time(), item, round(portion["kcal"]), r1(portion["protein"]),
                        r1(portion["fat"]), r1(portion["carbs"]), "prep",
-                       source={"kind": "prep", "prepId": key})
+                       estimated=estimated, source={"kind": "prep", "prepId": key})
     partial = 0 < left < 1 - 1e-6
     # The portion line is worth showing for a fit/target portion (always) or any portion of an
     # already-partial batch (where "of what's left" adds real info); on a full batch a plain
@@ -1622,7 +1771,8 @@ def cmd_prep_eat(args):
     if has_target(args) or partial:
         why_txt = f"{why} " if has_target(args) else ""
         leads.append(f"🍽️ {batch['name']}: {portion_desc(batch, frac, left)} {why_txt}- "
-                     f"{round(portion['kcal'])} kcal, {r1(portion['protein'])}g P")
+                     f"{approx(round(portion['kcal']), estimated)} kcal, "
+                     f"{approx(r1(portion['protein']), estimated)}g P")
     # The batch's remaining is stated on every eat, so no reply (least of all a --dry-run) ever
     # leaves it unclear how full the batch is. A capped fit/target already says it in its warning.
     if has_target(args) and capped:
@@ -1641,6 +1791,7 @@ def cmd_prep_eat(args):
         event = make_event("eaten", date, portion, f"{round(frac * 100)}% of batch")
         append_entry(date, make_entry(now_time(), item, round(portion["kcal"]), r1(portion["protein"]),
                                       r1(portion["fat"]), r1(portion["carbs"]), "prep",
+                                      estimated=estimated,
                                       source={"kind": "prep", "prepId": key, "eventId": event["id"]}))
         batch["consumption"].append(event)
         maybe_archive(batch)
@@ -1779,6 +1930,15 @@ def cmd_recompute(args):
     print(f"recomputed {n} day(s)")
 
 
+def add_provenance_flags(sp):
+    """Where the numbers typed on this command come from - required wherever they are typed out
+    (see declared_estimate), a correction where a record already has them."""
+    group = sp.add_mutually_exclusive_group()
+    group.add_argument("--exact", action="store_true",
+                       help="read off a label, a pack or an app, or given by the user")
+    group.add_argument("--estimated", action="store_true", help="your own figure")
+
+
 def add_amount_flags(sp, *extra):
     """Attach the mutually exclusive amount sources (command-specific `extra`
     plus the shared --fit-*/--target-*) and the --dry-run/--date flags."""
@@ -1826,6 +1986,7 @@ def build_parser() -> argparse.ArgumentParser:
     lo.add_argument("--time")
     lo.add_argument("--date")
     lo.add_argument("--dry-run", action="store_true")
+    add_provenance_flags(lo)
 
     ea = command("eat")
     ea.set_defaults(func=cmd_eat)
@@ -1836,6 +1997,7 @@ def build_parser() -> argparse.ArgumentParser:
     ea.add_argument("--carbs100", type=TENTH, default=0)
     ea.add_argument("--unit")
     ea.add_argument("--note")
+    add_provenance_flags(ea)
     add_amount_flags(ea, ("--amount", {"type": AMOUNT}))
 
     sh = command("show")
@@ -1877,6 +2039,7 @@ def build_parser() -> argparse.ArgumentParser:
     ed.add_argument("--carbs", type=TENTH)
     ed.add_argument("--note")
     ed.add_argument("--date")
+    add_provenance_flags(ed)
 
     fg = command("food-get")
     fg.set_defaults(func=cmd_food_get)
@@ -1894,12 +2057,14 @@ def build_parser() -> argparse.ArgumentParser:
     fa.add_argument("--aliases")
     fa.add_argument("--asked", action="store_true",
                     help="the user asked for this food to be saved (required)")
+    add_provenance_flags(fa)
 
     command("food-list").set_defaults(func=cmd_food_list)
 
     fe = command("food-eat")
     fe.set_defaults(func=cmd_food_eat)
     fe.add_argument("--name", required=True)
+    fe.add_argument("--estimated", action="store_true", help="the amount is your own figure")
     add_amount_flags(fe, ("--amount", {"type": AMOUNT}), ("--servings", {"type": AMOUNT}))
 
     fed = command("food-edit")
@@ -1913,6 +2078,7 @@ def build_parser() -> argparse.ArgumentParser:
     fed.add_argument("--unit")
     fed.add_argument("--rename")
     fed.add_argument("--aliases")
+    add_provenance_flags(fed)
 
     frm = command("food-rm")
     frm.set_defaults(func=cmd_food_rm)
@@ -1952,6 +2118,7 @@ def build_parser() -> argparse.ArgumentParser:
     ping.add_argument("--later", action="store_true")
     ping.add_argument("--no-log-eaten", action="store_true")
     ping.add_argument("--date")
+    add_provenance_flags(ping)
 
     pied = command("prep-ingredient-edit")
     pied.set_defaults(func=cmd_prep_ingredient_edit)
@@ -1966,6 +2133,7 @@ def build_parser() -> argparse.ArgumentParser:
     pied.add_argument("--carbs", type=TENTH)
     pied.add_argument("--no-log-eaten", action="store_true")
     pied.add_argument("--date")
+    add_provenance_flags(pied)
 
     pirm = command("prep-ingredient-rm")
     pirm.set_defaults(func=cmd_prep_ingredient_rm)
@@ -1983,6 +2151,7 @@ def build_parser() -> argparse.ArgumentParser:
     pe = command("prep-eat")
     pe.set_defaults(func=cmd_prep_eat)
     pe.add_argument("--name", required=True)
+    pe.add_argument("--estimated", action="store_true", help="the portion is your own figure")
     add_amount_flags(pe, ("--of-rest", {"nargs": "?", "const": "1", "default": None}),
                      ("--of-batch", {}), ("--size", {"type": AMOUNT}))
 

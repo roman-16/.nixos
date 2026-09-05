@@ -15,8 +15,22 @@ Tracks daily nutrition as JSON under `macros/` in the workspace, which the scrip
 
 ## Your job vs the script's job
 
-- **You:** read the message and identify the food and the amount. For a saved food, use `food-eat`; for a batch, `prep-eat`; for something going into a batch, `prep-ingredient-add`; for a one-off whose per-100 nutrition label you can read (a photo or screenshot), use `eat` with the label's per-100 values plus the amount; only when there is no per-100 rate at all (a pure guess from knowledge) do you supply the final macros yourself with `log --note estimated`. The script always does the scaling - never multiply a rate yourself, and never convert one share into another.
+- **You:** read the message and identify the food, the amount, and where your numbers come from. For a saved food, use `food-eat`; for a batch, `prep-eat`; for something going into a batch, `prep-ingredient-add`. Anything with a rate and an amount - a label you can read _or_ a rate you know from experience - goes to `eat` with the per-100 values and the amount. `log` is only for a **final total with nothing to scale**. The script always does the scaling - never multiply a rate yourself, never convert one share into another, and never write an amount into an item name or a note.
 - **The script:** does all scaling and portioning, stores entries, computes every total and the balance ledger, and prints the reply to send. It owns every number.
+
+## Estimates
+
+Whether a rate was read off a label or recalled from memory is invisible in the numbers themselves, so it is declared rather than inferred: `log`, `eat`, `food-add` and `prep-ingredient-add` (with `--kcal100`/`--kcal`) write nothing until you pass one of them.
+
+- `--exact` - off a label, a pack or an app, or the user said the numbers.
+- `--estimated` - your own figure: a described meal, a photo with no legible label, something you know roughly.
+- `food-eat`/`prep-eat` take `--estimated` for a guessed **amount** of something whose rate is known ("about half a bowl"); an ingredient taken from a saved food (`prep-ingredient-add --food`) needs no declaration, since the food already carries one.
+
+Estimate freely - a marked guess is what this is for - but never silently: an unmarked guess reads to the user as label data. A guessed figure prints with a `~` wherever they read it (`Kebap - ~370 kcal, ~19g P`), the day's total says how much of it rests on guesses (`Total: 1311 kcal (~381 estimated)`), and `summary` says how much of a range did.
+
+The mark flows on its own: a saved food that was estimated makes every `food-eat` of it estimated, one estimated ingredient makes the whole batch and every portion of it estimated, and a batch fix inherits its ingredient's mark. `edit`, `food-edit` and `prep-ingredient-edit` take `--exact`/`--estimated` to correct what a record rests on - so when a label finally turns up for a food the catalog only ever guessed at, `food-edit --name "X" --kcal100 ... --exact` puts the real numbers on it.
+
+Never write "estimated" into a `--note`: a note is prose that nothing is ever read out of, so the script refuses it and asks for the flag.
 
 ## Replying
 
@@ -44,39 +58,41 @@ Lines starting `[macros]` after the result are notes for you alone - they are ne
 
 `daily-goal` is the kcal anchor the ledger steers the multi-day average toward; `tdee` is maintenance and sets the floor. Phase is `cut`, `maintenance`, or `bulk`.
 
-## Logging food (one-off / estimated)
+## Logging a total
 
-`log` is for entries where you already have the **final** macros and just transcribe them - a pure estimate, or a value the user gives you directly. A food with a readable per-100 label goes through `eat` (below), saved foods through `food-eat`, batches through `prep-eat`; reach for `log` only when none of those fit. `--kcal` is required; `--protein/--fat/--carbs` default to 0; time and date default to now.
+`log` is for entries where you already have the **final** macros and there is nothing left to scale - a total the user gives you, or a meal you can only judge as a whole. Anything with a rate and an amount behind it goes through `eat` (below), saved foods through `food-eat`, batches through `prep-eat`; reach for `log` only when none of those fit. `--kcal` is required; `--protein/--fat/--carbs` default to 0; time and date default to now.
 
 ```bash
-{baseDir}/scripts/macros.py log --item "Chicken breast (250g)" --kcal 413 --protein 77.5 --fat 9 --carbs 0
-{baseDir}/scripts/macros.py log --item "Burger and fries" --kcal 900 --protein 40 --fat 45 --carbs 80 --note estimated
+{baseDir}/scripts/macros.py log --item "Burger and fries" --kcal 900 --protein 40 --fat 45 --carbs 80 --estimated
+{baseDir}/scripts/macros.py log --item "Protein shake" --kcal 220 --protein 30 --fat 3 --carbs 12 --exact   # the user read them out
 ```
+
+**An amount in the item or the note is refused.** A weight or volume there (`"Grapes 552g"`, `--note "552g"`) means you multiplied a rate in your head - the one thing this script exists to do instead. Give `eat` the per-100 rate and the amount (`--estimated` when the rate is your own figure): it scales it, labels it, and the entry stays re-scalable with `edit --amount` when the amount turns out to be wrong.
 
 `log` prints the day summary; the script sends it to the user (see [Replying](#replying)).
 
-## Logging from a nutrition label (photo)
+## Logging a rate and an amount
 
-When the user sends a photo or screenshot of a nutrition label - macros **per 100g or 100ml** - together with an amount ("log 235g"), read the per-100 values and the amount off the message and hand both to `eat`. The script scales them (it derives the factor from the amount itself, so 235g becomes x2.35) and logs the result **without saving the food**. You never multiply.
+Whenever there is a per-100 rate and an amount, `eat` is the command - whether the rate comes off a photographed label (macros **per 100g or 100ml**) or out of your own knowledge of the food. Read the per-100 values and the amount off the message, hand both over, and the script scales them (it derives the factor from the amount itself, so 235g becomes x2.35) and logs the result **without saving the food**. You never multiply.
 
 ```bash
-{baseDir}/scripts/macros.py eat --item "Granola" --kcal100 450 --protein100 10 --fat100 20 --carbs100 55 --amount 235
-{baseDir}/scripts/macros.py eat --item "Oat drink" --unit ml --kcal100 46 --protein100 1 --fat100 1.5 --carbs100 6.7 --amount 500
-{baseDir}/scripts/macros.py eat --item "Chips" --kcal100 536 --protein100 6 --fat100 32 --carbs100 53 --amount 60 --note estimated
+{baseDir}/scripts/macros.py eat --item "Granola" --kcal100 450 --protein100 10 --fat100 20 --carbs100 55 --amount 235 --exact
+{baseDir}/scripts/macros.py eat --item "Oat drink" --unit ml --kcal100 46 --protein100 1 --fat100 1.5 --carbs100 6.7 --amount 500 --exact
+{baseDir}/scripts/macros.py eat --item "Grapes" --kcal100 69 --protein100 0.7 --fat100 0.2 --carbs100 18 --amount 552 --estimated   # no label: the rate is yours
 ```
 
-`--kcal100` is required; `--protein100/--fat100/--carbs100` default to 0. `--unit` defaults to `g` (set `ml` for liquids, etc.), and the amount and logged label then read in that unit (`235g`, `500ml`). Pass `--note estimated` when the _amount_ is a guess - the label's per-100 numbers stay exact regardless. `eat` prints the day summary; the script sends it to the user (see [Replying](#replying)).
+`--kcal100` is required; `--protein100/--fat100/--carbs100` default to 0. `--unit` defaults to `g` (set `ml` for liquids, etc.), and the amount and logged label then read in that unit (`235g`, `500ml`). `--exact`/`--estimated` describes the **rate**; when the rate is off a label but the _amount_ is a guess, `--estimated` still applies - the entry rests on a guess either way. `eat` prints the day summary; the script sends it to the user (see [Replying](#replying)).
 
 In place of `--amount` it accepts the same `--fit-*`/`--target-*` sizing as `food-eat`, so you can answer "how much of this for my remaining protein?" straight from a photo:
 
 ```bash
-{baseDir}/scripts/macros.py eat --item "Granola" --kcal100 450 --protein100 10 --fat100 20 --carbs100 55 --fit-protein --dry-run
+{baseDir}/scripts/macros.py eat --item "Granola" --kcal100 450 --protein100 10 --fat100 20 --carbs100 55 --fit-protein --exact --dry-run
 ```
 
 `eat` logs a one-off, and the script checks what you typed against the catalog so you don't have to. Three things may come of it, in order:
 
 - **The rate is already saved** - use `food-eat` next time; same numbers, no transcribing.
-- **A saved food already has that name, with different numbers** - you estimated over real label data. It names both values so you can see how far off the guess was; the entry is still logged, so switch to `food-eat` (and remove the estimate) unless it genuinely is a different food.
+- **A saved food already has that name, with different numbers** - the two disagree, and which one to keep follows which one is the guess. Guessed over a saved label: switch to `food-eat` unless it genuinely is a different food. Read off a label for a food the catalog only ever estimated: the note hands you the `food-edit ... --exact` that puts the real numbers on it.
 - **The same food has now been written out on three separate days** - the script saves it as a food itself and tells the user so. There is nothing for you to run; use `food-eat --name "..."` from then on. Ingredients weighed into a batch count toward those three days, so a staple can earn its entry without ever being eaten on its own.
 
 Switching to a saved food is the user's call, so ask before you do it. Saving is not yours at all: it happens by itself once a food has earned it, and otherwise only when the user asks (see below).
@@ -111,11 +127,12 @@ Each saved food stores its macros per 100 of a **unit** - grams by default, or `
 {baseDir}/scripts/macros.py food-eat --name skyr --servings 2
 {baseDir}/scripts/macros.py food-eat --name skyr --fit-protein        # enough to reach today's protein goal
 {baseDir}/scripts/macros.py food-eat --name skyr --target-protein 40  # enough to supply 40g protein
+{baseDir}/scripts/macros.py food-eat --name skyr --amount 400 --estimated   # the rate is the food's, the amount is a guess
 ```
 
 `--fit-kcal` and `--target-kcal` size by calories the same way. Amounts and the logged label read in the food's unit (`500ml`, `4 pieces`, `500g`). `food-eat` prints the day summary; the script sends it to the user.
 
-`food-get` looks a food up (`food-eat` resolves names itself, so it is never needed as a pre-check); `food-add` saves one and refuses without `--asked`, which says the user asked for this food to be saved, in their own words; `food-edit` corrects a saved food's numbers, unit, or name; `food-rm` deletes one. `--unit` defaults to `g`; set it for liquids/countables and the per-100 values are then per 100 of that unit.
+`food-get` looks a food up (`food-eat` resolves names itself, so it is never needed as a pre-check); `food-add` saves one and refuses without `--asked`, which says the user asked for this food to be saved, in their own words, and without `--exact`/`--estimated`, which says what its numbers rest on; `food-edit` corrects a saved food's numbers, unit, name, or basis; `food-rm` deletes one. `--unit` defaults to `g`; set it for liquids/countables and the per-100 values are then per 100 of that unit. A food the script saves from repeats keeps the basis of the uses that earned it, so produce and restaurant food can live in the catalog as the estimates they are.
 
 **An entry is only worth having if the food comes back.** A one-off needs no entry - `eat` logs it and scales it just the same - and the catalog fills itself from what actually repeats: once the same food has been written out by hand on **three separate days**, the script saves it. Writing it out means either logging it with `eat` or weighing it into a batch with `prep-ingredient-add --kcal100`, since both are the same act - a rate typed in because the catalog has no entry for it. So there are exactly two ways a food gets in, and neither of them is your judgement - the script decided it had earned it, or the user asked and you passed `--asked`. Saving on first sight is a guess about the future, and those guesses are what fill a catalog with entries nobody ever uses again.
 
@@ -123,13 +140,13 @@ Each saved food stores its macros per 100 of a **unit** - grams by default, or `
 
 **Two foods are the same food when the name, the rate and the unit all agree.** Not the rate alone: a kitchen staple is a near-pure macronutrient, so every sugar reads 400 kcal/100g and everything calorie-free reads zero, and counting by rate would make one product of salt and xanthan gum. Not the name alone either, since one name covers milk at two fat levels. The amount plays no part - it is what the rate gets scaled by, and the thing certain to differ between two uses. So write a food's name the same way each time and the repeats will find each other; a genuinely new spelling starts its own count, and `food-add --asked` is there when the user wants it saved regardless.
 
-`food-list` shows what each entry has earned (`3 days, last 09.08`, or `never used, saved 04.08`), most used first, counted in the same days the threshold uses and counting a batch ingredient as the food coming back, so anything that genuinely never came back collects at the bottom - if the list has filled up with those, offer to clear them out.
+`food-list` shows what each entry has earned (`3 days, last 09.08`, or `never used, saved 04.08`) and tags the ones whose numbers are estimates, most used first, counted in the same days the threshold uses and counting a batch ingredient as the food coming back, so anything that genuinely never came back collects at the bottom - if the list has filled up with those, offer to clear them out.
 
 ```bash
 {baseDir}/scripts/macros.py food-get skyr
-{baseDir}/scripts/macros.py food-add --name "Skyr, plain" --kcal100 64 --protein100 11 --fat100 0.1 --carbs100 4 --serving 500 --aliases "skyr,my skyr" --asked
-{baseDir}/scripts/macros.py food-add --name "Gösser Märzen" --unit ml --kcal100 42 --protein100 0.5 --fat100 0 --carbs100 3.3 --serving 500 --aliases beer --asked   # a liquid: per 100ml, 500ml default
-{baseDir}/scripts/macros.py food-edit --name skyr --kcal100 63 --serving 450   # only what you pass changes; also --unit, --rename, --aliases
+{baseDir}/scripts/macros.py food-add --name "Skyr, plain" --kcal100 64 --protein100 11 --fat100 0.1 --carbs100 4 --serving 500 --aliases "skyr,my skyr" --asked --exact
+{baseDir}/scripts/macros.py food-add --name "Gösser Märzen" --unit ml --kcal100 42 --protein100 0.5 --fat100 0 --carbs100 3.3 --serving 500 --aliases beer --asked --exact   # a liquid: per 100ml, 500ml default
+{baseDir}/scripts/macros.py food-edit --name skyr --kcal100 63 --serving 450   # only what you pass changes; also --unit, --rename, --aliases, --exact/--estimated
 {baseDir}/scripts/macros.py food-rm --name skyr
 {baseDir}/scripts/macros.py food-list                                          # what's saved, most used first, with what each has earned
 ```
@@ -149,13 +166,14 @@ A recorded weigh-in is echoed in that day's summary (`Weight 66.4 kg (goal ...)`
 ```bash
 {baseDir}/scripts/macros.py entries        # the day's entries with their index numbers
 {baseDir}/scripts/macros.py edit --last --amount 300                           # wrong portion: re-scale it
-{baseDir}/scripts/macros.py edit --last --kcal 538 --item "Ice cream (215g)"   # fix values in place; only what you pass changes
+{baseDir}/scripts/macros.py edit --last --kcal 538 --item "Ice cream"          # fix values in place; only what you pass changes
 {baseDir}/scripts/macros.py edit --index 2 --protein 30                        # correct the 2nd entry
+{baseDir}/scripts/macros.py edit --last --exact                                # it wasn't a guess after all (or --estimated)
 {baseDir}/scripts/macros.py rm --last
 {baseDir}/scripts/macros.py rm --index 2   # remove the 2nd entry (use `entries` to find the number)
 ```
 
-`edit` changes only the fields you pass and keeps the rest (time, note, untouched macros) - safer than delete-and-retype. Select with `--last` or `--index N` (from `entries`), like `rm`.
+`edit` changes only the fields you pass and keeps the rest (time, note, untouched macros) - safer than delete-and-retype. Select with `--last` or `--index N` (from `entries`), like `rm`. `--exact`/`--estimated` corrects what the entry's numbers rest on, on its own or alongside a value.
 
 `--amount` re-scales an entry from its own per-100 rate and relabels it, so a misjudged portion is one command - it works for anything logged with `eat` or `food-eat`. An entry made with `log` has no rate behind it (you supplied final macros), so correct those with explicit `--kcal`/`--protein`/`--fat`/`--carbs`.
 
@@ -167,12 +185,12 @@ A batch is built up ingredient by ingredient, and everything that leaves it is a
 {baseDir}/scripts/macros.py prep-add --name "Bolognese"                        # create an empty batch
 {baseDir}/scripts/macros.py prep-add --name "Ice cream" --size 1000            # optional total size (grams; --unit ml/pieces/...)
 {baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --food skyr --amount 400                                    # a saved food, scaled here
-{baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label Passata --kcal100 35 --protein100 1.5 --carbs100 7 --amount 700   # off the packet, scaled here
-{baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label "Olive oil" --kcal 265 --fat 30                     # only the total is known
+{baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label Passata --kcal100 35 --protein100 1.5 --carbs100 7 --amount 700 --exact   # off the packet, scaled here
+{baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label "Olive oil" --kcal 265 --fat 30 --estimated         # only the total, and it's a guess
 {baseDir}/scripts/macros.py prep-get --name bolognese                          # ingredients, total, consumption log, % (and size) left
 ```
 
-**An ingredient is named the same three ways a meal is.** `--food <name> --amount N` for anything saved (the label writes itself, and `--unit` comes from the food); `--kcal100 ... --amount N` when you have the packet in front of you; `--kcal N` only when the total is all there is. The middle one is a food written out by hand, so it counts toward earning a saved entry exactly as `eat` does: weigh the same butter into a batch on a third separate day and the script saves it, and tells the user it did. As everywhere else, the script does the scaling - never multiply a per-100 rate by an amount to fill in `--kcal`. Amounts read back in the label (`Skyr (plain) (400g)`), and an ingredient scaled from a rate can be re-weighed later with one flag (`prep-ingredient-edit --amount 500`).
+**An ingredient is named the same three ways a meal is.** `--food <name> --amount N` for anything saved (the label writes itself, `--unit` comes from the food, and so does the estimate mark); `--kcal100 ... --amount N` when you have the packet in front of you or know the rate; `--kcal N` only when the total is all there is - the last two take `--exact`/`--estimated` like `eat` and `log` do, and `--kcal` refuses an amount in the label for the same reason `log` does. The middle one is a food written out by hand, so it counts toward earning a saved entry exactly as `eat` does: weigh the same butter into a batch on a third separate day and the script saves it, and tells the user it did. As everywhere else, the script does the scaling - never multiply a per-100 rate by an amount to fill in `--kcal`. Amounts read back in the label (`Skyr (plain) (400g)`), and an ingredient scaled from a rate can be re-weighed later with one flag (`prep-ingredient-edit --amount 500`).
 
 `prep-add` makes an empty batch and refuses a name that's already **active** (so you never wipe one you're part-way through) - but a finished batch steps aside (it archives itself, below), so reusing its name for a fresh cook just works; a batch whose total you already know is just `prep-add` plus one `prep-ingredient-add`.
 
@@ -185,6 +203,7 @@ A batch is built up ingredient by ingredient, and everything that leaves it is a
 {baseDir}/scripts/macros.py prep-eat --name "ice cream" --size 250       # you ate 250g (needs a size set)
 {baseDir}/scripts/macros.py prep-eat --name bolognese --fit-protein      # enough to reach today's protein goal
 {baseDir}/scripts/macros.py prep-eat --name bolognese --target-kcal 500  # a portion worth 500 kcal
+{baseDir}/scripts/macros.py prep-eat --name bolognese --of-rest 1/2 --estimated   # "about half of what's left" - the share is a guess
 {baseDir}/scripts/macros.py prep-remove --name bolognese --of-rest 1/3   # someone else ate / spilled 1/3 of what's LEFT - NOT your intake
 {baseDir}/scripts/macros.py prep-uneat --name bolognese --last          # undo the last event (or --index N from prep-get, or --all)
 {baseDir}/scripts/macros.py prep-archive --name bolognese               # done with it - file it away (kept forever, never deleted)
@@ -218,7 +237,7 @@ Adding to a batch that's already been eaten from has two cases; the flag depends
 - **Added it to the leftovers** just now (`--later`) - none of it was in what was eaten, so all of it joins what's left and nothing is logged.
 
 ```bash
-{baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label "Olive oil" --kcal 265 --fat 30                          # forgot it - was in the whole batch
+{baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label "Olive oil" --kcal 265 --fat 30 --estimated             # forgot it - was in the whole batch
 {baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --food "grated cheese" --amount 50 --later                       # stirred into the leftovers
 ```
 
@@ -230,7 +249,7 @@ Use `prep-get` to see each ingredient's index, then correct or drop one by `--in
 
 ```bash
 {baseDir}/scripts/macros.py prep-ingredient-edit --name bolognese --last --amount 500  # re-weigh it: re-scales from its own rate and relabels
-{baseDir}/scripts/macros.py prep-ingredient-edit --name bolognese --last --kcal 1000   # fix a wrong number; only what you pass changes, also --label
+{baseDir}/scripts/macros.py prep-ingredient-edit --name bolognese --last --kcal 1000   # fix a wrong number; only what you pass changes, also --label, --exact/--estimated
 {baseDir}/scripts/macros.py prep-ingredient-rm --name bolognese --index 3              # drop a mis-added ingredient
 ```
 
@@ -244,7 +263,7 @@ Before anything's been eaten this just adjusts the batch. If some has been eaten
 
 ```bash
 {baseDir}/scripts/macros.py prep-eat --name "ice cream" --fit-protein --dry-run
-{baseDir}/scripts/macros.py log --item "second helping" --kcal 600 --protein 35 --dry-run
+{baseDir}/scripts/macros.py log --item "second helping" --kcal 600 --protein 35 --estimated --dry-run
 ```
 
 ## Repairing the ledger
@@ -259,7 +278,7 @@ After a manual JSON edit or a phase change, re-fold the balance forward:
 
 - The macro day rolls over at **04:00**, not midnight: an entry made between 00:00 and 04:00 counts toward the previous calendar date. `today`, `summary`, and the whole rolling balance use this 04:00-based day, while `now_time` still records the real wall-clock time on the entry - so at 02:00, "today" is still yesterday. Pass an explicit `--date` only to override.
 - Dates and times come from the system clock; only pass `--date`/`--time` to correct a past entry. Adjusting a day that has already passed (`log`, `edit`, `rm`, `food-eat`, or `prep-eat` with `--date`) reprints today's summary after the changed day, since a past change cascades through the rolling balance and moves today's target (both blocks are sent to the user).
-- Estimate freely for vague inputs - a described meal, or a photo with no legible label - and pass `--note estimated`; when a photo _does_ show a per-100 label, use `eat` instead so the script scales it exactly. The totals stay exact regardless.
+- Estimate freely for vague inputs - a described meal, or a photo with no legible label - and mark it with `--estimated` (see [Estimates](#estimates)); when a photo _does_ show a per-100 label, use `eat --exact` so the script scales the real numbers. The arithmetic is the script's either way, so a total is never wrong about what it was given.
 - Every macro must be non-negative and every amount positive; the script rejects impossible values, so a slip like `--kcal -5` errors out instead of silently corrupting a total.
 - Every number is stored at its own quantity's resolution, so you never pre-round anything: kcal are whole (`--kcal 257.4` is taken as 257), grams keep one decimal, and an amount reads back exactly as it was stored (`--amount 0.5` stays half a piece). That is what keeps the rolling balance exact - a fraction logged once would otherwise be folded into every later day's target.
 - For "how much to hit X" or "how would my day look", use `--fit-*`/`--target-*` and `--dry-run` - never work out the amount or the projected totals yourself.

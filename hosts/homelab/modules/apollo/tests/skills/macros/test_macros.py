@@ -44,15 +44,15 @@ def set_goal():
 def add_skyr():
     run("food-add", "--name", "Skyr, plain", "--kcal100", "64", "--protein100", "11",
         "--fat100", "0.1", "--carbs100", "4", "--serving", "500", "--aliases", "skyr,my skyr",
-        "--asked")
+        "--asked", "--exact")
 
 
 def add_bolognese():
     run("prep-add", "--name", "Bolognese")
     run("prep-ingredient-add", "--name", "bolognese", "--label", "Beef", "--kcal", "1000",
-        "--protein", "100", "--fat", "60", "--carbs", "0")
+        "--protein", "100", "--fat", "60", "--carbs", "0", "--exact")
     run("prep-ingredient-add", "--name", "bolognese", "--label", "Passata", "--kcal", "800",
-        "--protein", "20", "--fat", "30", "--carbs", "110")
+        "--protein", "20", "--fat", "30", "--carbs", "110", "--exact")
 
 
 def day_entries():
@@ -271,7 +271,7 @@ class TestFoodCatalog:
 
     def test_edit_updates_value_and_renames(self, store):
         run("food-add", "--name", "Whey", "--kcal100", "375", "--protein100", "80",
-            "--fat100", "5", "--carbs100", "8", "--serving", "30", "--asked")
+            "--fat100", "5", "--carbs100", "8", "--serving", "30", "--asked", "--exact")
         run("food-edit", "--name", "whey", "--kcal100", "380", "--rename", "Whey Isolate")
         food = macros.load(macros.FOOD_FILE, {})
         assert "whey isolate" in food
@@ -310,7 +310,7 @@ class TestFoodUnits:
     def add_beer(self):
         run("food-add", "--name", "Gösser", "--unit", "ml", "--kcal100", "42",
             "--protein100", "0.5", "--fat100", "0", "--carbs100", "3.3", "--serving", "500",
-            "--asked")
+            "--asked", "--exact")
 
     def test_add_stores_the_unit(self, store):
         self.add_beer()
@@ -366,7 +366,7 @@ class TestEat:
     def test_scales_per100_by_amount(self, store):
         set_goal()
         run("eat", "--item", "Granola", "--kcal100", "450", "--protein100", "10",
-            "--fat100", "20", "--carbs100", "55", "--amount", "200")
+            "--fat100", "20", "--carbs100", "55", "--amount", "200", "--exact")
         entry = day_entries()[-1]
         assert entry["item"] == "Granola (200g)"
         assert entry["kcal"] == 900
@@ -376,18 +376,18 @@ class TestEat:
 
     def test_unit_defaults_to_grams(self, store):
         set_goal()
-        run("eat", "--item", "Rice", "--kcal100", "130", "--amount", "150")
+        run("eat", "--item", "Rice", "--kcal100", "130", "--amount", "150", "--exact")
         assert "Rice (150g)" in day_entries()[-1]["item"]
 
     def test_ml_unit_labels_the_amount(self, store):
         set_goal()
         run("eat", "--item", "Oat drink", "--unit", "ml", "--kcal100", "46",
-            "--protein100", "1", "--amount", "500")
+            "--protein100", "1", "--amount", "500", "--exact")
         assert "Oat drink (500ml)" in day_entries()[-1]["item"]
 
     def test_other_macros_default_to_zero(self, store):
         set_goal()
-        run("eat", "--item", "Sugar", "--kcal100", "400", "--amount", "50")
+        run("eat", "--item", "Sugar", "--kcal100", "400", "--amount", "50", "--exact")
         entry = day_entries()[-1]
         assert entry["kcal"] == 200
         assert entry["protein"] == 0
@@ -396,28 +396,29 @@ class TestEat:
 
     def test_kcal100_is_required(self, store):
         with pytest.raises(SystemExit):
-            run("eat", "--item", "Mystery", "--amount", "100")
+            run("eat", "--item", "Mystery", "--amount", "100", "--exact")
 
     def test_amount_or_target_required(self, store):
         with pytest.raises(SystemExit):
-            run("eat", "--item", "Granola", "--kcal100", "450")
+            run("eat", "--item", "Granola", "--kcal100", "450", "--exact")
 
     def test_note_passthrough(self, store):
         set_goal()
-        run("eat", "--item", "Chips", "--kcal100", "536", "--amount", "60", "--note", "estimated")
-        assert day_entries()[-1]["note"] == "estimated"
+        run("eat", "--item", "Chips", "--kcal100", "536", "--amount", "60", "--note", "shared",
+            "--exact")
+        assert day_entries()[-1]["note"] == "shared"
 
     def test_dry_run_saves_nothing(self, store, capsys):
         set_goal()
         capsys.readouterr()
-        run("eat", "--item", "Granola", "--kcal100", "450", "--amount", "200", "--dry-run")
+        run("eat", "--item", "Granola", "--kcal100", "450", "--amount", "200", "--dry-run", "--exact")
         assert "preview" in capsys.readouterr().out
         assert day_entries() == []
 
     def test_fit_protein_sizes_and_logs(self, store, capsys):
         set_goal()
         capsys.readouterr()
-        run("eat", "--item", "Whey", "--kcal100", "375", "--protein100", "80", "--fit-protein")
+        run("eat", "--item", "Whey", "--kcal100", "375", "--protein100", "80", "--fit-protein", "--exact")
         assert "to reach your protein goal" in capsys.readouterr().out
         assert day_entries()[-1]["protein"] >= 149
 
@@ -498,7 +499,7 @@ class TestIngredientSources:
     def test_a_liquid_food_keeps_its_own_unit(self, store):
         set_goal()
         run("food-add", "--name", "Cream", "--unit", "ml", "--kcal100", "300", "--protein100", "2",
-            "--fat100", "30", "--carbs100", "3", "--serving", "100", "--asked")
+            "--fat100", "30", "--carbs100", "3", "--serving", "100", "--asked", "--exact")
         run("prep-add", "--name", "Sauce")
         run("prep-ingredient-add", "--name", "sauce", "--food", "cream", "--amount", "200")
         ingredient = one_named("sauce")["ingredients"][0]
@@ -509,7 +510,7 @@ class TestIngredientSources:
         set_goal()
         run("prep-add", "--name", "Bolognese")
         run("prep-ingredient-add", "--name", "bolognese", "--label", "Passata", "--kcal100", "35",
-            "--protein100", "1.5", "--carbs100", "7", "--amount", "700")
+            "--protein100", "1.5", "--carbs100", "7", "--amount", "700", "--exact")
         ingredient = one_named("bolognese")["ingredients"][0]
         assert ingredient["label"] == "Passata (700g)"
         assert ingredient["kcal"] == 245
@@ -519,7 +520,7 @@ class TestIngredientSources:
         set_goal()
         run("prep-add", "--name", "Bolognese")
         run("prep-ingredient-add", "--name", "bolognese", "--label", "Olive oil", "--kcal", "265",
-            "--fat", "30")
+            "--fat", "30", "--exact")
         ingredient = one_named("bolognese")["ingredients"][0]
         assert ingredient["label"] == "Olive oil"
         assert ingredient["kcal"] == 265
@@ -537,7 +538,7 @@ class TestIngredientSources:
     def test_a_bare_total_records_that_it_has_no_rate(self, store):
         set_goal()
         run("prep-add", "--name", "Bolognese")
-        run("prep-ingredient-add", "--name", "bolognese", "--label", "Oil", "--kcal", "265")
+        run("prep-ingredient-add", "--name", "bolognese", "--label", "Oil", "--kcal", "265", "--exact")
         assert one_named("bolognese")["ingredients"][0]["source"] == {"kind": "log"}
 
     def test_a_food_needs_an_amount(self, store):
@@ -551,7 +552,7 @@ class TestIngredientSources:
         set_goal()
         run("prep-add", "--name", "Bolognese")
         with pytest.raises(SystemExit):
-            run("prep-ingredient-add", "--name", "bolognese", "--label", "X", "--kcal100", "35")
+            run("prep-ingredient-add", "--name", "bolognese", "--label", "X", "--kcal100", "35", "--exact")
 
     def test_no_numbers_at_all_says_what_the_three_ways_are(self, store, capsys):
         set_goal()
@@ -565,7 +566,7 @@ class TestIngredientSources:
         set_goal()
         run("prep-add", "--name", "Bolognese")
         with pytest.raises(SystemExit):
-            run("prep-ingredient-add", "--name", "bolognese", "--kcal100", "35", "--amount", "700")
+            run("prep-ingredient-add", "--name", "bolognese", "--kcal100", "35", "--amount", "700", "--exact")
 
     def test_two_rate_bases_at_once_are_refused(self, store):
         set_goal()
@@ -573,7 +574,7 @@ class TestIngredientSources:
         run("prep-add", "--name", "Bolognese")
         with pytest.raises(SystemExit):
             run("prep-ingredient-add", "--name", "bolognese", "--food", "skyr", "--amount", "400",
-                "--kcal", "100")
+                "--kcal", "100", "--exact")
 
     def test_a_loosely_matched_food_is_announced(self, store, capsys):
         set_goal()
@@ -628,7 +629,7 @@ class TestIngredientReWeigh:
     def test_an_ingredient_with_no_rate_cannot_be_re_weighed(self, store):
         set_goal()
         run("prep-add", "--name", "Bolognese")
-        run("prep-ingredient-add", "--name", "bolognese", "--label", "Oil", "--kcal", "265")
+        run("prep-ingredient-add", "--name", "bolognese", "--label", "Oil", "--kcal", "265", "--exact")
         with pytest.raises(SystemExit):
             run("prep-ingredient-edit", "--name", "bolognese", "--last", "--amount", "300")
 
@@ -707,7 +708,7 @@ class TestPrep:
         add_bolognese()
         run("prep-eat", "--name", "bolognese", "--of-batch", "1/2")
         capsys.readouterr()
-        run("prep-ingredient-add", "--name", "bolognese", "--label", "Oil", "--kcal", "200")
+        run("prep-ingredient-add", "--name", "bolognese", "--label", "Oil", "--kcal", "200", "--exact")
         out = capsys.readouterr().out
         assert "forgotten" in out
         assert "logged the 100 kcal" in out
@@ -723,7 +724,7 @@ class TestPrep:
         before = len(day_entries())
         capsys.readouterr()
         run("prep-ingredient-add", "--name", "bolognese", "--label", "Cheese",
-            "--kcal", "200", "--protein", "12", "--fat", "16", "--later")
+            "--kcal", "200", "--protein", "12", "--fat", "16", "--later", "--exact")
         assert "leftovers" in capsys.readouterr().out
         batch = one_named("bolognese")
         assert macros.prep_total(batch)["kcal"] == 2000
@@ -733,7 +734,7 @@ class TestPrep:
     def test_add_before_eating_neither_bumps_nor_logs(self, store):
         set_goal()
         run("prep-add", "--name", "Stew")
-        run("prep-ingredient-add", "--name", "stew", "--label", "A", "--kcal", "500", "--protein", "40")
+        run("prep-ingredient-add", "--name", "stew", "--label", "A", "--kcal", "500", "--protein", "40", "--exact")
         batch = one_named("stew")
         assert batch["consumption"] == []
         assert macros.prep_total(batch)["kcal"] == 500
@@ -802,8 +803,8 @@ class TestPrep:
     def test_ingredient_rm_after_eating_unlogs_share(self, store, capsys):
         set_goal()
         run("prep-add", "--name", "Batch")
-        run("prep-ingredient-add", "--name", "batch", "--label", "Base", "--kcal", "1800", "--protein", "120")
-        run("prep-ingredient-add", "--name", "batch", "--label", "Cheese", "--kcal", "300")
+        run("prep-ingredient-add", "--name", "batch", "--label", "Base", "--kcal", "1800", "--protein", "120", "--exact")
+        run("prep-ingredient-add", "--name", "batch", "--label", "Cheese", "--kcal", "300", "--exact")
         run("prep-eat", "--name", "batch", "--of-batch", "1/2")
         capsys.readouterr()
         run("prep-ingredient-rm", "--name", "batch", "--last")
@@ -827,7 +828,7 @@ class TestPrep:
     def test_ingredient_edit_macros_after_eating_corrects(self, store, capsys):
         set_goal()
         run("prep-add", "--name", "Batch")
-        run("prep-ingredient-add", "--name", "batch", "--label", "Beef", "--kcal", "1000", "--protein", "100")
+        run("prep-ingredient-add", "--name", "batch", "--label", "Beef", "--kcal", "1000", "--protein", "100", "--exact")
         run("prep-eat", "--name", "batch", "--of-batch", "1/2")
         capsys.readouterr()
         run("prep-ingredient-edit", "--name", "batch", "--last", "--kcal", "1200")
@@ -925,7 +926,7 @@ class TestPrepUneat:
         set_goal()
         add_bolognese()
         run("prep-add", "--name", "Curry")
-        run("prep-ingredient-add", "--name", "curry", "--label", "All", "--kcal", "1000", "--protein", "50")
+        run("prep-ingredient-add", "--name", "curry", "--label", "All", "--kcal", "1000", "--protein", "50", "--exact")
         run("prep-remove", "--name", "bolognese", "--of-batch", "1/5")  # mistake
         run("prep-uneat", "--name", "bolognese", "--last")               # undo it
         run("prep-remove", "--name", "curry", "--of-batch", "1/5")        # apply to the right one
@@ -953,7 +954,7 @@ class TestPrepSize:
     def add_ice_cream(self, kcal="3000", protein="150"):
         run("prep-add", "--name", "Ice cream", "--size", "1000")
         run("prep-ingredient-add", "--name", "ice cream", "--label", "Base",
-            "--kcal", kcal, "--protein", protein)
+            "--kcal", kcal, "--protein", protein, "--exact")
 
     def test_ml_and_pieces_formatting(self):
         assert macros.fmt_amount(500, "ml") == "500ml"
@@ -1008,7 +1009,7 @@ class TestPrepSize:
     def test_prep_line_shows_size(self, store, capsys):
         set_goal()
         run("prep-add", "--name", "Soup", "--size", "900", "--unit", "ml")
-        run("prep-ingredient-add", "--name", "soup", "--label", "All", "--kcal", "900", "--protein", "30")
+        run("prep-ingredient-add", "--name", "soup", "--label", "All", "--kcal", "900", "--protein", "30", "--exact")
         capsys.readouterr()
         run("prep-list")
         assert "900ml" in capsys.readouterr().out
@@ -1226,7 +1227,7 @@ class TestFoodListUsage:
         set_goal()
         add_skyr()
         run("food-add", "--name", "One-off", "--kcal100", "300", "--protein100", "1",
-            "--fat100", "1", "--carbs100", "1", "--serving", "100", "--asked")
+            "--fat100", "1", "--carbs100", "1", "--serving", "100", "--asked", "--exact")
         run("food-eat", "--name", "skyr", "--amount", "400")
         capsys.readouterr()
         run("food-list")
@@ -1260,7 +1261,7 @@ class TestFoodListUsage:
         set_goal()
         add_skyr()
         run("eat", "--item", "Skyr", "--kcal100", "64", "--protein100", "11", "--fat100", "0.1",
-            "--carbs100", "4", "--amount", "200")
+            "--carbs100", "4", "--amount", "200", "--exact")
         capsys.readouterr()
         run("food-list")
         assert "1 day, last" in capsys.readouterr().out
@@ -1279,7 +1280,7 @@ class TestFoodListUsage:
         set_goal()
         add_skyr()
         run("eat", "--item", "Granola", "--kcal100", "450", "--protein100", "10",
-            "--fat100", "20", "--carbs100", "55", "--amount", "100")
+            "--fat100", "20", "--carbs100", "55", "--amount", "100", "--exact")
         capsys.readouterr()
         run("food-list")
         assert "never used" in capsys.readouterr().out
@@ -1296,7 +1297,7 @@ class TestFoodAddDoor:
 
     def add(self, *extra):
         run("food-add", "--name", "IKEA Köttbullar", "--kcal100", "207", "--protein100", "13",
-            "--fat100", "12", "--carbs100", "9", "--serving", "15", *extra)
+            "--fat100", "12", "--carbs100", "9", "--serving", "15", *extra, "--exact")
 
     def test_it_refuses_to_save_without_the_users_say_so(self, store):
         set_goal()
@@ -1403,37 +1404,37 @@ class TestPrepRestShare:
 class TestEdit:
     def test_edit_single_field_preserves_rest_and_ledger(self, store):
         set_goal()
-        run("log", "--item", "Ice cream (415g)", "--kcal", "1038", "--protein", "16")
-        run("edit", "--last", "--item", "Ice cream (215g)", "--kcal", "538")
+        run("log", "--item", "Ice cream, large", "--kcal", "1038", "--protein", "16", "--exact")
+        run("edit", "--last", "--item", "Ice cream, small", "--kcal", "538")
         entry = day_entries()[-1]
-        assert entry["item"] == "Ice cream (215g)"
+        assert entry["item"] == "Ice cream, small"
         assert entry["kcal"] == 538
         assert entry["protein"] == 16
         assert sum(e["kcal"] for e in day_entries()) == 538
 
     def test_edit_by_index(self, store):
         set_goal()
-        run("log", "--item", "A", "--kcal", "100")
-        run("log", "--item", "B", "--kcal", "200")
+        run("log", "--item", "A", "--kcal", "100", "--exact")
+        run("log", "--item", "B", "--kcal", "200", "--exact")
         run("edit", "--index", "1", "--kcal", "150")
         assert day_entries()[0]["kcal"] == 150
 
     def test_edit_requires_a_field(self, store):
         set_goal()
-        run("log", "--item", "A", "--kcal", "100")
+        run("log", "--item", "A", "--kcal", "100", "--exact")
         with pytest.raises(SystemExit):
             run("edit", "--last")
 
     def test_edit_out_of_range(self, store):
         set_goal()
-        run("log", "--item", "A", "--kcal", "100")
+        run("log", "--item", "A", "--kcal", "100", "--exact")
         with pytest.raises(SystemExit):
             run("edit", "--index", "5", "--kcal", "1")
 
     def test_edit_blocks_a_prep_entry(self, store):
         set_goal()
         run("prep-add", "--name", "B")
-        run("prep-ingredient-add", "--name", "b", "--label", "x", "--kcal", "1000")
+        run("prep-ingredient-add", "--name", "b", "--label", "x", "--kcal", "1000", "--exact")
         run("prep-eat", "--name", "b", "--of-batch", "1/2")
         with pytest.raises(SystemExit):
             run("edit", "--last", "--kcal", "400")
@@ -1442,12 +1443,12 @@ class TestEdit:
 class TestValidation:
     def test_rejects_negative_kcal(self, store):
         with pytest.raises(SystemExit):
-            run("log", "--item", "typo", "--kcal", "-50")
+            run("log", "--item", "typo", "--kcal", "-50", "--exact")
 
     def test_allows_zero_kcal(self, store, capsys):
         set_goal()
         capsys.readouterr()
-        run("log", "--item", "Black coffee", "--kcal", "0")
+        run("log", "--item", "Black coffee", "--kcal", "0", "--exact")
         assert "0 kcal" in capsys.readouterr().out
 
 
@@ -1461,7 +1462,7 @@ class TestWeight:
     def test_shown_alongside_entries(self, store, capsys):
         set_goal()
         run("weight", "--kg", "66.4")
-        run("log", "--item", "A", "--kcal", "500", "--protein", "30")
+        run("log", "--item", "A", "--kcal", "500", "--protein", "30", "--exact")
         capsys.readouterr()
         run("show")
         assert "Weight 66.4 kg" in capsys.readouterr().out
@@ -1483,9 +1484,9 @@ class TestWeight:
 class TestSummary:
     def test_averages_completed_days_and_shows_today_apart(self, store, capsys):
         set_goal()
-        run("log", "--item", "A", "--kcal", "2000", "--protein", "150", "--date", days_ago(2))
-        run("log", "--item", "B", "--kcal", "3000", "--protein", "100", "--date", days_ago(1))
-        run("log", "--item", "C", "--kcal", "479", "--protein", "30")
+        run("log", "--item", "A", "--kcal", "2000", "--protein", "150", "--date", days_ago(2), "--exact")
+        run("log", "--item", "B", "--kcal", "3000", "--protein", "100", "--date", days_ago(1), "--exact")
+        run("log", "--item", "C", "--kcal", "479", "--protein", "30", "--exact")
         capsys.readouterr()
         run("summary", "--days", "3")
         out = capsys.readouterr().out
@@ -1495,8 +1496,8 @@ class TestSummary:
 
     def test_spread_and_protein_goal_hits(self, store, capsys):
         set_goal()
-        run("log", "--item", "A", "--kcal", "2000", "--protein", "150", "--date", days_ago(2))
-        run("log", "--item", "B", "--kcal", "3000", "--protein", "100", "--date", days_ago(1))
+        run("log", "--item", "A", "--kcal", "2000", "--protein", "150", "--date", days_ago(2), "--exact")
+        run("log", "--item", "B", "--kcal", "3000", "--protein", "100", "--date", days_ago(1), "--exact")
         capsys.readouterr()
         run("summary", "--days", "3")
         out = capsys.readouterr().out
@@ -1511,7 +1512,7 @@ class TestSummary:
 
     def test_only_today_logged_has_no_average(self, store, capsys):
         set_goal()
-        run("log", "--item", "A", "--kcal", "479", "--protein", "30")
+        run("log", "--item", "A", "--kcal", "479", "--protein", "30", "--exact")
         capsys.readouterr()
         run("summary", "--days", "1")
         out = capsys.readouterr().out
@@ -1520,8 +1521,8 @@ class TestSummary:
 
     def test_explicit_from_to_range(self, store, capsys):
         set_goal()
-        run("log", "--item", "A", "--kcal", "2000", "--protein", "150", "--date", "2026-06-10")
-        run("log", "--item", "B", "--kcal", "2400", "--protein", "150", "--date", "2026-06-11")
+        run("log", "--item", "A", "--kcal", "2000", "--protein", "150", "--date", "2026-06-10", "--exact")
+        run("log", "--item", "B", "--kcal", "2400", "--protein", "150", "--date", "2026-06-11", "--exact")
         capsys.readouterr()
         run("summary", "--from", "2026-06-01", "--to", "2026-06-30")
         out = capsys.readouterr().out
@@ -1530,8 +1531,8 @@ class TestSummary:
 
     def test_weight_trend_and_average(self, store, capsys):
         set_goal()
-        run("log", "--item", "A", "--kcal", "2000", "--protein", "150", "--date", days_ago(2))
-        run("log", "--item", "B", "--kcal", "2000", "--protein", "150", "--date", days_ago(1))
+        run("log", "--item", "A", "--kcal", "2000", "--protein", "150", "--date", days_ago(2), "--exact")
+        run("log", "--item", "B", "--kcal", "2000", "--protein", "150", "--date", days_ago(1), "--exact")
         run("weight", "--kg", "67.2", "--date", days_ago(2))
         run("weight", "--kg", "66.4", "--date", days_ago(1))
         capsys.readouterr()
@@ -1540,7 +1541,7 @@ class TestSummary:
 
     def test_single_weigh_in_shows_the_value(self, store, capsys):
         set_goal()
-        run("log", "--item", "A", "--kcal", "2000", "--protein", "150", "--date", days_ago(1))
+        run("log", "--item", "A", "--kcal", "2000", "--protein", "150", "--date", days_ago(1), "--exact")
         run("weight", "--kg", "66.4", "--date", days_ago(1))
         capsys.readouterr()
         run("summary", "--days", "3")
@@ -1558,7 +1559,7 @@ class TestSummary:
 
     def test_no_weigh_in_no_weight_line(self, store, capsys):
         set_goal()
-        run("log", "--item", "A", "--kcal", "2000", "--protein", "150", "--date", days_ago(1))
+        run("log", "--item", "A", "--kcal", "2000", "--protein", "150", "--date", days_ago(1), "--exact")
         capsys.readouterr()
         run("summary", "--days", "3")
         assert "Weight" not in capsys.readouterr().out
@@ -1567,23 +1568,23 @@ class TestSummary:
 class TestPastDayCascade:
     def log_chain(self):
         # three completed days at goal, then a light today
-        run("log", "--item", "A", "--kcal", "2100", "--protein", "150", "--date", days_ago(3))
-        run("log", "--item", "B", "--kcal", "2100", "--protein", "150", "--date", days_ago(2))
-        run("log", "--item", "C", "--kcal", "2100", "--protein", "150", "--date", days_ago(1))
-        run("log", "--item", "D", "--kcal", "500", "--protein", "40")
+        run("log", "--item", "A", "--kcal", "2100", "--protein", "150", "--date", days_ago(3), "--exact")
+        run("log", "--item", "B", "--kcal", "2100", "--protein", "150", "--date", days_ago(2), "--exact")
+        run("log", "--item", "C", "--kcal", "2100", "--protein", "150", "--date", days_ago(1), "--exact")
+        run("log", "--item", "D", "--kcal", "500", "--protein", "40", "--exact")
 
     def test_editing_an_earlier_day_cascades_to_todays_stored_target(self, store):
         set_goal()
         self.log_chain()
         # a 3000 kcal surplus three days back must reach today with no explicit recompute
-        run("log", "--item", "BIG", "--kcal", "3000", "--date", days_ago(3))
+        run("log", "--item", "BIG", "--kcal", "3000", "--date", days_ago(3), "--exact")
         assert macros.load(macros.day_path(macros.today()), {})["target"] == 1900
 
     def test_past_day_log_also_prints_today(self, store, capsys):
         set_goal()
         self.log_chain()
         capsys.readouterr()
-        run("log", "--item", "BIG", "--kcal", "3000", "--date", days_ago(3))
+        run("log", "--item", "BIG", "--kcal", "3000", "--date", days_ago(3), "--exact")
         out = capsys.readouterr().out
         assert macros.dm(days_ago(3)) in out
         assert "Today (" in out
@@ -1606,7 +1607,7 @@ class TestPastDayCascade:
         set_goal()
         self.log_chain()
         capsys.readouterr()
-        run("log", "--item", "E", "--kcal", "300", "--protein", "20")
+        run("log", "--item", "E", "--kcal", "300", "--protein", "20", "--exact")
         assert capsys.readouterr().out.count("Today (") == 1
 
 
@@ -1617,13 +1618,13 @@ class TestWholeKcal:
 
     def test_a_handed_over_figure_is_stored_whole(self, store):
         set_goal()
-        run("log", "--item", "Egg (165g)", "--kcal", "257.4", "--protein", "21")
+        run("log", "--item", "Egg", "--kcal", "257.4", "--protein", "21", "--exact")
         assert day_entries()[-1]["kcal"] == 257
 
     def test_the_ledger_it_folds_into_stays_whole(self, store):
         set_goal()
         for ago in (2, 1, 0):
-            run("log", "--item", "Egg", "--kcal", "257.4", "--date", days_ago(ago))
+            run("log", "--item", "Egg", "--kcal", "257.4", "--date", days_ago(ago), "--exact")
         for path in sorted(macros.DAYS_DIR.glob("*.json")):
             day = macros.load(path, {})
             assert day["cumulative"] == int(day["cumulative"])
@@ -1631,8 +1632,8 @@ class TestWholeKcal:
 
     def test_the_day_it_prints_holds_no_fractional_kcal(self, store, capsys):
         set_goal()
-        run("log", "--item", "Egg", "--kcal", "257.4", "--date", days_ago(1))
-        run("log", "--item", "Toast", "--kcal", "180.6")
+        run("log", "--item", "Egg", "--kcal", "257.4", "--date", days_ago(1), "--exact")
+        run("log", "--item", "Toast", "--kcal", "180.6", "--exact")
         capsys.readouterr()
         run("show")
         out = capsys.readouterr().out
@@ -1671,7 +1672,7 @@ class TestAmounts:
     def test_half_a_portion_stays_half_a_portion(self, store):
         set_goal()
         run("eat", "--item", "Egg", "--unit", "pieces", "--kcal100", "7800",
-            "--protein100", "630", "--amount", "0.5")
+            "--protein100", "630", "--amount", "0.5", "--exact")
         entry = day_entries()[-1]
         assert entry["item"] == "Egg (0.5 pieces)"
         assert entry["kcal"] == 39
@@ -1680,13 +1681,13 @@ class TestAmounts:
         set_goal()
         run("food-add", "--name", "Egg", "--unit", "pieces", "--kcal100", "7800",
             "--protein100", "630", "--fat100", "1100", "--carbs100", "60", "--serving", "2",
-            "--asked")
+            "--asked", "--exact")
         run("food-eat", "--name", "egg", "--amount", "0.5")
         assert day_entries()[-1]["item"] == "Egg (0.5 pieces)"
 
     def test_a_weighed_amount_reads_back_as_it_was_stored(self, store):
         set_goal()
-        run("eat", "--item", "Rice", "--kcal100", "130", "--amount", "234.6")
+        run("eat", "--item", "Rice", "--kcal100", "130", "--amount", "234.6", "--exact")
         entry = day_entries()[-1]
         assert entry["item"] == "Rice (235g)"
         assert entry["source"]["amount"] == 235
@@ -1697,7 +1698,7 @@ class TestAmounts:
         set_goal()
         run("prep-add", "--name", "Sauce")
         run("prep-ingredient-add", "--name", "sauce", "--label", "Passata",
-            "--kcal100", "35", "--amount", "234.6")
+            "--kcal100", "35", "--amount", "234.6", "--exact")
         ingredient = one_named("sauce")["ingredients"][0]
         assert ingredient["label"] == "Passata (235g)"
         assert ingredient["source"]["amount"] == 235
@@ -1706,7 +1707,7 @@ class TestAmounts:
         set_goal()
         capsys.readouterr()
         run("eat", "--item", "Whey", "--kcal100", "375", "--protein100", "80",
-            "--fit-protein", "--dry-run")
+            "--fit-protein", "--dry-run", "--exact")
         assert "188g to reach your protein goal" in capsys.readouterr().out
 
 
@@ -1812,7 +1813,7 @@ class TestAudience:
     def test_a_preview_reaches_the_user_too(self, store, monkeypatch):
         set_goal()
         sent = self.deliver_spy(monkeypatch)
-        self.invoke(monkeypatch, "log", "--item", "Second helping", "--kcal", "600", "--dry-run")
+        self.invoke(monkeypatch, "log", "--item", "Second helping", "--kcal", "600", "--dry-run", "--exact")
         assert len(sent) == 1
         assert "Second helping" in sent[0]
 
@@ -1845,7 +1846,7 @@ class TestAudience:
         sent = self.deliver_spy(monkeypatch)
         self.invoke(monkeypatch, "food-add", "--name", "Skyr, plain", "--kcal100", "64",
                     "--protein100", "11", "--fat100", "0.1", "--carbs100", "4",
-                    "--serving", "500", "--asked")
+                    "--serving", "500", "--asked", "--exact")
         assert len(sent) == 1
         assert 'Saved "Skyr, plain"' in sent[0]
 
@@ -1855,7 +1856,7 @@ class TestAudience:
         for ago in reversed(range(macros.DAYS_TO_SAVE)):
             self.invoke(monkeypatch, "eat", "--item", "Kinder", "--kcal100", "579",
                         "--protein100", "8.5", "--fat100", "35", "--carbs100", "55",
-                        "--amount", "100", "--date", days_ago(ago))
+                        "--amount", "100", "--date", days_ago(ago), "--exact")
         assert len(sent) == macros.DAYS_TO_SAVE
         assert 'Saved "Kinder"' in sent[-1]
 
@@ -1863,13 +1864,13 @@ class TestAudience:
 def macros_args(name):
     """The smallest valid argv for a command, so the parser can be inspected."""
     required = {
-        "log": ["--item", "x", "--kcal", "1"],
-        "eat": ["--item", "x", "--kcal100", "1", "--amount", "1"],
+        "log": ["--item", "x", "--kcal", "1", "--exact"],
+        "eat": ["--item", "x", "--kcal100", "1", "--amount", "1", "--exact"],
         "weight": ["--kg", "60"],
         "edit": ["--last", "--kcal", "1"],
         "food-get": ["x"],
         "food-add": ["--name", "x", "--kcal100", "1", "--protein100", "1", "--fat100", "1",
-                     "--carbs100", "1", "--serving", "1", "--asked"],
+                     "--carbs100", "1", "--serving", "1", "--asked", "--exact"],
         "food-eat": ["--name", "x"],
         "food-edit": ["--name", "x"],
         "food-rm": ["--name", "x"],
@@ -1883,7 +1884,7 @@ class TestProvenance:
     def test_eat_records_the_rate_it_scaled_from(self, store):
         set_goal()
         run("eat", "--item", "Granola", "--kcal100", "450", "--protein100", "10",
-            "--fat100", "20", "--carbs100", "55", "--amount", "235")
+            "--fat100", "20", "--carbs100", "55", "--amount", "235", "--exact")
         assert day_entries()[-1]["source"] == {
             "kind": "eat", "name": "Granola", "amount": 235, "unit": "g",
             "per100": {"kcal": 450, "protein": 10, "fat": 20, "carbs": 55},
@@ -1907,7 +1908,7 @@ class TestProvenance:
 
     def test_log_records_that_it_has_no_rate(self, store):
         set_goal()
-        run("log", "--item", "Burger", "--kcal", "900")
+        run("log", "--item", "Burger", "--kcal", "900", "--exact")
         assert day_entries()[-1]["source"] == {"kind": "log"}
 
 
@@ -1915,7 +1916,7 @@ class TestReScale:
     def test_amount_rescales_and_relabels(self, store):
         set_goal()
         run("eat", "--item", "Granola", "--kcal100", "450", "--protein100", "10",
-            "--fat100", "20", "--carbs100", "55", "--amount", "200")
+            "--fat100", "20", "--carbs100", "55", "--amount", "200", "--exact")
         run("edit", "--last", "--amount", "300")
         entry = day_entries()[-1]
         assert entry["item"] == "Granola (300g)"
@@ -1925,19 +1926,31 @@ class TestReScale:
 
     def test_rescaling_keeps_the_unit(self, store):
         set_goal()
-        run("eat", "--item", "Oat drink", "--unit", "ml", "--kcal100", "46", "--amount", "250")
+        run("eat", "--item", "Oat drink", "--unit", "ml", "--kcal100", "46", "--amount", "250", "--exact")
         run("edit", "--last", "--amount", "500")
         assert day_entries()[-1]["item"] == "Oat drink (500ml)"
 
+    def test_a_portion_smaller_than_one_survives_the_rescale(self, store):
+        # An amount arrives at its own resolution, so re-scaling to half a piece is a correction like
+        # any other - not a rounding down to nothing.
+        set_goal()
+        run("eat", "--item", "Egg", "--unit", "pieces", "--kcal100", "7800", "--protein100", "630",
+            "--amount", "2", "--exact")
+        run("edit", "--last", "--amount", "0.5")
+        entry = day_entries()[-1]
+        assert entry["item"] == "Egg (0.5 pieces)"
+        assert entry["kcal"] == 39
+        assert entry["source"]["amount"] == 0.5
+
     def test_an_explicit_macro_wins_over_the_rescale(self, store):
         set_goal()
-        run("eat", "--item", "Granola", "--kcal100", "450", "--amount", "200")
+        run("eat", "--item", "Granola", "--kcal100", "450", "--amount", "200", "--exact")
         run("edit", "--last", "--amount", "300", "--kcal", "1000")
         assert day_entries()[-1]["kcal"] == 1000
 
     def test_an_entry_without_a_rate_cannot_be_rescaled(self, store):
         set_goal()
-        run("log", "--item", "Burger", "--kcal", "900")
+        run("log", "--item", "Burger", "--kcal", "900", "--exact")
         with pytest.raises(SystemExit):
             run("edit", "--last", "--amount", "300")
 
@@ -1950,7 +1963,7 @@ class TestSavingWhatRepeats:
     KINDER = ["--kcal100", "579", "--protein100", "8.5", "--fat100", "35", "--carbs100", "55"]
 
     def eat(self, item, *extra, ago=0):
-        run("eat", "--item", item, *self.KINDER, "--amount", "100", "--date", days_ago(ago), *extra)
+        run("eat", "--item", item, *self.KINDER, "--amount", "100", "--date", days_ago(ago), *extra, "--exact")
 
     def eat_on(self, *agos, item="Kinder"):
         """One use on each of the given days back, since separate days are what earning an entry takes."""
@@ -1994,7 +2007,7 @@ class TestSavingWhatRepeats:
         set_goal()
         for ago in (2, 1, 0):
             run("eat", "--item", "Oat drink", "--unit", "ml", "--kcal100", "46",
-                "--protein100", "1", "--amount", "250", "--date", days_ago(ago))
+                "--protein100", "1", "--amount", "250", "--date", days_ago(ago), "--exact")
         saved = self.foods()["oat drink"]
         assert saved["unit"] == "ml"
         assert saved["serving"] == 250
@@ -2025,7 +2038,7 @@ class TestSavingWhatRepeats:
         # product of salt and xanthan gum, and save it under whichever name came third.
         set_goal()
         for ago, name in ((2, "Salt"), (1, "Xanthan gum"), (0, "Sweetener")):
-            run("eat", "--item", name, "--kcal100", "0", "--amount", "5", "--date", days_ago(ago))
+            run("eat", "--item", name, "--kcal100", "0", "--amount", "5", "--date", days_ago(ago), "--exact")
         assert self.foods() == {}
 
     def test_the_same_name_at_another_rate_is_another_food(self, store):
@@ -2033,14 +2046,14 @@ class TestSavingWhatRepeats:
         set_goal()
         for ago, kcal, protein in ((2, "64", "3.2"), (1, "42", "3.5"), (0, "42", "3.5")):
             run("eat", "--item", "Milk", "--kcal100", kcal, "--protein100", protein,
-                "--amount", "200", "--date", days_ago(ago))
+                "--amount", "200", "--date", days_ago(ago), "--exact")
         assert self.foods() == {}
 
     def test_punctuation_and_case_are_not_part_of_the_name(self, store):
         set_goal()
         for ago, name in ((2, "Skyr, plain"), (1, "skyr plain"), (0, "SKYR  Plain")):
             run("eat", "--item", name, "--kcal100", "64", "--protein100", "11", "--amount", "500",
-                "--date", days_ago(ago))
+                "--date", days_ago(ago), "--exact")
         assert len(self.foods()) == 1
 
     def test_it_is_saved_once_and_not_again(self, store, capsys):
@@ -2056,13 +2069,13 @@ class TestSavingWhatRepeats:
         set_goal()
         self.eat_on(2, 1)
         run("eat", "--item", "Granola", "--kcal100", "450", "--protein100", "10",
-            "--fat100", "20", "--carbs100", "55", "--amount", "100")
+            "--fat100", "20", "--carbs100", "55", "--amount", "100", "--exact")
         assert self.foods() == {}
 
     def test_an_already_saved_rate_is_pointed_at_its_food_instead(self, store):
         set_goal()
         run("food-add", "--name", "Kinder Happy Hippo", "--kcal100", "579", "--protein100", "8.5",
-            "--fat100", "35", "--carbs100", "55", "--serving", "100", "--asked")
+            "--fat100", "35", "--carbs100", "55", "--serving", "100", "--asked", "--exact")
         self.eat("Kinder")
         notes = self.notes()
         assert '"Kinder Happy Hippo" is already saved' in notes
@@ -2131,10 +2144,10 @@ class TestPrepIngredientsCount:
                     b["created"] = days_ago(ago)
             macros.save(macros.PREP_FILE, prep)
         run("prep-ingredient-add", "--name", batch, "--label", label, *(rate or self.BUTTER),
-            "--amount", amount)
+            "--amount", amount, "--exact")
 
     def eaten(self, amount="20", label="Butter", ago=0):
-        run("eat", "--item", label, *self.BUTTER, "--amount", amount, "--date", days_ago(ago))
+        run("eat", "--item", label, *self.BUTTER, "--amount", amount, "--date", days_ago(ago), "--exact")
 
     def foods(self):
         return macros.load(macros.FOOD_FILE, {})
@@ -2209,7 +2222,7 @@ class TestPrepIngredientsCount:
         set_goal()
         for ago, batch in ((2, "Dough"), (1, "Cookies"), (0, "Brownies")):
             run("prep-add", "--name", batch)
-            run("prep-ingredient-add", "--name", batch, "--label", "Butter", "--kcal", "825")
+            run("prep-ingredient-add", "--name", batch, "--label", "Butter", "--kcal", "825", "--exact")
         assert self.foods() == {}
 
     def test_a_batch_outside_the_window_no_longer_counts(self, store):
@@ -2252,10 +2265,10 @@ class TestGuessedOverSavedFood:
 
     def save_sriracha(self):
         run("food-add", "--name", "Sriracha", "--kcal100", "137", "--protein100", "1.9",
-            "--fat100", "0.9", "--carbs100", "28", "--serving", "30", "--asked")
+            "--fat100", "0.9", "--carbs100", "28", "--serving", "30", "--asked", "--exact")
 
     def guess(self, kcal="93", item="Sriracha"):
-        run("eat", "--item", item, "--kcal100", kcal, "--amount", "10")
+        run("eat", "--item", item, "--kcal100", kcal, "--amount", "10", "--exact")
 
     def notes(self):
         return "\n".join(macros.NOTES)
@@ -2286,7 +2299,7 @@ class TestGuessedOverSavedFood:
         set_goal()
         self.save_sriracha()
         run("eat", "--item", "Sriracha", "--kcal100", "137", "--protein100", "1.9",
-            "--fat100", "0.9", "--carbs100", "28", "--amount", "10")
+            "--fat100", "0.9", "--carbs100", "28", "--amount", "10", "--exact")
         notes = self.notes()
         assert '"Sriracha" is already saved' in notes
         assert "already exists at" not in notes
@@ -2317,12 +2330,481 @@ class TestGuessedOverSavedFood:
         for ago in reversed(range(macros.DAYS_TO_SAVE)):
             macros.NOTES.clear()
             run("eat", "--item", "Sriracha", "--kcal100", "93", "--amount", "10",
-                "--date", days_ago(ago))
+                "--date", days_ago(ago), "--exact")
         assert macros.load(macros.FOOD_FILE, {})["sriracha"]["per100"]["kcal"] == 137
         assert "already exists at" in self.notes()
 
     def test_a_preview_never_nags(self, store):
         set_goal()
         self.save_sriracha()
-        run("eat", "--item", "Sriracha", "--kcal100", "93", "--amount", "10", "--dry-run")
+        run("eat", "--item", "Sriracha", "--kcal100", "93", "--amount", "10", "--dry-run", "--exact")
         assert self.notes() == ""
+
+
+class TestDeclaringWhereNumbersCameFrom:
+    """A rate read off a label and one recalled from memory arrive as the same four numbers, so the
+    store cannot tell them apart and never guesses: every command that takes numbers by hand says
+    which they are, or refuses to write them."""
+
+    def test_a_logged_total_says_which_it_is(self, store, capsys):
+        set_goal()
+        with pytest.raises(SystemExit):
+            run("log", "--item", "Kebap", "--kcal", "370", "--protein", "19")
+        err = capsys.readouterr().err
+        assert "--exact" in err and "--estimated" in err
+        assert day_entries() == []
+
+    def test_a_rate_off_a_label_says_it_too(self, store):
+        set_goal()
+        with pytest.raises(SystemExit):
+            run("eat", "--item", "Granola", "--kcal100", "450", "--amount", "200")
+
+    def test_a_saved_food_says_it_as_well(self, store):
+        set_goal()
+        with pytest.raises(SystemExit):
+            run("food-add", "--name", "Beer", "--kcal100", "42", "--protein100", "0.4",
+                "--fat100", "0", "--carbs100", "3.5", "--serving", "500", "--asked")
+        assert macros.load(macros.FOOD_FILE, {}) == {}
+
+    def test_an_ingredient_weighed_off_a_packet_says_it(self, store):
+        set_goal()
+        run("prep-add", "--name", "Bolognese")
+        with pytest.raises(SystemExit):
+            run("prep-ingredient-add", "--name", "bolognese", "--label", "Passata",
+                "--kcal100", "35", "--amount", "700")
+
+    def test_an_ingredient_given_as_a_total_says_it(self, store):
+        set_goal()
+        run("prep-add", "--name", "Bolognese")
+        with pytest.raises(SystemExit):
+            run("prep-ingredient-add", "--name", "bolognese", "--label", "Oil", "--kcal", "265")
+
+    def test_an_ingredient_taken_from_a_saved_food_needs_no_declaration(self, store):
+        # The food already carries it, and a weighed-out portion of it is no more of a guess.
+        set_goal()
+        add_skyr()
+        run("prep-add", "--name", "Bolognese")
+        run("prep-ingredient-add", "--name", "bolognese", "--food", "skyr", "--amount", "400")
+        assert one_named("bolognese")["ingredients"][0]["estimated"] is False
+
+    def test_the_two_cannot_be_claimed_at_once(self, store):
+        set_goal()
+        with pytest.raises(SystemExit):
+            run("log", "--item", "Kebap", "--kcal", "370", "--exact", "--estimated")
+
+    def test_a_guess_is_stored_as_one(self, store):
+        set_goal()
+        run("log", "--item", "Kebap", "--kcal", "370", "--protein", "19", "--estimated")
+        assert day_entries()[-1]["estimated"] is True
+
+    def test_a_read_figure_is_stored_as_one(self, store):
+        set_goal()
+        run("eat", "--item", "Granola", "--kcal100", "450", "--amount", "200", "--exact")
+        assert day_entries()[-1]["estimated"] is False
+
+    def test_a_saved_food_keeps_what_its_numbers_rest_on(self, store):
+        set_goal()
+        run("food-add", "--name", "Beer", "--unit", "ml", "--kcal100", "42", "--protein100", "0.4",
+            "--fat100", "0", "--carbs100", "3.5", "--serving", "500", "--asked", "--estimated")
+        assert macros.load(macros.FOOD_FILE, {})["beer"]["estimated"] is True
+
+    def test_an_ingredient_keeps_it_too(self, store):
+        set_goal()
+        run("prep-add", "--name", "Bolognese")
+        run("prep-ingredient-add", "--name", "bolognese", "--label", "Oil", "--kcal", "265",
+            "--estimated")
+        assert one_named("bolognese")["ingredients"][0]["estimated"] is True
+
+
+class TestAmountsBelongToTheScript:
+    """An amount beside a final total is a rate that was multiplied in-model - the one thing the
+    script exists to do instead. Refused at the door, because afterwards nothing tells a scaled
+    total from a transcribed one: the entry cannot be re-weighed and the arithmetic is gone."""
+
+    def test_a_weight_in_the_item_sends_it_to_eat(self, store, capsys):
+        set_goal()
+        with pytest.raises(SystemExit):
+            run("log", "--item", "Grapes 552g", "--kcal", "381", "--estimated")
+        err = capsys.readouterr().err
+        assert '"552g" is an amount' in err
+        assert "eat" in err and "--kcal100" in err
+        assert day_entries() == []
+
+    def test_a_volume_counts_the_same(self, store, capsys):
+        set_goal()
+        with pytest.raises(SystemExit):
+            run("log", "--item", "Beer 3,5l", "--kcal", "1470", "--estimated")
+        assert '"3,5l" is an amount' in capsys.readouterr().err
+
+    def test_an_amount_hidden_in_the_note_is_caught_too(self, store):
+        set_goal()
+        with pytest.raises(SystemExit):
+            run("log", "--item", "Grapes", "--kcal", "381", "--note", "552g", "--estimated")
+
+    def test_an_ingredient_given_as_a_total_is_held_to_it_as_well(self, store, capsys):
+        set_goal()
+        run("prep-add", "--name", "Bolognese")
+        with pytest.raises(SystemExit):
+            run("prep-ingredient-add", "--name", "bolognese", "--label", "Olive oil 30ml",
+                "--kcal", "265", "--estimated")
+        assert "--kcal100" in capsys.readouterr().err
+
+    def test_a_name_with_a_number_but_no_unit_still_logs(self, store):
+        set_goal()
+        run("log", "--item", "Menu 3 at the canteen", "--kcal", "800", "--estimated")
+        assert day_entries()[-1]["item"] == "Menu 3 at the canteen"
+
+    def test_the_label_the_script_writes_itself_is_never_refused(self, store):
+        # `eat` puts the amount in the label, which is the shape this guard exists to produce.
+        set_goal()
+        run("eat", "--item", "Grapes", "--kcal100", "69", "--protein100", "0.7", "--amount", "552",
+            "--estimated")
+        assert day_entries()[-1]["item"] == "Grapes (552g)"
+
+
+class TestNotesAreNotWhereAGuessGoes:
+    """The note is prose, so nothing is ever read out of it: a guess written there is a fact the
+    store cannot count, total or mark."""
+
+    def test_a_note_that_claims_the_estimate_is_refused(self, store, capsys):
+        set_goal()
+        with pytest.raises(SystemExit):
+            run("log", "--item", "Kebap", "--kcal", "370", "--note", "estimated", "--exact")
+        assert "--estimated" in capsys.readouterr().err
+
+    def test_however_it_is_written(self, store):
+        set_goal()
+        with pytest.raises(SystemExit):
+            run("eat", "--item", "Chips", "--kcal100", "536", "--amount", "60",
+                "--note", "Estimated (standard bag)", "--exact")
+
+    def test_a_correction_cannot_smuggle_one_in_either(self, store):
+        set_goal()
+        run("log", "--item", "Kebap", "--kcal", "370", "--estimated")
+        with pytest.raises(SystemExit):
+            run("edit", "--last", "--note", "rough estimate")
+
+    def test_a_note_that_says_something_else_is_kept(self, store):
+        set_goal()
+        run("log", "--item", "Kebap", "--kcal", "370", "--note", "with garlic sauce", "--estimated")
+        assert day_entries()[-1]["note"] == "with garlic sauce"
+
+
+class TestEstimatesFlowDownward:
+    """A guess is in everything derived from it: a saved food's rate is in every use of it, and one
+    guessed ingredient is in every portion of the batch and in whatever is left."""
+
+    def add_beer(self, *basis):
+        run("food-add", "--name", "Beer", "--unit", "ml", "--kcal100", "42", "--protein100", "0.4",
+            "--fat100", "0", "--carbs100", "3.5", "--serving", "500", "--asked", *basis)
+
+    def estimated_batch(self):
+        run("prep-add", "--name", "Chili")
+        run("prep-ingredient-add", "--name", "chili", "--label", "Beans", "--kcal", "1000",
+            "--protein", "60", "--exact")
+        run("prep-ingredient-add", "--name", "chili", "--label", "Mince", "--kcal", "800",
+            "--protein", "60", "--estimated")
+
+    def test_a_guessed_food_makes_every_use_of_it_a_guess(self, store):
+        set_goal()
+        self.add_beer("--estimated")
+        run("food-eat", "--name", "beer", "--amount", "500")
+        assert day_entries()[-1]["estimated"] is True
+
+    def test_a_read_food_eaten_in_a_guessed_amount_is_one_too(self, store):
+        set_goal()
+        self.add_beer("--exact")
+        run("food-eat", "--name", "beer", "--amount", "500", "--estimated")
+        assert day_entries()[-1]["estimated"] is True
+
+    def test_a_read_food_in_a_weighed_amount_is_neither(self, store):
+        set_goal()
+        self.add_beer("--exact")
+        run("food-eat", "--name", "beer", "--amount", "500")
+        assert day_entries()[-1]["estimated"] is False
+
+    def test_a_guessed_food_weighed_into_a_batch_carries_it_in(self, store):
+        set_goal()
+        self.add_beer("--estimated")
+        run("prep-add", "--name", "Stew")
+        run("prep-ingredient-add", "--name", "stew", "--food", "beer", "--amount", "200")
+        batch = one_named("stew")
+        assert batch["ingredients"][0]["estimated"] is True
+        assert macros.prep_estimated(batch) is True
+
+    def test_one_guessed_ingredient_makes_the_whole_batch_a_guess(self, store):
+        set_goal()
+        self.estimated_batch()
+        assert macros.prep_estimated(one_named("chili")) is True
+
+    def test_every_portion_of_it_is_a_guess(self, store):
+        set_goal()
+        self.estimated_batch()
+        run("prep-eat", "--name", "chili", "--of-batch", "1/2")
+        assert day_entries()[-1]["estimated"] is True
+
+    def test_a_read_batch_eaten_in_a_guessed_share_is_one(self, store):
+        set_goal()
+        add_bolognese()
+        run("prep-eat", "--name", "bolognese", "--of-rest", "1/2", "--estimated")
+        assert day_entries()[-1]["estimated"] is True
+
+    def test_a_read_batch_in_a_named_share_is_not(self, store):
+        set_goal()
+        add_bolognese()
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/2")
+        assert day_entries()[-1]["estimated"] is False
+
+    def test_a_forgotten_guess_lands_on_the_day_as_a_guess(self, store):
+        set_goal()
+        add_bolognese()
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/2")
+        run("prep-ingredient-add", "--name", "bolognese", "--label", "Oil", "--kcal", "200",
+            "--estimated")
+        fix = [e for e in day_entries() if e["note"] == "prep-fix"]
+        assert [e["estimated"] for e in fix] == [True]
+
+    def test_correcting_a_read_ingredient_keeps_the_correction_read(self, store):
+        set_goal()
+        add_bolognese()
+        run("prep-eat", "--name", "bolognese", "--of-batch", "1/2")
+        run("prep-ingredient-edit", "--name", "bolognese", "--index", "1", "--kcal", "1200")
+        fix = [e for e in day_entries() if e["note"] == "prep-fix"]
+        assert [e["estimated"] for e in fix] == [False]
+
+    def test_a_correction_can_say_the_ingredient_was_a_guess_all_along(self, store):
+        set_goal()
+        add_bolognese()
+        run("prep-ingredient-edit", "--name", "bolognese", "--index", "1", "--estimated")
+        batch = one_named("bolognese")
+        assert batch["ingredients"][0]["estimated"] is True
+        assert macros.prep_estimated(batch) is True
+
+    def test_a_correction_can_take_the_mark_off_an_entry(self, store):
+        set_goal()
+        run("log", "--item", "Kebap", "--kcal", "370", "--estimated")
+        run("edit", "--last", "--exact")
+        assert day_entries()[-1]["estimated"] is False
+
+    def test_that_alone_counts_as_a_correction(self, store):
+        set_goal()
+        run("log", "--item", "Kebap", "--kcal", "370", "--exact")
+        run("edit", "--last", "--estimated")
+        assert day_entries()[-1]["estimated"] is True
+
+    def test_a_saved_food_can_be_corrected_the_same_way(self, store):
+        set_goal()
+        self.add_beer("--estimated")
+        run("food-edit", "--name", "beer", "--kcal100", "43", "--exact")
+        food = macros.load(macros.FOOD_FILE, {})["beer"]
+        assert food["estimated"] is False
+        assert food["per100"]["kcal"] == 43
+
+
+class TestEstimatesRead:
+    """Wherever a guessed figure is printed it is marked, because a number the user reads is a
+    number they act on - and a guess that reads like label data invites more trust than it earns."""
+
+    def guess(self, item="Kebap", kcal="370", protein="19", *extra):
+        run("log", "--item", item, "--kcal", kcal, "--protein", protein, "--estimated", *extra)
+
+    def test_a_days_entry_is_marked_on_the_figures_it_is_a_guess_about(self, store, capsys):
+        set_goal()
+        self.guess()
+        capsys.readouterr()
+        run("show")
+        assert "- Kebap - ~370 kcal, ~19g P" in capsys.readouterr().out
+
+    def test_a_read_entry_beside_it_is_not(self, store, capsys):
+        set_goal()
+        self.guess()
+        run("log", "--item", "Skyr", "--kcal", "320", "--protein", "55", "--exact")
+        capsys.readouterr()
+        run("show")
+        assert "- Skyr - 320 kcal, 55g P" in capsys.readouterr().out
+
+    def test_the_total_says_how_much_of_the_day_is_guessed(self, store, capsys):
+        set_goal()
+        self.guess()
+        run("log", "--item", "Skyr", "--kcal", "320", "--protein", "55", "--exact")
+        capsys.readouterr()
+        run("show")
+        assert "Total: 690 kcal (~370 estimated) |" in capsys.readouterr().out
+
+    def test_a_day_taken_off_labels_says_nothing_of_the_sort(self, store, capsys):
+        set_goal()
+        run("log", "--item", "Skyr", "--kcal", "320", "--protein", "55", "--exact")
+        capsys.readouterr()
+        run("show")
+        out = capsys.readouterr().out
+        assert "Total: 320 kcal |" in out
+        assert "~" not in out
+
+    def test_the_numbered_listing_is_marked_too(self, store, capsys):
+        set_goal()
+        self.guess()
+        capsys.readouterr()
+        run("entries")
+        assert "Kebap - ~370 kcal, ~19g P" in capsys.readouterr().out
+
+    def test_a_range_says_how_solid_its_average_is(self, store, capsys):
+        set_goal()
+        run("log", "--item", "A", "--kcal", "2000", "--protein", "150", "--date", days_ago(2),
+            "--estimated")
+        run("log", "--item", "B", "--kcal", "2000", "--protein", "150", "--date", days_ago(1),
+            "--exact")
+        capsys.readouterr()
+        run("summary", "--days", "3")
+        assert "50% of kcal estimated" in capsys.readouterr().out
+
+    def test_a_range_of_read_days_says_nothing(self, store, capsys):
+        set_goal()
+        run("log", "--item", "A", "--kcal", "2000", "--protein", "150", "--date", days_ago(1),
+            "--exact")
+        capsys.readouterr()
+        run("summary", "--days", "3")
+        assert "estimated" not in capsys.readouterr().out
+
+    def test_a_guessed_food_reads_as_one_wherever_it_is_looked_up(self, store, capsys):
+        set_goal()
+        run("food-add", "--name", "Beer", "--unit", "ml", "--kcal100", "42", "--protein100", "0.4",
+            "--fat100", "0", "--carbs100", "3.5", "--serving", "500", "--asked", "--estimated")
+        capsys.readouterr()
+        run("food-get", "beer")
+        out = capsys.readouterr().out
+        assert "per 100ml ~42 kcal, ~0.4g P, ~0g F, ~3.5g C" in out
+        assert "default serving 500ml" in out
+
+    def test_the_catalog_listing_tags_it(self, store, capsys):
+        set_goal()
+        run("food-add", "--name", "Beer", "--kcal100", "42", "--protein100", "0.4", "--fat100", "0",
+            "--carbs100", "3.5", "--serving", "500", "--asked", "--estimated")
+        add_skyr()
+        capsys.readouterr()
+        run("food-list")
+        out = capsys.readouterr().out
+        assert "- Beer  never used, saved" in out
+        assert "\u00b7  estimated" in out
+        assert "Skyr, plain" in out and "Skyr, plain  never used, saved" in out
+
+    def test_a_portion_of_a_guessed_food_is_marked_as_it_is_sized(self, store, capsys):
+        set_goal()
+        run("food-add", "--name", "Whey", "--kcal100", "375", "--protein100", "80", "--fat100", "5",
+            "--carbs100", "8", "--serving", "30", "--asked", "--estimated")
+        capsys.readouterr()
+        run("food-eat", "--name", "whey", "--fit-protein", "--dry-run")
+        assert re.search(r"\U0001f37d\ufe0f Whey: .*~\d+ kcal, ~\d+", capsys.readouterr().out)
+
+    def test_a_one_off_off_a_guessed_rate_is_marked_the_same_way(self, store, capsys):
+        set_goal()
+        capsys.readouterr()
+        run("eat", "--item", "Whey", "--kcal100", "375", "--protein100", "80", "--fit-protein",
+            "--estimated")
+        assert re.search(r"\U0001f37d\ufe0f Whey: .*~\d+ kcal, ~\d+", capsys.readouterr().out)
+
+    def test_a_batch_reads_as_a_guess_from_the_ingredient_that_makes_it_one(self, store, capsys):
+        set_goal()
+        run("prep-add", "--name", "Chili")
+        run("prep-ingredient-add", "--name", "chili", "--label", "Beans", "--kcal", "1000",
+            "--protein", "60", "--exact")
+        run("prep-ingredient-add", "--name", "chili", "--label", "Mince", "--kcal", "800",
+            "--protein", "60", "--estimated")
+        capsys.readouterr()
+        run("prep-get", "--name", "chili")
+        out = capsys.readouterr().out
+        assert "1. Beans - 1000 kcal, 60g P" in out
+        assert "2. Mince - ~800 kcal, ~60g P" in out
+        assert "Total: ~1800 kcal, ~120g P" in out
+        assert "Left: 100% (~1800 kcal, ~120g P)" in out
+
+    def test_the_batch_listing_is_marked_too(self, store, capsys):
+        set_goal()
+        run("prep-add", "--name", "Chili")
+        run("prep-ingredient-add", "--name", "chili", "--label", "Mince", "--kcal", "800",
+            "--protein", "60", "--estimated")
+        capsys.readouterr()
+        run("prep-list")
+        assert "Chili: 100% left (~800 kcal, ~60g P)" in capsys.readouterr().out
+
+    def test_adding_a_guessed_ingredient_says_so_as_it_lands(self, store, capsys):
+        set_goal()
+        run("prep-add", "--name", "Chili")
+        capsys.readouterr()
+        run("prep-ingredient-add", "--name", "chili", "--label", "Mince", "--kcal", "800",
+            "--protein", "60", "--estimated")
+        assert "added to Chili: Mince - ~800 kcal, ~60g P" in capsys.readouterr().out
+
+    def test_a_batch_taken_off_labels_prints_plain_figures(self, store, capsys):
+        set_goal()
+        add_bolognese()
+        capsys.readouterr()
+        run("prep-get", "--name", "bolognese")
+        assert "~" not in capsys.readouterr().out
+
+
+class TestSavingAGuessedFood:
+    """Produce, a restaurant meal and a beer poured from the tap never carry a label, so the catalog
+    has to be able to hold a food it only ever guessed at - as a guess, not as label data."""
+
+    GRAPES = ["--kcal100", "69", "--protein100", "0.7", "--fat100", "0.2", "--carbs100", "18"]
+
+    def eat_grapes(self, ago, *basis):
+        run("eat", "--item", "Grapes", *self.GRAPES, "--amount", "552", "--date", days_ago(ago),
+            *basis)
+
+    def foods(self):
+        return macros.load(macros.FOOD_FILE, {})
+
+    def test_a_food_earned_by_guesses_is_kept_as_a_guess(self, store):
+        set_goal()
+        for ago in (2, 1, 0):
+            self.eat_grapes(ago, "--estimated")
+        assert self.foods()["grapes"]["estimated"] is True
+
+    def test_the_save_says_so_to_the_user(self, store, capsys):
+        set_goal()
+        for ago in (2, 1):
+            self.eat_grapes(ago, "--estimated")
+        capsys.readouterr()
+        self.eat_grapes(0, "--estimated")
+        assert '\U0001f4cc Saved "Grapes" to your foods (estimated figures)' in capsys.readouterr().out
+
+    def test_a_food_earned_off_labels_is_kept_without_the_mark(self, store, capsys):
+        set_goal()
+        for ago in (2, 1):
+            self.eat_grapes(ago, "--exact")
+        capsys.readouterr()
+        self.eat_grapes(0, "--exact")
+        out = capsys.readouterr().out
+        assert self.foods()["grapes"]["estimated"] is False
+        assert "estimated figures" not in out
+
+    def test_every_later_use_of_it_inherits_the_guess(self, store):
+        set_goal()
+        for ago in (2, 1, 0):
+            self.eat_grapes(ago, "--estimated")
+        run("food-eat", "--name", "grapes", "--amount", "200")
+        assert day_entries()[-1]["estimated"] is True
+
+    def test_a_label_for_a_guessed_food_is_offered_to_the_food_itself(self, store):
+        # The saved entry is the guess, and these numbers are read - so the fix is to put them on it,
+        # not to prefer the guess over them.
+        set_goal()
+        run("food-add", "--name", "Grapes", "--kcal100", "50", "--protein100", "0.5",
+            "--fat100", "0.1", "--carbs100", "12", "--serving", "200", "--asked", "--estimated")
+        macros.NOTES.clear()
+        self.eat_grapes(0, "--exact")
+        notes = "\n".join(macros.NOTES)
+        assert 'the saved "Grapes" is an estimate at 50 kcal/100g' in notes
+        assert 'food-edit --name "Grapes" --kcal100 69' in notes
+        assert "--exact" in notes
+
+    def test_a_guess_over_a_read_food_is_still_sent_to_the_food(self, store):
+        set_goal()
+        run("food-add", "--name", "Grapes", "--kcal100", "50", "--protein100", "0.5",
+            "--fat100", "0.1", "--carbs100", "12", "--serving", "200", "--asked", "--exact")
+        macros.NOTES.clear()
+        self.eat_grapes(0, "--estimated")
+        notes = "\n".join(macros.NOTES)
+        assert 'a saved food "Grapes" already exists at 50 kcal/100g' in notes
+        assert 'food-eat --name "Grapes" --amount 552' in notes
