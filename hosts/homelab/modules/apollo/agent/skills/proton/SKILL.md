@@ -51,6 +51,17 @@ proton mail messages delete --from newsletter@example.com --all --dry-run
 
 A removal the user named themselves ("delete that Hetzner invoice") is not this: run it and report it. Everything else runs on the request alone, sending mail included - when the words going out are yours rather than the user's, the receipt carries the body, so a correction is one message away.
 
+## What goes where
+
+A request arrives as one sentence; a command takes it as fields. "Meet Sylvia tomorrow at 5 at Hauptplatz" is four of them - what, when, how long, where - and each one has a flag of its own.
+
+- **Read the verb's `--help` before you write.** Every time, not once: it lists what the command can be told, and what you remember of it is only what you have used before. An event alone takes a location, attendees, a description, reminders, a recurrence, a calendar to land in.
+- **One piece, one flag.** `--title` what it is, `--location` where it is, `--attendee` who else is coming, `--description` whatever else was said, `--remind` when to be told. A place folded into the title is a field left empty and a title nobody would have written.
+
+```bash
+proton calendar events create --title 'Coffee with Anna' --start 2026-04-16T17:00 --duration 1h --location Hauptplatz
+```
+
 ## What holds here
 
 - **Nothing waits for input.** `PROTON_NO_INPUT` is set, so a missing credential or a question nobody can answer is an error rather than a wait. `delete` and `empty` always ask before they act, and `trash` asks whenever a filter rather than a name chose what to remove, so those commands need `--yes` or they fail on the asking. Every command that changes something also takes `--dry-run`, which resolves the references and applies the filters and then touches nothing.
