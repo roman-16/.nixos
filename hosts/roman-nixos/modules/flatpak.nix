@@ -13,6 +13,7 @@
           }}";
         }
         "com.stremio.Stremio"
+        "org.vinegarhq.Sober"
       ];
 
       overrides = {
