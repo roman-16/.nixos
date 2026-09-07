@@ -8,12 +8,20 @@ import {
 	type ExtensionAPI,
 	type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import type { AutocompleteItem } from "@earendil-works/pi-tui";
 
 const FALLBACK_MODEL = { id: "claude-opus-5", provider: "anthropic" };
+const NO_PRUNE = "--no-prune";
+const NO_PRUNE_PATTERN = new RegExp(`^${NO_PRUNE}(?=\\s|$)|\\s${NO_PRUNE}$`, "g");
 const PLANNING_MODEL = { id: "claude-fable-5-1", provider: "anthropic" };
 const PRUNED = "[pruned]";
 const STATE = "plan";
 const WARN_ABOVE_TOKENS = 25_000;
+
+interface Invocation {
+	prunes: boolean;
+	text: string;
+}
 
 interface ModelRef {
 	id: string;
@@ -85,6 +93,25 @@ function configuredModel(ctx: ExtensionContext): ModelRef {
 	}, FALLBACK_MODEL);
 }
 
+function parseArgs(args: string): Invocation {
+	const text = args.trim();
+	const stripped = text.replace(NO_PRUNE_PATTERN, "").trim();
+
+	return { prunes: stripped === text, text: stripped };
+}
+
+function pruneCompletions(prefix: string): AutocompleteItem[] | null {
+	if (!parseArgs(prefix).prunes) return null;
+
+	const typed = prefix.match(/\S*$/)?.[0] ?? "";
+	const before = prefix.slice(0, prefix.length - typed.length);
+	const offered = typed === "" ? before.trim() === "" : NO_PRUNE.startsWith(typed);
+
+	return offered
+		? [{ description: "Keep the current context", label: NO_PRUNE, value: `${before}${NO_PRUNE}` }]
+		: null;
+}
+
 function kickoff(notes: string, pruned: boolean): string {
 	return [
 		"Implement the plan.",
@@ -120,10 +147,11 @@ export default function (pi: ExtensionAPI) {
 
 	pi.registerCommand("plan", {
 		description: "Research and plan a change on Fable, then hand it to /go",
+		getArgumentCompletions: pruneCompletions,
 		handler: async (args, ctx) => {
-			const task = args.trim();
-			if (!task) {
-				ctx.ui.notify("Usage: /plan <task>", "error");
+			const invocation = parseArgs(args);
+			if (!invocation.text) {
+				ctx.ui.notify(`Usage: /plan [${NO_PRUNE}] <task>`, "error");
 				return;
 			}
 
@@ -136,10 +164,11 @@ export default function (pi: ExtensionAPI) {
 			await ctx.waitForIdle();
 
 			const switchesModel = !sameModel(ctx.model, model);
+			const prunes = invocation.prunes && switchesModel;
 			const cut = Date.now();
 			const prunable = switchesModel ? prunableTokens(ctx, state.prunedBefore, cut) : 0;
 
-			if (ctx.hasUI && prunable > WARN_ABOVE_TOKENS) {
+			if (ctx.hasUI && prunes && prunable > WARN_ABOVE_TOKENS) {
 				const proceed = await ctx.ui.confirm(
 					`Prune ${prunable.toLocaleString()} tokens of prior context?`,
 					"Tool output and reasoning from this session stop being sent to the model. Text and file paths stay.",
@@ -152,26 +181,29 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			state = { planning: true, prunedBefore: switchesModel ? cut : state.prunedBefore };
+			state = { planning: true, prunedBefore: prunes ? cut : state.prunedBefore };
 			persist();
 			showStatus(ctx);
 
 			if (prunable > 0) {
-				ctx.ui.notify(`Dropped ~${prunable.toLocaleString()} tokens of prior context`, "info");
+				const verb = prunes ? "Dropped" : "Kept";
+				ctx.ui.notify(`${verb} ~${prunable.toLocaleString()} tokens of prior context`, "info");
 			}
 
-			pi.sendUserMessage(`/skill:plan ${task}`, { expandPromptTemplates: true });
+			pi.sendUserMessage(`/skill:plan ${invocation.text}`, { expandPromptTemplates: true });
 		},
 	});
 
 	pi.registerCommand("go", {
 		description: "Implement the plan on the model configured in settings",
+		getArgumentCompletions: pruneCompletions,
 		handler: async (args, ctx) => {
 			if (!state.planning) {
 				ctx.ui.notify("Nothing to implement. Start with /plan <task>.", "warning");
 				return;
 			}
 
+			const invocation = parseArgs(args);
 			const configured = configuredModel(ctx);
 			const model = ctx.modelRegistry.find(configured.provider, configured.id);
 			if (!model) {
@@ -182,6 +214,7 @@ export default function (pi: ExtensionAPI) {
 			await ctx.waitForIdle();
 
 			const switchesModel = !sameModel(ctx.model, model);
+			const prunes = invocation.prunes && switchesModel;
 			const cut = Date.now();
 			const prunable = switchesModel ? prunableTokens(ctx, state.prunedBefore, cut) : 0;
 
@@ -190,15 +223,16 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			state = { planning: false, prunedBefore: switchesModel ? cut : state.prunedBefore };
+			state = { planning: false, prunedBefore: prunes ? cut : state.prunedBefore };
 			persist();
 			showStatus(ctx);
 
 			if (prunable > 0) {
-				ctx.ui.notify(`Dropped ~${prunable.toLocaleString()} tokens of planning research`, "info");
+				const verb = prunes ? "Dropped" : "Kept";
+				ctx.ui.notify(`${verb} ~${prunable.toLocaleString()} tokens of planning research`, "info");
 			}
 
-			pi.sendUserMessage(kickoff(args.trim(), switchesModel));
+			pi.sendUserMessage(kickoff(invocation.text, prunes));
 		},
 	});
 }
