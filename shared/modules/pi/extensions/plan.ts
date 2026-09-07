@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { TextContent } from "@earendil-works/pi-ai";
 import {
@@ -6,6 +9,7 @@ import {
 	type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 
+const FALLBACK_MODEL = { id: "claude-opus-5", provider: "anthropic" };
 const PLANNING_MODEL = { id: "claude-fable-5-1", provider: "anthropic" };
 const PRUNED = "[pruned]";
 const STATE = "plan";
@@ -16,8 +20,12 @@ interface ModelRef {
 	provider: string;
 }
 
+interface Settings {
+	defaultModel?: string;
+	defaultProvider?: string;
+}
+
 interface State {
-	implementationModel?: ModelRef;
 	planning: boolean;
 	prunedBefore: number;
 }
@@ -53,11 +61,37 @@ function prunableTokens(ctx: ExtensionContext, from: number, to: number): number
 	return Math.max(0, prunable);
 }
 
-function kickoff(notes: string): string {
+function sameModel(a: ModelRef | undefined, b: ModelRef | undefined): boolean {
+	return a?.id === b?.id && a?.provider === b?.provider;
+}
+
+function readSettings(file: string): Settings {
+	try {
+		return JSON.parse(readFileSync(file, "utf8"));
+	} catch {
+		return {};
+	}
+}
+
+function configuredModel(ctx: ExtensionContext): ModelRef {
+	const files = [
+		join(homedir(), ".pi", "agent", "settings.json"),
+		join(ctx.cwd, ".pi", "settings.json"),
+	];
+
+	return files.reduce((model, file) => {
+		const { defaultModel, defaultProvider } = readSettings(file);
+		return defaultModel && defaultProvider ? { id: defaultModel, provider: defaultProvider } : model;
+	}, FALLBACK_MODEL);
+}
+
+function kickoff(notes: string, pruned: boolean): string {
 	return [
 		"Implement the plan.",
 		notes,
-		"Tool output from the planning phase is no longer in your context. Re-read whatever you need before changing it.",
+		pruned
+			? "Tool output from the planning phase is no longer in your context. Re-read whatever you need before changing it."
+			: "",
 	]
 		.filter((part) => part.length > 0)
 		.join("\n\n");
@@ -101,8 +135,9 @@ export default function (pi: ExtensionAPI) {
 
 			await ctx.waitForIdle();
 
+			const switchesModel = !sameModel(ctx.model, model);
 			const cut = Date.now();
-			const prunable = prunableTokens(ctx, state.prunedBefore, cut);
+			const prunable = switchesModel ? prunableTokens(ctx, state.prunedBefore, cut) : 0;
 
 			if (ctx.hasUI && prunable > WARN_ABOVE_TOKENS) {
 				const proceed = await ctx.ui.confirm(
@@ -112,20 +147,12 @@ export default function (pi: ExtensionAPI) {
 				if (!proceed) return;
 			}
 
-			const implementationModel = ctx.model;
 			if (!(await pi.setModel(model))) {
 				ctx.ui.notify(`No authentication configured for ${model.name}`, "error");
 				return;
 			}
 
-			state = {
-				implementationModel: implementationModel && {
-					id: implementationModel.id,
-					provider: implementationModel.provider,
-				},
-				planning: true,
-				prunedBefore: cut,
-			};
+			state = { planning: true, prunedBefore: switchesModel ? cut : state.prunedBefore };
 			persist();
 			showStatus(ctx);
 
@@ -138,25 +165,32 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("go", {
-		description: "Implement the plan, dropping the planning research from context",
+		description: "Implement the plan on the model configured in settings",
 		handler: async (args, ctx) => {
 			if (!state.planning) {
 				ctx.ui.notify("Nothing to implement. Start with /plan <task>.", "warning");
 				return;
 			}
 
+			const configured = configuredModel(ctx);
+			const model = ctx.modelRegistry.find(configured.provider, configured.id);
+			if (!model) {
+				ctx.ui.notify(`${configured.provider}/${configured.id} is not available`, "error");
+				return;
+			}
+
 			await ctx.waitForIdle();
 
+			const switchesModel = !sameModel(ctx.model, model);
 			const cut = Date.now();
-			const prunable = prunableTokens(ctx, state.prunedBefore, cut);
+			const prunable = switchesModel ? prunableTokens(ctx, state.prunedBefore, cut) : 0;
 
-			state = { ...state, planning: false, prunedBefore: cut };
+			if (!(await pi.setModel(model))) {
+				ctx.ui.notify(`No authentication configured for ${model.name}`, "error");
+				return;
+			}
 
-			const model =
-				state.implementationModel &&
-				ctx.modelRegistry.find(state.implementationModel.provider, state.implementationModel.id);
-			if (model) await pi.setModel(model);
-
+			state = { planning: false, prunedBefore: switchesModel ? cut : state.prunedBefore };
 			persist();
 			showStatus(ctx);
 
@@ -164,7 +198,7 @@ export default function (pi: ExtensionAPI) {
 				ctx.ui.notify(`Dropped ~${prunable.toLocaleString()} tokens of planning research`, "info");
 			}
 
-			pi.sendUserMessage(kickoff(args.trim()));
+			pi.sendUserMessage(kickoff(args.trim(), switchesModel));
 		},
 	});
 }
