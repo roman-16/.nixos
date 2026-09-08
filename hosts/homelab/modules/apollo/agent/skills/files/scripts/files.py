@@ -16,14 +16,12 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-import urllib.error
-import urllib.parse
-import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-# Uploading is the slow part, and a file is far larger than a picture.
-DELIVER_TIMEOUT = 300
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
+
+from apollo import send_file
 
 # Where received files live, and how long they last. Both are read the same way the app reads them,
 # so the countdown printed here is the one that actually applies.
@@ -42,33 +40,12 @@ def human_bytes(size: float) -> str:
     return f"{round(size)} B"
 
 
-def deliver(path: Path, caption: str, source: str):
-    """POST the file to the app's localhost hook, which sends it on WhatsApp and answers with the
-    marker to print. The caption is the body and everything else is the query, exactly as the image
-    hook works. Returns (delivered, what to print)."""
-    port = os.environ.get("PORT", "8080")
-    query = urllib.parse.urlencode({"path": str(path), "source": source})
-    request = urllib.request.Request(
-        f"http://127.0.0.1:{port}/internal/skill-file?{query}",
-        data=caption.encode("utf-8"),
-        method="POST",
-        headers={"Content-Type": "text/plain; charset=utf-8"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=DELIVER_TIMEOUT) as response:
-            return True, response.read().decode("utf-8")
-    except urllib.error.HTTPError as error:
-        return False, error.read().decode("utf-8")
-    except Exception as error:
-        return False, f"\n[{source}: could not reach the app to send it ({error})]\n"
-
-
 def cmd_send(args):
     # Absolute, because the app resolves whatever path it is handed against its own directory.
     path = Path(args.file).expanduser().resolve()
-    delivered, marker = deliver(path, args.caption or "", args.source)
-    sys.stdout.write(marker)
-    if not delivered:
+    delivery = send_file("files", path, args.caption or "")
+    sys.stdout.write(delivery.marker)
+    if not delivery.delivered:
         raise SystemExit(1)
 
 
@@ -115,8 +92,6 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_send)
     s.add_argument("file", help="the file to send")
     s.add_argument("--caption", help="one short line to go under it")
-    s.add_argument("--source", default="files",
-                   help='what the chat records it as: "via files", ...')
 
     li = sub.add_parser("list")
     li.set_defaults(func=cmd_list)

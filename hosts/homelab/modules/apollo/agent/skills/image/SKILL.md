@@ -15,8 +15,6 @@ Sends an image file to the user on WhatsApp. The picture has to be a file on thi
 
 The caption is one short line under the picture. Leave it off when the picture speaks for itself.
 
-`--source` sets what the chat records the message as - `--source diagram` reads as "via diagram". Leave it alone unless another skill is sending through this one.
-
 There is no way to run this without sending: sending is all it does. PNG, JPEG, WEBP and GIF are what WhatsApp will show as a photo.
 
 ## Replying
@@ -38,7 +36,7 @@ One picture per message, and one line with it at most.
 ## Where pictures come from
 
 - **The chat archive** - the recall skill's `image` command writes a stored picture out to a temp file and prints the path. That path is what you send here, which is how "send me that photo again" works.
-- **A drawing** - the diagram skill, which renders and sends in one step. Don't draw a diagram by hand and send it through here.
+- **A drawing** - the diagram skill, which renders and sends it itself. Don't draw a diagram by hand and send it through here.
 - **A document** - `pdftoppm` renders a PDF page to an image; `magick` crops, resizes and converts.
 - **The web** - `curl` for something you found, and the browser skill takes screenshots.
 

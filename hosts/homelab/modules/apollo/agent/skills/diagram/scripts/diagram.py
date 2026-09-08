@@ -13,9 +13,9 @@ ceiling rather than a target: a diagram wider than it gets squeezed down to fit,
 with it, which is why a sideways flowchart arrives as an unreadable strip. Nothing here can fix
 that - only drawing it the other way up can - so the shape of the result is measured and reported.
 
-Delivery belongs to the image skill, which owns getting a picture to the user whatever produced it -
-so this script owns exactly two things nobody else does: turning source into a PNG, and refusing to
-send one that did not render.
+Drawing and sending are two acts: the render happens on every run and says how it went, and the
+picture goes to the user when --send asks for it. So a diagram can be checked before anyone sees
+it, and one that did not render is never sent.
 
 Everything printed here is for the agent. The thing the user receives is the picture.
 """
@@ -23,22 +23,19 @@ Everything printed here is for the agent. The thing the user receives is the pic
 from __future__ import annotations
 
 import argparse
-import os
 import re
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-# Not resolved: each skill is its own store path on the VM, so following the symlink would land
-# outside the skills directory and lose sight of the siblings.
-SKILL = Path(__file__).parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
+
+from apollo import die, not_sent, send_image
+
+SKILL = Path(__file__).resolve().parent.parent
 CONFIG = SKILL / "mermaid-config.json"
 PUPPETEER = SKILL / "puppeteer.json"
-
-# The image skill, found by name so nothing needs configuring; the override is for a caller that
-# invokes this by store path, where siblings do not exist.
-IMAGE = Path(os.environ.get("APOLLO_IMAGE_SCRIPT") or SKILL.parent / "image" / "scripts" / "image.py")
 
 # The house style (see the module docstring).
 BACKGROUND = "white"
@@ -56,10 +53,6 @@ RENDER_TIMEOUT = 120
 # Below this there is no picture in the file, whatever the renderer's exit code claimed.
 MIN_PNG_BYTES = 1000
 
-# Uploading a photo to WhatsApp is the slow part, not drawing it. Longer than the image skill's own
-# ceiling, so its clearer message wins the race when a send hangs.
-DELIVER_TIMEOUT = 240
-
 # A node whose id is `end`: mermaid reads it as the keyword that closes a block, and the parse falls
 # apart somewhere else entirely, with a message pointing nowhere near the real problem.
 BARE_END = re.compile(r"(?:^|[\s>])end\s*[\[({]", re.MULTILINE)
@@ -70,11 +63,6 @@ UNQUOTED_LABEL = re.compile(r"\[[^\"\]\n]*[()\[][^\"\]\n]*\]")
 
 # Sideways graphs are the main way a diagram arrives unreadable: a phone is tall, not wide.
 SIDEWAYS = re.compile(r"^\s*(?:flowchart|graph)\s+(?:LR|RL)\b", re.MULTILINE)
-
-
-def die(msg: str):
-    print(f"error: {msg}", file=sys.stderr)
-    raise SystemExit(1)
 
 
 def png_size(data: bytes):
@@ -142,23 +130,6 @@ def render(source: Path, out: Path):
         die("the renderer produced no picture, so nothing was sent - check the source")
 
 
-def deliver(image: Path, caption: str):
-    """Hand the picture to the image skill, which knows how to reach the user. Tagged as a diagram,
-    so that is what the chat records it as. Returns (delivered, what to print) - its marker, passed
-    on exactly as it came."""
-    command = [sys.executable, str(IMAGE), "send", str(image), "--source", "diagram"]
-    if caption:
-        command += ["--caption", caption]
-    try:
-        done = subprocess.run(command, capture_output=True, text=True,
-                              timeout=DELIVER_TIMEOUT, check=False)
-    except (OSError, subprocess.TimeoutExpired) as error:
-        return False, f"\n[diagram: the picture could not be sent ({error})]\n"
-    if done.stderr.strip():
-        sys.stderr.write(done.stderr)
-    return done.returncode == 0, done.stdout
-
-
 def note(hint):
     if hint:
         print(f"[diagram] {hint}")
@@ -181,13 +152,14 @@ def cmd_render(args):
     size = png_size(out.read_bytes()[:24])
     if size:
         note(shape_hint(*size))
-    if args.quiet:
+    if not args.send:
         print(f"rendered {out} ({out.stat().st_size} bytes)")
-        print("[diagram: quiet - not sent to the user]")
+        sys.stdout.write(not_sent("diagram"))
         return
-    delivered, marker = deliver(out, args.caption or "")
-    sys.stdout.write(marker)
-    if not delivered:
+    # Tagged as a diagram, so that is what the chat records it as rather than a picture from nowhere.
+    delivery = send_image("diagram", out, args.caption or "")
+    sys.stdout.write(delivery.marker)
+    if not delivery.delivered:
         raise SystemExit(1)
 
 
@@ -200,8 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("file", help="the file you wrote the mermaid source into")
     r.add_argument("--caption", help="one short line to go under the picture")
     r.add_argument("--out", help="where to write the PNG (default: a temp file named after the source)")
-    r.add_argument("--quiet", action="store_true",
-                   help="draw and check it here, sending nothing to the user")
+    r.add_argument("--send", action="store_true", help="put the picture in front of the user")
     return p
 
 

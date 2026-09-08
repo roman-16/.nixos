@@ -34,16 +34,21 @@ Never write "estimated" into a `--note`: a note is prose that nothing is ever re
 
 ## Replying
 
-**Every number here is the user's own record, so every command's output goes to them.** The script posts what it printed straight to them on WhatsApp (as a "via macros" message) and prints `[macros: delivered to the user ✓ ...]`. When you see that line, **stay silent** - don't repeat, summarize, rephrase, or comment on it. They already have it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet.
+**A change to their record always reaches them; a look at it reaches them when they asked to see it.** So: **asked to see it - `--send`; needed it to decide - plain.**
 
-The output is printed here too, so you always see what was sent. That is the only reading there is: **never re-run a command in order to look at something again**, and never retype its numbers into a message of your own - a rate, a total or a portion the user reads must be one the script computed.
+- **Anything that writes** (`log`, `eat`, `food-eat`, `prep-eat`, `weight`, `edit`, `rm`, `food-add`, `prep-*`, `goal-set`) posts what it printed straight to the user on WhatsApp (as a "via macros" message) and prints `[macros: delivered to the user ✓ ...]`. It takes no `--send`, because a logged entry is theirs to see either way.
+- **Anything that only reads** (`goal`, `show`, `summary`, `entries`, `food-get`, `food-list`, `prep-get`, `prep-list`, and any `--dry-run`) prints its result here and sends nothing, ending with `[macros: not sent to the user - add --send to deliver it]`. Add `--send` and it goes to them verbatim instead.
+- `recompute` repairs the ledger and reports here only.
 
-- **A question the output answers** ("how far over am I?", "what did I have yesterday?"): run the one command that answers it, and say nothing after.
-- **A question it doesn't** ("should I have a beer tonight?"): the block goes out, and you add one short line - never a restatement of it.
+When you see `[macros: delivered to the user ✓ ...]`, **stay silent** - don't repeat, summarize, rephrase, or comment on it. They already have it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet.
+
+**Never retype numbers into a message of your own**: a rate, a total or a portion the user reads must be one the script computed and sent. So a question whose answer *is* the block gets `--send` and nothing after it; a question the block only informs gets read plain, and you answer in one line.
+
+- **"Show me today", "what did I have yesterday?", "how am I doing this week?"**: `show --send`, `summary --send` - the block is the answer, so say nothing after.
+- **"Do you have yfood saved?", "how much of the batch is left?"**: read it plain and answer in your own words - one message instead of a raw block plus a line.
+- **Before you write**: read plain. Resolving a name, checking a rate or sizing a portion is your own lookup, and re-running one costs the user nothing - nothing was sent.
+- **"How much X for my remaining protein?", "how would my day look with this?"**: `--dry-run --send` (it changes nothing, so it needs `--send` like any other read), then your one line after it (e.g. "Want me to log it?"). A dry run you are only checking for yourself stays plain.
 - **Several things at once**: log each one. Every reply carries the whole day, so the last is the day as it now stands.
-- **A `--dry-run`** goes to the user as well; it changes nothing, so add your one line after it (e.g. "Want me to log it?").
-
-`recompute` is the one command written for you rather than them: it repairs the ledger and reports here only.
 
 If the script prints `[macros: delivery FAILED ...]`, the send didn't happen: relay that command's output yourself, just this once (the data was still saved - don't re-run the command).
 
@@ -100,8 +105,9 @@ Switching to a saved food is the user's call, so ask before you do it. Saving is
 ## Viewing a day
 
 ```bash
-{baseDir}/scripts/macros.py show                     # today
-{baseDir}/scripts/macros.py show --date 2026-07-12
+{baseDir}/scripts/macros.py show --send                     # they asked to see today
+{baseDir}/scripts/macros.py show --date 2026-07-12 --send
+{baseDir}/scripts/macros.py show                            # you need the day to answer something
 ```
 
 ## Averages over a range
@@ -109,12 +115,12 @@ Switching to a saved food is the user's call, so ask before you do it. Saving is
 For any "average", "last N days", or "this week/month" question, use this - **one call**, never loop `show` and never sum or average days yourself. It averages over the completed logged days in the range; today, still in progress, is shown on its own line and never drags the average down. Unlogged days are skipped, not counted as zero.
 
 ```bash
-{baseDir}/scripts/macros.py summary                                  # last 7 days
-{baseDir}/scripts/macros.py summary --days 30                        # last 30 days
-{baseDir}/scripts/macros.py summary --from 2026-06-01 --to 2026-06-30
+{baseDir}/scripts/macros.py summary --send                                  # last 7 days
+{baseDir}/scripts/macros.py summary --days 30 --send                        # last 30 days
+{baseDir}/scripts/macros.py summary --from 2026-06-01 --to 2026-06-30 --send
 ```
 
-`--days N` counts back from today (`--days 7` is today plus the 6 days before it); `--from`/`--to` give an explicit range (`--to` defaults to today, and the two selectors are mutually exclusive). The output is a ready-to-send summary the script sends to the user (see [Replying](#replying)). When the range contains any weigh-ins it also appends a weight line - the trend (first → latest) plus the average, or just the value for a single one - and a range with only weigh-ins and no food still reports them.
+`--days N` counts back from today (`--days 7` is today plus the 6 days before it); `--from`/`--to` give an explicit range (`--to` defaults to today, and the two selectors are mutually exclusive). The output is a ready-to-send summary, so `--send` puts it in front of the user as it is (see [Replying](#replying)). When the range contains any weigh-ins it also appends a weight line - the trend (first → latest) plus the average, or just the value for a single one - and a range with only weigh-ins and no food still reports them.
 
 ## Saved foods (per 100 of a unit + default serving)
 
@@ -132,7 +138,7 @@ Each saved food stores its macros per 100 of a **unit** - grams by default, or `
 
 `--fit-kcal` and `--target-kcal` size by calories the same way. Amounts and the logged label read in the food's unit (`500ml`, `4 pieces`, `500g`). `food-eat` prints the day summary; the script sends it to the user.
 
-`food-get` looks a food up (`food-eat` resolves names itself, so it is never needed as a pre-check); `food-add` saves one and refuses without `--asked`, which says the user asked for this food to be saved, in their own words, and without `--exact`/`--estimated`, which says what its numbers rest on; `food-edit` corrects a saved food's numbers, unit, name, or basis; `food-rm` deletes one. `--unit` defaults to `g`; set it for liquids/countables and the per-100 values are then per 100 of that unit. A food the script saves from repeats keeps the basis of the uses that earned it, so produce and restaurant food can live in the catalog as the estimates they are.
+`food-get` looks a food up and `food-list` shows the catalog - both silent, so read them whenever you need them (`food-eat` resolves names itself, so neither is needed as a pre-check); `food-add` saves one and refuses without `--asked`, which says the user asked for this food to be saved, in their own words, and without `--exact`/`--estimated`, which says what its numbers rest on; `food-edit` corrects a saved food's numbers, unit, name, or basis; `food-rm` deletes one. `--unit` defaults to `g`; set it for liquids/countables and the per-100 values are then per 100 of that unit. A food the script saves from repeats keeps the basis of the uses that earned it, so produce and restaurant food can live in the catalog as the estimates they are.
 
 **An entry is only worth having if the food comes back.** A one-off needs no entry - `eat` logs it and scales it just the same - and the catalog fills itself from what actually repeats: once the same food has been written out by hand on **three separate days**, the script saves it. Writing it out means either logging it with `eat` or weighing it into a batch with `prep-ingredient-add --kcal100`, since both are the same act - a rate typed in because the catalog has no entry for it. So there are exactly two ways a food gets in, and neither of them is your judgement - the script decided it had earned it, or the user asked and you passed `--asked`. Saving on first sight is a guess about the future, and those guesses are what fill a catalog with entries nobody ever uses again.
 
@@ -143,12 +149,12 @@ Each saved food stores its macros per 100 of a **unit** - grams by default, or `
 `food-list` shows what each entry has earned (`3 days, last 09.08`, or `never used, saved 04.08`) and tags the ones whose numbers are estimates, most used first, counted in the same days the threshold uses and counting a batch ingredient as the food coming back, so anything that genuinely never came back collects at the bottom - if the list has filled up with those, offer to clear them out.
 
 ```bash
-{baseDir}/scripts/macros.py food-get skyr
+{baseDir}/scripts/macros.py food-get skyr                                      # for you; add --send when they asked
 {baseDir}/scripts/macros.py food-add --name "Skyr, plain" --kcal100 64 --protein100 11 --fat100 0.1 --carbs100 4 --serving 500 --aliases "skyr,my skyr" --asked --exact
 {baseDir}/scripts/macros.py food-add --name "Gösser Märzen" --unit ml --kcal100 42 --protein100 0.5 --fat100 0 --carbs100 3.3 --serving 500 --aliases beer --asked --exact   # a liquid: per 100ml, 500ml default
 {baseDir}/scripts/macros.py food-edit --name skyr --kcal100 63 --serving 450   # only what you pass changes; also --unit, --rename, --aliases, --exact/--estimated
 {baseDir}/scripts/macros.py food-rm --name skyr
-{baseDir}/scripts/macros.py food-list                                          # what's saved, most used first, with what each has earned
+{baseDir}/scripts/macros.py food-list --send                                   # they asked what's saved: most used first, with what each has earned
 ```
 
 Name matching is forgiving: an exact alias wins, else a unique substring, else the closest spelling. On the logging path a lone close match is logged and announced (`read "skyer" as Skyr, plain`); when several foods match it asks you to pick, and `food-edit`/`food-rm` never act on a guess (re-run with the exact name). On a miss, check `food-list`.
@@ -164,7 +170,7 @@ A recorded weigh-in is echoed in that day's summary (`Weight 66.4 kg (goal ...)`
 ## Fixing mistakes
 
 ```bash
-{baseDir}/scripts/macros.py entries        # the day's entries with their index numbers
+{baseDir}/scripts/macros.py entries        # the day's entries with their index numbers (for you)
 {baseDir}/scripts/macros.py edit --last --amount 300                           # wrong portion: re-scale it
 {baseDir}/scripts/macros.py edit --last --kcal 538 --item "Ice cream"          # fix values in place; only what you pass changes
 {baseDir}/scripts/macros.py edit --index 2 --protein 30                        # correct the 2nd entry
@@ -187,7 +193,7 @@ A batch is built up ingredient by ingredient, and everything that leaves it is a
 {baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --food skyr --amount 400                                    # a saved food, scaled here
 {baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label Passata --kcal100 35 --protein100 1.5 --carbs100 7 --amount 700 --exact   # off the packet, scaled here
 {baseDir}/scripts/macros.py prep-ingredient-add --name bolognese --label "Olive oil" --kcal 265 --fat 30 --estimated         # only the total, and it's a guess
-{baseDir}/scripts/macros.py prep-get --name bolognese                          # ingredients, total, consumption log, % (and size) left
+{baseDir}/scripts/macros.py prep-get --name bolognese                          # ingredients, total, consumption log, % (and size) left (add --send when they asked)
 ```
 
 **An ingredient is named the same three ways a meal is.** `--food <name> --amount N` for anything saved (the label writes itself, `--unit` comes from the food, and so does the estimate mark); `--kcal100 ... --amount N` when you have the packet in front of you or know the rate; `--kcal N` only when the total is all there is - the last two take `--exact`/`--estimated` like `eat` and `log` do, and `--kcal` refuses an amount in the label for the same reason `log` does. The middle one is a food written out by hand, so it counts toward earning a saved entry exactly as `eat` does: weigh the same butter into a batch on a third separate day and the script saves it, and tells the user it did. As everywhere else, the script does the scaling - never multiply a per-100 rate by an amount to fill in `--kcal`. Amounts read back in the label (`Skyr (plain) (400g)`), and an ingredient scaled from a rate can be re-weighed later with one flag (`prep-ingredient-edit --amount 500`).
@@ -208,7 +214,7 @@ A batch is built up ingredient by ingredient, and everything that leaves it is a
 {baseDir}/scripts/macros.py prep-uneat --name bolognese --last          # undo the last event (or --index N from prep-get, or --all)
 {baseDir}/scripts/macros.py prep-archive --name bolognese               # done with it - file it away (kept forever, never deleted)
 {baseDir}/scripts/macros.py prep-unarchive --name bolognese             # bring an archived batch back (or --id from prep-list --all)
-{baseDir}/scripts/macros.py prep-list                                   # active batches (add --all to include archived ones)
+{baseDir}/scripts/macros.py prep-list --send                            # active batches (add --all to include archived ones)
 ```
 
 **A share names its denominator, so say the one the user said.** "Half of it", "a third", "most of what's left", "the rest" are shares of what is currently **left**: `--of-rest <frac>` (bare `--of-rest` = all of it; it errors above 1, being a share of the leftovers). "One of the 5", "a fifth of what I made" is a share of the **whole** batch: `--of-batch <frac>` (it errors if it exceeds what's left). Never convert between the two yourself - pass the share as it was said and let the script do it; on a partly eaten batch `--of-batch` prints what that share is of the rest, so a mis-named denominator shows up at once. `--size` is for absolute grams. Every eat adds a `🥘` line with the batch's remaining before/after (a projection on `--dry-run`), so you always see how full it is - never assume it's full; once a batch is partway down the reply also reframes the portion as its share **of what's left** (e.g. `50% of what's left (30% of batch, ~250g)`). `prep-eat`'s `--fit-*`/`--target-*` size the portion for you and cap to what remains. **Batches are never deleted, only archived** - eating (or removing) a batch down to 0% archives it automatically, and `prep-archive` files one away on demand. Archived batches drop out of `prep-list` (see them with `--all`) but are kept forever for lookup with `prep-get` (by name, or `--id` when several archived batches share a name). To fix a finished batch, `prep-unarchive` it first, then `prep-uneat`/`prep-ingredient-edit`.
@@ -259,11 +265,11 @@ Before anything's been eaten this just adjusts the batch. If some has been eaten
 
 ## Previewing
 
-`log`, `eat`, `food-eat`, and `prep-eat` all take `--dry-run`: it prints the day exactly as it would look with the entry added, but saves nothing - no entry stored, no batch consumed. Use it for "how would my day look" and "how much of X can I eat"; pair it with `--fit-protein` to answer "how much do I need to hit my protein" in a single call.
+`log`, `eat`, `food-eat`, and `prep-eat` all take `--dry-run`: it prints the day exactly as it would look with the entry added, but saves nothing - no entry stored, no batch consumed. Use it for "how would my day look" and "how much of X can I eat"; pair it with `--fit-protein` to answer "how much do I need to hit my protein" in a single call. A dry run changes nothing, so it is a read: add `--send` when the projection is what the user asked for, leave it off when you are checking for yourself. `--send` without `--dry-run` is refused - a logged entry always reaches them.
 
 ```bash
-{baseDir}/scripts/macros.py prep-eat --name "ice cream" --fit-protein --dry-run
-{baseDir}/scripts/macros.py log --item "second helping" --kcal 600 --protein 35 --estimated --dry-run
+{baseDir}/scripts/macros.py prep-eat --name "ice cream" --fit-protein --dry-run --send
+{baseDir}/scripts/macros.py log --item "second helping" --kcal 600 --protein 35 --estimated --dry-run --send
 ```
 
 ## Repairing the ledger
@@ -282,6 +288,6 @@ After a manual JSON edit or a phase change, re-fold the balance forward:
 - Every macro must be non-negative and every amount positive; the script rejects impossible values, so a slip like `--kcal -5` errors out instead of silently corrupting a total.
 - Every number is stored at its own quantity's resolution, so you never pre-round anything: kcal are whole (`--kcal 257.4` is taken as 257), grams keep one decimal, and an amount reads back exactly as it was stored (`--amount 0.5` stays half a piece). That is what keeps the rolling balance exact - a fraction logged once would otherwise be folded into every later day's target.
 - For "how much to hit X" or "how would my day look", use `--fit-*`/`--target-*` and `--dry-run` - never work out the amount or the projected totals yourself.
-- The script delivers its own replies to the user (see [Replying](#replying)); don't relay or restate them - that double-sends.
+- The script delivers what it sends (see [Replying](#replying)); don't relay or restate a delivered block - that double-sends.
 
 `{baseDir}` = this skill's directory. Always resolve to the absolute path before executing.

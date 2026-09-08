@@ -17,7 +17,6 @@ daylight line is exact whatever the weather does.
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import os
 import sys
@@ -26,9 +25,12 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from contextlib import redirect_stdout
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
+
+from apollo import Kind, command, die, run
 
 # Anchored to the workspace rather than the working directory, because where this script is run from
 # says nothing about where the user's location is kept - and a config looked for in the wrong place
@@ -90,11 +92,6 @@ DAILY = (
     "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,"
     "sunrise,sunset,uv_index_max,wind_speed_10m_max"
 )
-
-
-def die(msg: str):
-    print(f"error: {msg}", file=sys.stderr)
-    raise SystemExit(1)
 
 
 # --- storage -------------------------------------------------------------
@@ -333,52 +330,22 @@ def cmd_config_set(args):
     cmd_config(args)
 
 
-# --- delivery ------------------------------------------------------------
-
-
-def deliver_to_user(text: str) -> str | None:
-    """POST the reply to the app's localhost hook, which delivers it to the user on WhatsApp and
-    returns the marker to print. Returns the response body (the marker); None only if the app
-    could not be reached at all - the one case the caller falls back for."""
-    port = os.environ.get("PORT", "8080")
-    request = urllib.request.Request(
-        f"http://127.0.0.1:{port}/internal/skill-message?source=weather",
-        data=text.encode("utf-8"),
-        method="POST",
-        headers={"Content-Type": "text/plain; charset=utf-8"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=8) as response:
-            return response.read().decode("utf-8")
-    except urllib.error.HTTPError as error:
-        return error.read().decode("utf-8")
-    except Exception:
-        return None
-
-
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="weather.py", description="weather and daylight")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    # `delivers` marks the commands whose output is written for the user.
-    def command(name: str, *, delivers: bool = False) -> argparse.ArgumentParser:
-        parser = sub.add_parser(name)
-        parser.set_defaults(delivers=delivers, quiet=False)
-        return parser
-
-    sh = command("show", delivers=True)
+    # A forecast is the world's rather than the user's, so it is read here and reaches them only
+    # when they asked to see it - which is also what lets the briefing compose one into its
+    # single morning message. The place they set is theirs, so setting it reports to them.
+    sh = command(sub, "show", kind=Kind.READING)
     sh.set_defaults(func=cmd_show)
-    # A forecast is the world's, not the user's, so the agent may read one to answer in its own words
-    # - and the briefing composes this one into a single morning message.
-    sh.add_argument("--quiet", action="store_true",
-                    help="print the result here instead of sending it to the user")
     group = sh.add_mutually_exclusive_group()
     group.add_argument("--date", help="a day from today onwards (YYYY-MM-DD)")
     group.add_argument("--days", type=int, help="a compact outlook over this many days")
 
-    command("config").set_defaults(func=cmd_config)
+    command(sub, "config", kind=Kind.MACHINERY).set_defaults(func=cmd_config)
 
-    cs = command("config-set", delivers=True)
+    cs = command(sub, "config-set")
     cs.set_defaults(func=cmd_config_set)
     cs.add_argument("--place")
     cs.add_argument("--lat", type=latitude)
@@ -388,30 +355,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main():
-    args = build_parser().parse_args()
-    if not WORKSPACE.is_dir():
-        die(f"no workspace at {WORKSPACE} - this is not where the user's data is")
-    # Capture the command's output so it can be delivered to the user directly, while still writing
-    # it to stdout so the caller sees it (for its reasoning and to detect delivery success/failure).
-    buffer = io.StringIO()
-    try:
-        with redirect_stdout(buffer):
-            args.func(args)
-    finally:
-        sys.stdout.write(buffer.getvalue())
-    output = buffer.getvalue()
-    if not output.strip() or not args.delivers:
-        return
-    if args.quiet:
-        # Say so explicitly: without a marker the caller cannot tell a silent run from a sent one.
-        sys.stdout.write("\n[weather: quiet - not sent to the user]\n")
-        return
-    marker = deliver_to_user(output)
-    sys.stdout.write(
-        marker
-        if marker is not None
-        else "\n[weather: delivery FAILED - relay the output above to the user yourself]\n"
-    )
+    run("weather", build_parser(), workspace=WORKSPACE)
 
 
 if __name__ == "__main__":

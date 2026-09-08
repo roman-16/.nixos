@@ -17,11 +17,11 @@ To the user this is just "the weather" - never name the provider the data comes 
 
 ## Replying
 
-**`show` is written for the user**: the script posts its output straight to them on WhatsApp (as a "via weather" message) and prints `[weather: delivered to the user ✓ ...]`. When you see that line, **stay silent** - they already have it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet.
+**Asked to see it - `--send`; needed it to decide - plain.** A forecast is the world's rather than the user's, so reading one costs nothing and shows nothing.
 
-Add `--quiet` when you need the numbers in order to answer something in your own words ("should I cycle to work?", "is it jacket weather?"). The output is then printed here, nothing is sent, and the last line is `[weather: quiet - not sent to the user]`. A forecast is the world's rather than the user's, so summarizing one is fair game; run `show` plain when they asked to _see_ the weather, and then say nothing after. It is the only command that takes the flag.
-
-**`config-set` reports to the user**, since where their weather comes from is theirs to see. `config` is a read for you alone - nothing is sent, so say whatever needs saying in your own words.
+- `show` prints its result here and sends nothing, ending with `[weather: not sent to the user - add --send to deliver it]`. That is what you want for "should I cycle to work?" or "is it jacket weather?" - one message in your own words instead of a raw block plus commentary.
+- `show --send` posts the two lines straight to them on WhatsApp (as a "via weather" message) and prints `[weather: delivered to the user ✓ ...]`. Use it when they asked to _see_ the weather. When you see that line, **stay silent** - they already have it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet.
+- **`config-set` reports to the user**, since where their weather comes from is theirs to see, and takes no `--send`. `config` reads the setting back for you alone and never sends.
 
 If the script prints `[weather: delivery FAILED ...]`, the send didn't happen: relay that output yourself, just this once.
 
@@ -39,9 +39,10 @@ Weather is a place, so the script needs coordinates. **Ask the user for theirs t
 ## Asking
 
 ```bash
-{baseDir}/scripts/weather.py show                        # today
-{baseDir}/scripts/weather.py show --date 2026-08-06      # any day up to 16 ahead
-{baseDir}/scripts/weather.py show --days 4               # a compact outlook
+{baseDir}/scripts/weather.py show                               # today, for you to answer from
+{baseDir}/scripts/weather.py show --send                        # they asked to see today
+{baseDir}/scripts/weather.py show --date 2026-08-06 --send      # any day up to 16 ahead
+{baseDir}/scripts/weather.py show --days 4 --send               # a compact outlook
 ```
 
 `show` prints two lines - the weather and the daylight:

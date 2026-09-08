@@ -6,16 +6,15 @@ process watches and fires at its time. This script creates, reads, reschedules, 
 firing a due reminder is Apollo's job.
 
 A reminder that fires happened, so Apollo moves it to archive/ with the time it went out and
-`list --all` reads it back. One that never fired is nothing to keep, so removing it drops it. Every
-command posts its own output to the user on WhatsApp via the app's localhost hook - the same "via
-reminders" channel a fired reminder uses - so the agent never relays it. All time math happens
-here, against the real clock.
+`list --all` reads it back. One that never fired is nothing to keep, so removing it drops it. A
+reminder set, changed or dropped is posted to the user on WhatsApp via the app's localhost hook -
+the same "via reminders" channel a fired reminder uses - so the agent never relays it. All time
+math happens here, against the real clock.
 """
 
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import os
 import re
@@ -23,11 +22,12 @@ import secrets
 import sys
 import tempfile
 import time
-import urllib.error
-import urllib.request
-from contextlib import redirect_stdout
 from datetime import datetime
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
+
+from apollo import Kind, command, die, run
 
 # Anchored to the workspace rather than the working directory, because where this script is run from
 # says nothing about where the user's reminders are - and a spool looked for in the wrong place reads
@@ -35,18 +35,13 @@ from pathlib import Path
 WORKSPACE = Path(os.environ.get("APOLLO_WORKSPACE") or Path.home() / "workspace")
 REMINDERS_DIR = WORKSPACE / "reminders"
 
-# How many fired reminders `list --all` shows. It is delivered to the user, so it stays skimmable;
+# How many fired reminders `list --all` shows. It stays skimmable, because it can be sent as it is;
 # anything older is in the chat archive, which the recall skill searches.
 ARCHIVE_LIMIT = 10
 
 UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
 DURATION_PART = re.compile(r"(\d+)([wdhms])")
 DURATION_FULL = re.compile(r"(?:\d+[wdhms])+")
-
-
-def die(msg: str):
-    print(f"error: {msg}", file=sys.stderr)
-    raise SystemExit(1)
 
 
 def now_ms() -> int:
@@ -246,29 +241,26 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="reminders.py", description="reminder CRUD")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    # Every command here answers to the user: each one reads or changes reminders this keeps on their
-    # behalf, so none of it happens out of their sight.
-    def command(name: str) -> argparse.ArgumentParser:
-        return sub.add_parser(name)
-
-    a = command("add")
+    # A reminder set, rescheduled or dropped is a change to what the user is expecting, so it
+    # reports to them. The list is the caller's own lookup and reaches them when they asked for it.
+    a = command(sub, "add")
     a.set_defaults(func=cmd_add)
     a.add_argument("--text", required=True)
     a.add_argument("--in", dest="in_")
     a.add_argument("--at")
 
-    li = command("list")
+    li = command(sub, "list", kind=Kind.READING)
     li.set_defaults(func=cmd_list)
     li.add_argument("--all", action="store_true", help="also show reminders that have fired")
 
-    u = command("update")
+    u = command(sub, "update")
     u.set_defaults(func=cmd_update)
     u.add_argument("query")
     u.add_argument("--text")
     u.add_argument("--in", dest="in_")
     u.add_argument("--at")
 
-    r = command("remove")
+    r = command(sub, "remove")
     r.set_defaults(func=cmd_remove)
     r.add_argument("query", nargs="?")
     r.add_argument("--all", action="store_true")
@@ -276,47 +268,8 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def deliver_to_user(text: str) -> str | None:
-    """POST the reply to the app's localhost hook, which delivers it to the user on WhatsApp and
-    returns the marker to print. Returns the response body (the marker); None only if the app
-    could not be reached at all - the one case the caller falls back for."""
-    port = os.environ.get("PORT", "8080")
-    request = urllib.request.Request(
-        f"http://127.0.0.1:{port}/internal/skill-message?source=reminders",
-        data=text.encode("utf-8"),
-        method="POST",
-        headers={"Content-Type": "text/plain; charset=utf-8"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=8) as response:
-            return response.read().decode("utf-8")
-    except urllib.error.HTTPError as error:
-        return error.read().decode("utf-8")
-    except Exception:
-        return None
-
-
 def main():
-    args = build_parser().parse_args()
-    if not WORKSPACE.is_dir():
-        die(f"no workspace at {WORKSPACE} - this is not where the user's data is")
-    # Capture the command's output so it can be delivered to the user directly, while still writing
-    # it to stdout so the agent sees it (for its reasoning and to detect delivery success/failure).
-    buffer = io.StringIO()
-    try:
-        with redirect_stdout(buffer):
-            args.func(args)
-    finally:
-        sys.stdout.write(buffer.getvalue())
-    output = buffer.getvalue()
-    if not output.strip():
-        return
-    marker = deliver_to_user(output)
-    sys.stdout.write(
-        marker
-        if marker is not None
-        else "\n[reminders: delivery FAILED - relay the output above to the user yourself]\n"
-    )
+    run("reminders", build_parser(), workspace=WORKSPACE)
 
 
 if __name__ == "__main__":

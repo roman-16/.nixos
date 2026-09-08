@@ -12,19 +12,21 @@ Turns a diagram you write into a picture on the user's phone. You write the sour
 Always two steps:
 
 1. **Write the source to a file with your `write` tool.** Never through the shell - the quoting will eat the arrows and the newlines.
-2. **Render it:**
+2. **Render it and send it:**
 
 ```bash
-{baseDir}/scripts/diagram.py render /tmp/flow.mmd --caption "how a message reaches you"
+{baseDir}/scripts/diagram.py render /tmp/flow.mmd --caption "how a message reaches you" --send
 ```
 
 The caption is one short line that sits under the picture. Leave it off when the picture speaks for itself.
 
-`--quiet` draws it and sends nothing, printing where the file landed - use it to check that something renders before you commit to sending it. `--out` puts the PNG somewhere specific.
+Without `--send` it draws the picture and sends nothing, printing where the file landed - use it to check that something renders before you commit to sending it. `--out` puts the PNG somewhere specific.
 
 ## Replying
 
-**The script delivers the picture itself**, and prints `[diagram: delivered to the user ✓ ...]`. When you see that line, **stay silent**: the user is looking at the diagram, so narrating it back is noise. Silence is written, not implied - close the turn with `<internal>…</internal>`, never with a line about staying quiet.
+**`--send` delivers the picture**, and prints `[diagram: delivered to the user ✓ ...]`. When you see that line, **stay silent**: the user is looking at the diagram, so narrating it back is noise. Silence is written, not implied - close the turn with `<internal>…</internal>`, never with a line about staying quiet.
+
+A run without it ends with `[diagram: not sent to the user - add --send to deliver it]`, so nothing arrived and there is nothing to stay silent about.
 
 If it prints `[diagram: delivery FAILED ...]`, the picture never arrived: say so in your own words.
 
@@ -73,6 +75,6 @@ Flowcharts, sequence diagrams, class diagrams, state diagrams, entity-relationsh
 
 - **The user's vault renders mermaid itself.** A diagram going into Obsidian stays as source in a ` ```mermaid ` fence - never a PNG. This skill is for the chat, where there is nothing to render it.
 - The picture is kept in the chat archive like any other, so the recall skill can find it later and the image skill can send it again without redrawing.
-- Sending it is the image skill's job, which this calls for you. To send a picture that is not a diagram - a photo from the archive, a page of a document - use that skill directly; this one is only the drawing.
+- The chat records it as "via diagram", not as a picture from nowhere. To send a picture that is not a diagram - a photo from the archive, a page of a document - use the image skill; this one is only the drawing.
 
 `{baseDir}` = this skill's directory. Always resolve to the absolute path before executing.

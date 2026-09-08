@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import difflib
-import io
 import json
 import os
 import re
@@ -27,11 +26,14 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
-from contextlib import redirect_stdout
 from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple
 from zoneinfo import ZoneInfo
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
+
+from apollo import Kind, command, die, hint, run
 
 # Anchored to the workspace rather than the working directory, because where this script is run from
 # says nothing about where the user's watches are - and a watchlist looked for in the wrong place
@@ -60,21 +62,6 @@ FUZZY_CUTOFF = 0.6
 
 # How many brands a query may match before the watch counts as too broad to be useful.
 BROAD_BRANDS = 4
-
-
-def die(msg: str):
-    print(f"error: {msg}", file=sys.stderr)
-    raise SystemExit(1)
-
-
-# Notes addressed to the caller rather than the user. What gets delivered is the command's printed
-# result, so these are collected during the run and written after it, outside that buffer.
-NOTES: list = []
-
-
-def hint(msg: str):
-    """Tell the caller something the user has no reason to read."""
-    NOTES.append(msg)
 
 
 # --- storage -------------------------------------------------------------
@@ -594,71 +581,38 @@ def cmd_digest(args):
         hint(f"[offers] nothing on offer for any of the {len(watchlist)} watch(es) - nothing sent.")
 
 
-# --- delivery ------------------------------------------------------------
-
-
-def deliver_to_user(text: str) -> str | None:
-    """POST the reply to the app's localhost hook, which delivers it to the user on WhatsApp and
-    returns the marker to print. Returns the response body (the marker); None only if the app
-    could not be reached at all - the one case the caller falls back for."""
-    port = os.environ.get("PORT", "8080")
-    request = urllib.request.Request(
-        f"http://127.0.0.1:{port}/internal/skill-message?source=offers",
-        data=text.encode("utf-8"),
-        method="POST",
-        headers={"Content-Type": "text/plain; charset=utf-8"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=8) as response:
-            return response.read().decode("utf-8")
-    except urllib.error.HTTPError as error:
-        return error.read().decode("utf-8")
-    except Exception:
-        return None
-
-
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="offers.py", description="watch products for offers")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    # `delivers` marks the commands whose output is written for the user - anything that describes
-    # their watches or the offers on them, as against the ids behind it. Two of them also take
-    # --quiet: an offer in a shop is the world's, not the user's, so the agent may read one to answer
-    # in its own words - and the briefing composes the digest into a single morning message. A watch
-    # is theirs, so nothing can read or change one out of their sight.
-    def command(name: str, *, delivers: bool = False,
-                silenceable: bool = False) -> argparse.ArgumentParser:
-        parser = sub.add_parser(name)
-        parser.set_defaults(delivers=delivers, quiet=False)
-        if silenceable:
-            parser.add_argument("--quiet", action="store_true",
-                                help="print the result here instead of sending it to the user")
-        return parser
+    # A change to the watchlist is the user's to see, so every command that makes one reports to
+    # them. Reading their watches back, and the offers running in a shop, are the caller's own
+    # lookups and reach them only when they asked to see them. The ids behind a watch are machinery:
+    # a brand id is not something the user should ever receive.
+    command(sub, "config", kind=Kind.MACHINERY).set_defaults(func=cmd_config)
 
-    command("config").set_defaults(func=cmd_config)
-
-    cs = command("config-set", delivers=True)
+    cs = command(sub, "config-set")
     cs.set_defaults(func=cmd_config_set)
     cs.add_argument("--zip", required=True)
 
-    br = command("brands")
+    br = command(sub, "brands", kind=Kind.MACHINERY)
     br.set_defaults(func=cmd_brands)
     br.add_argument("--query", required=True)
 
-    rt = command("retailers")
+    rt = command(sub, "retailers", kind=Kind.MACHINERY)
     rt.set_defaults(func=cmd_retailers)
     rt.add_argument("--query", required=True)
 
-    wa = command("watch-add", delivers=True)
+    wa = command(sub, "watch-add")
     wa.set_defaults(func=cmd_watch_add)
     wa.add_argument("--label", required=True)
     wa.add_argument("--query")
     wa.add_argument("--brands", type=id_list, default=[])
     wa.add_argument("--retailers", type=id_list, default=[])
 
-    command("watch-list", delivers=True).set_defaults(func=cmd_watch_list)
+    command(sub, "watch-list", kind=Kind.READING).set_defaults(func=cmd_watch_list)
 
-    we = command("watch-edit", delivers=True)
+    we = command(sub, "watch-edit")
     we.set_defaults(func=cmd_watch_edit)
     we.add_argument("--label", required=True)
     we.add_argument("--query")
@@ -666,11 +620,11 @@ def build_parser() -> argparse.ArgumentParser:
     we.add_argument("--retailers", type=id_list)
     we.add_argument("--rename")
 
-    wr = command("watch-rm", delivers=True)
+    wr = command(sub, "watch-rm")
     wr.set_defaults(func=cmd_watch_rm)
     wr.add_argument("--label", required=True)
 
-    se = command("search", delivers=True, silenceable=True)
+    se = command(sub, "search", kind=Kind.READING)
     se.set_defaults(func=cmd_search)
     group = se.add_mutually_exclusive_group(required=True)
     group.add_argument("--query")
@@ -679,44 +633,13 @@ def build_parser() -> argparse.ArgumentParser:
     se.add_argument("--retailers", type=id_list, default=[])
     se.add_argument("--limit", type=int, default=CAP)
 
-    command("digest", delivers=True, silenceable=True).set_defaults(func=cmd_digest)
+    command(sub, "digest", kind=Kind.READING).set_defaults(func=cmd_digest)
 
     return p
 
 
 def main():
-    args = build_parser().parse_args()
-    if not WORKSPACE.is_dir():
-        die(f"no workspace at {WORKSPACE} - this is not where the user's data is")
-    # Capture the command's output so it can be delivered to the user directly, while still writing
-    # it to stdout so the caller sees it (for its reasoning and to detect delivery success/failure).
-    buffer = io.StringIO()
-    try:
-        with redirect_stdout(buffer):
-            args.func(args)
-    finally:
-        sys.stdout.write(buffer.getvalue())
-    output = buffer.getvalue()
-    failed = False
-    if output.strip() and args.delivers:
-        if args.quiet:
-            # Say so explicitly: without a marker the caller cannot tell a silent run from a sent one.
-            sys.stdout.write("\n[offers: quiet - not sent to the user]\n")
-        else:
-            marker = deliver_to_user(output)
-            failed = marker is None
-            sys.stdout.write(
-                marker
-                if marker is not None
-                else "\n[offers: delivery FAILED - relay the output above to the user yourself]\n"
-            )
-    for note in NOTES:
-        sys.stdout.write(f"{note}\n")
-    # The digest runs unattended, so a send that never happened has to fail loudly: there is no
-    # agent reading the marker and no second chance. When the agent is the caller it relays the
-    # output instead, and the marker above tells it to.
-    if failed:
-        raise SystemExit(1)
+    run("offers", build_parser(), workspace=WORKSPACE)
 
 
 if __name__ == "__main__":

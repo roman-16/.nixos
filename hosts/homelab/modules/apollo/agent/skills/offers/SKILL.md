@@ -19,11 +19,11 @@ To the user this is just "offers" - never name the platform the data comes from,
 
 ## Replying
 
-**Anything describing the user's watches or the offers on them is written for the user** - `config-set`, `digest`, `search`, `watch-list`, `watch-add`, `watch-edit`, `watch-rm`. The script posts the output straight to them on WhatsApp (as a "via offers" message) and prints `[offers: delivered to the user ✓ ...]`. When you see that line, **stay silent** - they already have it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet.
+**Asked to see it - `--send`; needed it to decide - plain.** A change to the watchlist is theirs either way.
 
-**`search` and `digest` take `--quiet`**, and nothing else does: an offer running in a shop is the world's rather than the user's, so reading one to answer in your own words is fair game. The output is then printed here, nothing is sent, and the last line is `[offers: quiet - not sent to the user]`. **A watch is theirs**, so `watch-list`, `watch-add`, `watch-edit` and `watch-rm` always reach them - nothing about their watchlist is read or changed out of sight.
-
-**The ids behind them are machinery for you** - `config`, `brands`, `retailers`. Nothing is sent, because a brand id is not something the user should receive. Say whatever needs saying in your own words.
+- **Anything that changes a watch or the postcode** - `watch-add`, `watch-edit`, `watch-rm`, `config-set` - posts its output straight to the user on WhatsApp (as a "via offers" message) and prints `[offers: delivered to the user ✓ ...]`. No `--send`: a watch they now have is theirs to see. When you see that line, **stay silent** - they already have it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet.
+- **`digest`, `search` and `watch-list` read** - they print here and send nothing, ending with `[offers: not sent to the user - add --send to deliver it]`. Add `--send` when the user asked to _see_ the offers or their watches; leave it off when you are answering a question in your own words ("is it cheaper at Lidl?", "am I watching Milka?").
+- **The ids behind a watch are machinery for you** - `config`, `brands`, `retailers`. Nothing is ever sent, because a brand id is not something the user should receive.
 
 If the script prints `[offers: delivery FAILED ...]`, the send didn't happen: relay that output yourself, just this once (the data was still saved - don't re-run the command). It also exits non-zero in that case, because a send that silently never happened would be worse than a loud one - so treat the failure as already explained, not as something to investigate.
 
@@ -73,18 +73,19 @@ If `brands` returns several plausible matches, ask the user which they meant rat
 ## Answering "is X on offer?"
 
 ```bash
-{baseDir}/scripts/offers.py search --query "milka" --quiet
-{baseDir}/scripts/offers.py search --watch "red bull" --quiet
+{baseDir}/scripts/offers.py search --query "milka"
+{baseDir}/scripts/offers.py search --watch "red bull" --send
 ```
 
 `--watch` reuses a stored watch's pinning (names match forgivingly); `--query` is a one-off and takes `--brands`/`--retailers` too. `--limit` changes how many deals per section (default 4).
 
-Use `--quiet` and answer in your own words when the user asked a question ("is it cheaper at Lidl?", "should I wait?") - that is one message instead of a raw block plus your commentary. Run it plain only when they asked to _see_ the offers, and then say nothing after.
+Run it plain and answer in your own words when the user asked a question ("is it cheaper at Lidl?", "should I wait?") - that is one message instead of a raw block plus your commentary. Add `--send` when they asked to _see_ the offers, and then say nothing after.
 
 ## Viewing and changing watches
 
 ```bash
-{baseDir}/scripts/offers.py watch-list
+{baseDir}/scripts/offers.py watch-list --send                               # they asked to see their watches
+{baseDir}/scripts/offers.py watch-list                                      # for you: which watch to reuse, what a label is pinned to
 {baseDir}/scripts/offers.py watch-edit --label "Milka" --retailers 12769     # only what you pass changes
 {baseDir}/scripts/offers.py watch-edit --label "Monster" --rename "Monster Energy"
 {baseDir}/scripts/offers.py watch-rm --label "Monster Energy"
@@ -95,7 +96,7 @@ Use `--quiet` and answer in your own words when the user asked a question ("is i
 ## Everything at once
 
 ```bash
-{baseDir}/scripts/offers.py digest
+{baseDir}/scripts/offers.py digest --send
 ```
 
 Use this when the user asks "what's on offer right now?" across everything they follow. It reports the present state, not what changed - the same deal keeps appearing until it expires, which is intended.
@@ -133,6 +134,6 @@ Two marks can appear at the end of a line:
 - All dates are the user's local dates. Never re-derive a date from a timestamp yourself - the stored times are UTC and a window opening at 22:00Z is the _next_ day here.
 - Deals are ordered by price per unit, and only ever against the same unit - a price per piece is not comparable with a price per litre, so each unit is ranked within itself. A brand-pinned watch has one unit and this never shows.
 - Prices, dates, ordering, marks, and caps are all the script's job. Read its output; never recompute it. In particular, whether a price is net is recorded in the data - never work it out from a retailer's name, and never go reading a leaflet to find out.
-- The script delivers its own replies for `digest`, `search` and `watch-list` (see [Replying](#replying)); don't relay or restate them - that double-sends.
+- The script delivers what it sends (see [Replying](#replying)); don't relay or restate a delivered block - that double-sends.
 
 `{baseDir}` = this skill's directory. Always resolve to the absolute path before executing.

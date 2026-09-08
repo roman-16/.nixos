@@ -10,7 +10,7 @@ One message with the shape of the day: today's sky, what is on their calendar, a
 `{baseDir}` is this skill's directory. Resolve it to an absolute path before running the script.
 
 ```bash
-{baseDir}/scripts/briefing.py show
+{baseDir}/scripts/briefing.py show --send
 ```
 
 ## Reach for the parts, not the whole
@@ -27,9 +27,9 @@ Only "send me the briefing" and the like call for this script.
 
 ## Replying
 
-**Its output is written for the user**: the script posts the briefing straight to them on WhatsApp (as a "via briefing" message) and prints `[briefing: delivered to the user ✓ ...]`. When you see that line, **stay silent** - they already have it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet.
+**`show --send` posts the briefing** straight to the user on WhatsApp (as a "via briefing" message) and prints `[briefing: delivered to the user ✓ ...]`. When you see that line, **stay silent** - they already have it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet.
 
-`--quiet` prints it here and sends nothing, ending with `[briefing: quiet - not sent to the user]`. That is for checking what the briefing would say, not for relaying it.
+Without `--send` it prints the briefing here and sends nothing, ending with `[briefing: not sent to the user - add --send to deliver it]`. That is for checking what the briefing would say, not for relaying it.
 
 If the script prints `[briefing: delivery FAILED ...]`, the send didn't happen: relay the briefing yourself, just this once.
 

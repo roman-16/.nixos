@@ -11,19 +11,19 @@ from __future__ import annotations
 
 import argparse
 import difflib
-import io
 import json
 import os
 import re
 import secrets
 import sys
 import tempfile
-import urllib.error
-import urllib.request
-from contextlib import redirect_stdout
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import NamedTuple
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
+
+from apollo import Kind, command, die, hint, run
 
 # The one place the user's data lives. Anchored to the workspace rather than the working directory,
 # because where this script is run from says nothing about where their ledger is - and a store looked
@@ -61,22 +61,6 @@ NAME_NOISE = re.compile(r"[^a-z0-9]+")
 
 # A weight or volume written into a name, which is how a rate multiplied in-model arrives here.
 AMOUNT_IN_TEXT = re.compile(r"\d+(?:[.,]\d+)?\s*(?:kg|dl|cl|ml|l|g)\b", re.IGNORECASE)
-
-
-def die(msg: str):
-    print(f"error: {msg}", file=sys.stderr)
-    raise SystemExit(1)
-
-
-# Notes addressed to the caller rather than the user. What gets delivered is the command's printed
-# result - the document built up inside the output buffer - so these are collected during the run
-# and written after it, outside that buffer: same stream, never part of what the user receives.
-NOTES: list = []
-
-
-def hint(msg: str):
-    """Tell the caller something the user has no reason to read."""
-    NOTES.append(msg)
 
 
 def announce(msg: str):
@@ -1044,7 +1028,8 @@ def cmd_food_get(args):
         print(f'no exact match for "{args.query}" - did you mean: {", ".join(match.candidates)}?')
         return
     if match.kind == "none":
-        print(f'no saved food matches "{args.query}" - check food-list or estimate it')
+        print(f'no saved food matches "{args.query}"')
+        hint("[macros] check food-list or estimate it")
         return
     prefix = f'closest to "{args.query}" -> ' if match.kind == "fuzzy" else ""
     print(f"{prefix}{food_line(match.value)}")
@@ -1941,7 +1926,7 @@ def add_provenance_flags(sp):
 
 def add_amount_flags(sp, *extra):
     """Attach the mutually exclusive amount sources (command-specific `extra`
-    plus the shared --fit-*/--target-*) and the --dry-run/--date flags."""
+    plus the shared --fit-*/--target-*) and --date."""
     group = sp.add_mutually_exclusive_group()
     for name, kwargs in extra:
         group.add_argument(name, **kwargs)
@@ -1949,7 +1934,6 @@ def add_amount_flags(sp, *extra):
     group.add_argument("--fit-kcal", action="store_true")
     group.add_argument("--target-protein", type=TENTH_POSITIVE)
     group.add_argument("--target-kcal", type=WHOLE_POSITIVE)
-    sp.add_argument("--dry-run", action="store_true")
     sp.add_argument("--date")
 
 
@@ -1957,17 +1941,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="macros.py", description="daily nutrition tracker")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    # Every command's audience is settled here, not per run: `delivers` marks the ones whose output
-    # is written for the user, which is all of them but the ledger repair - every number this script
-    # prints is a record it keeps on their behalf, so it is never read or changed out of their sight.
-    def command(name: str, *, delivers: bool = True) -> argparse.ArgumentParser:
-        parser = sub.add_parser(name)
-        parser.set_defaults(delivers=delivers)
-        return parser
+    # A change to the ledger is the user's to see, so every command that makes one reports to them.
+    # Reading the ledger back is the caller's own lookup and takes --send to reach them, and so does
+    # a --dry-run, which changes nothing by definition. The ledger repair is neither.
+    command(sub, "goal", kind=Kind.READING).set_defaults(func=cmd_goal)
 
-    command("goal").set_defaults(func=cmd_goal)
-
-    g = command("goal-set")
+    g = command(sub, "goal-set")
     g.set_defaults(func=cmd_goal_set)
     g.add_argument("--phase", choices=["cut", "maintenance", "bulk"])
     g.add_argument("--tdee", type=WHOLE_POSITIVE)
@@ -1975,7 +1954,7 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--protein", type=TENTH_POSITIVE)
     g.add_argument("--weight-goal", type=TENTH_POSITIVE)
 
-    lo = command("log")
+    lo = command(sub, "log", previews=True)
     lo.set_defaults(func=cmd_log)
     lo.add_argument("--item", required=True)
     lo.add_argument("--kcal", type=WHOLE, required=True)
@@ -1985,10 +1964,9 @@ def build_parser() -> argparse.ArgumentParser:
     lo.add_argument("--note")
     lo.add_argument("--time")
     lo.add_argument("--date")
-    lo.add_argument("--dry-run", action="store_true")
     add_provenance_flags(lo)
 
-    ea = command("eat")
+    ea = command(sub, "eat", previews=True)
     ea.set_defaults(func=cmd_eat)
     ea.add_argument("--item", required=True)
     ea.add_argument("--kcal100", type=WHOLE, required=True)
@@ -2000,34 +1978,34 @@ def build_parser() -> argparse.ArgumentParser:
     add_provenance_flags(ea)
     add_amount_flags(ea, ("--amount", {"type": AMOUNT}))
 
-    sh = command("show")
+    sh = command(sub, "show", kind=Kind.READING)
     sh.set_defaults(func=cmd_show)
     sh.add_argument("--date")
 
-    sm = command("summary")
+    sm = command(sub, "summary", kind=Kind.READING)
     sm.set_defaults(func=cmd_summary)
     grp = sm.add_mutually_exclusive_group()
     grp.add_argument("--days", type=int)
     grp.add_argument("--from", dest="from_")
     sm.add_argument("--to")
 
-    w = command("weight")
+    w = command(sub, "weight")
     w.set_defaults(func=cmd_weight)
     w.add_argument("--kg", type=TENTH_POSITIVE, required=True)
     w.add_argument("--at")
     w.add_argument("--date")
 
-    rm = command("rm")
+    rm = command(sub, "rm")
     rm.set_defaults(func=cmd_rm)
     rm.add_argument("--last", action="store_true")
     rm.add_argument("--index", type=int)
     rm.add_argument("--date")
 
-    en = command("entries")
+    en = command(sub, "entries", kind=Kind.READING)
     en.set_defaults(func=cmd_entries)
     en.add_argument("--date")
 
-    ed = command("edit")
+    ed = command(sub, "edit")
     ed.set_defaults(func=cmd_edit)
     ed.add_argument("--last", action="store_true")
     ed.add_argument("--index", type=int)
@@ -2041,11 +2019,11 @@ def build_parser() -> argparse.ArgumentParser:
     ed.add_argument("--date")
     add_provenance_flags(ed)
 
-    fg = command("food-get")
+    fg = command(sub, "food-get", kind=Kind.READING)
     fg.set_defaults(func=cmd_food_get)
     fg.add_argument("query")
 
-    fa = command("food-add")
+    fa = command(sub, "food-add")
     fa.set_defaults(func=cmd_food_add)
     fa.add_argument("--name", required=True)
     fa.add_argument("--kcal100", type=WHOLE, required=True)
@@ -2059,15 +2037,15 @@ def build_parser() -> argparse.ArgumentParser:
                     help="the user asked for this food to be saved (required)")
     add_provenance_flags(fa)
 
-    command("food-list").set_defaults(func=cmd_food_list)
+    command(sub, "food-list", kind=Kind.READING).set_defaults(func=cmd_food_list)
 
-    fe = command("food-eat")
+    fe = command(sub, "food-eat", previews=True)
     fe.set_defaults(func=cmd_food_eat)
     fe.add_argument("--name", required=True)
     fe.add_argument("--estimated", action="store_true", help="the amount is your own figure")
     add_amount_flags(fe, ("--amount", {"type": AMOUNT}), ("--servings", {"type": AMOUNT}))
 
-    fed = command("food-edit")
+    fed = command(sub, "food-edit")
     fed.set_defaults(func=cmd_food_edit)
     fed.add_argument("--name", required=True)
     fed.add_argument("--kcal100", type=WHOLE)
@@ -2080,17 +2058,17 @@ def build_parser() -> argparse.ArgumentParser:
     fed.add_argument("--aliases")
     add_provenance_flags(fed)
 
-    frm = command("food-rm")
+    frm = command(sub, "food-rm")
     frm.set_defaults(func=cmd_food_rm)
     frm.add_argument("--name", required=True)
 
-    pa = command("prep-add")
+    pa = command(sub, "prep-add")
     pa.set_defaults(func=cmd_prep_add)
     pa.add_argument("--name", required=True)
     pa.add_argument("--size", type=AMOUNT)
     pa.add_argument("--unit")
 
-    psz = command("prep-size")
+    psz = command(sub, "prep-size")
     psz.set_defaults(func=cmd_prep_size)
     psz.add_argument("--name", required=True)
     grp = psz.add_mutually_exclusive_group(required=True)
@@ -2098,7 +2076,7 @@ def build_parser() -> argparse.ArgumentParser:
     grp.add_argument("--clear", action="store_true")
     psz.add_argument("--unit")
 
-    ping = command("prep-ingredient-add")
+    ping = command(sub, "prep-ingredient-add")
     ping.set_defaults(func=cmd_prep_ingredient_add)
     ping.add_argument("--name", required=True)
     ping.add_argument("--label")
@@ -2120,7 +2098,7 @@ def build_parser() -> argparse.ArgumentParser:
     ping.add_argument("--date")
     add_provenance_flags(ping)
 
-    pied = command("prep-ingredient-edit")
+    pied = command(sub, "prep-ingredient-edit")
     pied.set_defaults(func=cmd_prep_ingredient_edit)
     pied.add_argument("--name", required=True)
     pied.add_argument("--last", action="store_true")
@@ -2135,7 +2113,7 @@ def build_parser() -> argparse.ArgumentParser:
     pied.add_argument("--date")
     add_provenance_flags(pied)
 
-    pirm = command("prep-ingredient-rm")
+    pirm = command(sub, "prep-ingredient-rm")
     pirm.set_defaults(func=cmd_prep_ingredient_rm)
     pirm.add_argument("--name", required=True)
     pirm.add_argument("--last", action="store_true")
@@ -2143,19 +2121,19 @@ def build_parser() -> argparse.ArgumentParser:
     pirm.add_argument("--no-log-eaten", action="store_true")
     pirm.add_argument("--date")
 
-    pget = command("prep-get")
+    pget = command(sub, "prep-get", kind=Kind.READING)
     pget.set_defaults(func=cmd_prep_get)
     pget.add_argument("--name")
     pget.add_argument("--id")
 
-    pe = command("prep-eat")
+    pe = command(sub, "prep-eat", previews=True)
     pe.set_defaults(func=cmd_prep_eat)
     pe.add_argument("--name", required=True)
     pe.add_argument("--estimated", action="store_true", help="the portion is your own figure")
     add_amount_flags(pe, ("--of-rest", {"nargs": "?", "const": "1", "default": None}),
                      ("--of-batch", {}), ("--size", {"type": AMOUNT}))
 
-    prem = command("prep-remove")
+    prem = command(sub, "prep-remove")
     prem.set_defaults(func=cmd_prep_remove)
     prem.add_argument("--name", required=True)
     grp = prem.add_mutually_exclusive_group()
@@ -2164,7 +2142,7 @@ def build_parser() -> argparse.ArgumentParser:
     grp.add_argument("--size", type=AMOUNT)
     prem.add_argument("--date")
 
-    pun = command("prep-uneat")
+    pun = command(sub, "prep-uneat")
     pun.set_defaults(func=cmd_prep_uneat)
     pun.add_argument("--name", required=True)
     grp = pun.add_mutually_exclusive_group(required=True)
@@ -2172,67 +2150,28 @@ def build_parser() -> argparse.ArgumentParser:
     grp.add_argument("--index", type=int)
     grp.add_argument("--all", action="store_true")
 
-    par = command("prep-archive")
+    par = command(sub, "prep-archive")
     par.set_defaults(func=cmd_prep_archive)
     par.add_argument("--name", required=True)
 
-    pua = command("prep-unarchive")
+    pua = command(sub, "prep-unarchive")
     pua.set_defaults(func=cmd_prep_unarchive)
     pua.add_argument("--name")
     pua.add_argument("--id")
 
-    pl = command("prep-list")
+    pl = command(sub, "prep-list", kind=Kind.READING)
     pl.set_defaults(func=cmd_prep_list)
     pl.add_argument("--all", action="store_true")
 
-    rc = command("recompute", delivers=False)
+    rc = command(sub, "recompute", kind=Kind.MACHINERY)
     rc.set_defaults(func=cmd_recompute)
     rc.add_argument("--from", dest="from_")
 
     return p
 
 
-DELIVERY_FAILED = "\n[macros: delivery FAILED - relay the output above to the user yourself]\n"
-
-
-def deliver_to_user(text: str) -> str | None:
-    """POST the reply to the app's localhost hook, which delivers it to the user on WhatsApp and
-    returns the marker to print. Returns the response body (the marker); None only if the app
-    could not be reached at all - the one case the caller falls back for."""
-    port = os.environ.get("PORT", "8080")
-    request = urllib.request.Request(
-        f"http://127.0.0.1:{port}/internal/skill-message?source=macros",
-        data=text.encode("utf-8"),
-        method="POST",
-        headers={"Content-Type": "text/plain; charset=utf-8"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=8) as response:
-            return response.read().decode("utf-8")
-    except urllib.error.HTTPError as error:
-        return error.read().decode("utf-8")
-    except Exception:
-        return None
-
-
 def main():
-    args = build_parser().parse_args()
-    if not WORKSPACE.is_dir():
-        die(f"no workspace at {WORKSPACE} - this is not where the user's data is")
-    # Capture the command's output so it can be delivered to the user directly, while still writing
-    # it to stdout so the agent sees it (for its reasoning and to detect delivery success/failure).
-    buffer = io.StringIO()
-    try:
-        with redirect_stdout(buffer):
-            args.func(args)
-    finally:
-        sys.stdout.write(buffer.getvalue())
-    output = buffer.getvalue()
-    if output.strip() and args.delivers:
-        marker = deliver_to_user(output)
-        sys.stdout.write(marker if marker is not None else DELIVERY_FAILED)
-    for note in NOTES:
-        sys.stdout.write(f"{note}\n")
+    run("macros", build_parser(), workspace=WORKSPACE)
 
 
 if __name__ == "__main__":

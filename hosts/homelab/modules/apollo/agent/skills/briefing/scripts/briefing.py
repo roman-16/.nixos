@@ -3,8 +3,8 @@
 
 A timer sends this once a day, with nobody watching. It owns no data of its own - the sky belongs to the weather skill,
 the offers to the offers skill, the calendar to Proton - so all it does is ask each of them for
-text and post the result once. Each provider already knows how to print instead of send (that is
-what --quiet means everywhere), which is what makes one message out of four sources possible.
+text and post the result once. A read is silent everywhere until it is asked to send, which is what
+makes one message out of four sources possible.
 
 Two rules decide what appears. A section speaks when it has something to say, or when it broke:
 emptiness needs no words, so a day with no events and no offers is just the sky. And a failure
@@ -22,24 +22,23 @@ hours are - is worked out here.
 from __future__ import annotations
 
 import argparse
-import io
 import json
-import os
 import re
 import subprocess
 import sys
-import urllib.error
-import urllib.request
-from contextlib import redirect_stdout
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-# Sibling skills, found by name so the agent needs no configuration; the systemd job invokes store
-# paths, where siblings do not exist, so it passes these explicitly.
-SKILLS = Path(__file__).parent.parent.parent
-WEATHER = Path(os.environ.get("APOLLO_WEATHER_SCRIPT") or SKILLS / "weather" / "scripts" / "weather.py")
-OFFERS = Path(os.environ.get("APOLLO_OFFERS_SCRIPT") or SKILLS / "offers" / "scripts" / "offers.py")
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
+
+from apollo import Kind, command, run
+
+# Sibling skills, found by name from this file's real location, so they are the same scripts whether
+# this runs from the agent's skills directory or by path from a timer.
+SKILLS = Path(__file__).resolve().parents[2]
+WEATHER = SKILLS / "weather" / "scripts" / "weather.py"
+OFFERS = SKILLS / "offers" / "scripts" / "offers.py"
 
 WEATHER_TIMEOUT = 60
 OFFERS_TIMEOUT = 90
@@ -54,27 +53,22 @@ TZ = ZoneInfo("Europe/Vienna")
 MARKER = re.compile(r"^\[[a-z][a-z-]*[:\]]")
 
 
-def die(msg: str):
-    print(f"error: {msg}", file=sys.stderr)
-    raise SystemExit(1)
-
-
 def strip_markers(text: str) -> str:
     """A sibling's printed result, without the notes it addressed to whoever ran it."""
     kept = [line for line in text.splitlines() if not MARKER.match(line.strip())]
     return "\n".join(kept).strip()
 
 
-def run(command: list, timeout: int) -> str | None:
+def output_of(argv: list, timeout: int) -> str | None:
     """The command's output, or None when it failed. A section that cannot be produced is reported
     as unavailable rather than left out, so nothing is ever quietly missing."""
     try:
-        done = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
+        done = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, check=False)
     except (OSError, subprocess.TimeoutExpired) as error:
-        print(f"{command[0]}: {error}", file=sys.stderr)
+        print(f"{argv[0]}: {error}", file=sys.stderr)
         return None
     if done.returncode != 0:
-        print(f"{command[0]} exited {done.returncode}: {done.stderr.strip()[:400]}", file=sys.stderr)
+        print(f"{argv[0]} exited {done.returncode}: {done.stderr.strip()[:400]}", file=sys.stderr)
         return None
     return strip_markers(done.stdout)
 
@@ -83,11 +77,11 @@ def run(command: list, timeout: int) -> str | None:
 
 
 def fetch_sky() -> str | None:
-    return run([sys.executable, str(WEATHER), "show", "--quiet"], WEATHER_TIMEOUT)
+    return output_of([sys.executable, str(WEATHER), "show"], WEATHER_TIMEOUT)
 
 
 def fetch_offers() -> str | None:
-    return run([sys.executable, str(OFFERS), "digest", "--quiet"], OFFERS_TIMEOUT)
+    return output_of([sys.executable, str(OFFERS), "digest"], OFFERS_TIMEOUT)
 
 
 def calendar_window(day: date) -> tuple:
@@ -164,8 +158,8 @@ def covers(event: dict, day: date) -> bool:
 def default_calendar() -> str | None:
     """The calendar the briefing speaks for: the one new events land in. Read from the account rather
     than configured, so it follows the account when it changes and there is nothing to set up."""
-    out = run(["proton", "calendar", "settings", "get", "--output", "json", "--quiet"],
-              CALENDAR_TIMEOUT)
+    out = output_of(["proton", "calendar", "settings", "get", "--output", "json", "--quiet"],
+                    CALENDAR_TIMEOUT)
     if out is None:
         return None
     try:
@@ -184,8 +178,8 @@ def fetch_events(day: date) -> list | None:
     if calendar is None:
         return None
     start, end = calendar_window(day)
-    out = run(["proton", "calendar", "events", "list", "--start", start, "--end", end,
-               "--calendar", calendar, "--output", "json", "--quiet"], CALENDAR_TIMEOUT)
+    out = output_of(["proton", "calendar", "events", "list", "--start", start, "--end", end,
+                     "--calendar", calendar, "--output", "json", "--quiet"], CALENDAR_TIMEOUT)
     if out is None:
         return None
     events = read_events(out)
@@ -259,63 +253,17 @@ def cmd_show(args):
     print(compose(day, fetch_sky(), fetch_events(day), fetch_offers()))
 
 
-# --- delivery ------------------------------------------------------------
-
-
-def deliver_to_user(text: str) -> str | None:
-    """POST the reply to the app's localhost hook, which delivers it to the user on WhatsApp and
-    returns the marker to print. Returns the response body (the marker); None only if the app
-    could not be reached at all - the one case the caller falls back for."""
-    port = os.environ.get("PORT", "8080")
-    request = urllib.request.Request(
-        f"http://127.0.0.1:{port}/internal/skill-message?source=briefing",
-        data=text.encode("utf-8"),
-        method="POST",
-        headers={"Content-Type": "text/plain; charset=utf-8"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=8) as response:
-            return response.read().decode("utf-8")
-    except urllib.error.HTTPError as error:
-        return error.read().decode("utf-8")
-    except Exception:
-        return None
-
-
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="briefing.py", description="the day's briefing")
     sub = p.add_subparsers(dest="cmd", required=True)
-    sh = sub.add_parser("show")
-    sh.set_defaults(func=cmd_show)
-    sh.add_argument("--quiet", action="store_true",
-                    help="print the briefing here instead of sending it to the user")
+    # A briefing is composed rather than kept, so composing one changes nothing: the timer asks for
+    # it to be sent, and anyone checking what it would say reads it here.
+    command(sub, "show", kind=Kind.READING).set_defaults(func=cmd_show)
     return p
 
 
 def main():
-    args = build_parser().parse_args()
-    # Capture the output so it can be delivered to the user directly, while still writing it to
-    # stdout so the caller sees it (for its reasoning and to detect delivery success/failure).
-    buffer = io.StringIO()
-    try:
-        with redirect_stdout(buffer):
-            args.func(args)
-    finally:
-        sys.stdout.write(buffer.getvalue())
-    output = buffer.getvalue()
-    if not output.strip():
-        return
-    if args.quiet:
-        # Say so explicitly: without a marker the caller cannot tell a silent run from a sent one.
-        sys.stdout.write("\n[briefing: quiet - not sent to the user]\n")
-        return
-    marker = deliver_to_user(output)
-    if marker is not None:
-        sys.stdout.write(marker)
-        return
-    # The timer runs this with nobody watching, so a send that never happened has to fail loudly.
-    sys.stdout.write("\n[briefing: delivery FAILED - relay the output above to the user yourself]\n")
-    raise SystemExit(1)
+    run("briefing", build_parser())
 
 
 if __name__ == "__main__":

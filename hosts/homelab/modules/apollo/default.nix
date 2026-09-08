@@ -91,6 +91,10 @@ in
 
         protonSkill = import ./proton-skill.nix { inherit pkgs protonCli; };
 
+        # The agent's skills as one tree, so every script finds the shared delivery client and its
+        # sibling skills next to itself, however it was invoked.
+        skills = ./agent/skills;
+
         # Chromium for the browser skill's managed-local sessions. chrome-launcher (inside
         # `browse`) picks it up via CHROME_PATH; the flags are the standard headless-in-a-VM
         # pair - no user-namespace sandbox, and no reliance on a large /dev/shm.
@@ -136,22 +140,24 @@ in
           # MEMORY_PROMPT.md governs how MEMORY.md is folded forward when the conversation is quiet
           ln -sfn ${./agent/MEMORY_PROMPT.md} "$agentDir/MEMORY_PROMPT.md"
 
-          # Skills pi discovers from $agentDir/skills (read-only)
+          # Skills pi discovers from $agentDir/skills (read-only). Each is linked out of the one
+          # skills tree, so a script finds the shared delivery client (_shared) and its siblings
+          # beside itself; _shared is not a skill and is deliberately not linked.
           ln -sfn ${../../../../shared/modules/pi/skills/browser} "$agentDir/skills/browser"
           ln -sfn ${../../../../shared/modules/pi/skills/context7} "$agentDir/skills/context7"
           ln -sfn ${../../../../shared/modules/pi/skills/exa} "$agentDir/skills/exa"
-          ln -sfn ${./agent/skills/backup} "$agentDir/skills/backup"
-          ln -sfn ${./agent/skills/briefing} "$agentDir/skills/briefing"
-          ln -sfn ${./agent/skills/diagram} "$agentDir/skills/diagram"
-          ln -sfn ${./agent/skills/files} "$agentDir/skills/files"
-          ln -sfn ${./agent/skills/image} "$agentDir/skills/image"
-          ln -sfn ${./agent/skills/macros} "$agentDir/skills/macros"
-          ln -sfn ${./agent/skills/obsidian} "$agentDir/skills/obsidian"
-          ln -sfn ${./agent/skills/offers} "$agentDir/skills/offers"
+          ln -sfn ${skills}/backup "$agentDir/skills/backup"
+          ln -sfn ${skills}/briefing "$agentDir/skills/briefing"
+          ln -sfn ${skills}/diagram "$agentDir/skills/diagram"
+          ln -sfn ${skills}/files "$agentDir/skills/files"
+          ln -sfn ${skills}/image "$agentDir/skills/image"
+          ln -sfn ${skills}/macros "$agentDir/skills/macros"
+          ln -sfn ${skills}/obsidian "$agentDir/skills/obsidian"
+          ln -sfn ${skills}/offers "$agentDir/skills/offers"
           ln -sfn ${protonSkill} "$agentDir/skills/proton"
-          ln -sfn ${./agent/skills/recall} "$agentDir/skills/recall"
-          ln -sfn ${./agent/skills/reminders} "$agentDir/skills/reminders"
-          ln -sfn ${./agent/skills/weather} "$agentDir/skills/weather"
+          ln -sfn ${skills}/recall "$agentDir/skills/recall"
+          ln -sfn ${skills}/reminders "$agentDir/skills/reminders"
+          ln -sfn ${skills}/weather "$agentDir/skills/weather"
 
           # Extensions pi discovers from $agentDir/extensions. directory-agents-md
           # injects each vault folder's AGENTS.md on read/write/edit.
@@ -376,13 +382,7 @@ in
         scheduledJobs = {
           briefing = {
             description = "Send the day's briefing: sky, calendar and offers";
-            # The composer owns no data: it asks the weather and offers skills for their text, so it
-            # needs their scripts by path - siblings do not exist between store paths.
-            environment = {
-              APOLLO_OFFERS_SCRIPT = "${./agent/skills/offers/scripts/offers.py}";
-              APOLLO_WEATHER_SCRIPT = "${./agent/skills/weather/scripts/weather.py}";
-            };
-            exec = "${./agent/skills/briefing/scripts/briefing.py} show";
+            exec = "${skills}/briefing/scripts/briefing.py show --send";
             onCalendar = "*-*-* 08:00:00";
             packages = [
               pkgs.python3

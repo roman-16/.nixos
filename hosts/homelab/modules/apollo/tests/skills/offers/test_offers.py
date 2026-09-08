@@ -2,6 +2,7 @@ import argparse
 import sys
 from datetime import datetime
 
+import apollo
 import offers
 import pytest
 
@@ -70,7 +71,7 @@ def run(*argv):
 
 @pytest.fixture
 def store(tmp_path, monkeypatch):
-    offers.NOTES.clear()
+    apollo.NOTES.clear()
     root = tmp_path / "offers"
     monkeypatch.setattr(offers, "WORKSPACE", tmp_path)
     monkeypatch.setattr(offers, "OFFERS_DIR", root)
@@ -521,12 +522,12 @@ class TestWatchReport:
     def test_warns_that_an_unpinned_watch_is_broad(self, wired):
         wired.brands = [{"id": i, "name": f"B{i}", "resultsCount": 1} for i in range(6)]
         run("watch-add", "--label", "Kaffee")
-        assert any("broad" in note for note in offers.NOTES)
+        assert any("broad" in note for note in apollo.NOTES)
 
     def test_a_pinned_watch_is_never_called_broad(self, wired):
         wired.brands = [{"id": i, "name": f"B{i}", "resultsCount": 1} for i in range(6)]
         run("watch-add", "--label", "Monster Energy", "--brands", "4517")
-        assert not any("broad" in note for note in offers.NOTES)
+        assert not any("broad" in note for note in apollo.NOTES)
 
     def test_removing_a_watch_says_so(self, wired, capsys):
         run("watch-add", "--label", "Monster Energy", "--brands", "4517")

@@ -6,6 +6,7 @@ import subprocess
 import sys
 from datetime import datetime, timedelta
 
+import apollo
 import macros
 import pytest
 
@@ -26,7 +27,7 @@ def run(*argv):
 
 @pytest.fixture
 def store(tmp_path, monkeypatch):
-    macros.NOTES.clear()
+    apollo.NOTES.clear()
     root = tmp_path / "macros"
     monkeypatch.setattr(macros, "WORKSPACE", tmp_path)
     monkeypatch.setattr(macros, "MACROS_DIR", root)
@@ -470,7 +471,7 @@ class TestIngredientSources:
     here rather than multiplied out by the caller."""
 
     def notes(self):
-        return "\n".join(macros.NOTES)
+        return "\n".join(apollo.NOTES)
 
     def test_a_saved_food_is_scaled_by_the_amount(self, store):
         set_goal()
@@ -1116,7 +1117,7 @@ class TestShareDenominators:
     and the conversion between them never happens in the caller's head."""
 
     def notes(self):
-        return "\n".join(macros.NOTES)
+        return "\n".join(apollo.NOTES)
 
     def half_eaten(self):
         set_goal()
@@ -1125,7 +1126,7 @@ class TestShareDenominators:
 
     def test_of_rest_is_a_share_of_what_is_left(self, store):
         self.half_eaten()
-        macros.NOTES.clear()
+        apollo.NOTES.clear()
         run("prep-eat", "--name", "bolognese", "--of-rest", "0.4")
         # 40% of the 66.7% that was left, so 26.7% of the batch.
         assert macros.frac_left(one_named("bolognese")) == pytest.approx(0.4)
@@ -1140,7 +1141,7 @@ class TestShareDenominators:
         # The exact confusion this pair exists to prevent: 0.268 of the batch looks arbitrary, and
         # is 40% of the leftovers.
         self.half_eaten()
-        macros.NOTES.clear()
+        apollo.NOTES.clear()
         run("prep-eat", "--name", "bolognese", "--of-batch", "0.268", "--dry-run")
         notes = self.notes()
         assert "67% left" in notes
@@ -1150,13 +1151,13 @@ class TestShareDenominators:
     def test_a_full_batch_needs_no_such_note(self, store):
         set_goal()
         add_bolognese()
-        macros.NOTES.clear()
+        apollo.NOTES.clear()
         run("prep-eat", "--name", "bolognese", "--of-batch", "1/3", "--dry-run")
         assert self.notes() == ""
 
     def test_of_rest_is_never_second_guessed(self, store):
         self.half_eaten()
-        macros.NOTES.clear()
+        apollo.NOTES.clear()
         run("prep-eat", "--name", "bolognese", "--of-rest", "0.4", "--dry-run")
         assert self.notes() == ""
 
@@ -1167,7 +1168,7 @@ class TestShareDenominators:
 
     def test_a_removal_of_the_batch_is_flagged_the_same_way(self, store):
         self.half_eaten()
-        macros.NOTES.clear()
+        apollo.NOTES.clear()
         run("prep-remove", "--name", "bolognese", "--of-batch", "0.1")
         assert "--of-rest" in self.notes()
 
@@ -1744,99 +1745,95 @@ class TestStore:
         assert "Today" not in result.stdout
 
 
-class TestDelivery:
-    def test_deliver_to_user_posts_and_returns_the_marker(self, monkeypatch):
-        seen = {}
-
-        class Resp:
-            def read(self):
-                return "\n[macros: delivered to the user \u2713 - do not relay]\n".encode("utf-8")
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *args):
-                return False
-
-        def fake_urlopen(request, timeout=None):
-            seen["url"] = request.full_url
-            seen["data"] = request.data
-            return Resp()
-
-        monkeypatch.setattr(macros.urllib.request, "urlopen", fake_urlopen)
-        marker = macros.deliver_to_user("hello")
-        assert "source=macros" in seen["url"]
-        assert seen["data"] == b"hello"
-        assert "delivered to the user" in marker
-
-    def test_deliver_to_user_returns_error_body_on_http_error(self, monkeypatch):
-        def raise_503(request, timeout=None):
-            raise macros.urllib.error.HTTPError(
-                request.full_url, 503, "err", {},
-                io.BytesIO("\n[macros: delivery FAILED - relay the output above to the user yourself]\n".encode("utf-8")),
-            )
-
-        monkeypatch.setattr(macros.urllib.request, "urlopen", raise_503)
-        assert "delivery FAILED" in macros.deliver_to_user("hello")
-
-    def test_deliver_to_user_returns_none_when_unreachable(self, monkeypatch):
-        def boom(request, timeout=None):
-            raise OSError("refused")
-
-        monkeypatch.setattr(macros.urllib.request, "urlopen", boom)
-        assert macros.deliver_to_user("hello") is None
-
-
 class TestAudience:
     def deliver_spy(self, monkeypatch):
         sent = []
 
-        def fake(text):
+        def fake(skill, text):
             sent.append(text)
-            return "\n[macros: delivered to the user \u2713 - do not relay]\n"
+            return apollo.Delivery(True, "\n[macros: delivered to the user \u2713 - do not relay]\n")
 
-        monkeypatch.setattr(macros, "deliver_to_user", fake)
+        monkeypatch.setattr(apollo, "send_message", fake)
         return sent
 
     def invoke(self, monkeypatch, *argv):
         monkeypatch.setattr(sys, "argv", ["macros.py", *argv])
         macros.main()
 
-    def test_a_plain_command_sends_its_result(self, store, monkeypatch, capsys):
+    def test_a_logged_entry_reaches_the_user(self, store, monkeypatch, capsys):
+        set_goal()
+        sent = self.deliver_spy(monkeypatch)
+        self.invoke(monkeypatch, "log", "--item", "Burger", "--kcal", "900", "--estimated")
+        assert len(sent) == 1
+        assert "Burger" in sent[0]
+        assert "delivered to the user" in capsys.readouterr().out
+
+    def test_reading_the_ledger_back_stays_with_the_caller(self, store, monkeypatch, capsys):
         set_goal()
         sent = self.deliver_spy(monkeypatch)
         self.invoke(monkeypatch, "show")
+        out = capsys.readouterr().out
+        assert sent == []
+        assert "Target:" in out
+        assert "not sent to the user" in out
+
+    def test_a_read_the_user_asked_for_reaches_them(self, store, monkeypatch, capsys):
+        set_goal()
+        sent = self.deliver_spy(monkeypatch)
+        self.invoke(monkeypatch, "show", "--send")
         assert len(sent) == 1
         assert "Target:" in sent[0]
         assert "delivered to the user" in capsys.readouterr().out
 
-    def test_a_preview_reaches_the_user_too(self, store, monkeypatch):
+    def test_a_preview_changes_nothing_so_it_is_a_read(self, store, monkeypatch, capsys):
         set_goal()
         sent = self.deliver_spy(monkeypatch)
-        self.invoke(monkeypatch, "log", "--item", "Second helping", "--kcal", "600", "--dry-run", "--exact")
+        self.invoke(monkeypatch, "log", "--item", "Second helping", "--kcal", "600",
+                    "--dry-run", "--exact")
+        assert sent == []
+        assert "Second helping" in capsys.readouterr().out
+        self.invoke(monkeypatch, "log", "--item", "Second helping", "--kcal", "600",
+                    "--dry-run", "--exact", "--send")
         assert len(sent) == 1
         assert "Second helping" in sent[0]
 
-    def test_nothing_can_be_read_out_of_the_users_sight(self):
+    def test_every_record_the_user_keeps_reports_when_it_changes(self):
         parser = macros.build_parser()
-        for name in ("goal", "log", "eat", "show", "summary", "weight", "rm", "entries", "edit",
-                     "food-get", "food-add", "food-list", "food-eat", "food-edit", "food-rm",
-                     "prep-add", "prep-eat", "prep-get", "prep-list"):
+        for name in ("goal-set", "log", "eat", "weight", "rm", "edit", "food-add", "food-eat",
+                     "food-edit", "food-rm", "prep-add", "prep-eat", "prep-remove",
+                     "prep-archive"):
             args = parser.parse_args(macros_args(name))
-            assert args.delivers is True, name
-            assert not hasattr(args, "quiet"), name
+            assert args.kind is macros.Kind.RECEIPT, name
+
+    def test_every_look_at_it_is_the_callers_own(self):
+        parser = macros.build_parser()
+        for name in ("goal", "show", "summary", "entries", "food-get", "food-list", "prep-get",
+                     "prep-list"):
+            args = parser.parse_args(macros_args(name))
+            assert args.kind is macros.Kind.READING, name
+            assert args.send is False, name
+
+    def test_only_a_preview_can_be_asked_to_send_a_write(self):
+        parser = macros.build_parser()
+        for name in ("log", "eat", "food-eat", "prep-eat"):
+            assert parser.parse_args([*macros_args(name), "--dry-run", "--send"]).send is True, name
+        for name in ("weight", "food-add", "food-rm", "prep-add"):
+            with pytest.raises(SystemExit):
+                parser.parse_args([*macros_args(name), "--send"])
 
     def test_the_ledger_repair_reports_to_the_caller(self, store, monkeypatch, capsys):
         sent = self.deliver_spy(monkeypatch)
         self.invoke(monkeypatch, "recompute")
+        out = capsys.readouterr().out
         assert sent == []
-        assert "recomputed" in capsys.readouterr().out
+        assert "recomputed" in out
+        assert "not sent to the user" not in out
 
     def test_a_note_never_reaches_the_user(self, store, monkeypatch, capsys):
         set_goal()
         sent = self.deliver_spy(monkeypatch)
         macros.hint("[macros] a private note")
-        self.invoke(monkeypatch, "show")
+        self.invoke(monkeypatch, "show", "--send")
         assert "private note" not in sent[0]
         assert "private note" in capsys.readouterr().out
 
@@ -1971,7 +1968,7 @@ class TestSavingWhatRepeats:
             self.eat(item, ago=ago)
 
     def notes(self):
-        return "\n".join(macros.NOTES)
+        return "\n".join(apollo.NOTES)
 
     def foods(self):
         return macros.load(macros.FOOD_FILE, {})
@@ -2060,7 +2057,7 @@ class TestSavingWhatRepeats:
         set_goal()
         self.eat_on(2, 1, 0)
         capsys.readouterr()
-        macros.NOTES.clear()
+        apollo.NOTES.clear()
         self.eat("Kinder")
         assert "Saved" not in capsys.readouterr().out
         assert "already saved" in self.notes()
@@ -2194,9 +2191,9 @@ class TestPrepIngredientsCount:
         set_goal()
         for ago, batch in ((2, "Dough"), (1, "Cookies"), (0, "Brownies")):
             self.into(batch, ago=ago)
-        macros.NOTES.clear()
+        apollo.NOTES.clear()
         self.into("Shortbread")
-        notes = "\n".join(macros.NOTES)
+        notes = "\n".join(apollo.NOTES)
         assert '"Butter" is already saved' in notes
         assert 'prep-ingredient-add --name "Shortbread" --food "Butter"' in notes
 
@@ -2271,7 +2268,7 @@ class TestGuessedOverSavedFood:
         run("eat", "--item", item, "--kcal100", kcal, "--amount", "10", "--exact")
 
     def notes(self):
-        return "\n".join(macros.NOTES)
+        return "\n".join(apollo.NOTES)
 
     def test_names_the_saved_food_and_both_numbers(self, store):
         set_goal()
@@ -2328,7 +2325,7 @@ class TestGuessedOverSavedFood:
         set_goal()
         self.save_sriracha()
         for ago in reversed(range(macros.DAYS_TO_SAVE)):
-            macros.NOTES.clear()
+            apollo.NOTES.clear()
             run("eat", "--item", "Sriracha", "--kcal100", "93", "--amount", "10",
                 "--date", days_ago(ago), "--exact")
         assert macros.load(macros.FOOD_FILE, {})["sriracha"]["per100"]["kcal"] == 137
@@ -2792,9 +2789,9 @@ class TestSavingAGuessedFood:
         set_goal()
         run("food-add", "--name", "Grapes", "--kcal100", "50", "--protein100", "0.5",
             "--fat100", "0.1", "--carbs100", "12", "--serving", "200", "--asked", "--estimated")
-        macros.NOTES.clear()
+        apollo.NOTES.clear()
         self.eat_grapes(0, "--exact")
-        notes = "\n".join(macros.NOTES)
+        notes = "\n".join(apollo.NOTES)
         assert 'the saved "Grapes" is an estimate at 50 kcal/100g' in notes
         assert 'food-edit --name "Grapes" --kcal100 69' in notes
         assert "--exact" in notes
@@ -2803,8 +2800,8 @@ class TestSavingAGuessedFood:
         set_goal()
         run("food-add", "--name", "Grapes", "--kcal100", "50", "--protein100", "0.5",
             "--fat100", "0.1", "--carbs100", "12", "--serving", "200", "--asked", "--exact")
-        macros.NOTES.clear()
+        apollo.NOTES.clear()
         self.eat_grapes(0, "--estimated")
-        notes = "\n".join(macros.NOTES)
+        notes = "\n".join(apollo.NOTES)
         assert 'a saved food "Grapes" already exists at 50 kcal/100g' in notes
         assert 'food-eat --name "Grapes" --amount 552' in notes
