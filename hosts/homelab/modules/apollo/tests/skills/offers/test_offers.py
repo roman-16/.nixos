@@ -591,33 +591,27 @@ class TestWatchLine:
 
 
 class TestAudience:
-    def test_everything_describing_watches_or_offers_is_written_for_the_user(self):
+    def test_a_change_to_the_watchlist_reports_to_the_user(self):
         parser = offers.build_parser()
-        for argv in (["digest"], ["watch-list"], ["search", "--query", "x"],
-                     ["watch-add", "--label", "x"], ["watch-edit", "--label", "x", "--query", "y"],
-                     ["watch-rm", "--label", "x"]):
-            assert parser.parse_args(argv).delivers is True, argv
+        for argv in (["config-set", "--zip", "1010"], ["watch-add", "--label", "x"],
+                     ["watch-edit", "--label", "x", "--query", "y"], ["watch-rm", "--label", "x"]):
+            assert parser.parse_args(argv).kind is offers.Kind.RECEIPT, argv
+            with pytest.raises(SystemExit):
+                parser.parse_args([*argv, "--send"])
 
-    def test_the_ids_behind_them_are_not_sent(self):
+    def test_the_watches_and_the_offers_on_them_are_read_and_sent_on_request(self):
+        parser = offers.build_parser()
+        for argv in (["digest"], ["watch-list"], ["search", "--query", "x"]):
+            assert parser.parse_args(argv).kind is offers.Kind.READING, argv
+            assert parser.parse_args(argv).send is False, argv
+            assert parser.parse_args([*argv, "--send"]).send is True, argv
+
+    def test_the_ids_behind_them_are_never_sent(self):
         parser = offers.build_parser()
         for argv in (["config"], ["brands", "--query", "x"], ["retailers", "--query", "x"]):
-            assert parser.parse_args(argv).delivers is False, argv
-
-    def test_the_postcode_it_is_set_to_reaches_the_user(self):
-        assert offers.build_parser().parse_args(["config-set", "--zip", "1010"]).delivers is True
-
-    def test_only_offers_in_a_shop_can_be_read_without_sending_them(self):
-        parser = offers.build_parser()
-        for argv in (["search", "--query", "x"], ["digest"]):
-            assert parser.parse_args([*argv, "--quiet"]).quiet is True, argv
-
-    def test_a_watch_is_the_users_so_nothing_reads_one_out_of_their_sight(self):
-        parser = offers.build_parser()
-        for argv in (["watch-add", "--label", "x"], ["watch-list"],
-                     ["watch-edit", "--label", "x", "--query", "y"], ["watch-rm", "--label", "x"]):
-            assert parser.parse_args(argv).quiet is False, argv
+            assert parser.parse_args(argv).kind is offers.Kind.MACHINERY, argv
             with pytest.raises(SystemExit):
-                parser.parse_args([*argv, "--quiet"])
+                parser.parse_args([*argv, "--send"])
 
     def test_search_needs_a_query_or_a_watch(self):
         with pytest.raises(SystemExit):
@@ -629,7 +623,7 @@ class TestAudience:
 
 
 class TestDelivery:
-    """main()'s exit code, which is the only thing the unattended 09:00 run can be judged by."""
+    """What the user ends up with, and the exit code a run with nobody watching is judged by."""
 
     def invoke(self, monkeypatch, *argv):
         monkeypatch.setattr(sys, "argv", ["offers.py", *argv])
@@ -638,37 +632,40 @@ class TestDelivery:
     def spy(self, monkeypatch, *, reachable=True):
         sent = []
 
-        def fake(text):
+        def fake(skill, text):
             sent.append(text)
-            return "\n[offers: delivered to the user \u2713]\n" if reachable else None
+            marker = f"\n[{skill}: delivered to the user \u2713]\n" if reachable else \
+                f"\n[{skill}: delivery FAILED]\n"
+            return apollo.Delivery(reachable, marker)
 
-        monkeypatch.setattr(offers, "deliver_to_user", fake)
+        monkeypatch.setattr(apollo, "send_message", fake)
         return sent
 
-    def test_a_delivered_watch_list_sends_and_succeeds(self, wired, monkeypatch, capsys):
+    def test_a_watch_list_the_user_asked_for_sends_and_succeeds(self, wired, monkeypatch, capsys):
         run("watch-add", "--label", "Red Bull")
         sent = self.spy(monkeypatch)
-        self.invoke(monkeypatch, "watch-list")
+        self.invoke(monkeypatch, "watch-list", "--send")
         assert len(sent) == 1
         assert "Red Bull" in sent[0]
         assert "delivered to the user" in capsys.readouterr().out
 
-    def test_a_quiet_digest_sends_nothing_and_says_so(self, wired, monkeypatch, capsys):
+    def test_a_digest_read_for_the_caller_sends_nothing_and_says_so(self, wired, monkeypatch,
+                                                                   capsys):
         run("watch-add", "--label", "Red Bull", "--brands", "5693")
         wired.found = [offer(advertisers=[{"name": "BILLA"}])]
         sent = self.spy(monkeypatch)
         capsys.readouterr()
-        self.invoke(monkeypatch, "digest", "--quiet")
+        self.invoke(monkeypatch, "digest")
         out = capsys.readouterr().out
         assert sent == []
         assert "BILLA" in out
-        assert "quiet - not sent to the user" in out
+        assert "not sent to the user" in out
 
     def test_an_undeliverable_send_fails_loudly(self, wired, monkeypatch, capsys):
         run("watch-add", "--label", "Red Bull")
         self.spy(monkeypatch, reachable=False)
         with pytest.raises(SystemExit) as exit_info:
-            self.invoke(monkeypatch, "watch-list")
+            self.invoke(monkeypatch, "watch-list", "--send")
         assert exit_info.value.code == 1
         assert "delivery FAILED" in capsys.readouterr().out
 
@@ -684,6 +681,6 @@ class TestDelivery:
         sent = self.spy(monkeypatch, reachable=False)
         run("config-set", "--zip", "4020")
         capsys.readouterr()
-        self.invoke(monkeypatch, "digest")  # no watches, so it never reaches the network
+        self.invoke(monkeypatch, "digest", "--send")  # no watches, so it never reaches the network
         assert sent == []
         assert "nothing is being watched" in capsys.readouterr().out

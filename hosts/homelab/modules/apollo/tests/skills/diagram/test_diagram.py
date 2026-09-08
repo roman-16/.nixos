@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import apollo
 import diagram
 import pytest
 
@@ -7,6 +8,26 @@ import pytest
 def run(*argv):
     args = diagram.build_parser().parse_args(list(argv))
     args.func(args)
+
+
+def drawn(tmp_path, monkeypatch) -> Path:
+    """A source file whose render produces a picture, without a browser being started."""
+    source = tmp_path / "flow.mmd"
+    source.write_text("flowchart TD\n  A --> B")
+    monkeypatch.setattr(diagram, "render", lambda _source, target: target.write_bytes(b"x" * 2000))
+    return source
+
+
+def spy(monkeypatch) -> list:
+    """What was handed to the app to put in front of the user."""
+    sent = []
+
+    def fake(skill, image, caption):
+        sent.append((skill, image, caption))
+        return apollo.Delivery(True, f"\n[{skill}: delivered to the user \u2713]\n")
+
+    monkeypatch.setattr(diagram, "send_image", fake)
+    return sent
 
 
 class TestPreflight:
@@ -97,11 +118,10 @@ class TestRenderCommand:
     def test_a_failed_render_sends_nothing_and_says_so(self, tmp_path, capsys, monkeypatch):
         source = tmp_path / "broken.mmd"
         source.write_text("flowchart TD\n  A --> end[Done]")
-        sent = []
-        monkeypatch.setattr(diagram, "deliver", lambda *args: sent.append(args) or (True, ""))
+        sent = spy(monkeypatch)
         monkeypatch.setattr(diagram, "render", lambda *args: diagram.die("Parse error on line 2"))
         with pytest.raises(SystemExit):
-            run("render", str(source))
+            run("render", str(source), "--send")
         captured = capsys.readouterr()
         assert sent == []
         assert "Parse error" in captured.err
@@ -109,40 +129,26 @@ class TestRenderCommand:
         assert "closes a block" in captured.out
 
     def test_a_drawn_diagram_is_delivered_with_its_caption(self, tmp_path, monkeypatch):
-        source = tmp_path / "flow.mmd"
-        source.write_text("flowchart TD\n  A --> B")
         out = tmp_path / "flow.png"
-        sent = []
-        monkeypatch.setattr(diagram, "render", lambda _source, target: target.write_bytes(b"x" * 2000))
-        monkeypatch.setattr(
-            diagram, "deliver", lambda image, caption: (sent.append((image, caption)), (True, ""))[1]
-        )
-        run("render", str(source), "--caption", "how it flows", "--out", str(out))
-        assert sent == [(out, "how it flows")]
+        sent = spy(monkeypatch)
+        run("render", str(drawn(tmp_path, monkeypatch)), "--caption", "how it flows",
+            "--out", str(out), "--send")
+        assert sent == [("diagram", out, "how it flows")]
 
     def test_no_caption_delivers_the_picture_alone(self, tmp_path, monkeypatch):
-        source = tmp_path / "flow.mmd"
-        source.write_text("flowchart TD\n  A --> B")
-        sent = []
-        monkeypatch.setattr(diagram, "render", lambda _source, target: target.write_bytes(b"x" * 2000))
-        monkeypatch.setattr(
-            diagram, "deliver", lambda image, caption: (sent.append((image, caption)), (True, ""))[1]
-        )
-        run("render", str(source), "--out", str(tmp_path / "flow.png"))
-        assert sent[0][1] == ""
+        sent = spy(monkeypatch)
+        run("render", str(drawn(tmp_path, monkeypatch)), "--out", str(tmp_path / "flow.png"),
+            "--send")
+        assert sent[0][2] == ""
 
-    def test_quiet_draws_it_and_sends_nothing(self, tmp_path, capsys, monkeypatch):
-        source = tmp_path / "flow.mmd"
-        source.write_text("flowchart TD\n  A --> B")
+    def test_without_send_it_draws_it_and_sends_nothing(self, tmp_path, capsys, monkeypatch):
         out = tmp_path / "flow.png"
-        sent = []
-        monkeypatch.setattr(diagram, "render", lambda _source, target: target.write_bytes(b"x" * 2000))
-        monkeypatch.setattr(diagram, "deliver", lambda *args: sent.append(args) or (True, ""))
-        run("render", str(source), "--quiet", "--out", str(out))
+        sent = spy(monkeypatch)
+        run("render", str(drawn(tmp_path, monkeypatch)), "--out", str(out))
         captured = capsys.readouterr().out
         assert sent == []
         assert str(out) in captured
-        assert "quiet - not sent to the user" in captured
+        assert "not sent to the user - add --send to deliver it" in captured
 
 
 class TestPngSize:
@@ -184,102 +190,34 @@ class TestShapeHint:
 
 
 class TestDelivery:
-    def draw(self, tmp_path, monkeypatch, answer):
-        source = tmp_path / "flow.mmd"
-        source.write_text("flowchart TD\n  A --> B")
-        monkeypatch.setattr(diagram, "render", lambda _s, target: target.write_bytes(b"x" * 2000))
-        monkeypatch.setattr(diagram, "deliver", lambda *args: answer)
-        return source
+    def answer(self, tmp_path, monkeypatch, delivery):
+        monkeypatch.setattr(diagram, "send_image", lambda *args: delivery)
+        return drawn(tmp_path, monkeypatch)
 
     def test_a_delivered_diagram_echoes_the_marker_and_succeeds(self, tmp_path, monkeypatch, capsys):
-        source = self.draw(tmp_path, monkeypatch, (True, "\n[diagram: delivered to the user \u2713]\n"))
-        run("render", str(source), "--out", str(tmp_path / "flow.png"))
+        source = self.answer(tmp_path, monkeypatch,
+                             apollo.Delivery(True, "\n[diagram: delivered to the user \u2713]\n"))
+        run("render", str(source), "--out", str(tmp_path / "flow.png"), "--send")
         assert "delivered to the user" in capsys.readouterr().out
 
     def test_a_failed_delivery_says_so_and_fails_loudly(self, tmp_path, monkeypatch, capsys):
-        source = self.draw(tmp_path, monkeypatch, (False, "\n[diagram: delivery FAILED]\n"))
+        source = self.answer(tmp_path, monkeypatch,
+                             apollo.Delivery(False, "\n[diagram: delivery FAILED]\n"))
         with pytest.raises(SystemExit) as exit_info:
-            run("render", str(source), "--out", str(tmp_path / "flow.png"))
+            run("render", str(source), "--out", str(tmp_path / "flow.png"), "--send")
         assert exit_info.value.code == 1
         assert "delivery FAILED" in capsys.readouterr().out
 
-
-class TestHandOff:
-    """Drawing is this skill's job; getting the picture to the user is the image skill's."""
-
-    def invoke(self, tmp_path, monkeypatch, returncode=0, stdout="ok", stderr=""):
-        calls = []
-
-        class Done:
-            def __init__(self):
-                self.returncode = returncode
-                self.stdout = stdout
-                self.stderr = stderr
-
-        def fake_run(command, **kwargs):
-            calls.append(command)
-            return Done()
-
-        monkeypatch.setattr(diagram.subprocess, "run", fake_run)
-        return calls, diagram.deliver(tmp_path / "flow.png", "how it flows")
-
-    def test_it_hands_the_picture_to_the_image_skill(self, tmp_path, monkeypatch):
-        calls, _ = self.invoke(tmp_path, monkeypatch)
-        assert str(diagram.IMAGE) in calls[0]
-        assert "send" in calls[0]
-        assert str(tmp_path / "flow.png") in calls[0]
-
-    def test_the_chat_records_it_as_a_diagram_not_an_image(self, tmp_path, monkeypatch):
-        calls, _ = self.invoke(tmp_path, monkeypatch)
-        assert calls[0][calls[0].index("--source") + 1] == "diagram"
-
-    def test_the_caption_is_passed_along(self, tmp_path, monkeypatch):
-        calls, _ = self.invoke(tmp_path, monkeypatch)
-        assert calls[0][calls[0].index("--caption") + 1] == "how it flows"
-
-    def test_no_caption_flag_when_there_is_no_caption(self, tmp_path, monkeypatch):
-        calls = []
-        monkeypatch.setattr(diagram.subprocess, "run",
-                            lambda command, **kw: calls.append(command) or type(
-                                "D", (), {"returncode": 0, "stdout": "", "stderr": ""})())
-        diagram.deliver(tmp_path / "flow.png", "")
-        assert "--caption" not in calls[0]
-
-    def test_the_image_skills_answer_is_passed_on_exactly(self, tmp_path, monkeypatch):
-        _, (delivered, marker) = self.invoke(
-            tmp_path, monkeypatch, stdout="\n[diagram: delivered to the user \u2713]\n")
-        assert delivered is True
-        assert marker == "\n[diagram: delivered to the user \u2713]\n"
-
-    def test_a_refusal_is_reported_as_a_failure(self, tmp_path, monkeypatch):
-        _, (delivered, marker) = self.invoke(
-            tmp_path, monkeypatch, returncode=1, stdout="cannot send: not an image")
-        assert delivered is False
-        assert "cannot send" in marker
-
-    def test_a_missing_image_skill_fails_instead_of_crashing(self, tmp_path, monkeypatch):
-        def missing(command, **kwargs):
-            raise FileNotFoundError("no such file")
-
-        monkeypatch.setattr(diagram.subprocess, "run", missing)
-        delivered, marker = diagram.deliver(tmp_path / "flow.png", "x")
-        assert delivered is False
-        assert "could not be sent" in marker
+    def test_the_chat_records_it_as_a_diagram_not_a_picture_from_nowhere(self, tmp_path,
+                                                                        monkeypatch):
+        sent = spy(monkeypatch)
+        run("render", str(drawn(tmp_path, monkeypatch)), "--out", str(tmp_path / "flow.png"),
+            "--send")
+        assert sent[0][0] == "diagram"
 
 
 class TestSkillLayout:
-    def test_the_image_skill_is_found_next_door(self):
-        # Each skill is its own store path on the VM, so resolving symlinks here would look for a
-        # sibling outside the skills directory and never find one.
-        assert diagram.IMAGE.name == "image.py"
-        assert diagram.IMAGE.parent.parent.name == "image"
-        assert diagram.IMAGE.parent.parent.parent == diagram.SKILL.parent
-
-    def test_the_override_wins_when_the_layout_does_not_hold(self, monkeypatch):
-        monkeypatch.setenv("APOLLO_IMAGE_SCRIPT", "/somewhere/else/image.py")
-        import importlib
-
-        reloaded = importlib.reload(diagram)
-        assert str(reloaded.IMAGE) == "/somewhere/else/image.py"
-        monkeypatch.delenv("APOLLO_IMAGE_SCRIPT")
-        importlib.reload(diagram)
+    def test_the_style_files_it_draws_with_are_its_own(self):
+        assert diagram.SKILL.name == "diagram"
+        assert diagram.CONFIG.parent == diagram.SKILL
+        assert diagram.PUPPETEER.parent == diagram.SKILL

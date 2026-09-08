@@ -42,7 +42,7 @@ Never write "estimated" into a `--note`: a note is prose that nothing is ever re
 
 When you see `[macros: delivered to the user ✓ ...]`, **stay silent** - don't repeat, summarize, rephrase, or comment on it. They already have it verbatim, and restating it double-sends. Silence is written, not implied: close the turn with `<internal>…</internal>`, never with a line about staying quiet.
 
-**Never retype numbers into a message of your own**: a rate, a total or a portion the user reads must be one the script computed and sent. So a question whose answer *is* the block gets `--send` and nothing after it; a question the block only informs gets read plain, and you answer in one line.
+**Never retype numbers into a message of your own**: a rate, a total or a portion the user reads must be one the script computed and sent. So a question whose answer _is_ the block gets `--send` and nothing after it; a question the block only informs gets read plain, and you answer in one line.
 
 - **"Show me today", "what did I have yesterday?", "how am I doing this week?"**: `show --send`, `summary --send` - the block is the answer, so say nothing after.
 - **"Do you have yfood saved?", "how much of the batch is left?"**: read it plain and answer in your own words - one message instead of a raw block plus a line.

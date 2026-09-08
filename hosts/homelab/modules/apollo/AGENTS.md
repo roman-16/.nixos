@@ -21,6 +21,6 @@ Never write the user's real name anywhere in this project - code, comments, test
 ## Tests
 
 - Tests live under `tests/`, mirroring the `src/` tree: `src/foo/bar.ts` is tested by `tests/foo/bar.test.ts`.
-- Skill scripts (Python) are tested under `tests/skills/<skill>/` (e.g. `agent/skills/macros/scripts/macros.py` -> `tests/skills/macros/test_macros.py`), run with `pytest tests/skills/`; each skill dir keeps its own `conftest.py` that puts its script on the path.
-- A test file only tests things defined in its corresponding source file. It does not import or assert behaviour from other modules.
+- Skill scripts (Python) are tested under `tests/skills/<skill>/` (e.g. `agent/skills/macros/scripts/macros.py` -> `tests/skills/macros/test_macros.py`), run with `pytest tests/skills/`; each skill dir keeps its own `conftest.py` that puts its script on the path, and `tests/skills/conftest.py` puts the shared delivery client (`agent/skills/_shared/apollo.py`, tested in `tests/skills/_shared/`) on it for all of them.
+- A test file only tests things defined in its corresponding source file. It does not import or assert behaviour from other modules - `apollo` is imported only to stand in for the app while a skill's own audience decisions are checked.
 - Not every file needs tests. Cover pure, self-contained logic; skip files that are only side effects or thin I/O wrappers (e.g. `index.ts`, `whatsapp.ts`).

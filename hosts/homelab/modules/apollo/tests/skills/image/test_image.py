@@ -2,6 +2,7 @@ import io
 import urllib.error
 from urllib.parse import parse_qs, urlparse
 
+import apollo
 import image
 import pytest
 
@@ -34,7 +35,7 @@ def hook(monkeypatch):
         sent.append(request)
         return Response("\n[image: delivered to the user \u2713]\n")
 
-    monkeypatch.setattr(image.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(apollo.urllib.request, "urlopen", fake_urlopen)
     return sent
 
 
@@ -75,13 +76,9 @@ class TestDeliver:
         run("send", str(tmp_path / "x.png"))
         assert hook[0].data == b""
 
-    def test_it_is_recorded_as_an_image_by_default(self, hook, tmp_path):
+    def test_it_is_recorded_as_an_image(self, hook, tmp_path):
         run("send", str(tmp_path / "x.png"))
         assert query(hook[0])["source"] == "image"
-
-    def test_another_skill_can_say_what_it_is(self, hook, tmp_path):
-        run("send", str(tmp_path / "x.png"), "--source", "diagram")
-        assert query(hook[0])["source"] == "diagram"
 
     def test_a_relative_path_is_made_absolute(self, hook, tmp_path, monkeypatch):
         # The app resolves what it is handed against its own directory, not the caller's.
@@ -108,7 +105,7 @@ class TestOutcome:
                 io.BytesIO(b"cannot send /tmp/x.pdf: that file is not an image\n"),
             )
 
-        monkeypatch.setattr(image.urllib.request, "urlopen", refuse)
+        monkeypatch.setattr(apollo.urllib.request, "urlopen", refuse)
         with pytest.raises(SystemExit) as exit_info:
             run("send", str(tmp_path / "x.pdf"))
         assert exit_info.value.code == 1
@@ -123,7 +120,7 @@ class TestOutcome:
                 io.BytesIO(b"\n[image: delivery FAILED - relay the output above yourself]\n"),
             )
 
-        monkeypatch.setattr(image.urllib.request, "urlopen", unavailable)
+        monkeypatch.setattr(apollo.urllib.request, "urlopen", unavailable)
         with pytest.raises(SystemExit):
             run("send", str(tmp_path / "x.png"))
         assert "delivery FAILED" in capsys.readouterr().out
@@ -134,10 +131,10 @@ class TestOutcome:
         def refused(request, timeout=None):
             raise OSError("Connection refused")
 
-        monkeypatch.setattr(image.urllib.request, "urlopen", refused)
+        monkeypatch.setattr(apollo.urllib.request, "urlopen", refused)
         with pytest.raises(SystemExit) as exit_info:
-            run("send", str(tmp_path / "x.png"), "--source", "diagram")
+            run("send", str(tmp_path / "x.png"))
         assert exit_info.value.code == 1
         out = capsys.readouterr().out
         assert "could not reach the app" in out
-        assert out.startswith("\n[diagram:")  # tagged as whoever was sending
+        assert out.startswith("\n[image:")

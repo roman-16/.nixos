@@ -18,8 +18,11 @@ import { describe, expect, it } from "bun:test";
 
 const SKILLS_DIR = join(import.meta.dir, "../agent/skills");
 
-const skills = readdirSync(SKILLS_DIR).filter((name) =>
-  statSync(join(SKILLS_DIR, name)).isDirectory(),
+/** The delivery client every skill imports. It ships in the tree but is not a skill. */
+const SHARED = "_shared";
+
+const skills = readdirSync(SKILLS_DIR).filter(
+  (name) => name !== SHARED && statSync(join(SKILLS_DIR, name)).isDirectory(),
 );
 
 /** The scripts a skill ships. Some skills have none, and scripts/ also collects stray bytecode. */
@@ -40,6 +43,11 @@ interface SkillFrontmatter extends Record<string, unknown> {
 describe("shipped skills", () => {
   it("are found where the setup script links them from", () => {
     expect(skills.length).toBeGreaterThan(0);
+  });
+
+  it("the delivery client is not one of them, so pi never tries to load it", () => {
+    expect(existsSync(join(SKILLS_DIR, SHARED, "apollo.py"))).toBe(true);
+    expect(existsSync(join(SKILLS_DIR, SHARED, "SKILL.md"))).toBe(false);
   });
 
   it("a colon in an unquoted description is what silently unloads one", () => {

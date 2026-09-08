@@ -2,6 +2,7 @@ import argparse
 import sys
 from datetime import date, timedelta
 
+import apollo
 import pytest
 import weather
 
@@ -291,29 +292,29 @@ class TestAudience:
     def spy(self, monkeypatch):
         sent = []
 
-        def fake(text):
+        def fake(skill, text):
             sent.append(text)
-            return "\n[weather: delivered to the user \u2713]\n"
+            return apollo.Delivery(True, "\n[weather: delivered to the user \u2713]\n")
 
-        monkeypatch.setattr(weather, "deliver_to_user", fake)
+        monkeypatch.setattr(apollo, "send_message", fake)
         return sent
 
-    def test_the_sky_is_written_for_the_user(self, store, canned, monkeypatch, capsys):
+    def test_a_forecast_is_read_here_and_sent_nowhere(self, store, canned, monkeypatch, capsys):
         configured()
         sent = self.spy(monkeypatch)
         self.invoke(monkeypatch, "show")
-        assert len(sent) == 1
-        assert "Graz" in sent[0]
-        assert "delivered to the user" in capsys.readouterr().out
-
-    def test_quiet_sends_nothing_and_says_so(self, store, canned, monkeypatch, capsys):
-        configured()
-        sent = self.spy(monkeypatch)
-        self.invoke(monkeypatch, "show", "--quiet")
         out = capsys.readouterr().out
         assert sent == []
         assert "Graz" in out
-        assert "quiet - not sent to the user" in out
+        assert "not sent to the user" in out
+
+    def test_the_sky_the_user_asked_to_see_reaches_them(self, store, canned, monkeypatch, capsys):
+        configured()
+        sent = self.spy(monkeypatch)
+        self.invoke(monkeypatch, "show", "--send")
+        assert len(sent) == 1
+        assert "Graz" in sent[0]
+        assert "delivered to the user" in capsys.readouterr().out
 
     def test_the_place_it_is_set_to_reaches_the_user(self, store, monkeypatch):
         sent = self.spy(monkeypatch)
@@ -326,15 +327,19 @@ class TestAudience:
         sent = self.spy(monkeypatch)
         capsys.readouterr()
         self.invoke(monkeypatch, "config")
+        out = capsys.readouterr().out
         assert sent == []
-        assert "Graz" in capsys.readouterr().out
+        assert "Graz" in out
+        assert "not sent to the user" not in out
 
-    def test_only_the_forecast_can_be_read_without_sending_it(self):
+    def test_only_the_forecast_can_be_sent_on_request(self):
         parser = weather.build_parser()
-        assert parser.parse_args(["show", "--quiet"]).quiet is True
+        assert parser.parse_args(["show"]).kind is weather.Kind.READING
+        assert parser.parse_args(["show", "--send"]).send is True
+        assert parser.parse_args(["config"]).kind is weather.Kind.MACHINERY
+        assert parser.parse_args(["config-set", "--place", "x"]).kind is weather.Kind.RECEIPT
         for argv in (["config"], ["config-set", "--place", "x"]):
-            assert parser.parse_args(argv).quiet is False, argv
             with pytest.raises(SystemExit):
-                parser.parse_args([*argv, "--quiet"])
+                parser.parse_args([*argv, "--send"])
 
 

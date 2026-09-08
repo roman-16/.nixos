@@ -5,6 +5,7 @@ import urllib.error
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import apollo
 import files
 import pytest
 
@@ -37,7 +38,7 @@ def hook(monkeypatch):
         sent.append(request)
         return Response("\n[files: delivered to the user \u2713]\n")
 
-    monkeypatch.setattr(files.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(apollo.urllib.request, "urlopen", fake_urlopen)
     return sent
 
 
@@ -102,7 +103,7 @@ class TestSend:
         run("send", str(tmp_path / "notes.zip"), "--caption", caption)
         assert hook[0].data.decode("utf-8") == caption
 
-    def test_it_is_recorded_as_files_by_default(self, hook, tmp_path):
+    def test_it_is_recorded_as_files(self, hook, tmp_path):
         run("send", str(tmp_path / "notes.zip"))
         assert query(hook[0])["source"] == "files"
 
@@ -124,7 +125,7 @@ class TestSend:
                 io.BytesIO(b"cannot send /tmp/x: the file is 612.0 MB, and I only send files up to 100.0 MB\n"),
             )
 
-        monkeypatch.setattr(files.urllib.request, "urlopen", refuse)
+        monkeypatch.setattr(apollo.urllib.request, "urlopen", refuse)
         with pytest.raises(SystemExit) as exit_info:
             run("send", str(tmp_path / "holiday.mp4"))
         assert exit_info.value.code == 1
@@ -136,7 +137,7 @@ class TestSend:
         def refused(request, timeout=None):
             raise OSError("Connection refused")
 
-        monkeypatch.setattr(files.urllib.request, "urlopen", refused)
+        monkeypatch.setattr(apollo.urllib.request, "urlopen", refused)
         with pytest.raises(SystemExit):
             run("send", str(tmp_path / "notes.zip"))
         assert "could not reach the app" in capsys.readouterr().out

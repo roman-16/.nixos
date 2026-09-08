@@ -1,8 +1,8 @@
-import io
 import json
 import sys
 from datetime import datetime
 
+import apollo
 import pytest
 import reminders
 
@@ -321,49 +321,6 @@ class TestFindReminder:
             reminders.find_reminder("   ")
 
 
-class TestDelivery:
-    def test_deliver_to_user_posts_and_returns_the_marker(self, monkeypatch):
-        seen = {}
-
-        class Resp:
-            def read(self):
-                return "\n[reminders: delivered to the user \u2713 - do not relay]\n".encode("utf-8")
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *args):
-                return False
-
-        def fake_urlopen(request, timeout=None):
-            seen["url"] = request.full_url
-            seen["data"] = request.data
-            return Resp()
-
-        monkeypatch.setattr(reminders.urllib.request, "urlopen", fake_urlopen)
-        marker = reminders.deliver_to_user("hello")
-        assert "source=reminders" in seen["url"]
-        assert seen["data"] == b"hello"
-        assert "delivered to the user" in marker
-
-    def test_deliver_to_user_returns_error_body_on_http_error(self, monkeypatch):
-        def raise_503(request, timeout=None):
-            raise reminders.urllib.error.HTTPError(
-                request.full_url, 503, "err", {},
-                io.BytesIO("\n[reminders: delivery FAILED - relay the output above to the user yourself]\n".encode("utf-8")),
-            )
-
-        monkeypatch.setattr(reminders.urllib.request, "urlopen", raise_503)
-        assert "delivery FAILED" in reminders.deliver_to_user("hello")
-
-    def test_deliver_to_user_returns_none_when_unreachable(self, monkeypatch):
-        def boom(request, timeout=None):
-            raise OSError("refused")
-
-        monkeypatch.setattr(reminders.urllib.request, "urlopen", boom)
-        assert reminders.deliver_to_user("hello") is None
-
-
 class TestAudience:
     def invoke(self, monkeypatch, *argv):
         monkeypatch.setattr(sys, "argv", ["reminders.py", *argv])
@@ -372,25 +329,42 @@ class TestAudience:
     def spy(self, monkeypatch):
         sent = []
 
-        def fake(text):
+        def fake(skill, text):
             sent.append(text)
-            return "\n[reminders: delivered to the user \u2713 - do not relay]\n"
+            return apollo.Delivery(True, "\n[reminders: delivered to the user \u2713 - do not relay]\n")
 
-        monkeypatch.setattr(reminders, "deliver_to_user", fake)
+        monkeypatch.setattr(apollo, "send_message", fake)
         return sent
 
-    def test_a_plain_command_sends_its_result(self, spool, monkeypatch, capsys):
+    def test_a_reminder_that_is_set_reports_to_the_user(self, spool, monkeypatch, capsys):
         sent = self.spy(monkeypatch)
         self.invoke(monkeypatch, "add", "--text", "call the dentist", "--in", "1h")
         assert len(sent) == 1
         assert "call the dentist" in sent[0]
+        assert "delivered to the user" in capsys.readouterr().out
 
-    def test_nothing_can_be_read_or_changed_out_of_the_users_sight(self):
+    def test_the_list_is_read_here_and_sent_on_request(self, spool, monkeypatch, capsys):
+        sent = self.spy(monkeypatch)
+        self.invoke(monkeypatch, "add", "--text", "call the dentist", "--in", "1h")
+        capsys.readouterr()
+        self.invoke(monkeypatch, "list")
+        out = capsys.readouterr().out
+        assert len(sent) == 1
+        assert "call the dentist" in out
+        assert "not sent to the user" in out
+        self.invoke(monkeypatch, "list", "--send")
+        assert len(sent) == 2
+        assert "call the dentist" in sent[1]
+
+    def test_a_change_to_them_cannot_be_kept_from_the_user(self):
         parser = reminders.build_parser()
-        for argv in (["add", "--text", "x", "--in", "1h"], ["list"], ["list", "--all"],
-                     ["update", "x", "--text", "y"], ["remove", "--all"]):
+        for argv in (["add", "--text", "x", "--in", "1h"], ["update", "x", "--text", "y"],
+                     ["remove", "--all"]):
+            assert parser.parse_args(argv).kind is reminders.Kind.RECEIPT, argv
             with pytest.raises(SystemExit):
-                parser.parse_args([*argv, "--quiet"])
+                parser.parse_args([*argv, "--send"])
+        for argv in (["list"], ["list", "--all"]):
+            assert parser.parse_args(argv).kind is reminders.Kind.READING, argv
 
     def test_a_workspace_that_is_not_there_is_an_error_not_an_empty_spool(self, monkeypatch,
                                                                          tmp_path, capsys):

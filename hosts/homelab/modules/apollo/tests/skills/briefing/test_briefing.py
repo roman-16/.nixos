@@ -2,6 +2,7 @@ import json
 import sys
 from datetime import date
 
+import apollo
 import briefing
 import pytest
 
@@ -90,7 +91,7 @@ class TestCovers:
 
 class TestDefaultCalendar:
     def reply(self, monkeypatch, out):
-        monkeypatch.setattr(briefing, "run", lambda command, timeout: out)
+        monkeypatch.setattr(briefing, "output_of", lambda argv, timeout: out)
 
     def test_it_reads_the_id_from_the_account(self, monkeypatch):
         self.reply(monkeypatch, json.dumps({"view": "month", "default_calendar": "cal-1"}))
@@ -114,13 +115,13 @@ class TestFetchEvents:
     def stub(self, monkeypatch, events, *, calendar="cal-1"):
         commands = []
 
-        def fake_run(command, timeout):
-            commands.append(command)
-            if "settings" in command:
+        def fake_output_of(argv, timeout):
+            commands.append(argv)
+            if "settings" in argv:
                 return json.dumps({"default_calendar": calendar}) if calendar else None
             return json.dumps({"events": events, "count": len(events)})
 
-        monkeypatch.setattr(briefing, "run", fake_run)
+        monkeypatch.setattr(briefing, "output_of", fake_output_of)
         return commands
 
     def listing(self, commands):
@@ -157,6 +158,26 @@ class TestFetchEvents:
         commands = self.stub(monkeypatch, [event()], calendar=None)
         assert briefing.fetch_events(DAY) is None
         assert not any("events" in command for command in commands)
+
+
+class TestSiblings:
+    def calls(self, monkeypatch):
+        argvs = []
+        monkeypatch.setattr(briefing, "output_of", lambda argv, timeout: argvs.append(argv) or "")
+        briefing.fetch_sky()
+        briefing.fetch_offers()
+        return argvs
+
+    def test_each_section_is_read_from_its_own_skill_and_sent_by_none_of_them(self, monkeypatch):
+        sky, offers = self.calls(monkeypatch)
+        assert sky[1:] == [str(briefing.WEATHER), "show"]
+        assert offers[1:] == [str(briefing.OFFERS), "digest"]
+
+    def test_the_skills_it_asks_are_the_ones_beside_it(self):
+        assert briefing.WEATHER == briefing.SKILLS / "weather" / "scripts" / "weather.py"
+        assert briefing.OFFERS == briefing.SKILLS / "offers" / "scripts" / "offers.py"
+        assert briefing.WEATHER.is_file()
+        assert briefing.OFFERS.is_file()
 
 
 class TestReadEvents:
@@ -244,7 +265,7 @@ class TestCalendarBlock:
 
 class TestStripMarkers:
     def test_a_caller_note_never_reaches_the_user(self):
-        assert briefing.strip_markers("hello\n[offers: quiet - not sent to the user]") == "hello"
+        assert briefing.strip_markers(f"hello{apollo.not_sent('offers')}") == "hello"
 
     def test_a_hint_line_is_dropped_too(self):
         assert briefing.strip_markers("[offers] pin the watch\nhello") == "hello"
@@ -253,7 +274,7 @@ class TestStripMarkers:
         assert briefing.strip_markers("€0.99 [see leaflet]") == "€0.99 [see leaflet]"
 
     def test_nothing_but_markers_leaves_nothing(self):
-        assert briefing.strip_markers("[weather: quiet - not sent to the user]") == ""
+        assert briefing.strip_markers(apollo.not_sent("weather")) == ""
 
 
 class TestCompose:
@@ -308,32 +329,34 @@ class TestAudience:
         monkeypatch.setattr(briefing, "fetch_events", lambda day: [])
         monkeypatch.setattr(briefing, "fetch_offers", lambda: "")
 
-        def fake(text):
+        def fake(skill, text):
             sent.append(text)
-            return "\n[briefing: delivered to the user \u2713]\n" if reachable else None
+            marker = f"\n[{skill}: delivered to the user \u2713]\n" if reachable else \
+                f"\n[{skill}: delivery FAILED]\n"
+            return apollo.Delivery(reachable, marker)
 
-        monkeypatch.setattr(briefing, "deliver_to_user", fake)
+        monkeypatch.setattr(apollo, "send_message", fake)
         return sent
 
-    def test_the_briefing_is_written_for_the_user(self, monkeypatch, capsys):
+    def test_the_briefing_the_timer_asks_for_reaches_the_user(self, monkeypatch, capsys):
         sent = self.stub(monkeypatch)
-        self.invoke(monkeypatch, "show")
+        self.invoke(monkeypatch, "show", "--send")
         assert len(sent) == 1
         assert "Graz" in sent[0]
         assert "delivered to the user" in capsys.readouterr().out
 
-    def test_quiet_sends_nothing_and_says_so(self, monkeypatch, capsys):
+    def test_composing_one_sends_nothing_and_says_so(self, monkeypatch, capsys):
         sent = self.stub(monkeypatch)
-        self.invoke(monkeypatch, "show", "--quiet")
+        self.invoke(monkeypatch, "show")
         out = capsys.readouterr().out
         assert sent == []
         assert "Graz" in out
-        assert "quiet - not sent to the user" in out
+        assert "not sent to the user" in out
 
     def test_an_undeliverable_briefing_fails_loudly(self, monkeypatch, capsys):
         # The timer runs this with nobody watching, so a silent non-send would be worse.
         self.stub(monkeypatch, reachable=False)
         with pytest.raises(SystemExit) as exit_info:
-            self.invoke(monkeypatch, "show")
+            self.invoke(monkeypatch, "show", "--send")
         assert exit_info.value.code == 1
         assert "delivery FAILED" in capsys.readouterr().out

@@ -1,5 +1,4 @@
 import argparse
-import io
 import os
 import re
 import subprocess
@@ -269,6 +268,13 @@ class TestFoodCatalog:
         capsys.readouterr()
         run("food-get", "skyr")
         assert "Skyr, plain" in capsys.readouterr().out
+
+    def test_a_miss_states_the_fact_and_keeps_the_advice_for_the_caller(self, store, capsys):
+        add_skyr()
+        capsys.readouterr()
+        run("food-get", "pizza")
+        assert capsys.readouterr().out.strip() == 'no saved food matches "pizza"'
+        assert apollo.NOTES == ["[macros] check food-list or estimate it"]
 
     def test_edit_updates_value_and_renames(self, store):
         run("food-add", "--name", "Whey", "--kcal100", "375", "--protein100", "80",
@@ -1872,7 +1878,9 @@ def macros_args(name):
         "food-edit": ["--name", "x"],
         "food-rm": ["--name", "x"],
         "prep-add": ["--name", "x"],
+        "prep-archive": ["--name", "x"],
         "prep-eat": ["--name", "x", "--of-batch", "1/2"],
+        "prep-remove": ["--name", "x"],
     }
     return [name, *required.get(name, [])]
 
