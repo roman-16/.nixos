@@ -1,6 +1,6 @@
 ---
 name: exa
-description: Web research via Exa: web search, filtered search, page fetch, and multi-step agent runs that research, build lists or enrich data with citations. Use when researching topics, finding documentation, looking up code examples, or extracting webpage content.
+description: Web research via Exa - web search, filtered search, page fetch, and multi-step agent runs that research, build lists or enrich data with citations. Use when researching topics, finding documentation, looking up code examples, or extracting webpage content.
 ---
 
 # Exa
@@ -34,23 +34,23 @@ Full filter control: categories, date ranges, domains, highlights, summaries.
 ```
 
 **Parameters:**
-- `query` (required) — question, statement or keywords
-- `numResults` — 1-100 (default: 10)
-- `type` — `auto` (default, works with all filters), `fast`, `instant`
-- `category` — `company`, `publication`, `news`, `pdf`, `github`, `personal site`, `people`, `financial report`
-- `includeDomains` / `excludeDomains` — domain filters
-- `startPublishedDate` / `endPublishedDate` — ISO 8601 date filters
-- `startCrawlDate` / `endCrawlDate` — crawl date filters
-- `includeText` — results containing ALL of these strings (**single-item arrays only**)
-- `excludeText` — results containing ANY of these strings (**single-item arrays only**)
-- `userLocation` — ISO country code for geo-targeted results, e.g. `AT`, `DE`, `US`
-- `moderation` — filter out unsafe content
-- `additionalQueries` — query variations for broader coverage
-- `enableSummary` / `summaryQuery` — generate summaries
-- `enableHighlights` / `highlightsQuery` / `highlightsMaxCharacters` — highlight extraction
-- `subpages` / `subpageTarget` — crawl subpages (1-10)
+- `query` (required) - question, statement or keywords
+- `numResults` - 1-100 (default: 10)
+- `type` - `auto` (default, works with all filters), `fast`, `instant`
+- `category` - `company`, `publication`, `news`, `pdf`, `github`, `personal site`, `people`, `financial report`
+- `includeDomains` / `excludeDomains` - domain filters
+- `startPublishedDate` / `endPublishedDate` - ISO 8601 date filters
+- `startCrawlDate` / `endCrawlDate` - crawl date filters
+- `includeText` - results containing ALL of these strings (**single-item arrays only**)
+- `excludeText` - results containing ANY of these strings (**single-item arrays only**)
+- `userLocation` - ISO country code for geo-targeted results, e.g. `AT`, `DE`, `US`
+- `moderation` - filter out unsafe content
+- `additionalQueries` - query variations for broader coverage
+- `enableSummary` / `summaryQuery` - generate summaries
+- `enableHighlights` / `highlightsQuery` / `highlightsMaxCharacters` - highlight extraction
+- `subpages` / `subpageTarget` - crawl subpages (1-10)
 - `textMaxCharacters` / `contextMaxCharacters`
-- `maxAgeHours` — max age of cached content (`0` always fetches fresh) / `livecrawlTimeout` — ms budget for that fresh fetch
+- `maxAgeHours` - max age of cached content (`0` always fetches fresh) / `livecrawlTimeout` - ms budget for that fresh fetch
 
 **Category filter restrictions:**
 - `company`: no domain or date filters
@@ -100,7 +100,7 @@ Use it only when one search cannot answer the question: it costs per run and tak
 
 Leave effort at `low`; go above `medium` only when the user asked for that depth.
 
-**Set the bash timeout to 900 seconds** on `agent` calls. A run that outlives the call window comes back as `"status": "running"` with its `id` — resume it, never start a duplicate:
+**Set the bash timeout to 900 seconds** on `agent` calls. A run that outlives the call window comes back as `"status": "running"` with its `id` - resume it, never start a duplicate:
 
 ```bash
 {baseDir}/scripts/exa.sh agent-advanced '{"runId": "agent_run_..."}'
