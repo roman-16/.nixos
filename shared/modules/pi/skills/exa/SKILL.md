@@ -1,13 +1,13 @@
 ---
 name: exa
-description: Web research using Exa search via scripts. Provides web search, advanced filtered search, code context lookup, and URL content extraction. Use when researching topics, finding documentation, looking up code examples, or extracting webpage content. No API key required.
+description: Web research via Exa: web search, filtered search, page fetch, and multi-step agent runs that research, build lists or enrich data with citations. Use when researching topics, finding documentation, looking up code examples, or extracting webpage content.
 ---
 
 # Exa
 
-Web research via the free Exa MCP endpoint. All commands go through `{baseDir}/scripts/exa.sh`. No API key required.
+Web research via the Exa MCP endpoint. All commands go through `{baseDir}/scripts/exa.sh`, which authenticates with `EXA_API_KEY` from the environment.
 
-**Concurrency**: Multiple parallel calls are safe — the script serializes them automatically via a file lock so only one request hits the API at a time. Others queue up and execute in order. **Set timeout to 60 seconds** on all exa bash calls since queued requests may wait for earlier ones to finish.
+Every call is billed to the account: $7 per 1k searches, $1 per 1k fetched pages, and per-run pricing for `agent` (see below).
 
 ## Commands
 
@@ -20,28 +20,37 @@ General web search for any topic.
 {baseDir}/scripts/exa.sh search "home-manager modules" 15
 ```
 
+- Describe the ideal page instead of listing keywords: `"blog post comparing React and Vue performance"`, not `"React vs Vue"`.
+- For code, name the language or framework: `"Nix language: builtins.readDir example filtering entries by file type"`.
+- Prefix `category:people` or `category:company` to search LinkedIn profiles or companies: `"category:people John Doe software engineer"`.
+- `numResults` defaults to 10.
+
 ### Advanced Search
 
 Full filter control: categories, date ranges, domains, highlights, summaries.
 
 ```bash
-{baseDir}/scripts/exa.sh search-advanced '{"query": "transformer attention efficiency", "category": "research paper", "startPublishedDate": "2024-01-01", "numResults": 15}'
+{baseDir}/scripts/exa.sh search-advanced '{"query": "transformer attention efficiency", "category": "publication", "startPublishedDate": "2024-01-01", "numResults": 15}'
 ```
 
 **Parameters:**
-- `query` (required) — search query
+- `query` (required) — question, statement or keywords
 - `numResults` — 1-100 (default: 10)
-- `type` — `auto` (default), `fast`, `neural`
-- `category` — `company`, `research paper`, `news`, `pdf`, `github`, `personal site`, `people`, `financial report`
+- `type` — `auto` (default, works with all filters), `fast`, `instant`
+- `category` — `company`, `publication`, `news`, `pdf`, `github`, `personal site`, `people`, `financial report`
 - `includeDomains` / `excludeDomains` — domain filters
 - `startPublishedDate` / `endPublishedDate` — ISO 8601 date filters
 - `startCrawlDate` / `endCrawlDate` — crawl date filters
-- `includeText` / `excludeText` — text filters (**single-item arrays only**)
+- `includeText` — results containing ALL of these strings (**single-item arrays only**)
+- `excludeText` — results containing ANY of these strings (**single-item arrays only**)
+- `userLocation` — ISO country code for geo-targeted results, e.g. `AT`, `DE`, `US`
+- `moderation` — filter out unsafe content
 - `additionalQueries` — query variations for broader coverage
 - `enableSummary` / `summaryQuery` — generate summaries
-- `enableHighlights` / `highlightsQuery` / `highlightsNumSentences` / `highlightsPerUrl`
+- `enableHighlights` / `highlightsQuery` / `highlightsMaxCharacters` — highlight extraction
 - `subpages` / `subpageTarget` — crawl subpages (1-10)
 - `textMaxCharacters` / `contextMaxCharacters`
+- `maxAgeHours` — max age of cached content (`0` always fetches fresh) / `livecrawlTimeout` — ms budget for that fresh fetch
 
 **Category filter restrictions:**
 - `company`: no domain or date filters
@@ -60,31 +69,52 @@ Full filter control: categories, date ranges, domains, highlights, summaries.
 {baseDir}/scripts/exa.sh search-advanced '{"query": "Rust async runtime", "category": "personal site", "enableSummary": true, "enableHighlights": true, "numResults": 10}'
 ```
 
-### Code Context
+### Fetch
 
-Find code examples, API docs, library usage from GitHub, Stack Overflow, and docs.
-
-```bash
-{baseDir}/scripts/exa.sh code-context "Nix builtins.readDir filter by file type"
-{baseDir}/scripts/exa.sh code-context "React useState hook examples" 12
-```
-
-Query tips: include the programming language/framework and be specific.
-
-### Crawl
-
-Extract full page content from known URLs. Supports batching.
+Extract full page content from known URLs. Batch multiple URLs into one call.
 
 ```bash
-{baseDir}/scripts/exa.sh crawl '["https://nixos.wiki/wiki/Flakes"]'
-{baseDir}/scripts/exa.sh crawl '["https://example.com", "https://example.org"]' 5000
+{baseDir}/scripts/exa.sh fetch '["https://nixos.wiki/wiki/Flakes"]'
+{baseDir}/scripts/exa.sh fetch '["https://example.com", "https://example.org"]' 5000
 ```
+
+### Agent
+
+A single objective the Exa Agent researches on its own across many searches and fetches, returning an answer with citations, or structured records for list-building and data enrichment. Output is JSON: `id`, `status`, `output.text`, `output.grounding` (citations), `output.structured`, `usage` and `costDollars`.
+
+```bash
+{baseDir}/scripts/exa.sh agent "Which Austrian ISPs offer symmetric gigabit fiber, with monthly price?" medium
+{baseDir}/scripts/exa.sh agent-advanced '{"query": "...", "effort": "medium", "outputSchema": {"type": "object", "properties": {"isps": {"type": "array", "items": {"type": "object", "properties": {"name": {"type": "string"}, "monthlyEur": {"type": "number"}, "source": {"type": "string"}}}}}}}'
+```
+
+Use it only when one search cannot answer the question: it costs per run and takes minutes.
+
+| Effort | Cost |
+| --- | --- |
+| `minimal` | $0.012 |
+| `low` (default) | $0.025 |
+| `medium` | $0.10 |
+| `high` | $0.50 |
+| `xhigh` | $1.00 |
+| `auto` | metered, up to $5 |
+
+Leave effort at `low`; go above `medium` only when the user asked for that depth.
+
+**Set the bash timeout to 900 seconds** on `agent` calls. A run that outlives the call window comes back as `"status": "running"` with its `id` — resume it, never start a duplicate:
+
+```bash
+{baseDir}/scripts/exa.sh agent-advanced '{"runId": "agent_run_..."}'
+```
+
+Killing the call does not cancel the run, and the run is billed either way.
+
+**`agent-advanced` parameters:** `query` or `runId` (never both), `effort`, `systemPrompt`, `outputSchema`, `input`, `dataSources`, `previousRunId` (a completed run to use as context for a new one).
 
 ## Research Workflow
 
 1. Start with `search` or `search-advanced` for discovery
-2. Use `code-context` for programming-specific queries
-3. Follow up with `crawl` on promising URLs for full content
-4. Use `additionalQueries` or multiple searches with varied phrasing for coverage
+2. Follow up with `fetch` on promising URLs for full content
+3. Use `additionalQueries` or multiple searches with varied phrasing for coverage
+4. Reach for `agent` when the question needs many steps chained together, or a structured list built from the whole web
 
 `{baseDir}` = this skill's directory. Always resolve to the absolute path before executing.

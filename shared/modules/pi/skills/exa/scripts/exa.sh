@@ -1,125 +1,116 @@
 #!/usr/bin/env bash
-# Exa search via the free hosted MCP endpoint — no API key required
 set -euo pipefail
 
-MCP_URL="https://mcp.exa.ai/mcp?tools=web_search_exa,web_search_advanced_exa,get_code_context_exa,crawling_exa"
-LOCK_DIR="/tmp/exa-rate-limit"
-MAX_RETRIES=3
-RETRY_DELAY=3
+: "${EXA_API_KEY:?}"
 
-# Serialize concurrent calls — only one request hits the API at a time
-acquire_lock() {
-  mkdir -p "$LOCK_DIR"
-  local lock_file="$LOCK_DIR/lock"
-  local wait_time=0
-  while ! (set -C; echo $$ > "$lock_file") 2>/dev/null; do
-    # Check for stale lock: if the holding PID is dead, remove it
-    local holder_pid
-    holder_pid=$(cat "$lock_file" 2>/dev/null || echo "")
-    if [ -n "$holder_pid" ] && ! kill -0 "$holder_pid" 2>/dev/null; then
-      echo "Removing stale lock from dead PID $holder_pid" >&2
-      rm -f "$lock_file"
-      continue
-    fi
-    sleep 0.5
-    wait_time=$((wait_time + 1))
-    if [ $wait_time -ge 120 ]; then
-      echo "Timed out waiting for rate-limit lock" >&2
-      rm -f "$lock_file"
-      return 1
-    fi
-  done
-}
+MCP_URL="https://mcp.exa.ai/mcp?tools=agent_run,web_fetch_exa,web_search_advanced_exa,web_search_exa"
+REQUEST_ID=1
 
-release_lock() {
-  rm -f "$LOCK_DIR/lock"
-}
+SEARCH_TIMEOUT=60
+SEARCH_RETRIES=3
+AGENT_TIMEOUT=800
+AGENT_RETRIES=0
 
-# Ensure lock is released on exit/error
-cleanup() { release_lock; }
-trap cleanup EXIT
+mcp_request() {
+  local tool="$1" args="$2" timeout="$3" retries="$4"
 
-mcp_call() {
-  local tool="$1" args="$2"
-  local attempt=0
+  local payload
+  payload=$(jq --null-input --compact-output \
+    --arg tool "$tool" --argjson args "$args" --argjson id "$REQUEST_ID" \
+    '{jsonrpc: "2.0", id: $id, method: "tools/call", params: {name: $tool, arguments: $args}}')
 
-  while [ $attempt -lt $MAX_RETRIES ]; do
-    acquire_lock
+  local response status=0
+  response=$(curl \
+    --data "$payload" \
+    --fail-with-body \
+    --header "Accept: application/json, text/event-stream" \
+    --header "Content-Type: application/json" \
+    --header "x-api-key: $EXA_API_KEY" \
+    --max-time "$timeout" \
+    --request POST \
+    --retry "$retries" \
+    --retry-connrefused \
+    --show-error \
+    --silent \
+    "$MCP_URL") || status=$?
 
-    local response
-    response=$(curl -s -w '\n__HTTP_CODE__%{http_code}' -X POST "$MCP_URL" \
-      -H "Content-Type: application/json" \
-      -H "Accept: application/json, text/event-stream" \
-      --max-time 30 \
-      -d "$(jq -n --arg tool "$tool" --argjson args "$args" \
-        '{jsonrpc: "2.0", id: 1, method: "tools/call", params: {name: $tool, arguments: $args}}')")
+  if [ "$status" -ne 0 ]; then
+    printf '%s\n' "$response" >&2
+    return 1
+  fi
 
-    release_lock
+  local message
+  message=$(printf '%s\n' "$response" \
+    | sed --quiet 's/^data: //p' \
+    | jq --slurp --compact-output --argjson id "$REQUEST_ID" 'map(select(.id == $id)) | last')
 
-    local http_code
-    http_code=$(echo "$response" | grep '__HTTP_CODE__' | sed 's/.*__HTTP_CODE__//')
-    response=$(echo "$response" | grep -v '__HTTP_CODE__')
+  if [ "$message" = "null" ]; then
+    printf 'No JSON-RPC response from %s:\n%s\n' "$tool" "$response" >&2
+    return 1
+  fi
 
-    # Retry on rate limit (429) or server errors (5xx)
-    if [[ "$http_code" =~ ^(429|5[0-9][0-9])$ ]]; then
-      attempt=$((attempt + 1))
-      if [ $attempt -lt $MAX_RETRIES ]; then
-        local delay=$((RETRY_DELAY * attempt))
-        echo "Rate limited (HTTP $http_code), retrying in ${delay}s (attempt $((attempt+1))/$MAX_RETRIES)..." >&2
-        sleep $delay
-        continue
-      else
-        echo "Failed after $MAX_RETRIES attempts (HTTP $http_code)" >&2
-        return 1
-      fi
-    fi
+  if jq --exit-status '.error != null' <<< "$message" > /dev/null; then
+    jq --raw-output '.error.message // (.error | tojson)' <<< "$message" >&2
+    return 1
+  fi
 
-    # Parse SSE response: extract data line, then result content text
-    local parsed
-    parsed=$(echo "$response" | sed -n 's/^data: //p')
+  local text
+  text=$(jq --raw-output '[.result.content[]? | select(.type == "text") | .text] | join("\n")' <<< "$message")
 
-    if echo "$parsed" | jq -e 'has("error") and .error != null' > /dev/null 2>&1; then
-      echo "$parsed" | jq -r '.error' >&2
-      return 1
-    fi
+  if jq --exit-status '.result.isError == true' <<< "$message" > /dev/null; then
+    printf '%s\n' "$text" >&2
+    return 1
+  fi
 
-    echo "$parsed" | jq -r '[.result.content[]? | select(.type == "text") | .text] | join("\n")'
-    return $?
-  done
+  printf '%s\n' "$text"
 }
 
 cmd_search() {
-  local query="$1" num="${2:-8}"
-  mcp_call "web_search_exa" "$(jq -n --arg q "$query" --argjson n "$num" '{query: $q, numResults: $n}')"
+  local query="$1" num="${2:-10}"
+  mcp_request web_search_exa \
+    "$(jq --null-input --arg query "$query" --argjson num "$num" '{query: $query, numResults: $num}')" \
+    "$SEARCH_TIMEOUT" "$SEARCH_RETRIES"
 }
 
 cmd_search_advanced() {
-  mcp_call "web_search_advanced_exa" "$1"
+  mcp_request web_search_advanced_exa "$1" "$SEARCH_TIMEOUT" "$SEARCH_RETRIES"
 }
 
-cmd_code_context() {
-  local query="$1" num="${2:-8}"
-  mcp_call "get_code_context_exa" "$(jq -n --arg q "$query" --argjson n "$num" '{query: $q, numResults: $n}')"
+cmd_fetch() {
+  local urls="$1" max_chars="${2:-3000}"
+  mcp_request web_fetch_exa \
+    "$(jq --null-input --argjson urls "$urls" --argjson chars "$max_chars" '{urls: $urls, maxCharacters: $chars}')" \
+    "$SEARCH_TIMEOUT" "$SEARCH_RETRIES"
 }
 
-cmd_crawl() {
-  local urls_json="$1" max_chars="${2:-3000}"
-  mcp_call "crawling_exa" "$(jq -n --argjson urls "$urls_json" --argjson chars "$max_chars" '{urls: $urls, maxCharacters: $chars}')"
+cmd_agent() {
+  local query="$1" effort="${2:-low}"
+  mcp_request agent_run \
+    "$(jq --null-input --arg query "$query" --arg effort "$effort" '{query: $query, effort: $effort}')" \
+    "$AGENT_TIMEOUT" "$AGENT_RETRIES"
+}
+
+cmd_agent_advanced() {
+  mcp_request agent_run "$1" "$AGENT_TIMEOUT" "$AGENT_RETRIES"
 }
 
 case "${1:-}" in
   search)          shift; cmd_search "$@" ;;
   search-advanced) shift; cmd_search_advanced "$@" ;;
-  code-context)    shift; cmd_code_context "$@" ;;
-  crawl)           shift; cmd_crawl "$@" ;;
+  fetch)           shift; cmd_fetch "$@" ;;
+  agent)           shift; cmd_agent "$@" ;;
+  agent-advanced)  shift; cmd_agent_advanced "$@" ;;
   *)
-    echo "Usage: exa.sh <command> [args]"
-    echo ""
-    echo "Commands:"
-    echo "  search <query> [numResults]"
-    echo "  search-advanced '<json params>'"
-    echo "  code-context <query> [numResults]"
-    echo "  crawl '<[\"url1\",\"url2\"]>' [maxCharacters]"
+    {
+      echo "Usage: exa.sh <command> [args]"
+      echo ""
+      echo "Commands:"
+      echo "  search <query> [numResults]"
+      echo "  search-advanced '<json params>'"
+      echo "  fetch '<[\"url1\",\"url2\"]>' [maxCharacters]"
+      echo "  agent <query> [minimal|low|medium|high|xhigh|auto]"
+      echo "  agent-advanced '<json params>'"
+    } >&2
     exit 1
     ;;
 esac

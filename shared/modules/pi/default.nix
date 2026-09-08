@@ -20,6 +20,8 @@
     let
       pi = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.pi;
 
+      secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
+
       # Extensions: symlink each top-level entry as-is, so a multi-file extension
       # directory becomes a single store path and its relative imports resolve
       # (per-file symlinks put each file in its own store path, breaking them).
@@ -108,6 +110,8 @@
 
         home = {
           packages = [ pkgs.libnotify ];
+
+          sessionVariables.EXA_API_KEY = secrets.exaApiKey;
 
           file = {
             ".pi/agent/AGENTS.md".text = config.pi.agentsMd;

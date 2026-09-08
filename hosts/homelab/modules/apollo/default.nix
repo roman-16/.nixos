@@ -598,6 +598,7 @@ in
                 # nothing compiles.
                 BUN_INSTALL_CACHE_DIR = "/tmp/bun-cache";
                 CHROME_PATH = "${chromeWrapper}";
+                EXA_API_KEY = secrets.exaApiKey;
                 HOME = "%S/apollo";
                 MISTRAL_API_KEY = secrets.mistralApiKey;
                 # Opt pi into Anthropic's 1h prompt-cache TTL (default is 5min). The assistant is
