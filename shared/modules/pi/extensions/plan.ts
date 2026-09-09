@@ -18,6 +18,7 @@ const PLANNING_MODEL = { id: "claude-fable-5-1", provider: "anthropic" };
 const PRUNED = "[pruned]";
 const SKILL_BLOCK = /<skill\b[^>]*>[\s\S]*?<\/skill>/g;
 const STATE = "plan";
+const TASK_FROM_CONVERSATION = "Plan the change this conversation has established.";
 const WARN_ABOVE_TOKENS = 25_000;
 
 interface Invocation {
@@ -178,11 +179,6 @@ export default function (pi: ExtensionAPI) {
 		getArgumentCompletions: pruneCompletions,
 		handler: async (args, ctx) => {
 			const invocation = parseArgs(args);
-			if (!invocation.text) {
-				ctx.ui.notify(`Usage: /plan [${NO_PRUNE}] <task>`, "error");
-				return;
-			}
-
 			const model = ctx.modelRegistry.find(PLANNING_MODEL.provider, PLANNING_MODEL.id);
 			if (!model) {
 				ctx.ui.notify(`${PLANNING_MODEL.provider}/${PLANNING_MODEL.id} is not available`, "error");
@@ -218,7 +214,9 @@ export default function (pi: ExtensionAPI) {
 				ctx.ui.notify(`${verb} ~${prunable.toLocaleString()} tokens of prior context`, "info");
 			}
 
-			pi.sendUserMessage(`/skill:plan ${invocation.text}`, { expandPromptTemplates: true });
+			pi.sendUserMessage(`/skill:plan ${invocation.text || TASK_FROM_CONVERSATION}`, {
+				expandPromptTemplates: true,
+			});
 		},
 	});
 
@@ -227,7 +225,7 @@ export default function (pi: ExtensionAPI) {
 		getArgumentCompletions: pruneCompletions,
 		handler: async (args, ctx) => {
 			if (!state.planning) {
-				ctx.ui.notify("Nothing to implement. Start with /plan <task>.", "warning");
+				ctx.ui.notify("Nothing to implement. Start with /plan.", "warning");
 				return;
 			}
 
