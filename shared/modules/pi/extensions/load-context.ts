@@ -1,7 +1,6 @@
-import { Glob } from "bun";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, isAbsolute, join, matchesGlob, relative, resolve } from "node:path";
 import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
 import {
   convertToPng,
@@ -114,9 +113,16 @@ const SECRET_FILES = [
 
 const SKIPPED_REASON_LIMIT = 10;
 
+function unhidden(path: string): string {
+  return path.replace(/(^|\/)\./g, "$1");
+}
+
+function matchesPattern(path: string, pattern: string): boolean {
+  return matchesGlob(path, pattern) || matchesGlob(unhidden(path), pattern);
+}
+
 function nameMatcher(patterns: string[]): (name: string) => boolean {
-  const globs = patterns.map((pattern) => new Glob(pattern));
-  return (name) => globs.some((glob) => glob.match(name));
+  return (name) => patterns.some((pattern) => matchesPattern(name, pattern));
 }
 
 const isBulkyFormat = nameMatcher(BULKY_FORMATS);
@@ -210,6 +216,14 @@ function splitPattern(pattern: string): { pattern: string; root: string } {
   return { pattern: segments.join("/"), root: rootSegments.join("/") || "/" };
 }
 
+function walkFiles(root: string): string[] {
+  return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(root, entry.name);
+    if (!entry.isDirectory()) return path;
+    return entry.name === ".git" ? [] : walkFiles(path);
+  });
+}
+
 async function listFiles(pi: ExtensionAPI, root: string, pattern?: string): Promise<string[]> {
   const result = await pi.exec(
     "git",
@@ -217,24 +231,17 @@ async function listFiles(pi: ExtensionAPI, root: string, pattern?: string): Prom
     { cwd: root },
   );
 
-  if (result.code === 0) {
-    const glob = pattern ? new Glob(pattern) : undefined;
-    return result.stdout
-      .split("\0")
-      .filter((rel) => rel && (!glob || glob.match(rel)))
-      .map((rel) => resolve(root, rel))
-      .filter((path) => existsSync(path));
-  }
+  const paths =
+    result.code === 0
+      ? result.stdout
+          .split("\0")
+          .filter((rel) => rel)
+          .map((rel) => resolve(root, rel))
+      : walkFiles(root);
 
-  return [
-    ...new Glob(pattern ?? "**/*").scanSync({
-      absolute: true,
-      cwd: root,
-      dot: true,
-      followSymlinks: true,
-      onlyFiles: true,
-    }),
-  ].filter((path) => !path.split("/").includes(".git"));
+  return paths.filter(
+    (path) => (!pattern || matchesPattern(relative(root, path), pattern)) && existsSync(path),
+  );
 }
 
 async function toPng(bytes: Buffer, mimeType: string): Promise<{ bytes: Buffer; mimeType: string } | null> {
@@ -378,8 +385,7 @@ export default function (pi: ExtensionAPI) {
       const exclusions: Exclusion[] = excludeTokens.map((token) => {
         const expanded = expandPath(token, ctx.cwd);
         if (hasGlobMagic(token)) {
-          const glob = new Glob(expanded);
-          return { display: token, matches: (path: string) => glob.match(path) };
+          return { display: token, matches: (path: string) => matchesPattern(path, expanded) };
         }
         if (!existsSync(expanded)) ctx.ui.notify(`Exclude path not found: ${token}`, "warning");
         return {

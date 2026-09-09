@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { TextContent } from "@earendil-works/pi-ai";
+import type { TextContent, UserMessage } from "@earendil-works/pi-ai";
 import {
 	estimateTokens,
 	type ExtensionAPI,
@@ -11,10 +11,12 @@ import {
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
 
 const FALLBACK_MODEL = { id: "claude-opus-5", provider: "anthropic" };
+const HANDOFF = "/skill:handoff --inline";
 const NO_PRUNE = "--no-prune";
 const NO_PRUNE_PATTERN = new RegExp(`^${NO_PRUNE}(?=\\s|$)|\\s${NO_PRUNE}$`, "g");
 const PLANNING_MODEL = { id: "claude-fable-5-1", provider: "anthropic" };
 const PRUNED = "[pruned]";
+const SKILL_BLOCK = /<skill\b[^>]*>[\s\S]*?<\/skill>/g;
 const STATE = "plan";
 const WARN_ABOVE_TOKENS = 25_000;
 
@@ -42,14 +44,28 @@ function prunedContent(): TextContent[] {
 	return [{ text: PRUNED, type: "text" }];
 }
 
+function withoutSkills(text: string): string {
+	return text.replace(SKILL_BLOCK, "").trim();
+}
+
+function pruneUser(content: UserMessage["content"]): UserMessage["content"] {
+	if (typeof content === "string") return withoutSkills(content) || PRUNED;
+
+	const blocks = content
+		.map((block) => (block.type === "text" ? { ...block, text: withoutSkills(block.text) } : block))
+		.filter((block) => block.type !== "text" || block.text.length > 0);
+
+	return blocks.length > 0 ? blocks : prunedContent();
+}
+
 function prune(message: AgentMessage, prunedBefore: number): AgentMessage {
 	if (message.timestamp > prunedBefore) return message;
 
 	if (message.role === "toolResult") return { ...message, content: prunedContent() };
+	if (message.role === "user") return { ...message, content: pruneUser(message.content) };
 	if (message.role !== "assistant") return message;
 
 	const content = message.content.filter((block) => block.type !== "thinking");
-	if (content.length === message.content.length) return message;
 
 	return { ...message, content: content.length > 0 ? content : prunedContent() };
 }
@@ -62,8 +78,7 @@ function prunableTokens(ctx: ExtensionContext, from: number, to: number): number
 		const { timestamp } = entry.message;
 		if (timestamp <= from || timestamp > to) continue;
 
-		const pruned = prune(entry.message, to);
-		if (pruned !== entry.message) prunable += estimateTokens(entry.message) - estimateTokens(pruned);
+		prunable += estimateTokens(entry.message) - estimateTokens(prune(entry.message, to));
 	}
 
 	return Math.max(0, prunable);
@@ -145,6 +160,19 @@ export default function (pi: ExtensionAPI) {
 		return { messages: event.messages.map((message) => prune(message, state.prunedBefore)) };
 	});
 
+	let settle: (() => void) | undefined;
+
+	pi.on("agent_settled", () => {
+		settle?.();
+		settle = undefined;
+	});
+
+	const brief = () =>
+		new Promise<void>((resolve) => {
+			settle = resolve;
+			pi.sendUserMessage(HANDOFF, { expandPromptTemplates: true });
+		});
+
 	pi.registerCommand("plan", {
 		description: "Research and plan a change on Fable, then hand it to /go",
 		getArgumentCompletions: pruneCompletions,
@@ -171,7 +199,7 @@ export default function (pi: ExtensionAPI) {
 			if (ctx.hasUI && prunes && prunable > WARN_ABOVE_TOKENS) {
 				const proceed = await ctx.ui.confirm(
 					`Prune ${prunable.toLocaleString()} tokens of prior context?`,
-					"Tool output and reasoning from this session stop being sent to the model. Text and file paths stay.",
+					"Tool output, reasoning and skill instructions from this session stop being sent to the model. Your messages and file paths stay.",
 				);
 				if (!proceed) return;
 			}
@@ -215,6 +243,9 @@ export default function (pi: ExtensionAPI) {
 
 			const switchesModel = !sameModel(ctx.model, model);
 			const prunes = invocation.prunes && switchesModel;
+
+			if (prunes) await brief();
+
 			const cut = Date.now();
 			const prunable = switchesModel ? prunableTokens(ctx, state.prunedBefore, cut) : 0;
 
