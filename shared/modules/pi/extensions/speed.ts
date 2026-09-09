@@ -47,12 +47,13 @@ interface Flight {
 	deltas: Delta[];
 	firstDeltaAt?: number;
 	firstVisibleAt?: number;
+	generationAt?: number;
 	lastDeltaAt?: number;
 	model?: string;
 	requestAt: number;
-	thinking?: ThinkingBlock;
 	thinkingChars: number;
-	thinkingMs: number;
+	thinkingEndAt?: number;
+	thinkingStartedAt?: number;
 	visibleChars: number;
 }
 
@@ -79,11 +80,6 @@ interface Summary {
 	tokenRate?: number;
 	tokens: number;
 	waitMs?: number;
-}
-
-interface ThinkingBlock {
-	chars: number;
-	startedAt: number;
 }
 
 interface Window {
@@ -232,11 +228,14 @@ function liveStatus(flight: Flight, samples: Sample[], theme: Theme, now: number
 	const estimate = (tokens: number, ms: number) =>
 		theme.fg("text", `~${Math.round(tokensPerSecond(tokens, Math.max(TICK_INTERVAL, ms)))} tok/s`);
 
-	const thinking = flight.thinking;
-	if (thinking) {
-		return thinking.chars === 0
-			? theme.fg("dim", `thinking ${elapsed(now - thinking.startedAt)}`)
-			: estimate(thinking.chars / calibrate(samples, flight.model, "thinking"), now - thinking.startedAt);
+	const thinkingStartedAt = flight.thinkingStartedAt;
+	if (thinkingStartedAt !== undefined) {
+		return flight.thinkingChars === 0
+			? theme.fg("dim", `thinking ${elapsed(now - thinkingStartedAt)}`)
+			: estimate(
+					flight.thinkingChars / calibrate(samples, flight.model, "thinking"),
+					now - (flight.generationAt ?? flight.requestAt),
+				);
 	}
 
 	if (flight.firstDeltaAt === undefined) {
@@ -603,7 +602,6 @@ export default function speed(pi: ExtensionAPI) {
 			deltas: [],
 			requestAt: event.timestamp,
 			thinkingChars: 0,
-			thinkingMs: 0,
 			visibleChars: 0,
 		};
 		show(ctx);
@@ -613,6 +611,7 @@ export default function speed(pi: ExtensionAPI) {
 	pi.on("message_start", (event, ctx) => {
 		if (event.message.role !== "assistant" || !flight) return;
 
+		flight.generationAt = Date.now();
 		flight.model = `${event.message.provider}/${event.message.model}`;
 		flight.requestAt = event.message.timestamp;
 		show(ctx);
@@ -625,12 +624,12 @@ export default function speed(pi: ExtensionAPI) {
 		const now = Date.now();
 
 		if (update.type === "thinking_start") {
-			flight.thinking = { chars: 0, startedAt: now };
+			flight.thinkingStartedAt = now;
 			return;
 		}
 		if (update.type === "thinking_end") {
-			if (flight.thinking) flight.thinkingMs += now - flight.thinking.startedAt;
-			flight.thinking = undefined;
+			flight.thinkingEndAt = now;
+			flight.thinkingStartedAt = undefined;
 			return;
 		}
 		if (update.type !== "text_delta" && update.type !== "thinking_delta" && update.type !== "toolcall_delta") {
@@ -642,7 +641,6 @@ export default function speed(pi: ExtensionAPI) {
 
 		if (update.type === "thinking_delta") {
 			flight.thinkingChars += update.delta.length;
-			if (flight.thinking) flight.thinking.chars += update.delta.length;
 			return;
 		}
 
@@ -658,7 +656,7 @@ export default function speed(pi: ExtensionAPI) {
 		stopClock();
 
 		const at = Date.now();
-		const open = flight.thinking;
+		const thinkingDoneAt = flight.thinkingStartedAt === undefined ? flight.thinkingEndAt : at;
 		const sample: Sample = {
 			at,
 			firstTokenMs: (flight.firstDeltaAt ?? at) - flight.requestAt,
@@ -666,7 +664,8 @@ export default function speed(pi: ExtensionAPI) {
 			outputTokens: message.usage.output,
 			reasoningTokens: message.usage.reasoning ?? null,
 			thinkingChars: flight.thinkingChars,
-			thinkingMs: flight.thinkingMs + (open ? at - open.startedAt : 0),
+			thinkingMs:
+				thinkingDoneAt === undefined ? 0 : thinkingDoneAt - (flight.generationAt ?? flight.requestAt),
 			totalMs: at - flight.requestAt,
 			visibleChars: flight.visibleChars,
 		};
