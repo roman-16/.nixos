@@ -53,6 +53,7 @@ export default function stats(pi: ExtensionAPI) {
 		run = createRun();
 		status = undefined;
 		if (ctx.hasUI) ctx.ui.setStatus(STATUS_KEY, undefined);
+		setTimeout(() => collectSessions(), 0);
 	});
 
 	pi.on("agent_start", (_event, ctx) => {
@@ -142,7 +143,6 @@ export default function stats(pi: ExtensionAPI) {
 				entries: ctx.sessionManager.getEntries(),
 				id: ctx.sessionManager.getSessionId(),
 				name: pi.getSessionName(),
-				path: ctx.sessionManager.getSessionFile(),
 			});
 
 			ctx.ui.setStatus(STATUS_KEY, "Reading sessions…");

@@ -1,4 +1,15 @@
-import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync, writeFileSync } from "node:fs";
+import {
+	closeSync,
+	openSync,
+	readdirSync,
+	readFileSync,
+	readSync,
+	renameSync,
+	statSync,
+	unlinkSync,
+	writeFileSync,
+} from "node:fs";
+import { hostname } from "node:os";
 import { basename, join } from "node:path";
 import { getAgentDir, type SessionEntry } from "@earendil-works/pi-coding-agent";
 import { modelName } from "./table.ts";
@@ -30,9 +41,9 @@ export interface Response {
 
 export interface StatsSession {
 	firstMessage?: string;
+	host: string;
 	id: string;
 	name?: string;
-	path: string;
 	project: string;
 	responses: Response[];
 }
@@ -42,7 +53,6 @@ export interface LiveSession {
 	entries: SessionEntry[];
 	id: string;
 	name?: string;
-	path: string | undefined;
 }
 
 interface Usage {
@@ -83,40 +93,59 @@ interface Accumulator {
 	timings: Timing[];
 }
 
-interface CacheEntry {
-	firstMessage?: string;
-	id: string;
+interface Source {
 	mtimeMs: number;
-	name?: string;
-	project: string;
-	responses: Response[];
+	path: string;
 	size: number;
 }
 
-interface CacheFile {
-	entryShape: string;
-	files: { [path: string]: CacheEntry };
+interface StoredSession {
+	firstMessage?: string;
+	host: string;
+	name?: string;
+	project: string;
+	responses: Response[];
+	source?: Source;
 }
 
-type Cache = Map<string, CacheEntry>;
+interface StoreFile {
+	sessions: { [id: string]: StoredSession };
+	version: number;
+}
 
-const CACHE_ENTRY_SHAPE = "firstMessage,id,mtimeMs,name,project,responses,size";
+type Store = Map<string, StoredSession>;
 
 const FIRST_MESSAGE_LIMIT = 90;
 
-let cache: Cache | undefined;
+const HOST = hostname();
 
-const cachePath = () => join(getAgentDir(), "stats-cache.json");
+const STORE_VERSION = 1;
+
+let failure: string | undefined;
+
+let store: Store | undefined;
+
+let writable = true;
 
 const sessionsDir = () => join(getAgentDir(), "sessions");
+
+const storePath = () => join(getAgentDir(), "stats.json");
+
+export function storeFailure(): string | undefined {
+	return failure;
+}
 
 export function shortModel(model: string): string {
 	if (model === SUMMARY_MODEL) return "summaries";
 	return `${model.slice(0, model.indexOf("/"))}/${modelName(model)}`;
 }
 
-function createAccumulator(responses: Response[] = []): Accumulator {
-	return { id: "", project: "", responses: [...responses], timings: [] };
+function reason(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
+function createAccumulator(): Accumulator {
+	return { id: "", project: "", responses: [], timings: [] };
 }
 
 function promptText(content: string | Array<{ text?: string; type?: string }> | undefined): string {
@@ -258,51 +287,74 @@ function readChunk(path: string, offset: number, length: number): { consumed: nu
 	}
 }
 
-function toEntry(accumulator: Accumulator, mtimeMs: number, size: number): CacheEntry {
+function foldChunk(accumulator: Accumulator, path: string, offset: number, length: number): number {
+	const { consumed, text } = readChunk(path, offset, length);
+	foldText(text, accumulator);
+	return offset + consumed;
+}
+
+function seedFrom(id: string, stored: StoredSession): Accumulator {
 	return {
-		firstMessage: accumulator.firstMessage,
-		id: accumulator.id,
-		mtimeMs,
-		name: accumulator.name,
-		project: accumulator.project,
-		responses: applyTimings(accumulator),
-		size,
+		firstMessage: stored.firstMessage,
+		id,
+		name: stored.name,
+		project: stored.project,
+		responses: stored.responses,
+		timings: [],
 	};
 }
 
-function parseFile(path: string, mtimeMs: number, size: number): CacheEntry {
-	const accumulator = createAccumulator();
-	const { consumed, text } = readChunk(path, 0, size);
-	foldText(text, accumulator);
-	return toEntry(accumulator, mtimeMs, consumed);
+function toStored(accumulator: Accumulator, source: Source): StoredSession {
+	return {
+		firstMessage: accumulator.firstMessage,
+		host: HOST,
+		name: accumulator.name,
+		project: accumulator.project,
+		responses: applyTimings(accumulator),
+		source,
+	};
 }
 
-function extendFile(path: string, cached: CacheEntry, mtimeMs: number, size: number): CacheEntry {
-	const accumulator = createAccumulator(cached.responses);
-	accumulator.firstMessage = cached.firstMessage;
-	accumulator.id = cached.id;
-	accumulator.name = cached.name;
-	accumulator.project = cached.project;
-	const { consumed, text } = readChunk(path, cached.size, size - cached.size);
-	foldText(text, accumulator);
-	return toEntry(accumulator, mtimeMs, cached.size + consumed);
-}
-
-function loadCache(): Cache {
+function loadStore(): Store {
+	let text: string;
 	try {
-		const parsed = JSON.parse(readFileSync(cachePath(), "utf8")) as CacheFile;
-		if (parsed.entryShape !== CACHE_ENTRY_SHAPE) return new Map();
-		return new Map(Object.entries(parsed.files));
+		text = readFileSync(storePath(), "utf8");
 	} catch {
+		return new Map();
+	}
+
+	try {
+		const parsed = JSON.parse(text) as StoreFile;
+		if (parsed.version !== STORE_VERSION) {
+			writable = false;
+			failure = `stats.json is version ${parsed.version}, this build reads ${STORE_VERSION}`;
+			return new Map();
+		}
+		return new Map(Object.entries(parsed.sessions));
+	} catch (error) {
+		writable = false;
+		failure = `stats.json unreadable (${reason(error)})`;
 		return new Map();
 	}
 }
 
-function saveCache(entries: Cache): void {
-	const content: CacheFile = { entryShape: CACHE_ENTRY_SHAPE, files: Object.fromEntries(entries) };
+function saveStore(sessions: Store): void {
+	if (!writable) return;
+
+	const path = storePath();
+	const temporary = `${path}.${process.pid}`;
+	const content: StoreFile = { sessions: Object.fromEntries(sessions), version: STORE_VERSION };
+
 	try {
-		writeFileSync(cachePath(), JSON.stringify(content));
-	} catch {}
+		writeFileSync(temporary, JSON.stringify(content));
+		renameSync(temporary, path);
+		failure = undefined;
+	} catch (error) {
+		failure = reason(error);
+		try {
+			unlinkSync(temporary);
+		} catch {}
+	}
 }
 
 function sessionFiles(): string[] {
@@ -328,14 +380,22 @@ function sessionFiles(): string[] {
 	);
 }
 
+function localSessions(sessions: Store): Map<string, { id: string; stored: StoredSession }> {
+	const local = new Map<string, { id: string; stored: StoredSession }>();
+	for (const [id, stored] of sessions) {
+		if (stored.host === HOST && stored.source) local.set(stored.source.path, { id, stored });
+	}
+	return local;
+}
+
 function fromEntries(live: LiveSession): StatsSession {
 	const accumulator = createAccumulator();
 	for (const entry of live.entries) fold(entry as unknown as SessionRecord, accumulator);
 	return {
 		firstMessage: accumulator.firstMessage,
+		host: HOST,
 		id: live.id,
 		name: live.name,
-		path: live.path ?? live.id,
 		project: live.cwd,
 		responses: applyTimings(accumulator),
 	};
@@ -355,9 +415,9 @@ function withoutForkedCopies(sessions: StatsSession[]): StatsSession[] {
 }
 
 export function collectSessions(live?: LiveSession): StatsSession[] {
-	const previous = (cache ??= loadCache());
-	const next: Cache = new Map();
-	const sessions: StatsSession[] = [];
+	const previous = (store ??= loadStore());
+	const local = localSessions(previous);
+	const next: Store = new Map();
 	let changed = false;
 
 	for (const path of sessionFiles()) {
@@ -371,32 +431,42 @@ export function collectSessions(live?: LiveSession): StatsSession[] {
 			continue;
 		}
 
-		const cached = previous.get(path);
-		const reusable = cached && cached.mtimeMs === mtimeMs && cached.size === size;
-		const entry = reusable
-			? cached
-			: cached && size > cached.size
-				? extendFile(path, cached, mtimeMs, size)
-				: parseFile(path, mtimeMs, size);
+		const cached = local.get(path);
+		const source = cached?.stored.source;
+		if (cached && source && source.mtimeMs === mtimeMs && source.size === size) {
+			next.set(cached.id, cached.stored);
+			continue;
+		}
 
-		changed ||= !reusable;
-		next.set(path, entry);
-		sessions.push({
-			firstMessage: entry.firstMessage,
-			id: entry.id,
-			name: entry.name,
-			path,
-			project: entry.project,
-			responses: entry.responses,
-		});
+		const grown = cached && source && size > source.size;
+		const accumulator = grown ? seedFrom(cached.id, cached.stored) : createAccumulator();
+		const consumed = grown
+			? foldChunk(accumulator, path, source.size, size - source.size)
+			: foldChunk(accumulator, path, 0, size);
+
+		next.set(accumulator.id || path, toStored(accumulator, { mtimeMs, path, size: consumed }));
+		changed = true;
 	}
 
-	cache = next;
-	if (changed || next.size !== previous.size) saveCache(next);
+	for (const [id, stored] of previous) {
+		if (!next.has(id)) next.set(id, stored);
+	}
+
+	store = next;
+	if (changed) saveStore(next);
+
+	const sessions: StatsSession[] = Array.from(next, ([id, stored]) => ({
+		firstMessage: stored.firstMessage,
+		host: stored.host,
+		id,
+		name: stored.name,
+		project: stored.project,
+		responses: stored.responses,
+	})).sort((left, right) => left.id.localeCompare(right.id));
 
 	if (live) {
 		const session = fromEntries(live);
-		const index = sessions.findIndex((existing) => existing.path === session.path);
+		const index = sessions.findIndex((existing) => existing.id === session.id);
 		if (index >= 0) {
 			sessions[index] = {
 				...session,

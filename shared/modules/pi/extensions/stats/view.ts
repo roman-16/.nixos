@@ -3,6 +3,7 @@ import { type Component, Key, matchesKey, type TUI, truncateToWidth, visibleWidt
 import {
 	allResponses,
 	cacheHit,
+	type HostRow,
 	medianWait,
 	type ModelTotals,
 	modelRows,
@@ -21,7 +22,7 @@ import {
 } from "./aggregate.ts";
 import { chartLines, type Metric, ZOOMS } from "./chart.ts";
 import type { LiveSnapshot } from "./live.ts";
-import { shortModel, type StatsSession } from "./records.ts";
+import { shortModel, type StatsSession, storeFailure } from "./records.ts";
 import {
 	clockTime,
 	type ColumnSpec,
@@ -179,9 +180,11 @@ function modelTab(): TableTab<ModelTotals & { breakdown: ModelTotals[] }> {
 	};
 }
 
-function sessionTab(): TableTab<SessionRow> {
+function sessionTab(hosted: boolean): TableTab<SessionRow> {
+	const hostCell = <T>(value: T) => (hosted ? [value] : []);
 	const columns: ColumnSpec[] = [
 		{ align: "left", header: "Session", maxWidth: 38, priority: 0 },
+		...hostCell<ColumnSpec>({ align: "left", header: "Host", maxWidth: 18, priority: 2 }),
 		{ align: "left", header: "Project", maxWidth: 26, priority: 2 },
 		{ align: "left", header: "Models", maxWidth: 20, priority: 8 },
 		...STATS_COLUMNS,
@@ -191,6 +194,7 @@ function sessionTab(): TableTab<SessionRow> {
 	return {
 		cells: (row) => [
 			row.label,
+			...hostCell(row.host),
 			shortProject(row.project),
 			joinModels(row.breakdown.map((model) => model.model)),
 			...statsCells(row),
@@ -202,12 +206,20 @@ function sessionTab(): TableTab<SessionRow> {
 		rows: sessionRows,
 		sorts: sortOptions<SessionRow>(columns, [
 			textSort<SessionRow>("Session", (row) => row.label.toLowerCase()),
+			...hostCell(textSort<SessionRow>("Host", (row) => row.host)),
 			textSort<SessionRow>("Project", (row) => row.project),
 			...statsSorts<SessionRow>(),
 			numberSort<SessionRow>("Last", (row) => row.lastTs),
 		]),
-		subCells: (model) => [`  └─ ${modelName(model.model)}`, "", "", ...statsCells(model), ""],
-		total: (rows) => ["Total", "", "", ...statsCells(sumTotals(rows)), ""],
+		subCells: (model) => [
+			`  └─ ${modelName(model.model)}`,
+			...hostCell(""),
+			"",
+			"",
+			...statsCells(model),
+			"",
+		],
+		total: (rows) => ["Total", ...hostCell(""), "", "", ...statsCells(sumTotals(rows)), ""],
 	};
 }
 
@@ -249,17 +261,27 @@ function projectTab(): TableTab<ProjectRow> {
 	};
 }
 
-const TABLE_TABS = [
-	periodTab("Hourly", "Hour", "hour", HOUR_SPAN),
-	periodTab("Daily", "Date", "day"),
-	periodTab("Weekly", "Week", "week"),
-	periodTab("Monthly", "Month", "month"),
-	modelTab(),
-	sessionTab(),
-	projectTab(),
-] as unknown as Array<TableTab<Totals & { breakdown: ModelTotals[] }>>;
+function tableTabs(hosted: boolean): Array<TableTab<Totals & { breakdown: ModelTotals[] }>> {
+	return [
+		periodTab("Hourly", "Hour", "hour", HOUR_SPAN),
+		periodTab("Daily", "Date", "day"),
+		periodTab("Weekly", "Week", "week"),
+		periodTab("Monthly", "Month", "month"),
+		modelTab(),
+		sessionTab(hosted),
+		projectTab(),
+	] as unknown as Array<TableTab<Totals & { breakdown: ModelTotals[] }>>;
+}
 
-const TABS = ["All", ...TABLE_TABS.map((table) => table.name)];
+const OVERVIEW_HOST_COLUMNS: ColumnSpec[] = [
+	{ align: "left", header: "Host", maxWidth: 24, priority: 0 },
+	{ align: "right", header: "Sessions", priority: 4 },
+	{ align: "right", header: "Responses", priority: 5 },
+	{ align: "right", header: "Tokens", priority: 1 },
+	{ align: "right", header: "Cost", priority: 0 },
+	{ align: "right", header: "Share", priority: 2 },
+	{ align: "right", header: "Tok/s", priority: 0 },
+];
 
 const OVERVIEW_MODEL_COLUMNS: ColumnSpec[] = [
 	{ align: "left", header: "Model", maxWidth: 34, priority: 0 },
@@ -345,7 +367,7 @@ function summaryLines(report: Overview, live: LiveSnapshot, theme: Theme): strin
 		["Tokens", tokenLine(totals)],
 		[
 			"Responses",
-			`${formatCount(totals.responses)} in ${plural(report.sessionCount, "session")} across ${plural(report.projects, "project")}`,
+			`${formatCount(totals.responses)} in ${plural(report.sessionCount, "session")} across ${plural(report.projects, "project")}${report.byHost.length > 1 ? ` on ${plural(report.byHost.length, "host")}` : ""}`,
 		],
 		[
 			"Active days",
@@ -384,6 +406,19 @@ function overviewBody(
 	width: number,
 ): string[] {
 	const spend = report.totals.cost;
+
+	const hosts: TableRow[] = report.byHost.map((host: HostRow) => ({
+		cells: [
+			host.host,
+			formatCount(host.sessions),
+			formatCount(host.responses),
+			formatTokens(host.tokens),
+			formatCost(host.cost),
+			formatShare(host.cost, spend),
+			formatRate(tokenRate(host)),
+		],
+		kind: "data",
+	}));
 
 	const models: TableRow[] = report.byModel.map((model) => ({
 		cells: [
@@ -426,6 +461,12 @@ function overviewBody(
 		...summaryLines(report, live, theme),
 		...section("Throughput", theme),
 		...chartLines(allResponses(sessions), ZOOMS[zoom], metric, theme, width, CHART_HEIGHT),
+		...(hosts.length > 1
+			? [
+					...section("By host", theme),
+					...renderTable(OVERVIEW_HOST_COLUMNS, hosts, theme, width, undefined, EMPTY).lines,
+				]
+			: []),
 		...section("By model", theme),
 		...renderTable(OVERVIEW_MODEL_COLUMNS, models, theme, width, undefined, EMPTY).lines,
 		...section("By project", theme),
@@ -448,9 +489,11 @@ export function createStatsView(options: StatsViewOptions): Component {
 	let breakdown = false;
 	let cache: { key: string; lines: string[] } | undefined;
 
-	const scroll = TABS.map(() => 0);
-	const visibleColumns = TABLE_TABS.map(() => [] as number[]);
-	const sort = TABLE_TABS.map((table) => ({
+	const tables = tableTabs(new Set(sessions.map((session) => session.host)).size > 1);
+	const tabs = ["All", ...tables.map((table) => table.name)];
+	const scroll = tabs.map(() => 0);
+	const visibleColumns = tables.map(() => [] as number[]);
+	const sort = tables.map((table) => ({
 		descending: true,
 		index: table.sorts.findIndex((option) => option.header === table.defaultSort),
 	}));
@@ -490,7 +533,7 @@ export function createStatsView(options: StatsViewOptions): Component {
 	}
 
 	function tableBody(index: number, width: number): string[] {
-		const table = TABLE_TABS[index];
+		const table = tables[index];
 		const state = sort[index];
 		const option = table.sorts[state.index];
 		const rows = table
@@ -532,12 +575,12 @@ export function createStatsView(options: StatsViewOptions): Component {
 	}
 
 	function viewportHeight(): number {
-		return Math.max(5, Math.floor(tui.terminal.rows / 2) - CHROME_LINES);
+		return Math.max(5, Math.floor(tui.terminal.rows / 2) - CHROME_LINES - (storeFailure() ? 1 : 0));
 	}
 
 	function cycleSort(step: number): void {
 		if (tab === 0) return;
-		const table = TABLE_TABS[tab - 1];
+		const table = tables[tab - 1];
 		const state = sort[tab - 1];
 		const kept = visibleColumns[tab - 1];
 		const usable = table.sorts.filter((option) => kept.includes(option.column));
@@ -580,7 +623,7 @@ export function createStatsView(options: StatsViewOptions): Component {
 	}
 
 	function tabBar(width: number): string {
-		const rendered = TABS.map((name, index) => {
+		const rendered = tabs.map((name, index) => {
 			const label = ` ${index + 1} ${name} `;
 			return index === tab
 				? theme.bg("selectedBg", theme.fg("accent", theme.bold(label)))
@@ -599,7 +642,7 @@ export function createStatsView(options: StatsViewOptions): Component {
 
 		const keys = [
 			"Tab/←→ tabs",
-			`1-${TABS.length} jump`,
+			`1-${tabs.length} jump`,
 			"↑↓ PgUp/PgDn scroll",
 			...(tab === 0
 				? [`${ZOOMS.map((option) => option.key).join("/")} zoom`, "c spend/speed"]
@@ -627,16 +670,16 @@ export function createStatsView(options: StatsViewOptions): Component {
 				return;
 			}
 			if (matchesKey(data, Key.tab) || matchesKey(data, Key.right)) {
-				tab = (tab + 1) % TABS.length;
+				tab = (tab + 1) % tabs.length;
 				refresh();
 				return;
 			}
 			if (matchesKey(data, Key.shift("tab")) || matchesKey(data, Key.left)) {
-				tab = (tab - 1 + TABS.length) % TABS.length;
+				tab = (tab - 1 + tabs.length) % tabs.length;
 				refresh();
 				return;
 			}
-			if (data >= "1" && data <= `${TABS.length}`) {
+			if (data >= "1" && data <= `${tabs.length}`) {
 				tab = Number(data) - 1;
 				refresh();
 				return;
@@ -690,9 +733,23 @@ export function createStatsView(options: StatsViewOptions): Component {
 			scroll[tab] = Math.min(scroll[tab], limit);
 			const visible = lines.slice(scroll[tab], scroll[tab] + height);
 			while (visible.length < height) visible.push("");
-			return [title(width), tabBar(width), "", ...visible, "", hint(lines.length, width)].map((line) =>
-				truncateToWidth(line, width),
-			);
+			const notWritten = storeFailure();
+			return [
+				title(width),
+				tabBar(width),
+				"",
+				...visible,
+				"",
+				hint(lines.length, width),
+				...(notWritten === undefined
+					? []
+					: [
+							theme.fg(
+								"warning",
+								`stats.json not written: ${notWritten} - the panel is current, the backup file is not`,
+							),
+						]),
+			].map((line) => truncateToWidth(line, width));
 		},
 	};
 }

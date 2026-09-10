@@ -34,8 +34,15 @@ export interface PeriodRow extends Totals {
 
 export interface SessionRow extends Totals {
 	breakdown: ModelTotals[];
+	host: string;
 	label: string;
 	project: string;
+}
+
+export interface HostRow extends Totals {
+	breakdown: ModelTotals[];
+	host: string;
+	sessions: number;
 }
 
 export interface ProjectRow extends Totals {
@@ -46,6 +53,7 @@ export interface ProjectRow extends Totals {
 
 export interface Overview {
 	activeDays: number;
+	byHost: HostRow[];
 	byModel: ModelTotals[];
 	byProject: ProjectRow[];
 	calendarDays: number;
@@ -249,7 +257,7 @@ function groupBy(
 		for (const response of session.responses) {
 			const key = keyOf(response, session);
 			const group = groups.get(key) ?? createGroup();
-			absorb(group, response, session.path);
+			absorb(group, response, session.id);
 			groups.set(key, group);
 		}
 	}
@@ -283,15 +291,26 @@ export function sessionRows(sessions: StatsSession[]): SessionRow[] {
 		.filter((session) => session.responses.length > 0)
 		.map((session) => {
 			const group = createGroup();
-			for (const response of session.responses) absorb(group, response, session.path);
+			for (const response of session.responses) absorb(group, response, session.id);
 			return {
 				...group.totals,
 				breakdown: breakdownOf(group),
+				host: session.host,
 				label: session.name ?? session.firstMessage ?? session.id.slice(0, 8),
 				project: session.project,
 			};
 		})
 		.sort((left, right) => right.cost - left.cost);
+}
+
+export function hostRows(sessions: StatsSession[]): HostRow[] {
+	const groups = groupBy(sessions, (_response, session) => session.host);
+	return Array.from(groups, ([host, group]) => ({
+		...group.totals,
+		breakdown: breakdownOf(group),
+		host: `${host}`,
+		sessions: group.sessions.size,
+	})).sort((left, right) => right.cost - left.cost);
 }
 
 export function projectRows(sessions: StatsSession[]): ProjectRow[] {
@@ -342,6 +361,7 @@ export function overview(sessions: StatsSession[]): Overview {
 
 	return {
 		activeDays: days.size,
+		byHost: hostRows(sessions),
 		byModel: modelRows(sessions),
 		byProject: projectRows(sessions),
 		calendarDays: sorted.length > 0 ? Math.round(span / DAY_MS) + 1 : 0,
