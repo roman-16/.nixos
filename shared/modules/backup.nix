@@ -13,6 +13,7 @@
     let
       cfg = config.backup;
 
+      digestLength = 16;
       host = osConfig.networking.hostName;
       keep = 32;
       remote = "/backups/${host}";
@@ -41,8 +42,6 @@
         ]);
 
         text = ''
-          name="${host}-$(date --utc +%Y-%m-%dT%H-%M-%SZ).tar.zst"
-
           status=0
           proton drive items get ${remote} >/dev/null 2>&1 || status=$?
           case "$status" in
@@ -51,28 +50,46 @@
             *) echo "cannot reach Drive (${remote}, exit $status)" >&2; exit "$status" ;;
           esac
 
-          echo "archiving ${lib.concatStringsSep " " cfg.paths} -> ${remote}/$name"
-
           archive() {
             local tar_status=0
-            tar --create --file - --directory "$HOME" ${excludeArgs} \
+            tar --create --file - --sort name --directory "$HOME" ${excludeArgs} "$@" \
               -- ${lib.escapeShellArgs cfg.paths} || tar_status=$?
             [ "$tar_status" -le 1 ]
           }
 
-          archive \
-            | zstd --quiet --threads=0 --stdout \
-            | proton drive items upload - "${remote}/$name"
-
-          stale="$(
+          archives() {
             proton drive items list ${remote} \
               --output json \
               --page-size 0 \
               --pattern '${host}-*.tar.zst' \
               --sort name \
-              --desc \
-              | jq --raw-output '.items[${toString keep}:][].name'
+              --desc
+          }
+
+          digest="$(
+            archive --mtime=@0 --owner=0 --group=0 --numeric-owner \
+              | sha256sum \
+              | cut --characters=1-${toString digestLength}
           )"
+          latest="$(archives | jq --raw-output '.items[0].name // ""')"
+
+          case "$latest" in
+            *-"$digest".tar.zst)
+              echo "${lib.concatStringsSep " " cfg.paths} unchanged since $latest"
+              mkdir --parents ${stateDir}
+              touch ${heartbeat}
+              exit 0
+              ;;
+          esac
+
+          name="${host}-$(date --utc +%Y-%m-%dT%H-%M-%SZ)-$digest.tar.zst"
+          echo "archiving ${lib.concatStringsSep " " cfg.paths} -> ${remote}/$name"
+
+          archive \
+            | zstd --quiet --threads=0 --stdout \
+            | proton drive items upload - "${remote}/$name"
+
+          stale="$(archives | jq --raw-output '.items[${toString keep}:][].name')"
 
           if [ -n "$stale" ]; then
             stale_paths=()
