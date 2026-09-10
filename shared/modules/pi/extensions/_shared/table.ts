@@ -1,7 +1,6 @@
 import { homedir } from "node:os";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import { SUMMARY_MODEL } from "./collect.ts";
 
 export interface ColumnSpec {
 	align: "left" | "right";
@@ -51,14 +50,17 @@ export function formatDate(timestamp: number): string {
 	return `${date.getFullYear()}-${month}-${day}`;
 }
 
+export function clockTime(timestamp: number): string {
+	if (!timestamp || !Number.isFinite(timestamp)) return "";
+	const date = new Date(timestamp);
+	const hours = `${date.getHours()}`.padStart(2, "0");
+	const minutes = `${date.getMinutes()}`.padStart(2, "0");
+	return `${hours}:${minutes}`;
+}
+
 export function modelName(model: string): string {
 	const name = model.slice(model.indexOf("/") + 1);
 	return name.startsWith("claude-") ? name.slice("claude-".length) : name;
-}
-
-export function shortModel(model: string): string {
-	if (model === SUMMARY_MODEL) return "summaries";
-	return `${model.slice(0, model.indexOf("/"))}/${modelName(model)}`;
 }
 
 export function shortProject(project: string): string {
@@ -118,15 +120,18 @@ export function renderTable(
 	theme: Theme,
 	width: number,
 	sort?: SortMarker,
+	empty = "Nothing recorded.",
 ): TableRender {
-	if (rows.length === 0) return { kept: [], lines: [theme.fg("muted", "No usage recorded.")] };
+	if (rows.length === 0) return { kept: [], lines: [theme.fg("muted", empty)] };
 
 	const headed = columns.map((column, index) =>
 		index === sort?.column ? { ...column, header: `${column.header} ${sort.ascending ? "▲" : "▼"}` } : column,
 	);
 	const { kept, widths } = fit(headed, rows, width);
 	const line = (cells: string[]) =>
-		kept.map((index, position) => pad(cells[index] ?? "", widths[position], headed[index].align)).join(" ".repeat(GAP));
+		kept
+			.map((index, position) => pad(cells[index] ?? "", widths[position], headed[index].align))
+			.join(" ".repeat(GAP));
 	const ruleWidth = Math.min(width, widths.reduce((sum, value) => sum + value, 0) + GAP * (widths.length - 1));
 
 	const output: string[] = [

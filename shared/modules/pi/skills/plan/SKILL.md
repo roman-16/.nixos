@@ -5,17 +5,11 @@ description: Research-and-plan mode for substantive tasks before implementation.
 
 # Plan
 
-Research-only mode. Stay read-only across turns until the user authorizes implementation.
+Research-only mode. Nothing is built until the user authorizes implementation.
 
-## Read-only boundary
+## Read-only
 
-Allowed:
-
-- The `read` tool.
-- Any `bash` command that is purely informational - inspecting files, searching, querying VCS history, fetching read-only remote data.
-- Ephemeral scratch work in `/tmp/`: cloning, extracting, writing throwaway scripts to verify behavior. Anything that doesn't touch the project or persistent system state.
-
-Forbidden: anything that mutates the project, the system, processes, network state, package indexes, or VCS history. No `edit` / `write`. No privilege escalation. If you're unsure whether a command counts as mutating, treat it as forbidden.
+Planning happens inside read-only mode: the `read-only` skill's boundary holds from here to the hand-off. `/plan` loads it alongside this one; when it is not already in context, `read` the sibling `../read-only/SKILL.md` before anything else.
 
 ## Research
 
@@ -87,8 +81,6 @@ Depart from it when the task genuinely needs another shape, never to make room f
 
 Hyphens only, never em-dashes or en-dashes - in headings, transcripts and prose alike.
 
-Stay read-only across every turn, including follow-up questions and refinements.
-
 ### Lead with what the user will see
 
 The plan asks for a product decision, so it has to be answerable without reading code. It opens with **What changes for the user**: what they do and see today, and what they do and see once this is built. Each proposed change then leads with its effect on that surface before any mechanism. The section stands alone - no file names, no symbols, no internal vocabulary.
@@ -153,7 +145,7 @@ The whole plan is rendered again only when the user asks for it ("show me the fu
 
 ## Hand-off
 
-When the user says `implement`, `start`, `go`, `do it`, `apply`, `make the changes`, `execute the plan`, or any phrase clearly authorizing implementation: re-state in one sentence what the user will be able to do differently once it is done, then build it. What you build is the plan as it stands after every refinement: the first version plus each delta the user accepted.
+When the user says `go`, or anything else that lifts read-only mode: re-state in one sentence what the user will be able to do differently once it is done, then build it. What you build is the plan as it stands after every refinement: the first version plus each delta the user accepted.
 
 ### Build all of it
 

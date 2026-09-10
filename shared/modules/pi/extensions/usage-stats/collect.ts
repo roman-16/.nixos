@@ -1,8 +1,14 @@
 import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAgentDir, type SessionEntry } from "@earendil-works/pi-coding-agent";
+import { modelName } from "../_shared/table.ts";
 
 export const SUMMARY_MODEL = "Tools/summaries";
+
+export function shortModel(model: string): string {
+	if (model === SUMMARY_MODEL) return "summaries";
+	return `${model.slice(0, model.indexOf("/"))}/${modelName(model)}`;
+}
 
 export interface UsageRow {
 	cacheRead: number;
@@ -31,7 +37,7 @@ export interface LiveSession {
 	entries: SessionEntry[];
 	id: string;
 	name?: string;
-	path: string | null;
+	path: string | undefined;
 }
 
 interface Usage {

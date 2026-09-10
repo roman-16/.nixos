@@ -15,8 +15,8 @@ import {
 	type Totals,
 	weeklyRows,
 } from "./aggregate.ts";
-import type { SessionUsage } from "./collect.ts";
 import {
+	clockTime,
 	type ColumnSpec,
 	formatCost,
 	formatCount,
@@ -25,10 +25,10 @@ import {
 	joinModels,
 	modelName,
 	renderTable,
-	shortModel,
 	shortProject,
 	type TableRow,
-} from "./table.ts";
+} from "../_shared/table.ts";
+import { shortModel, type SessionUsage } from "./collect.ts";
 
 const CHROME_LINES = 5;
 
@@ -240,13 +240,6 @@ export interface UsageViewOptions {
 	tui: TUI;
 }
 
-function clockTime(timestamp: number): string {
-	const date = new Date(timestamp);
-	const hours = `${date.getHours()}`.padStart(2, "0");
-	const minutes = `${date.getMinutes()}`.padStart(2, "0");
-	return `${hours}:${minutes}`;
-}
-
 function compare(left: number | string, right: number | string): number {
 	return typeof left === "number" && typeof right === "number"
 		? left - right
@@ -323,11 +316,11 @@ function allBody(report: Overview, theme: Theme, width: number): string[] {
 	return [
 		...summaryLines(report, theme),
 		...section("By model", theme),
-		...renderTable(MODEL_COLUMNS, models, theme, width).lines,
+		...renderTable(MODEL_COLUMNS, models, theme, width, undefined, "No usage recorded.").lines,
 		...section("By project", theme),
-		...renderTable(TOP_PROJECT_COLUMNS, projects, theme, width).lines,
+		...renderTable(TOP_PROJECT_COLUMNS, projects, theme, width, undefined, "No usage recorded.").lines,
 		...section("Most expensive sessions", theme),
-		...renderTable(TOP_SESSION_COLUMNS, top, theme, width).lines,
+		...renderTable(TOP_SESSION_COLUMNS, top, theme, width, undefined, "No usage recorded.").lines,
 	];
 }
 
@@ -365,10 +358,14 @@ export function createUsageView(options: UsageViewOptions): Component {
 		}
 		if (rows.length > 0) lines.push({ cells: table.total(rows), kind: "total" });
 
-		const rendered = renderTable(table.columns, lines, theme, width, {
-			ascending: !state.descending,
-			column: option.column,
-		});
+		const rendered = renderTable(
+			table.columns,
+			lines,
+			theme,
+			width,
+			{ ascending: !state.descending, column: option.column },
+			"No usage recorded.",
+		);
 		visibleColumns[index] = rendered.kept;
 		return rendered.lines;
 	}

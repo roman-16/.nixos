@@ -22,21 +22,30 @@
 
       secrets = builtins.fromJSON (builtins.readFile ./secrets.json);
 
-      # Extensions: symlink each top-level entry as-is, so a multi-file extension
-      # directory becomes a single store path and its relative imports resolve
-      # (per-file symlinks put each file in its own store path, breaking them).
-      extensionsDir = ./extensions;
-      extensionAttrs = builtins.listToAttrs (
-        lib.mapAttrsToList (name: _: {
-          name = ".pi/agent/extensions/${name}";
-          value.source = extensionsDir + "/${name}";
-        }) (builtins.readDir extensionsDir)
-      );
+      # Relative imports resolve through the real path, so an extension importing
+      # a sibling directory only works if the whole tree is one store path.
+      extensionsTree = pkgs.runCommand "pi-extensions" { } ''
+        cp --recursive ${./extensions} $out
+        chmod --recursive u+w $out
 
-      upstreamExtensionAttrs = {
-        ".pi/agent/extensions/questionnaire.ts".source =
-          "${pi}/libexec/pi/examples/extensions/questionnaire.ts";
-      };
+        cp ${pi}/libexec/pi/examples/extensions/questionnaire.ts $out/questionnaire.ts
+
+        export HOME=$(mktemp --directory)
+        ${lib.getExe config.programs.atuin.package} hook install pi
+        cp $HOME/.pi/agent/extensions/atuin.ts $out/atuin.ts
+      '';
+
+      extensionNames = builtins.attrNames (builtins.readDir ./extensions) ++ [
+        "atuin.ts"
+        "questionnaire.ts"
+      ];
+
+      extensionAttrs = builtins.listToAttrs (
+        map (name: {
+          name = ".pi/agent/extensions/${name}";
+          value.source = "${extensionsTree}/${name}";
+        }) extensionNames
+      );
 
       # Skills: symlink individual files so directories are real (writable for npm install)
       skillsDir = ./skills;
@@ -118,7 +127,6 @@
             ".pi/agent/keybindings.json".text = keybindingsJson;
           }
           // extensionAttrs
-          // upstreamExtensionAttrs
           // skillAttrs;
 
           # Merge nix-defined settings onto existing settings.json
