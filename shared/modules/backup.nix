@@ -16,7 +16,7 @@
       digestLength = 16;
       host = osConfig.networking.hostName;
       keep = 32;
-      remote = "/backups/${host}";
+      remote = "/backups/nixos/${host}";
       stateDir = "${config.xdg.stateHome}/backup";
       heartbeat = "${stateDir}/last-success";
       protonCli = inputs.proton-cli.packages.${pkgs.stdenv.hostPlatform.system}.default;
