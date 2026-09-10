@@ -25,7 +25,7 @@
         pattern: "--exclude=${lib.escapeShellArg pattern}"
       ) cfg.exclude;
 
-      fresherThan = age: "find ${heartbeat} -newermt '${age}' 2>/dev/null | grep --quiet .";
+      succeededToday = "find ${heartbeat} -newermt '00:00' 2>/dev/null | grep --quiet .";
 
       backup = pkgs.writeShellApplication {
         name = "nx-backup";
@@ -118,7 +118,7 @@
         ];
 
         text = ''
-          if ${fresherThan "12 hours ago"}; then
+          if ${succeededToday}; then
             exit 1
           fi
         '';
@@ -135,7 +135,7 @@
         ];
 
         text = ''
-          if ${fresherThan "24 hours ago"}; then
+          if ${succeededToday}; then
             exit 0
           fi
 
@@ -195,7 +195,7 @@
                 Type = "oneshot";
               };
 
-              Unit.Description = "Warn when no backup has succeeded for a day";
+              Unit.Description = "Warn when today's backup has not succeeded";
             };
           };
 
@@ -203,11 +203,12 @@
             Install.WantedBy = [ "timers.target" ];
 
             Timer = {
-              OnCalendar = "hourly";
+              OnCalendar = "daily";
+              OnStartupSec = "2min";
               Persistent = true;
             };
 
-            Unit.Description = "Ask hourly whether a backup older than 12 hours is owed";
+            Unit.Description = "Ask at midnight and at startup whether today's backup is owed";
           };
         };
       };
