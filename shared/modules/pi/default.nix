@@ -115,6 +115,8 @@
       };
 
       config = {
+        backup.paths = [ ".pi/agent/stats.json" ];
+
         pi.agentsMd = builtins.readFile ./AGENTS.md;
 
         home = {

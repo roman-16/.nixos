@@ -11,12 +11,12 @@
       ...
     }:
     let
-      cfg = config.nx-backup;
+      cfg = config.backup;
 
       host = osConfig.networking.hostName;
       keep = 32;
       remote = "/backups/${host}";
-      stateDir = "${config.xdg.stateHome}/nx-backup";
+      stateDir = "${config.xdg.stateHome}/backup";
       heartbeat = "${stateDir}/last-success";
       protonCli = inputs.proton-cli.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
@@ -93,7 +93,7 @@
       };
 
       due = pkgs.writeShellApplication {
-        name = "nx-backup-due";
+        name = "backup-due";
 
         runtimeInputs = with pkgs; [
           findutils
@@ -108,7 +108,7 @@
       };
 
       late = pkgs.writeShellApplication {
-        name = "nx-backup-late";
+        name = "backup-late";
 
         runtimeInputs = with pkgs; [
           coreutils
@@ -129,14 +129,14 @@
           fi
 
           notify-send \
-            --app-name nx-backup \
+            --app-name backup \
             --urgency critical \
-            -- "Backup is late" "$since"$'\n'"journalctl --user --unit nx-backup"
+            -- "Backup is late" "$since"$'\n'"journalctl --user --unit backup"
         '';
       };
     in
     {
-      options.nx-backup = {
+      options.backup = {
         exclude = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [ ];
@@ -155,7 +155,7 @@
 
         systemd.user = {
           services = {
-            nx-backup = {
+            backup = {
               Service = {
                 Environment = [ "PROTON_NO_INPUT=1" ];
                 ExecCondition = lib.getExe due;
@@ -167,12 +167,12 @@
               Unit = {
                 After = [ "proton-login.service" ];
                 Description = "Back up ${lib.concatStringsSep " " cfg.paths} to ${remote} on Proton Drive";
-                OnFailure = [ "nx-backup-late.service" ];
+                OnFailure = [ "backup-late.service" ];
                 Requires = [ "proton-login.service" ];
               };
             };
 
-            nx-backup-late = {
+            backup-late = {
               Service = {
                 ExecStart = lib.getExe late;
                 Type = "oneshot";
@@ -182,7 +182,7 @@
             };
           };
 
-          timers.nx-backup = {
+          timers.backup = {
             Install.WantedBy = [ "timers.target" ];
 
             Timer = {
