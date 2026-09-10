@@ -42,12 +42,37 @@ export function formatTokens(value: number): string {
 	return `${value}`;
 }
 
+export function formatDuration(ms: number): string {
+	if (ms <= 0) return "-";
+
+	const seconds = Math.round(ms / 1000);
+	if (seconds < 60) return `${seconds}s`;
+
+	const minutes = Math.floor(seconds / 60);
+	if (minutes < 60) return `${minutes}m`;
+
+	return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+export function formatRate(rate: number | undefined): string {
+	return rate === undefined ? "-" : `${Math.round(rate)}`;
+}
+
+export function formatShare(part: number, whole: number): string {
+	return whole > 0 ? `${((part / whole) * 100).toFixed(1)}%` : "";
+}
+
+export function formatWait(ms: number | undefined): string {
+	if (ms === undefined) return "-";
+	return ms >= 10_000 ? `${Math.round(ms / 1000)} s` : `${(ms / 1000).toFixed(1)} s`;
+}
+
 export function formatDate(timestamp: number): string {
 	if (!timestamp || !Number.isFinite(timestamp)) return "";
 	const date = new Date(timestamp);
-	const month = `${date.getMonth() + 1}`.padStart(2, "0");
 	const day = `${date.getDate()}`.padStart(2, "0");
-	return `${date.getFullYear()}-${month}-${day}`;
+	const month = `${date.getMonth() + 1}`.padStart(2, "0");
+	return `${day}.${month}.${date.getFullYear()}`;
 }
 
 export function clockTime(timestamp: number): string {

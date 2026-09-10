@@ -1,35 +1,40 @@
 import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { getAgentDir, type SessionEntry } from "@earendil-works/pi-coding-agent";
-import { modelName } from "../_shared/table.ts";
+import { modelName } from "./table.ts";
 
 export const SUMMARY_MODEL = "Tools/summaries";
 
-export function shortModel(model: string): string {
-	if (model === SUMMARY_MODEL) return "summaries";
-	return `${model.slice(0, model.indexOf("/"))}/${modelName(model)}`;
+export const TIMING_TYPE = "stats";
+
+export interface Timing {
+	firstTokenMs: number;
+	requestedAt: number;
+	thinkingMs: number;
 }
 
-export interface UsageRow {
+export interface Response {
 	cacheRead: number;
 	cacheWrite: number;
 	cost: number;
-	date: string;
-	firstTs: number;
+	durationMs: number;
+	endedAt: number;
+	firstTokenMs?: number;
 	input: number;
-	lastTs: number;
-	messages: number;
 	model: string;
 	output: number;
+	reasoning: number;
+	startedAt: number;
+	thinkingMs?: number;
 }
 
-export interface SessionUsage {
+export interface StatsSession {
 	firstMessage?: string;
 	id: string;
 	name?: string;
 	path: string;
 	project: string;
-	rows: UsageRow[];
+	responses: Response[];
 }
 
 export interface LiveSession {
@@ -46,10 +51,13 @@ interface Usage {
 	cost?: { total?: number };
 	input?: number;
 	output?: number;
+	reasoning?: number;
 }
 
 interface SessionRecord {
+	customType?: string;
 	cwd?: string;
+	data?: Partial<Timing>;
 	id?: string;
 	message?: {
 		content?: string | Array<{ text?: string; type?: string }>;
@@ -71,7 +79,8 @@ interface Accumulator {
 	id: string;
 	name?: string;
 	project: string;
-	rows: Map<string, UsageRow>;
+	responses: Response[];
+	timings: Timing[];
 }
 
 interface CacheEntry {
@@ -80,7 +89,7 @@ interface CacheEntry {
 	mtimeMs: number;
 	name?: string;
 	project: string;
-	rows: UsageRow[];
+	responses: Response[];
 	size: number;
 }
 
@@ -91,25 +100,23 @@ interface CacheFile {
 
 type Cache = Map<string, CacheEntry>;
 
-const CACHE_ENTRY_SHAPE = "firstMessage,id,mtimeMs,name,project,rows,size";
+const CACHE_ENTRY_SHAPE = "firstMessage,id,mtimeMs,name,project,responses,size";
 
 const FIRST_MESSAGE_LIMIT = 90;
 
-const cachePath = () => join(getAgentDir(), "usage-stats-cache.json");
+let cache: Cache | undefined;
+
+const cachePath = () => join(getAgentDir(), "stats-cache.json");
 
 const sessionsDir = () => join(getAgentDir(), "sessions");
 
-function localDate(ms: number): string {
-	const date = new Date(ms);
-	const month = `${date.getMonth() + 1}`.padStart(2, "0");
-	const day = `${date.getDate()}`.padStart(2, "0");
-	return `${date.getFullYear()}-${month}-${day}`;
+export function shortModel(model: string): string {
+	if (model === SUMMARY_MODEL) return "summaries";
+	return `${model.slice(0, model.indexOf("/"))}/${modelName(model)}`;
 }
 
-function createAccumulator(rows: UsageRow[] = []): Accumulator {
-	const map = new Map<string, UsageRow>();
-	for (const row of rows) map.set(`${row.date}\u0000${row.model}`, { ...row });
-	return { id: "", project: "", rows: map };
+function createAccumulator(responses: Response[] = []): Accumulator {
+	return { id: "", project: "", responses: [...responses], timings: [] };
 }
 
 function promptText(content: string | Array<{ text?: string; type?: string }> | undefined): string {
@@ -128,30 +135,25 @@ function promptText(content: string | Array<{ text?: string; type?: string }> | 
 	return collapsed.length > FIRST_MESSAGE_LIMIT ? `${collapsed.slice(0, FIRST_MESSAGE_LIMIT)}…` : collapsed;
 }
 
-function addUsage(accumulator: Accumulator, model: string, usage: Usage, timestamp: number): void {
-	const date = localDate(timestamp);
-	const key = `${date}\u0000${model}`;
-	const row = accumulator.rows.get(key) ?? {
-		cacheRead: 0,
-		cacheWrite: 0,
-		cost: 0,
-		date,
-		firstTs: timestamp,
-		input: 0,
-		lastTs: timestamp,
-		messages: 0,
+function addResponse(
+	accumulator: Accumulator,
+	model: string,
+	usage: Usage,
+	startedAt: number,
+	endedAt: number,
+): void {
+	accumulator.responses.push({
+		cacheRead: usage.cacheRead ?? 0,
+		cacheWrite: usage.cacheWrite ?? 0,
+		cost: usage.cost?.total ?? 0,
+		durationMs: endedAt > startedAt ? endedAt - startedAt : 0,
+		endedAt,
+		input: usage.input ?? 0,
 		model,
-		output: 0,
-	};
-	row.cacheRead += usage.cacheRead ?? 0;
-	row.cacheWrite += usage.cacheWrite ?? 0;
-	row.cost += usage.cost?.total ?? 0;
-	row.firstTs = Math.min(row.firstTs, timestamp);
-	row.input += usage.input ?? 0;
-	row.lastTs = Math.max(row.lastTs, timestamp);
-	row.messages += 1;
-	row.output += usage.output ?? 0;
-	accumulator.rows.set(key, row);
+		output: usage.output ?? 0,
+		reasoning: usage.reasoning ?? 0,
+		startedAt,
+	});
 }
 
 function fold(record: SessionRecord, accumulator: Accumulator): void {
@@ -164,6 +166,17 @@ function fold(record: SessionRecord, accumulator: Accumulator): void {
 		accumulator.name = record.name;
 		return;
 	}
+	if (record.type === "custom" && record.customType === TIMING_TYPE) {
+		const timing = record.data;
+		if (typeof timing?.requestedAt === "number" && typeof timing.firstTokenMs === "number") {
+			accumulator.timings.push({
+				firstTokenMs: timing.firstTokenMs,
+				requestedAt: timing.requestedAt,
+				thinkingMs: timing.thinkingMs ?? 0,
+			});
+		}
+		return;
+	}
 
 	const message = record.message;
 
@@ -172,38 +185,53 @@ function fold(record: SessionRecord, accumulator: Accumulator): void {
 		if (text) accumulator.firstMessage = text;
 	}
 
-	const timestamp = Date.parse(record.timestamp ?? "") || message?.timestamp || 0;
-	if (!timestamp) return;
+	const endedAt = Date.parse(record.timestamp ?? "") || message?.timestamp || 0;
+	if (!endedAt) return;
 
 	if (message?.role === "assistant" && message.usage) {
-		addUsage(
+		addResponse(
 			accumulator,
 			`${message.provider}/${message.responseModel ?? message.model}`,
 			message.usage,
-			timestamp,
+			message.timestamp ?? endedAt,
+			endedAt,
 		);
 		return;
 	}
 	if (message?.role === "toolResult" && message.usage) {
-		addUsage(accumulator, SUMMARY_MODEL, message.usage, timestamp);
+		addResponse(accumulator, SUMMARY_MODEL, message.usage, endedAt, endedAt);
 		return;
 	}
 	if ((record.type === "branch_summary" || record.type === "compaction") && record.usage) {
-		addUsage(accumulator, SUMMARY_MODEL, record.usage, timestamp);
+		addResponse(accumulator, SUMMARY_MODEL, record.usage, endedAt, endedAt);
 	}
 }
 
-function carriesUsageOrMetadata(line: string, wantsPrompt: boolean): boolean {
+function applyTimings(accumulator: Accumulator): Response[] {
+	if (accumulator.timings.length > 0) {
+		const byStart = new Map(accumulator.responses.map((response) => [response.startedAt, response]));
+		for (const timing of accumulator.timings) {
+			const response = byStart.get(timing.requestedAt);
+			if (!response) continue;
+			response.firstTokenMs = timing.firstTokenMs;
+			response.thinkingMs = timing.thinkingMs;
+		}
+	}
+	return accumulator.responses;
+}
+
+function carriesRecord(line: string, wantsPrompt: boolean): boolean {
 	return (
 		line.includes('"usage"') ||
 		line.includes('"type":"session') ||
+		line.includes(`"customType":"${TIMING_TYPE}"`) ||
 		(wantsPrompt && line.includes('"role":"user"'))
 	);
 }
 
 function foldText(text: string, accumulator: Accumulator): void {
 	for (const line of text.split("\n")) {
-		if (!carriesUsageOrMetadata(line, accumulator.firstMessage === undefined)) continue;
+		if (!carriesRecord(line, accumulator.firstMessage === undefined)) continue;
 		try {
 			fold(JSON.parse(line) as SessionRecord, accumulator);
 		} catch {}
@@ -237,7 +265,7 @@ function toEntry(accumulator: Accumulator, mtimeMs: number, size: number): Cache
 		mtimeMs,
 		name: accumulator.name,
 		project: accumulator.project,
-		rows: Array.from(accumulator.rows.values()),
+		responses: applyTimings(accumulator),
 		size,
 	};
 }
@@ -250,7 +278,7 @@ function parseFile(path: string, mtimeMs: number, size: number): CacheEntry {
 }
 
 function extendFile(path: string, cached: CacheEntry, mtimeMs: number, size: number): CacheEntry {
-	const accumulator = createAccumulator(cached.rows);
+	const accumulator = createAccumulator(cached.responses);
 	accumulator.firstMessage = cached.firstMessage;
 	accumulator.id = cached.id;
 	accumulator.name = cached.name;
@@ -270,8 +298,8 @@ function loadCache(): Cache {
 	}
 }
 
-function saveCache(cache: Cache): void {
-	const content: CacheFile = { entryShape: CACHE_ENTRY_SHAPE, files: Object.fromEntries(cache) };
+function saveCache(entries: Cache): void {
+	const content: CacheFile = { entryShape: CACHE_ENTRY_SHAPE, files: Object.fromEntries(entries) };
 	try {
 		writeFileSync(cachePath(), JSON.stringify(content));
 	} catch {}
@@ -295,10 +323,12 @@ function sessionFiles(): string[] {
 			}
 		} catch {}
 	}
-	return files;
+	return files.sort(
+		(left, right) => basename(left).localeCompare(basename(right)) || left.localeCompare(right),
+	);
 }
 
-function fromEntries(live: LiveSession): SessionUsage {
+function fromEntries(live: LiveSession): StatsSession {
 	const accumulator = createAccumulator();
 	for (const entry of live.entries) fold(entry as unknown as SessionRecord, accumulator);
 	return {
@@ -307,14 +337,28 @@ function fromEntries(live: LiveSession): SessionUsage {
 		name: live.name,
 		path: live.path ?? live.id,
 		project: live.cwd,
-		rows: Array.from(accumulator.rows.values()),
+		responses: applyTimings(accumulator),
 	};
 }
 
-export function collectSessions(live?: LiveSession): SessionUsage[] {
-	const cache = loadCache();
+function withoutForkedCopies(sessions: StatsSession[]): StatsSession[] {
+	const seen = new Set<string>();
+	return sessions.map((session) => ({
+		...session,
+		responses: session.responses.filter((response) => {
+			const key = `${response.startedAt}\u0000${response.endedAt}`;
+			if (seen.has(key)) return false;
+			seen.add(key);
+			return true;
+		}),
+	}));
+}
+
+export function collectSessions(live?: LiveSession): StatsSession[] {
+	const previous = (cache ??= loadCache());
 	const next: Cache = new Map();
-	const sessions: SessionUsage[] = [];
+	const sessions: StatsSession[] = [];
+	let changed = false;
 
 	for (const path of sessionFiles()) {
 		let mtimeMs: number;
@@ -327,14 +371,15 @@ export function collectSessions(live?: LiveSession): SessionUsage[] {
 			continue;
 		}
 
-		const cached = cache.get(path);
-		const entry =
-			cached && cached.mtimeMs === mtimeMs && cached.size === size
-				? cached
-				: cached && size > cached.size
-					? extendFile(path, cached, mtimeMs, size)
-					: parseFile(path, mtimeMs, size);
+		const cached = previous.get(path);
+		const reusable = cached && cached.mtimeMs === mtimeMs && cached.size === size;
+		const entry = reusable
+			? cached
+			: cached && size > cached.size
+				? extendFile(path, cached, mtimeMs, size)
+				: parseFile(path, mtimeMs, size);
 
+		changed ||= !reusable;
 		next.set(path, entry);
 		sessions.push({
 			firstMessage: entry.firstMessage,
@@ -342,25 +387,26 @@ export function collectSessions(live?: LiveSession): SessionUsage[] {
 			name: entry.name,
 			path,
 			project: entry.project,
-			rows: entry.rows,
+			responses: entry.responses,
 		});
 	}
 
-	saveCache(next);
+	cache = next;
+	if (changed || next.size !== previous.size) saveCache(next);
 
 	if (live) {
-		const usage = fromEntries(live);
-		const index = sessions.findIndex((session) => session.path === usage.path);
+		const session = fromEntries(live);
+		const index = sessions.findIndex((existing) => existing.path === session.path);
 		if (index >= 0) {
 			sessions[index] = {
-				...usage,
-				firstMessage: usage.firstMessage ?? sessions[index].firstMessage,
-				name: usage.name ?? sessions[index].name,
+				...session,
+				firstMessage: session.firstMessage ?? sessions[index].firstMessage,
+				name: session.name ?? sessions[index].name,
 			};
 		} else {
-			sessions.push(usage);
+			sessions.push(session);
 		}
 	}
 
-	return sessions;
+	return withoutForkedCopies(sessions);
 }

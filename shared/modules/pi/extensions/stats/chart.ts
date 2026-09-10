@@ -1,10 +1,10 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { type Period, periodStart, previousPeriod, rateOf, tokenRate } from "./aggregate.ts";
-import type { Sample } from "./samples.ts";
+import { addResponse, emptyTotals, type Period, periodStart, previousPeriod, tokenRate } from "./aggregate.ts";
+import type { Response } from "./records.ts";
+import { formatCost } from "./table.ts";
 
-const BAR_MAX_WIDTH = 6;
-const BLOCKS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
+export type Metric = "cost" | "rate";
 
 export interface Zoom {
 	buckets: number;
@@ -14,9 +14,12 @@ export interface Zoom {
 }
 
 interface Bucket {
-	rate?: number;
 	start: number;
+	value?: number;
 }
+
+const BAR_MAX_WIDTH = 6;
+const BLOCKS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
 
 export const ZOOMS: Zoom[] = [
 	{ buckets: 60, key: "m", period: "minute", unit: "minute" },
@@ -25,19 +28,30 @@ export const ZOOMS: Zoom[] = [
 	{ buckets: 12, key: "w", period: "week", unit: "week" },
 ];
 
-function buckets(samples: Sample[], zoom: Zoom, now: number): Bucket[] {
+function formatValue(metric: Metric, value: number): string {
+	return metric === "cost" ? formatCost(value) : `${Math.round(value)}`;
+}
+
+function buckets(responses: Response[], zoom: Zoom, metric: Metric, now: number): Bucket[] {
 	const starts = [periodStart(zoom.period, now)];
 	while (starts.length < zoom.buckets) starts.unshift(previousPeriod(zoom.period, starts[0]));
 
-	const grouped = new Map<number, Sample[]>();
-	for (const sample of samples) {
-		const start = periodStart(zoom.period, sample.at);
-		const group = grouped.get(start);
-		if (group) group.push(sample);
-		else grouped.set(start, [sample]);
+	const oldest = starts[0];
+	const grouped = new Map<number, ReturnType<typeof emptyTotals>>();
+	for (const response of responses) {
+		if (response.endedAt < oldest) continue;
+		const start = periodStart(zoom.period, response.endedAt);
+		const totals = grouped.get(start) ?? emptyTotals();
+		addResponse(totals, response);
+		grouped.set(start, totals);
 	}
 
-	return starts.map((start) => ({ rate: tokenRate(rateOf(grouped.get(start) ?? [])), start }));
+	return starts.map((start) => {
+		const totals = grouped.get(start);
+		if (!totals) return { start };
+		if (metric === "rate") return { start, value: tokenRate(totals) };
+		return { start, value: totals.cost > 0 ? totals.cost : undefined };
+	});
 }
 
 function spanText(zoom: Zoom, count: number): string {
@@ -67,27 +81,30 @@ function axisRow(labels: string[], gutter: number, plotWidth: number): string {
 }
 
 export function chartLines(
-	samples: Sample[],
+	responses: Response[],
 	zoom: Zoom,
+	metric: Metric,
 	theme: Theme,
 	width: number,
 	height: number,
 ): string[] {
-	const all = buckets(samples, zoom, Date.now());
-	const labelWidth = `${Math.round(Math.max(...all.map((bucket) => bucket.rate ?? 0)))}`.length;
+	const all = buckets(responses, zoom, metric, Date.now());
+	const labelWidth = Math.max(
+		...all.map((bucket) => (bucket.value === undefined ? 1 : formatValue(metric, bucket.value).length)),
+	);
 	const gutter = labelWidth + 3;
 	const plotWidth = Math.max(1, width - gutter);
 	const cell = Math.max(1, Math.min(BAR_MAX_WIDTH, Math.floor(plotWidth / zoom.buckets)));
 	const bar = cell > 1 ? cell - 1 : 1;
 	const count = Math.min(zoom.buckets, Math.floor(plotWidth / cell));
 	const shown = all.slice(all.length - count);
-	const rates = shown.flatMap((bucket) => (bucket.rate === undefined ? [] : [bucket.rate]));
-	const peak = rates.length > 0 ? Math.max(...rates) : undefined;
-	const base = rates.length > 0 ? Math.min(...rates) : undefined;
+	const values = shown.flatMap((bucket) => (bucket.value === undefined ? [] : [bucket.value]));
+	const peak = values.length > 0 ? Math.max(...values) : undefined;
+	const base = values.length > 0 ? Math.min(...values) : undefined;
 
 	const level = (bucket: Bucket) => {
-		if (bucket.rate === undefined || peak === undefined || base === undefined) return 0;
-		const ratio = peak > base ? (bucket.rate - base) / (peak - base) : 0.5;
+		if (bucket.value === undefined || peak === undefined || base === undefined) return 0;
+		const ratio = peak > base ? (bucket.value - base) / (peak - base) : 0.5;
 		return Math.max(1, Math.round(ratio * height * BLOCKS.length));
 	};
 
@@ -103,13 +120,13 @@ export function chartLines(
 
 	const yLabel = (index: number) => {
 		if (peak === undefined || base === undefined || peak === base) return "";
-		if (index === height - 1) return `${Math.round(peak)}`;
-		if (index === Math.floor((height - 1) / 2)) return `${Math.round((peak + base) / 2)}`;
+		if (index === height - 1) return formatValue(metric, peak);
+		if (index === Math.floor((height - 1) / 2)) return formatValue(metric, (peak + base) / 2);
 		return "";
 	};
 
-	const caption = ` tok/s per ${zoom.unit} · ${spanText(zoom, count)}`;
-	const note = peak === undefined ? "no responses in range" : `peak ${Math.round(peak)}`;
+	const caption = ` ${metric === "cost" ? "spend" : "tok/s"} per ${zoom.unit} · ${spanText(zoom, count)}`;
+	const note = peak === undefined ? "nothing in range" : `peak ${formatValue(metric, peak)}`;
 	const pad = width - visibleWidth(caption) - visibleWidth(note);
 
 	return [
@@ -122,7 +139,7 @@ export function chartLines(
 		}),
 		theme.fg(
 			"dim",
-			` ${(base === undefined ? "-" : `${Math.round(base)}`).padStart(labelWidth)} ┼${"─".repeat(count * cell)}`,
+			` ${(base === undefined ? "-" : formatValue(metric, base)).padStart(labelWidth)} ┼${"─".repeat(count * cell)}`,
 		),
 		theme.fg("dim", axisRow(axisLabels(zoom, count), gutter, count * cell)),
 	];

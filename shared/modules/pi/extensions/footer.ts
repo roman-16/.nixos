@@ -10,7 +10,7 @@ import {
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 const MIN_GAP = 2;
-const RIGHT_STATUS_KEYS = new Set(["speed"]);
+const RIGHT_STATUS_KEYS = new Set(["stats"]);
 
 interface Split {
 	left: string;
