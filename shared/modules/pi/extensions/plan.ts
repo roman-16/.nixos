@@ -8,8 +8,6 @@ import {
 	type ExtensionAPI,
 	type ExtensionCommandContext,
 	type ExtensionContext,
-	type Skill,
-	stripFrontmatter,
 } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
 
@@ -18,10 +16,9 @@ const HANDOFF = "/skill:handoff --inline";
 const NO_PRUNE = "--no-prune";
 const NO_PRUNE_PATTERN = new RegExp(`^${NO_PRUNE}(?=\\s|$)|\\s${NO_PRUNE}$`, "g");
 const PLANNING_MODEL = { id: "claude-fable-5-1", provider: "anthropic" };
+const PLAN_SKILL = "plan";
 const PRUNED = "[pruned]";
-const SKILLS = ["plan", "read-only"];
 const SKILL_BLOCK = /<skill\b[^>]*>[\s\S]*?<\/skill>/g;
-const SKILL_NAME = /<skill name="([^"]+)"/;
 const STATE = "plan";
 const TASK_FROM_CONVERSATION = "Plan the change this conversation has established.";
 const WARN_ABOVE_TOKENS = 25_000;
@@ -50,26 +47,8 @@ function prunedContent(): TextContent[] {
 	return [{ text: PRUNED, type: "text" }];
 }
 
-function skillBlock(skill: Skill): string {
-	const body = stripFrontmatter(readFileSync(skill.filePath, "utf8")).trim();
-
-	return `<skill name="${skill.name}" location="${skill.filePath}">\nReferences are relative to ${skill.baseDir}.\n\n${body}\n</skill>`;
-}
-
-function skillMention(block: string): string {
-	const name = block.match(SKILL_NAME)?.[1];
-
-	return name ? `\`/skill:${name}\`` : block;
-}
-
-function planningSkills(ctx: ExtensionCommandContext): Skill[] {
-	const loaded = ctx.getSystemPromptOptions().skills ?? [];
-
-	return SKILLS.flatMap((name) => loaded.filter((skill) => skill.name === name));
-}
-
-function briefing(skills: Skill[], task: string): string {
-	return [...skills.map(skillBlock), task].join("\n\n");
+function skillLoaded(ctx: ExtensionCommandContext, name: string): boolean {
+	return (ctx.getSystemPromptOptions().skills ?? []).some((skill) => skill.name === name);
 }
 
 function withoutSkills(text: string): string {
@@ -183,10 +162,6 @@ export default function (pi: ExtensionAPI) {
 		showStatus(ctx);
 	});
 
-	pi.registerMarkdownTransformer((markdown, { messageType }) =>
-		messageType === "user" ? markdown.replace(SKILL_BLOCK, skillMention) : markdown,
-	);
-
 	pi.on("context", (event) => {
 		if (state.prunedBefore === 0) return;
 		return { messages: event.messages.map((message) => prune(message, state.prunedBefore)) };
@@ -216,9 +191,8 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			const skills = planningSkills(ctx);
-			if (skills.length !== SKILLS.length) {
-				ctx.ui.notify(`Planning needs the ${SKILLS.join(" and ")} skills`, "error");
+			if (!skillLoaded(ctx, PLAN_SKILL)) {
+				ctx.ui.notify(`The ${PLAN_SKILL} skill is not available`, "error");
 				return;
 			}
 
@@ -251,7 +225,9 @@ export default function (pi: ExtensionAPI) {
 				ctx.ui.notify(`${verb} ~${prunable.toLocaleString()} tokens of prior context`, "info");
 			}
 
-			pi.sendUserMessage(briefing(skills, invocation.text || TASK_FROM_CONVERSATION));
+			pi.sendUserMessage(`/skill:${PLAN_SKILL} ${invocation.text || TASK_FROM_CONVERSATION}`, {
+				expandPromptTemplates: true,
+			});
 		},
 	});
 

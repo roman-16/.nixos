@@ -9,7 +9,7 @@ Research-only mode. Nothing is built until the user authorizes implementation.
 
 ## Read-only
 
-Planning happens inside read-only mode: the `read-only` skill's boundary holds from here to the hand-off. `/plan` loads it alongside this one; when it is not already in context, `read` the sibling `../read-only/SKILL.md` before anything else.
+Planning happens inside read-only mode: the `read-only` skill's boundary holds from here to the hand-off. When it is not already in context, `read` the sibling `../read-only/SKILL.md` before anything else.
 
 ## Research
 
