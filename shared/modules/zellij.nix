@@ -4,6 +4,9 @@
   home =
     { lib, ... }:
     let
+      escapeSequence =
+        characters: [ 27 ] ++ map lib.strings.charToInt (lib.stringToCharacters characters);
+
       letters = lib.stringToCharacters "abcdefghijklmnopqrstuvwxyz";
 
       umlauts = {
@@ -18,49 +21,46 @@
         ++ lib.stringToCharacters "0123456789"
         ++ lib.stringToCharacters "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
         ++ [
+          "§"
+          "°"
           "²"
           "³"
-          "°"
-          "§"
           "´"
           "µ"
-          "€"
           "ß"
+          "€"
         ]
         ++ lib.attrNames umlauts
         ++ lib.attrValues umlauts;
 
+      namedKeys = {
+        Backspace = [ 127 ];
+        Delete = escapeSequence "[3~";
+        Enter = [ 13 ];
+        Left = escapeSequence "[D";
+        Right = escapeSequence "[C";
+        Space = [ 32 ];
+        Tab = [ 9 ];
+      };
+
       escapeKdl = builtins.replaceStrings [ "\\" "\"" ] [ "\\\\" "\\\"" ];
 
-      scrollBind = key: actions: ''bind "${escapeKdl key}" { ${actions} }'';
-      resumeBind = key: actions: scrollBind key "ScrollToBottom; ${actions}";
+      resumeBind = key: write: ''bind "${key}" { ScrollToBottom; ${write}; }'';
+      writeBytes = key: bytes: resumeBind key "Write ${lib.concatMapStringsSep " " toString bytes}";
+      writeCharacter = key: character: resumeBind (escapeKdl key) ''WriteChars "${escapeKdl character}"'';
 
-      scrollBinds = [
-        (scrollBind "Down" "ScrollDown;")
-        (scrollBind "End" "ScrollToBottom;")
-        (scrollBind "Esc" "ScrollToBottom;")
-        (scrollBind "Home" "ScrollToTop;")
-        (scrollBind "PageDown" "PageScrollDown;")
-        (scrollBind "PageUp" "PageScrollUp;")
-        (scrollBind "Up" "ScrollUp;")
-      ];
-
-      resumeBinds =
-        map (character: resumeBind character ''WriteChars "${escapeKdl character}";'') typedCharacters
-        ++ lib.mapAttrsToList (lower: upper: resumeBind "Shift ${lower}" ''WriteChars "${upper}";'') umlauts
-        ++ lib.mapAttrsToList (key: bytes: resumeBind key "Write ${bytes};") {
-          Backspace = "127";
-          Delete = "27 91 51 126";
-          Enter = "13";
-          Left = "27 91 68";
-          Right = "27 91 67";
-          Space = "32";
-          Tab = "9";
-        }
-        ++ lib.imap1 (index: letter: resumeBind "Ctrl ${letter}" "Write ${toString index};") letters
-        ++ lib.imap1 (
-          index: letter: resumeBind "Alt ${letter}" "Write 27 ${toString (96 + index)};"
-        ) letters;
+      resumeBinds = lib.concatStringsSep "\n        " (
+        map (character: writeCharacter character character) typedCharacters
+        ++ lib.mapAttrsToList (lower: upper: writeCharacter "Shift ${lower}" upper) umlauts
+        ++ lib.mapAttrsToList writeBytes namedKeys
+        ++ map (
+          letter:
+          writeBytes "Ctrl ${letter}" [
+            (lib.strings.charToInt letter - lib.strings.charToInt "a" + 1)
+          ]
+        ) letters
+        ++ map (letter: writeBytes "Alt ${letter}" (escapeSequence letter)) letters
+      );
     in
     {
       programs.zellij = {
@@ -71,7 +71,15 @@
         extraConfig = ''
           keybinds clear-defaults=true {
               scroll {
-                  ${lib.concatStringsSep "\n        " (scrollBinds ++ resumeBinds)}
+                  bind "Down"     { ScrollDown; }
+                  bind "End"      { ScrollToBottom; }
+                  bind "Esc"      { ScrollToBottom; }
+                  bind "Home"     { ScrollToTop; }
+                  bind "PageDown" { PageScrollDown; }
+                  bind "PageUp"   { PageScrollUp; }
+                  bind "Up"       { ScrollUp; }
+
+                  ${resumeBinds}
               }
 
               shared {
